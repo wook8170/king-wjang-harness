@@ -1,5 +1,28 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-20 — ★ 출하 검증 완료 — 판정 "조건부 출하 가능" (10축 ③ 제외, BLOCKER 0)
+
+**대상 `e48473d`**. 산출: `docs/release-readiness/2026-08-20/` — 정본 `ledger.md`(대장),
+판정·게이트 `00-summary.md`, 이음매 `99-final-verification.md`, 축별 `NN-*.md`.
+- **판정: 조건부 출하 가능** — 차단 결함(BLOCKER) 0, 측정 게이트 G1~G12 전건 실측 PASS
+  (테스트 171×3 동일·tsc0·훅지연 p95 59ms·doctor 1만이벤트 60ms·공급망 프로덕션도달0·
+  이력비밀0·설치/업그레이드/롤백 성공). 다만 **출하 전 충족 조건 = HIGH 3건**:
+  - **LOGIC-11**(HIGH): state.json 삭제 시 훅 전면 침묵(무흔적) — isInitialized를 harnessDir
+    기준으로 + 저널 폴백. 재현: 활동 후 `rm state.json`→훅3종 무응답.
+  - **LOGIC-10**(HIGH): state.json 형태손상(유효JSON `{}`) 시 저널 폴백 미발동→설계트랙 소스
+    차단·stop 가드 침묵 해제. readState 형태검증 실패시 폴백. 재현: `echo {}>state.json`→P0 src allow.
+  - **SHIP-11**(HIGH): 순수 클론 플러그인 설치서 core/dist 부재→하네스 inert. dist 커밋 or
+    설치 빌드 보장+README. (수동 클론+빌드 경로는 동작·검증됨.)
+  - 셋 다 근본원인 좁고 값쌈. LOGIC-10/11은 하네스 핵심 가치(강제력) 복원이라 닫기 권고.
+- **부수 값싼 수정 후보**(이음매로 묶임): SEC-10~13(주입 격리 + fail-open mkdir), API-10=LOGIC-12
+  (bumpNode 파서 이중화), USE-01/API-12/OPS-11/LOGIC-15(ENOENT 안내화 미적용 클래스), OPS-14
+  (누적 hook-error 미노출).
+- **다음 즉시 할 일**: 사용자에게 판정 보고 + HIGH 3건 수정 라운드 여부 확인. 승인 시
+  subagent-driven으로 수정→재측정(대장 verified 승급). 미승인 시 조건부 출하로 확정하고 main
+  병합 결정(a/b/c)으로.
+- **⚠ 함정**: 파이프(`| head`) 뒤 `$?`는 head의 exit라 CLI 종료코드 관측 오염(파이프 없이 재라).
+  일부 축 에이전트가 대장을 직접 편집함(수용, 병합 시 재읽기). SubagentStop 알림 반복은 무해 잡음.
+
 ## 2026-08-20 — ★ Critical 수정 웨이브 완료 — 최종 재판정 "머지 가능" (9커밋, 171 tests)
 
 ### 추가: /verify E2E 검증 + findings 보완 (웨이브 종결 후)
