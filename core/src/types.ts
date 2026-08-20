@@ -4,6 +4,9 @@ export const PHASES = [
 ] as const;
 export type Phase = (typeof PHASES)[number];
 
+export const isPhase = (v: unknown): v is Phase =>
+  (PHASES as readonly string[]).includes(v as string);
+
 export const DESIGN_PHASES: readonly Phase[] = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
 export const BUILD_PHASES: readonly Phase[] = ['P7', 'P8', 'P9'];
 export const SHIP_PHASES: readonly Phase[] = ['P10', 'P11', 'P12'];
