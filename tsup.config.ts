@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: { cli: 'core/src/cli.ts' },
+  // mcp 는 별도 진입점이다 — MCP 어댑터(mcp/server.js)가 CLI 번들 전체를 끌고 오지 않도록.
+  entry: { cli: 'core/src/cli.ts', mcp: 'core/src/mcp.ts' },
   outDir: 'core/dist',
   format: ['cjs'],
   bundle: true,
