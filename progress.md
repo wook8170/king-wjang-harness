@@ -13,11 +13,36 @@
   주요 결함(경로 정규화 우회, 웨이브 쓰기 id 비대칭, doctor 신뢰도 게이트, 저널 손상 은폐 등)
   전부 수정·재승인 완료. 상세는 아래 태스크별 기록.
 
+### 최종 코드 리뷰 결과 (2026-08-20) — ★ 머지 불가, Critical 3건 수정 필요
+전체 브랜치 리뷰(b22a49f..HEAD) 판정: **머지 차단 3건. C1·C2는 반드시 함께 수정.**
+- **C1 — activeWave 웨이브 파일 유실 시 영구 잠금**: complete/update/activate 전부 ENOENT,
+  doctor --repair --force도 무동작(replay도 같은 activeWave라 issues 0), state.json 직접 편집은
+  훅이 차단, hook 안내는 doctor로 보내는데 doctor에 수단 없음. **수정**: doctor가 "activeWave
+  파일 부재"를 warning이 아닌 issue로 올리고 --repair 시 activeWave 정산(null).
+- **C2 — createWave id 재발급** (wave.ts:73-76 디스크 파일명 기반): 파일 삭제 후 create가 같은
+  id 재발급 → 이전 웨이브의 evidence/wave-NNN/을 자기 증적으로 인정, **스크린샷 0장으로 UX 게이트
+  통과**(재현됨). git 브랜치 전환으로도 트리거. **수정**: 저널 wave-created 최대 id와 디스크
+  최대치 중 큰 값 + 파일 존재 시 거부.
+- **C3 — 심링크 루트에서 CORE_FILES 보호 우회** (hook.ts relPath가 realpath 미정규화):
+  실경로로 주면 state.json 편집 통과(재현됨). **수정 한 줄**: fs.realpathSync.native 정규화
+  (실패 시 원본 유지).
+- **값싼 수정 후보**(같은 웨이브에서): core/dist gitignore인데 prepare 스크립트 없음 → 클론 직후
+  bin/harness MODULE_NOT_FOUND(훅 무해 계약이 CLI 바깥에서 깨짐, `"prepare": "tsup"` 추가) ·
+  .runtime/.gitignore `*`가 자신도 무시(`*\n!.gitignore`로) · markStale이 activeWave 비울 때
+  그 세션 stop 가드 꺼짐 · hook-errors.log 비울 수단(doctor가 정리) · --refs 원장 미존재 id 무검증.
+- 로드맵에서 자연 해소로 기록: gate CLI(로드맵 2), terse 소비·trace·plugin.json(각 로드맵),
+  P7~P9 배포 명령 차단(로드맵 5), backtrack의 phase 복귀 시맨틱.
+
 ### 다음에 즉시 할 일
-1. **전체 구현 최종 코드 리뷰** (플랜 실행 스킬의 마지막 단계 — 브랜치 전체 diff 대상) →
-   통과 시 superpowers:finishing-a-development-branch 로 main 병합 여부 사용자 확인
-2. **로드맵 2번 "게이트·리뷰 패킷"** 스펙→플랜 사이클 시작 (스펙 §13. 게이트 submit/approve/무효화,
-   리뷰 패킷 아티팩트 생성, 권한 다이얼로그 장치, 산출물 레지스트리·RTM)
+1. **Critical 수정 웨이브**: C1+C2 함께, C3 한 줄, 값싼 수정 후보 포함 → 테스트 추가 →
+   최종 리뷰어 재판정 (에이전트 a749acc532540f1d1 트랜스크립트에 재현 절차 있음. 새 세션이면
+   이 섹션 내용만으로 충분)
+2. 통과 시 superpowers:finishing-a-development-branch 로 main 병합 여부 사용자 확인
+3. **로드맵 2번 "게이트·리뷰 패킷"** 스펙→플랜 사이클 시작
+
+### ⚠ 세션 상태 (2026-08-20 오후)
+**사용량 한도 99% 경보 관측** — token-guard 정책상 신규 작업 중단, 이 핸드오프가 마지막 갱신.
+한도 도달 시 auto-retry가 리셋 후 재개하거나, 사용자가 새 세션에서 이 파일로 이어받는다.
 
 ### 미해결·확인 대기 / 이월 기록
 - `MultiEdit`은 현행 도구 목록에 없음(무해한 죽은 분기) — 하위호환 위해 유지 결정, 정리 후보
