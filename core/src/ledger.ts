@@ -49,7 +49,8 @@ export function bumpNode(root: string, id: string): { node: LedgerNode; affected
   const affectedWaves: string[] = [];
   if (fs.existsSync(wavesDir(root))) {
     for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
-      const txt = fs.readFileSync(path.join(wavesDir(root), f), 'utf8');
+      let txt: string;
+      try { txt = fs.readFileSync(path.join(wavesDir(root), f), 'utf8'); } catch { continue; } // 읽기 실패도 스킵(파싱 실패와 동일 관용)
       const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(txt);
       if (!m) continue;
       let meta: { design_refs?: string[]; status?: string };
