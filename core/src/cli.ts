@@ -22,9 +22,11 @@ import {
   getDoc, upsertDoc, submitDoc, approveDoc, reviseDoc, setDocArtifactUrl,
   staleDocs, loadRegistry,
 } from './registry';
+import { buildReviewPacket, renderRtm, buildHub } from './report';
+import { proposeAdr, decideAdr, reviseAdr, getAdr, listAdrs, renderAdrPacket } from './adr';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
-import { harnessDir, runtimeDir } from './paths';
+import { harnessDir, runtimeDir, packetsDir } from './paths';
 import { PHASES, isPhase, DOC_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
@@ -151,7 +153,21 @@ export function run(argv: string[], root: string): number {
               throw new Error(`유효하지 않은 근거 등급: ${evidence} (claimed, code, measured 중 하나)`);
             }
             const r = submitGate(root, phase, { paths: csv(flag(args, 'paths')), evidence });
-            console.log(`${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`);
+            // 제출은 곧 심사 요청이다 — 리뷰 패킷을 함께 남긴다(§4-3). 패킷 생성 실패가
+            // 제출 자체를 되돌리지는 않는다(게이트 레코드는 이미 저널에 있다) — 경고만 한다.
+            let packet = '';
+            try {
+              fs.mkdirSync(packetsDir(root), { recursive: true });
+              packet = path.join(packetsDir(root), `${phase}.md`);
+              fs.writeFileSync(packet, buildReviewPacket(root, phase));
+            } catch (e) {
+              console.error(`리뷰 패킷 생성 실패(제출은 유효) — ${String(e)}`);
+              packet = '';
+            }
+            console.log(
+              `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`
+              + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : ''),
+            );
             return 0;
           }
           case 'approve': {
@@ -177,6 +193,83 @@ export function run(argv: string[], root: string): number {
           }
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
           default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+        }
+      }
+
+      case 'report': {
+        switch (sub) {
+          case 'packet': {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
+            console.log(buildReviewPacket(root, phase));
+            return 0;
+          }
+          case 'rtm': console.log(renderRtm(root)); return 0;
+          case 'hub': console.log(buildHub(root)); return 0;
+          default: throw new Error(`알 수 없는 report 하위 명령: ${sub} (packet|rtm|hub)`);
+        }
+      }
+
+      case 'adr': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'propose': {
+            const id = flag(args, 'id');
+            const phase = flag(args, 'phase');
+            const question = flag(args, 'question');
+            if (!id || !question) throw new Error('사용법: harness adr propose --id <ADR-x> --phase <P0..P12> --question <질문> --option <id:제목> ...');
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${String(phase)} (${PHASES.join(', ')})`);
+            // --option 은 반복 가능하다: `--option a:라이브러리 --option b:자체구축`
+            const options = args
+              .map((a, i) => (a === '--option' ? args[i + 1] : undefined))
+              .filter((v): v is string => typeof v === 'string' && v.length > 0)
+              .map(v => {
+                const at = v.indexOf(':');
+                if (at <= 0) throw new Error(`--option 형식은 <id>:<제목> 이다: ${v}`);
+                return { id: v.slice(0, at), title: v.slice(at + 1), pros: [], cons: [] };
+              });
+            const rec = proposeAdr(root, { id, phase, question, options, recommended: flag(args, 'recommend') });
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case 'decide': {
+            const id = rest[0];
+            const chosen = flag(args, 'choose');
+            const rationale = flag(args, 'rationale');
+            if (!id || !chosen || !rationale) {
+              throw new Error('사용법: harness adr decide <ADR-x> --choose <선택지id|자유값> --rationale <근거> --reject <id>:<사유> ...');
+            }
+            const rejectedReasons: Record<string, string> = {};
+            args.forEach((a, i) => {
+              if (a !== '--reject') return;
+              const v = args[i + 1] ?? '';
+              const at = v.indexOf(':');
+              if (at <= 0) throw new Error(`--reject 형식은 <선택지id>:<기각 사유> 이다: ${v}`);
+              rejectedReasons[v.slice(0, at)] = v.slice(at + 1);
+            });
+            const rec = decideAdr(root, id, { chosen, rationale, rejectedReasons });
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case 'revise': {
+            const { record, affectedWaves, unverifiable } = reviseAdr(root, rest[0], {
+              question: flag(args, 'question'),
+            });
+            console.log(`${record.id} → v${record.version} · STALE 웨이브: ${affectedWaves.join(', ') || '없음'}`);
+            if (unverifiable.length > 0) {
+              console.error(`STALE 전파 불완전 — 검증 불가 웨이브: ${unverifiable.join(', ')} — 수동 확인 필요`);
+              return 1;
+            }
+            return 0;
+          }
+          case 'show': {
+            const rec = getAdr(root, rest[0]);
+            if (!rec) throw new Error(`ADR 없음: ${rest[0]}`);
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case 'list': console.log(JSON.stringify(listAdrs(root), null, 2)); return 0;
+          default: throw new Error(`알 수 없는 adr 하위 명령: ${sub}`);
         }
       }
 

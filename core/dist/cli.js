@@ -107,17 +107,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path11) {
-      const ctrl = callVisitor(key, node, visitor, path11);
+    function visit_(key, node, visitor, path13) {
+      const ctrl = callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path11, ctrl);
-        return visit_(key, ctrl, visitor, path11);
+        replaceNode(key, path13, ctrl);
+        return visit_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path11 = Object.freeze(path11.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path11);
+            const ci = visit_(i, node.items[i], visitor, path13);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -128,13 +128,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path11 = Object.freeze(path11.concat(node));
-          const ck = visit_("key", node.key, visitor, path11);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = visit_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path11);
+          const cv = visit_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -155,17 +155,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path11) {
-      const ctrl = await callVisitor(key, node, visitor, path11);
+    async function visitAsync_(key, node, visitor, path13) {
+      const ctrl = await callVisitor(key, node, visitor, path13);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path11, ctrl);
-        return visitAsync_(key, ctrl, visitor, path11);
+        replaceNode(key, path13, ctrl);
+        return visitAsync_(key, ctrl, visitor, path13);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path11 = Object.freeze(path11.concat(node));
+          path13 = Object.freeze(path13.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path11);
+            const ci = await visitAsync_(i, node.items[i], visitor, path13);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -176,13 +176,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path11 = Object.freeze(path11.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path11);
+          path13 = Object.freeze(path13.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path13);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path11);
+          const cv = await visitAsync_("value", node.value, visitor, path13);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -209,23 +209,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path11) {
+    function callVisitor(key, node, visitor, path13) {
       if (typeof visitor === "function")
-        return visitor(key, node, path11);
+        return visitor(key, node, path13);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path11);
+        return visitor.Map?.(key, node, path13);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path11);
+        return visitor.Seq?.(key, node, path13);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path11);
+        return visitor.Pair?.(key, node, path13);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path11);
+        return visitor.Scalar?.(key, node, path13);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path11);
+        return visitor.Alias?.(key, node, path13);
       return void 0;
     }
-    function replaceNode(key, path11, node) {
-      const parent = path11[path11.length - 1];
+    function replaceNode(key, path13, node) {
+      const parent = path13[path13.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -835,10 +835,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path11, value) {
+    function collectionFromPath(schema, path13, value) {
       let v = value;
-      for (let i = path11.length - 1; i >= 0; --i) {
-        const k = path11[i];
+      for (let i = path13.length - 1; i >= 0; --i) {
+        const k = path13[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -857,7 +857,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path11) => path11 == null || typeof path11 === "object" && !!path11[Symbol.iterator]().next().done;
+    var isEmptyPath = (path13) => path13 == null || typeof path13 === "object" && !!path13[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -887,11 +887,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path11, value) {
-        if (isEmptyPath(path11))
+      addIn(path13, value) {
+        if (isEmptyPath(path13))
           this.add(value);
         else {
-          const [key, ...rest] = path11;
+          const [key, ...rest] = path13;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -905,8 +905,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path11) {
-        const [key, ...rest] = path11;
+      deleteIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -920,8 +920,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path11, keepScalar) {
-        const [key, ...rest] = path11;
+      getIn(path13, keepScalar) {
+        const [key, ...rest] = path13;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -939,8 +939,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path11) {
-        const [key, ...rest] = path11;
+      hasIn(path13) {
+        const [key, ...rest] = path13;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -950,8 +950,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path11, value) {
-        const [key, ...rest] = path11;
+      setIn(path13, value) {
+        const [key, ...rest] = path13;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -1498,7 +1498,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify4(item, ctx, onComment, onChompKeep) {
+    function stringify5(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -1527,7 +1527,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str}`;
     }
     exports2.createStringifyContext = createStringifyContext;
-    exports2.stringify = stringify4;
+    exports2.stringify = stringify5;
   }
 });
 
@@ -1537,7 +1537,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify4 = require_stringify();
+    var stringify5 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -1559,7 +1559,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str = stringify4.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str = stringify5.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -1611,7 +1611,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify4.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify5.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -1752,7 +1752,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge = require_merge();
-    var stringify4 = require_stringify();
+    var stringify5 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
@@ -1788,7 +1788,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify4.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify5.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -1855,12 +1855,12 @@ var require_stringifyCollection = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify4 = require_stringify();
+    var stringify5 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify5 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify5(collection, ctx, options);
+      const stringify6 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify6(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -1885,7 +1885,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str2 = stringify4.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
+        let str2 = stringify5.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
         if (comment2)
           str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment2));
         if (chompKeep && comment2)
@@ -1952,7 +1952,7 @@ ${indent}${line}` : "\n";
         }
         if (comment)
           reqNewline = true;
-        let str = stringify4.stringify(item, itemCtx, () => comment = null);
+        let str = stringify5.stringify(item, itemCtx, () => comment = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
         if (i < items.length - 1) {
           str += ",";
@@ -3313,7 +3313,7 @@ var require_stringifyDocument = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify4 = require_stringify();
+    var stringify5 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -3328,7 +3328,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify4.createStringifyContext(doc, options);
+      const ctx = stringify5.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -3350,7 +3350,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify4.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify5.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -3358,7 +3358,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify4.stringify(doc.contents, ctx));
+        lines.push(stringify5.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -3466,9 +3466,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path11, value) {
+      addIn(path13, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path11, value);
+          this.contents.addIn(path13, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3543,14 +3543,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path11) {
-        if (Collection.isEmptyPath(path11)) {
+      deleteIn(path13) {
+        if (Collection.isEmptyPath(path13)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path11) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path13) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3565,10 +3565,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path11, keepScalar) {
-        if (Collection.isEmptyPath(path11))
+      getIn(path13, keepScalar) {
+        if (Collection.isEmptyPath(path13))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path11, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path13, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3579,10 +3579,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path11) {
-        if (Collection.isEmptyPath(path11))
+      hasIn(path13) {
+        if (Collection.isEmptyPath(path13))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path11) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path13) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3599,13 +3599,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path11, value) {
-        if (Collection.isEmptyPath(path11)) {
+      setIn(path13, value) {
+        if (Collection.isEmptyPath(path13)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path11), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path13), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path11, value);
+          this.contents.setIn(path13, value);
         }
       }
       /**
@@ -5493,7 +5493,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "node_modules/yaml/dist/parse/cst-stringify.js"(exports2) {
     "use strict";
-    var stringify4 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify5 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -5546,7 +5546,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports2.stringify = stringify4;
+    exports2.stringify = stringify5;
   }
 });
 
@@ -5565,9 +5565,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path11) => {
+    visit.itemAtPath = (cst, path13) => {
       let item = cst;
-      for (const [field, index] of path11) {
+      for (const [field, index] of path13) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5576,23 +5576,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path11) => {
-      const parent = visit.itemAtPath(cst, path11.slice(0, -1));
-      const field = path11[path11.length - 1][0];
+    visit.parentCollection = (cst, path13) => {
+      const parent = visit.itemAtPath(cst, path13.slice(0, -1));
+      const field = path13[path13.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path11, item, visitor) {
-      let ctrl = visitor(item, path11);
+    function _visit(path13, item, visitor) {
+      let ctrl = visitor(item, path13);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path11.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path13.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5603,10 +5603,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path11);
+            ctrl = ctrl(item, path13);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path11) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path13) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs12 = this.flowScalar(this.type);
+              const fs14 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs12, sep: [] });
+                map.items.push({ start, key: fs14, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs12);
+                this.stack.push(fs14);
               } else {
-                Object.assign(it, { key: fs12, sep: [] });
+                Object.assign(it, { key: fs14, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs12 = this.flowScalar(this.type);
+              const fs14 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs12, sep: [] });
+                fc.items.push({ start: [], key: fs14, sep: [] });
               else if (it.sep)
-                this.stack.push(fs12);
+                this.stack.push(fs14);
               else
-                Object.assign(it, { key: fs12, sep: [] });
+                Object.assign(it, { key: fs14, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7257,7 +7257,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse5(src, reviver, options) {
+    function parse6(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7276,7 +7276,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify4(value, replacer, options) {
+    function stringify5(value, replacer, options) {
       let _replacer = null;
       if (typeof replacer === "function" || Array.isArray(replacer)) {
         _replacer = replacer;
@@ -7298,10 +7298,10 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse5;
+    exports2.parse = parse6;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
-    exports2.stringify = stringify4;
+    exports2.stringify = stringify5;
   }
 });
 
@@ -7364,8 +7364,8 @@ __export(cli_exports, {
   run: () => run
 });
 module.exports = __toCommonJS(cli_exports);
-var fs11 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
+var fs13 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
 
 // core/src/state.ts
 var fs = __toESM(require("fs"));
@@ -7380,6 +7380,7 @@ var configPath = (root) => path.join(harnessDir(root), "config.yaml");
 var designDir = (root) => path.join(harnessDir(root), "design");
 var ledgerPath = (root) => path.join(designDir(root), "ledger.yaml");
 var registryPath = (root) => path.join(designDir(root), "registry.yaml");
+var packetsDir = (root) => path.join(harnessDir(root), "packets");
 var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
@@ -8564,6 +8565,591 @@ function staleDocs(root) {
     }
   });
 }
+function docsForPhase(root, phase) {
+  const latest = /* @__PURE__ */ new Map();
+  for (const d of loadRegistry(root).docs) {
+    if (d.phase !== phase || d.status === "superseded") continue;
+    const cur = latest.get(d.id);
+    if (!cur || d.version > cur.version) latest.set(d.id, d);
+  }
+  return [...latest.values()];
+}
+
+// core/src/report.ts
+var fs11 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
+function attempt(fn) {
+  try {
+    return { ok: true, value: fn() };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+var generatedAt = () => `\uC0DD\uC131: ${(/* @__PURE__ */ new Date()).toISOString()}`;
+var cell = (s) => s.replace(/\|/g, "\\|");
+var listCell = (xs) => xs.length ? xs.map(cell).join(", ") : "\u2014";
+function ledgerIndex(root) {
+  return attempt(() => {
+    const m = /* @__PURE__ */ new Map();
+    for (const n of loadLedger(root)) {
+      if (n && typeof n.id === "string" && n.id && !m.has(n.id)) m.set(n.id, n);
+    }
+    return m;
+  });
+}
+function docsByPhase(root) {
+  return PHASES.map((phase) => ({ phase, docs: docsForPhase(root, phase) }));
+}
+function currentDocs(root) {
+  return docsByPhase(root).flatMap((g) => g.docs);
+}
+function waveEntries(root) {
+  const entries = [];
+  const unreadable = [];
+  if (!fs11.existsSync(wavesDir(root))) return { entries, unreadable };
+  let files;
+  try {
+    files = fs11.readdirSync(wavesDir(root));
+  } catch (e) {
+    return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
+  }
+  for (const f2 of files.filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+    const id = f2.replace(/\.md$/, "");
+    const r = attempt(() => readWave(root, id).meta);
+    if (r.ok) entries.push({ id, meta: r.value });
+    else unreadable.push(`\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error}`);
+  }
+  return { entries, unreadable };
+}
+function hasEvidence(root, waveId) {
+  const dir = evidenceDir(root, waveId);
+  let files;
+  try {
+    files = fs11.readdirSync(dir);
+  } catch {
+    return false;
+  }
+  return files.some((f2) => {
+    if (f2.startsWith(".")) return false;
+    try {
+      const st = fs11.statSync(path10.join(dir, f2));
+      return st.isFile() && st.size > 0;
+    } catch {
+      return false;
+    }
+  });
+}
+function gapsFor(row) {
+  const gaps = [];
+  if (row.docs.length === 0 && row.adrs.length === 0) {
+    gaps.push("\uBB38\uC11C \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C \uB2E4\uB8E8\uB294 \uB4F1\uB85D \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4");
+  }
+  if (row.waves.length === 0) {
+    gaps.push("\uC124\uACC4\uB9CC \uC788\uACE0 \uAD6C\uD604 \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C design_refs \uB85C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+  } else if (row.evidence.length === 0) {
+    gaps.push(`\uAD6C\uD604\uB9CC \uC788\uACE0 \uAC80\uC99D \uC5C6\uC74C \u2014 ${row.waves.join(", ")} \uC758 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uBE44\uC5B4 \uC788\uB2E4`);
+  }
+  return gaps;
+}
+function collectRtm(root) {
+  const unreadable = [];
+  const idx = ledgerIndex(root);
+  if (!idx.ok) {
+    return { rows: [], unreadable: [`\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${idx.error}`] };
+  }
+  const nodes = [...idx.value.values()];
+  const reg = inspectRegistry(root);
+  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.invalid.length > 0) {
+    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uCD94\uC801\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+  }
+  const docs = currentDocs(root);
+  const waves = waveEntries(root);
+  unreadable.push(...waves.unreadable);
+  const rows = [];
+  for (const node of nodes) {
+    if (!node.id.startsWith("F-")) continue;
+    const linked = docs.filter((d) => d.linkedNodes.includes(node.id));
+    const waveIds = waves.entries.filter((w) => w.meta.design_refs.includes(node.id)).map((w) => w.id);
+    const row = {
+      id: node.id,
+      title: typeof node.title === "string" && node.title ? node.title : "(\uC81C\uBAA9 \uC5C6\uC74C)",
+      version: typeof node.version === "number" ? node.version : 0,
+      status: node.status,
+      docs: linked.filter((d) => !d.id.startsWith("ADR-")).map((d) => d.id),
+      adrs: [.../* @__PURE__ */ new Set([
+        ...linked.filter((d) => d.id.startsWith("ADR-")).map((d) => d.id),
+        ...nodes.filter((n) => n.id.startsWith("ADR-") && n.parent === node.id).map((n) => n.id)
+      ])].sort(),
+      waves: waveIds,
+      evidence: waveIds.filter((id) => hasEvidence(root, id)),
+      deployments: [],
+      gaps: []
+    };
+    row.gaps = gapsFor(row);
+    rows.push(row);
+  }
+  return { rows, unreadable };
+}
+function gapLines(rows) {
+  const holed = rows.filter((r) => r.gaps.length > 0);
+  if (rows.length === 0) return ["- \uCD94\uC801\uD560 \uC694\uAD6C(F-) \uB178\uB4DC\uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 RTM \uC740 \uC544\uC9C1 \uC544\uBB34\uAC83\uB3C4 \uBCF4\uC99D\uD558\uC9C0 \uC54A\uB294\uB2E4"];
+  if (holed.length === 0) return ["- \uBBF8\uCEE4\uBC84 \uAD6C\uAC04 \uC5C6\uC74C \u2014 \uBAA8\uB4E0 \uC694\uAD6C\uAC00 \uBB38\uC11C\xB7\uC6E8\uC774\uBE0C\xB7\uC99D\uC801\uC744 \uAC16\uCDC4\uB2E4"];
+  return holed.map((r) => `- **${r.id}** ${r.title}: ${r.gaps.join(" / ")}`);
+}
+function unreadableSection(unreadable) {
+  if (unreadable.length === 0) return [];
+  return [
+    "",
+    "## \uC77D\uC9C0 \uBABB\uD55C \uC785\uB825",
+    "",
+    "\uC544\uB798\uB294 \uC190\uC0C1\xB7\uBD80\uC7AC\uB85C \uC77D\uC9C0 \uBABB\uD55C \uC785\uB825\uC774\uB2E4. \uB9AC\uD3EC\uD2B8\uC5D0\uC11C \uBE60\uC84C\uC73C\uBBC0\uB85C **\uC5C6\uB294 \uAC83\uACFC \uB2E4\uB974\uB2E4.**",
+    ...unreadable.map((u) => `- ${u}`)
+  ];
+}
+function renderRtm(root) {
+  const { rows, unreadable } = collectRtm(root);
+  const out = ["# \uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)", "", generatedAt(), ""];
+  if (rows.length === 0) {
+    out.push("\uC6D0\uC7A5\uC5D0 F- \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uCD94\uC801\uD560 \uC694\uAD6C\uAC00 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uB2E4.");
+  } else {
+    out.push(
+      "| \uC694\uAD6C | \uC81C\uBAA9 | \uC124\uACC4\uBB38\uC11C | ADR | \uC6E8\uC774\uBE0C | \uD14C\uC2A4\uD2B8\xB7\uC99D\uC801 | \uBC30\uD3EC | \uBBF8\uCEE4\uBC84 |",
+      "|---|---|---|---|---|---|---|---|",
+      ...rows.map((r) => [
+        "",
+        r.id,
+        cell(r.title),
+        listCell(r.docs),
+        listCell(r.adrs),
+        listCell(r.waves),
+        listCell(r.evidence),
+        listCell(r.deployments),
+        r.gaps.length === 0 ? "\u2014" : `**${r.gaps.length}\uAC74**`,
+        ""
+      ].join(" | ").trim())
+    );
+  }
+  out.push("", "## \uBBF8\uCEE4\uBC84 \uAD6C\uAC04", "", ...gapLines(rows));
+  out.push(...unreadableSection(unreadable));
+  return out.join("\n") + "\n";
+}
+function gateLines(root, phase) {
+  const state = attempt(() => readState(root));
+  if (!state.ok) return { lines: [], unreadable: [`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error}`] };
+  const g = state.value.gates[phase];
+  if (!g || g.status === "pending") {
+    return { lines: [`- \uC0C1\uD0DC: pending \u2014 \uC544\uC9C1 \uC81C\uCD9C\uB418\uC9C0 \uC54A\uC558\uB2E4`], unreadable: [] };
+  }
+  const lines = [
+    `- \uC0C1\uD0DC: ${g.status} (\uADFC\uAC70: ${g.evidence ?? "\uC5C6\uC74C"})`,
+    `- \uC0B0\uCD9C\uBB3C \uD574\uC2DC: ${g.artifactHash ? g.artifactHash.slice(0, 12) : "\uC5C6\uC74C"}`
+  ];
+  if (g.submittedAt) lines.push(`- \uC81C\uCD9C: ${g.submittedAt}`);
+  if (g.approvedAt) lines.push(`- \uC2B9\uC778: ${g.approvedAt}`);
+  if (g.invalidatedReason) lines.push(`- \uBB34\uD6A8\uD654 \uC0AC\uC720: ${g.invalidatedReason}`);
+  const verdict = verifyGate(root, phase);
+  lines.push(verdict.ok ? "- \uAC80\uC99D: PASS" : `- \uAC80\uC99D: **FAIL** \u2014 ${verdict.reason ?? "\uC0AC\uC720 \uC5C6\uC74C"}`);
+  return { lines, unreadable: [] };
+}
+function buildReviewPacket(root, phase) {
+  const out = [`# \uB9AC\uBDF0 \uD328\uD0B7 \u2014 ${phase}`, "", generatedAt(), ""];
+  const blockers = [];
+  const unreadable = [];
+  const reg = inspectRegistry(root);
+  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.invalid.length > 0) {
+    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uD328\uD0B7\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+  }
+  const docs = docsForPhase(root, phase);
+  const idx = ledgerIndex(root);
+  if (!idx.ok) unreadable.push(`\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${idx.error}`);
+  out.push(`## \uC0B0\uCD9C\uBB3C (${docs.length}\uAC74)`, "");
+  if (docs.length === 0) {
+    out.push(
+      `**${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4.** \uC2EC\uC0AC\uD560 \uBB38\uC11C\uAC00 \uC5C6\uC73C\uBBC0\uB85C \uC774 \uD328\uD0B7\uC740 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uACE0 \uC544\uD2F0\uD329\uD2B8\uB97C \uBC1C\uD589\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
+    );
+    blockers.push(`${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uBE48 \uD328\uD0B7\uC73C\uB85C\uB294 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC5C6\uB2E4`);
+  }
+  for (const d of docs) {
+    out.push(`### ${d.id} v${d.version} \u2014 ${d.status}`, `- \uACBD\uB85C: \`${d.path}\``);
+    if (d.artifactUrl) {
+      out.push(`- \uC544\uD2F0\uD329\uD2B8: ${d.artifactUrl}`);
+    } else {
+      out.push("- \uC544\uD2F0\uD329\uD2B8: **\uC5C6\uC74C \u2014 \uBC1C\uD589\uB418\uC9C0 \uC54A\uC740 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16)**");
+      blockers.push(`${d.id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBC1C\uD589\uD558\uACE0 URL \uC744 \uB4F1\uB85D\uD558\uB77C(\uC694\uAD6C 16)`);
+    }
+    out.push(`- \uC5F0\uACB0 \uB178\uB4DC: ${d.linkedNodes.length ? d.linkedNodes.join(", ") : "\uC5C6\uC74C"}`, "");
+  }
+  for (const d of staleDocs(root).filter((d2) => d2.phase === phase)) {
+    blockers.push(`${d.id} \uB294 \uC2B9\uC778 \uC2DC\uC810 \uD574\uC2DC\uC640 \uD604\uC7AC \`${d.path}\` \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC73C\uB85C \uC7AC\uC81C\uCD9C\uD558\uB77C`);
+  }
+  const linkedIds = [...new Set(docs.flatMap((d) => d.linkedNodes))];
+  out.push("## \uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC", "");
+  if (!idx.ok) {
+    out.push('\uC6D0\uC7A5\uC744 \uC77D\uC9C0 \uBABB\uD574 \uC5F0\uACB0 \uB178\uB4DC\uB97C \uD655\uC778\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.', "");
+  } else if (linkedIds.length === 0) {
+    out.push("\uC5F0\uACB0\uB41C \uC6D0\uC7A5 \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uC774 \uC0B0\uCD9C\uBB3C\uC774 \uC5B4\uB5A4 \uC124\uACC4\uB97C \uB2E4\uB8E8\uB294\uC9C0 \uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4.", "");
+  } else {
+    out.push("| \uB178\uB4DC | \uC81C\uBAA9 | \uBC84\uC804 | \uC0C1\uD0DC |", "|---|---|---|---|");
+    const stale = [];
+    for (const id of linkedIds) {
+      const n = idx.value.get(id);
+      if (!n) {
+        out.push(`| ${id} | **\uC6D0\uC7A5\uC5D0 \uC5C6\uC74C** | \u2014 | \u2014 |`);
+        blockers.push(`${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBB38\uC11C\uAC00 \uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uB178\uB4DC\uB97C \uCC38\uC870\uD55C\uB2E4`);
+        continue;
+      }
+      out.push(`| ${n.id} | ${cell(n.title ?? "")} | ${n.version} | ${n.status} |`);
+      if (n.status === "stale") stale.push(n);
+    }
+    out.push("");
+    if (stale.length > 0) {
+      out.push("## STALE \uACBD\uACE0", "");
+      for (const n of stale) {
+        out.push(
+          `- **${n.id}** ${n.title} (v${n.version}) \u2014 \uC124\uACC4\uAC00 \uAC1C\uC815\uB410\uB2E4. \uC0B0\uCD9C\uBB3C\uC774 \uAC1C\uC815\uBCF8\uC744 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uAE30 \uC804\uC5D0\uB294 \uC2B9\uC778\uD558\uC9C0 \uB9C8\uB77C.`
+        );
+        blockers.push(`${n.id} \uAC00 STALE \uC774\uB2E4 \u2014 \uAC1C\uC815\uB41C \uC124\uACC4\uB97C \uC0B0\uCD9C\uBB3C\uC774 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uB77C`);
+      }
+      out.push("");
+    }
+  }
+  const gate = gateLines(root, phase);
+  unreadable.push(...gate.unreadable);
+  out.push("## \uAC8C\uC774\uD2B8 \uD604\uD669", "");
+  out.push(...gate.lines.length ? gate.lines : ['- \uC0C1\uD0DC\uB97C \uC77D\uC9C0 \uBABB\uD588\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.']);
+  out.push("");
+  out.push("## \uCC28\uB2E8 \uC0AC\uD56D", "");
+  out.push(...blockers.length === 0 ? ["\uCC28\uB2E8 \uC0AC\uD56D \uC5C6\uC74C \u2014 \uC704 \uC0B0\uCD9C\uBB3C \uAE30\uC900\uC73C\uB85C \uC2B9\uC778 \uC2EC\uC0AC\uB97C \uC9C4\uD589\uD560 \uC218 \uC788\uB2E4."] : blockers.map((b) => `- ${b}`));
+  out.push(...unreadableSection(unreadable));
+  return out.join("\n") + "\n";
+}
+function buildHub(root) {
+  const out = ["# \uD504\uB85C\uC81D\uD2B8 \uD5C8\uBE0C", "", generatedAt(), ""];
+  const unreadable = [];
+  const reg = inspectRegistry(root);
+  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.invalid.length > 0) {
+    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uBAA9\uCC28\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+  }
+  const groups = docsByPhase(root);
+  const all = groups.flatMap((g) => g.docs);
+  out.push("## \uD398\uC774\uC988\uBCC4 \uC0B0\uCD9C\uBB3C", "");
+  if (all.length === 0) {
+    out.push("\uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uC544\uC9C1 \uBAA9\uCC28\uC5D0 \uC62C\uB9B4 \uBB38\uC11C\uAC00 \uC5C6\uB2E4.", "");
+  }
+  for (const { phase, docs } of groups) {
+    if (docs.length === 0) continue;
+    out.push(`### ${phase}`, "", "| \uBB38\uC11C | \uBC84\uC804 | \uC0C1\uD0DC | \uC544\uD2F0\uD329\uD2B8 |", "|---|---|---|---|");
+    for (const d of docs) {
+      out.push(`| ${d.id} | ${d.version} | ${d.status} | ${d.artifactUrl ? `[\uC5F4\uAE30](${d.artifactUrl})` : "**\uBC1C\uD589 \uB300\uAE30**"} |`);
+    }
+    out.push("");
+  }
+  const state = attempt(() => readState(root));
+  out.push("## \uAC8C\uC774\uD2B8 \uD604\uD669", "");
+  if (!state.ok) {
+    unreadable.push(`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error}`);
+    out.push('\uC0C1\uD0DC\uB97C \uC77D\uC9C0 \uBABB\uD574 \uAC8C\uC774\uD2B8 \uD604\uD669\uC744 \uB0BC \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.', "");
+  } else {
+    out.push(`- \uD604\uC7AC \uD398\uC774\uC988: ${state.value.phase}`, "", "| \uD398\uC774\uC988 | \uC0C1\uD0DC | \uADFC\uAC70 | \uC2B9\uC778 |", "|---|---|---|---|");
+    for (const phase of PHASES) {
+      const g = state.value.gates[phase];
+      out.push(`| ${phase} | ${g?.status ?? "pending"} | ${g?.evidence ?? "\u2014"} | ${g?.approvedAt ?? "\u2014"} |`);
+    }
+    out.push("");
+  }
+  const pending = all.filter((d) => !d.artifactUrl);
+  out.push("## \uBC1C\uD589 \uB300\uAE30", "");
+  out.push(pending.length === 0 ? "\uBC1C\uD589 \uB300\uAE30 \uC5C6\uC74C \u2014 \uB4F1\uB85D\uB41C \uBB38\uC11C \uC804\uBD80\uAC00 \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uAC00\uC9C4\uB2E4." : "\uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uC5B4 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB294 \uBB38\uC11C\uB2E4(\uC694\uAD6C 16). \uBC1C\uD589 \uAC00\uB2A5\uD574\uC9C0\uBA74 \uC77C\uAD04 \uCC98\uB9AC\uD558\uB77C.");
+  for (const d of pending) out.push(`- ${d.phase} **${d.id}** v${d.version} (${d.status}) \u2014 \`${d.path}\``);
+  out.push("");
+  const rtm = collectRtm(root);
+  unreadable.push(...rtm.unreadable);
+  out.push("## \uBBF8\uCEE4\uBC84 \uC694\uC57D", "", ...gapLines(rtm.rows));
+  out.push(...unreadableSection(unreadable));
+  return out.join("\n") + "\n";
+}
+
+// core/src/adr.ts
+var fs12 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
+var YAML5 = __toESM(require_dist());
+var adrDir = (root) => path11.join(designDir(root), "adr");
+var adrPath = (root, id) => path11.join(adrDir(root), `${id}.yaml`);
+var adrHistoryPath = (root, id, version) => path11.join(adrDir(root), `${id}.v${version}.yaml`);
+var CUSTOM_OPTION_ID = "custom";
+var MIN_OPTIONS = 2;
+var MAX_OPTIONS = 4;
+function writeAdrFile(target, rec) {
+  fs12.mkdirSync(path11.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs12.writeFileSync(tmp, YAML5.stringify(rec));
+  fs12.renameSync(tmp, target);
+}
+function toAdrRecord(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.question !== "string") return null;
+  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
+  if (o.status !== "proposed" && o.status !== "accepted" && o.status !== "superseded") return null;
+  const options = (Array.isArray(o.options) ? o.options : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({
+    id: String(e.id ?? ""),
+    title: String(e.title ?? ""),
+    pros: Array.isArray(e.pros) ? e.pros.map(String) : [],
+    cons: Array.isArray(e.cons) ? e.cons.map(String) : []
+  }));
+  const rejected = (Array.isArray(o.rejected) ? o.rejected : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({ id: String(e.id ?? ""), reason: String(e.reason ?? "") }));
+  const rec = {
+    id: o.id,
+    phase: o.phase,
+    question: o.question,
+    options,
+    rejected,
+    status: o.status,
+    version: o.version
+  };
+  if (typeof o.recommended === "string" && o.recommended) rec.recommended = o.recommended;
+  if (typeof o.chosen === "string" && o.chosen) rec.chosen = o.chosen;
+  if (typeof o.rationale === "string" && o.rationale) rec.rationale = o.rationale;
+  return rec;
+}
+function getAdr(root, id) {
+  const p = adrPath(root, id);
+  if (!fs12.existsSync(p)) return void 0;
+  const parsed = toAdrRecord(YAML5.parse(fs12.readFileSync(p, "utf8")));
+  if (!parsed) throw new Error(`ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+  return parsed;
+}
+function listAdrs(root) {
+  const dir = adrDir(root);
+  if (!fs12.existsSync(dir)) return [];
+  const out = [];
+  for (const f2 of fs12.readdirSync(dir).sort()) {
+    if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
+    if (/\.v\d+\.yaml$/.test(f2)) continue;
+    try {
+      const rec = toAdrRecord(YAML5.parse(fs12.readFileSync(path11.join(dir, f2), "utf8")));
+      if (rec) out.push(rec);
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+function assertOptions(options, recommended) {
+  if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
+    throw new Error(
+      `ADR \uC120\uD0DD\uC9C0\uB294 ${MIN_OPTIONS}~${MAX_OPTIONS}\uAC1C\uC5EC\uC57C \uD55C\uB2E4(\uD604\uC7AC ${options.length}\uAC1C) \u2014 \uC120\uD0DD\uC9C0 \uD558\uB098\uC9DC\uB9AC \uACB0\uC815\uC740 \uACB0\uC815\uC774 \uC544\uB2C8\uB77C \uD1B5\uBCF4\uB2E4. \uBE44\uAD50 \uAC00\uB2A5\uD55C \uB300\uC548\uC744 \uD2B8\uB808\uC774\uB4DC\uC624\uD504\uC640 \uD568\uAED8 \uC81C\uC2DC\uD558\uB77C.`
+    );
+  }
+  if (recommended !== void 0 && !options.some((o) => o.id === recommended)) {
+    throw new Error(
+      `\uCD94\uCC9C\uC548 "${recommended}" \uC774 \uC120\uD0DD\uC9C0\uC5D0 \uC5C6\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4(${options.map((o) => o.id).join(", ")})`
+    );
+  }
+}
+function requireAdr(root, id) {
+  const rec = getAdr(root, id);
+  if (!rec) {
+    throw new Error(`ADR ${id} \uAE30\uB85D\uC774 \uC5C6\uB2E4 (${adrPath(root, id)}) \u2014 \uBA3C\uC800 \uC81C\uC548(propose)\uD558\uB77C`);
+  }
+  return rec;
+}
+var INDEX_STATUS = {
+  proposed: "draft",
+  accepted: "approved",
+  superseded: "stale"
+};
+function syncIndex(root, rec) {
+  const prev = getNode(root, rec.id);
+  upsertNode(root, {
+    id: rec.id,
+    title: rec.question,
+    parent: prev?.parent,
+    doc_anchor: prev?.doc_anchor,
+    version: rec.version,
+    status: INDEX_STATUS[rec.status]
+  });
+}
+function referencingWaves(root, id) {
+  const affected = [];
+  const unverifiable = [];
+  if (!fs12.existsSync(wavesDir(root))) return { affected, unverifiable };
+  for (const f2 of fs12.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+    const stem = f2.replace(/\.md$/, "");
+    let txt;
+    try {
+      txt = fs12.readFileSync(path11.join(wavesDir(root), f2), "utf8");
+    } catch {
+      unverifiable.push(stem);
+      continue;
+    }
+    let meta;
+    try {
+      meta = parseWave(txt).meta;
+    } catch {
+      unverifiable.push(stem);
+      continue;
+    }
+    if (meta.design_refs.includes(id) && meta.status !== "stale") affected.push(stem);
+  }
+  return { affected, unverifiable };
+}
+function proposeAdr(root, input) {
+  if (!input.id.startsWith("ADR-")) {
+    throw new Error(`ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)`);
+  }
+  if (fs12.existsSync(adrPath(root, input.id))) {
+    throw new Error(
+      `ADR ${input.id} \uAC00 \uC774\uBBF8 \uC788\uB2E4 \u2014 \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F0\uC9C0 \uB9C8\uB77C. \uBC14\uAFB8\uB824\uBA74 reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815\uD558\uB77C(version++ + STALE \uC804\uD30C).`
+    );
+  }
+  assertOptions(input.options, input.recommended);
+  const rec = {
+    id: input.id,
+    phase: input.phase,
+    question: input.question,
+    options: input.options,
+    ...input.recommended ? { recommended: input.recommended } : {},
+    rejected: [],
+    status: "proposed",
+    version: 1
+  };
+  appendEvent(root, "adr-proposed", {
+    id: rec.id,
+    phase: rec.phase,
+    version: rec.version,
+    options: rec.options.map((o) => o.id),
+    recommended: rec.recommended
+  });
+  writeAdrFile(adrPath(root, rec.id), rec);
+  syncIndex(root, rec);
+  return rec;
+}
+function decideAdr(root, id, input) {
+  const prev = requireAdr(root, id);
+  if (prev.status !== "proposed") {
+    throw new Error(
+      `ADR ${id} \uB294 proposed \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${prev.status}) \u2014 \uAE30\uB85D\uB41C \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC5C6\uB2E4. reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815(version++ + STALE \uC804\uD30C)\uD55C \uB4A4 \uB2E4\uC2DC \uCC44\uD0DD\uD558\uB77C.`
+    );
+  }
+  const chosenRaw = input.chosen.trim();
+  if (!chosenRaw) throw new Error(`ADR ${id} \uCC44\uD0DD \uAC12\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uB610\uB294 \uC790\uC720 \uC815\uC758 \uAC12\uC744 \uB123\uC5B4\uB77C`);
+  if (!input.rationale.trim()) {
+    throw new Error(
+      `ADR ${id} \uCC44\uD0DD \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uACB0\uC815 \uAE30\uB85D\uC740 \uBC18\uB144 \uB4A4 \uC77D\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uC544\uBB34 \uC815\uBCF4\uB3C4 \uC8FC\uC9C0 \uC54A\uB294\uB2E4. \uC65C \uC774 \uC548\uC744 \uACE8\uB790\uB294\uC9C0 \uD55C \uC904\uC774\uB77C\uB3C4 \uB0A8\uACA8\uB77C.`
+    );
+  }
+  const known = prev.options.some((o) => o.id === chosenRaw);
+  const options = known ? prev.options : [...prev.options, { id: CUSTOM_OPTION_ID, title: chosenRaw, pros: [], cons: [] }];
+  const chosen = known ? chosenRaw : CUSTOM_OPTION_ID;
+  const missing = [];
+  const rejected = [];
+  for (const o of options) {
+    if (o.id === chosen) continue;
+    const reason = (input.rejectedReasons[o.id] ?? "").trim();
+    if (!reason) {
+      missing.push(o.id);
+      continue;
+    }
+    rejected.push({ id: o.id, reason });
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `ADR ${id} \uC758 \uAE30\uAC01 \uC0AC\uC720\uAC00 \uBE60\uC9C4 \uC120\uD0DD\uC9C0: ${missing.join(", ")} \u2014 \uAE30\uAC01 \uC0AC\uC720 \uC5C6\uB294 \uACB0\uC815 \uB85C\uADF8\uB294 "\uC65C \uC800\uAC74 \uC548 \uD588\uB098"\uC5D0 \uB2F5\uD558\uC9C0 \uBABB\uD55C\uB2E4. \uCC44\uD0DD\uD558\uC9C0 \uC54A\uC740 \uBAA8\uB4E0 \uC120\uD0DD\uC9C0\uC5D0 \uC0AC\uC720\uB97C \uB2EC\uC544\uB77C.`
+    );
+  }
+  const rec = {
+    ...prev,
+    options,
+    chosen,
+    rationale: input.rationale.trim(),
+    rejected,
+    status: "accepted"
+  };
+  appendEvent(root, "adr-decided", {
+    id: rec.id,
+    phase: rec.phase,
+    version: rec.version,
+    chosen: rec.chosen,
+    custom: !known,
+    rejected: rec.rejected.map((r) => r.id)
+  });
+  writeAdrFile(adrPath(root, rec.id), rec);
+  syncIndex(root, rec);
+  return rec;
+}
+function reviseAdr(root, id, input) {
+  const prev = requireAdr(root, id);
+  const options = input.options ?? prev.options;
+  const recommended = input.options ? input.recommended : input.recommended ?? prev.recommended;
+  assertOptions(options, recommended);
+  const { affected, unverifiable } = referencingWaves(root, id);
+  const rec = {
+    id: prev.id,
+    phase: prev.phase,
+    question: input.question ?? prev.question,
+    options,
+    ...recommended ? { recommended } : {},
+    rejected: [],
+    status: "proposed",
+    version: prev.version + 1
+  };
+  appendEvent(root, "adr-revised", {
+    id: rec.id,
+    phase: rec.phase,
+    from: prev.version,
+    to: rec.version,
+    affected,
+    unverifiable
+  });
+  writeAdrFile(adrHistoryPath(root, id, prev.version), { ...prev, status: "superseded" });
+  writeAdrFile(adrPath(root, id), rec);
+  syncIndex(root, rec);
+  for (const w of affected) markStale(root, w);
+  return { record: rec, affectedWaves: affected, unverifiable };
+}
+var STATUS_LABEL = {
+  proposed: "\uC81C\uC548\uB428",
+  accepted: "\uCC44\uD0DD\uB428",
+  superseded: "\uB300\uCCB4\uB428"
+};
+function renderAdrPacket(rec) {
+  const L = [];
+  L.push(`# ${rec.id} \xB7 ${rec.phase} \u2014 ${rec.question}`, "");
+  L.push(`- \uC0C1\uD0DC: ${STATUS_LABEL[rec.status]} (v${rec.version})`, "");
+  L.push("## \uC120\uD0DD\uC9C0", "");
+  for (const o of rec.options) {
+    const mark = o.id === rec.chosen ? " \u2190 \uCC44\uD0DD" : o.id === rec.recommended ? " \u2190 \uCD94\uCC9C" : "";
+    L.push(`### ${o.title} (\`${o.id}\`)${mark}`);
+    L.push(`- \uC7A5\uC810: ${o.pros.length ? o.pros.join(", ") : "(\uBBF8\uAE30\uC7AC)"}`);
+    L.push(`- \uB2E8\uC810: ${o.cons.length ? o.cons.join(", ") : "(\uBBF8\uAE30\uC7AC)"}`, "");
+  }
+  if (rec.recommended) {
+    const r = rec.options.find((o) => o.id === rec.recommended);
+    L.push("## \uCD94\uCC9C\uC548", "", `\`${rec.recommended}\` \u2014 ${r ? r.title : "(\uC120\uD0DD\uC9C0\uC5D0\uC11C \uC0AC\uB77C\uC9D0)"}`, "");
+  }
+  if (rec.chosen) {
+    const c = rec.options.find((o) => o.id === rec.chosen);
+    L.push("## \uACB0\uC815", "");
+    L.push(`- \uCC44\uD0DD: \`${rec.chosen}\` \u2014 ${c ? c.title : "(\uC120\uD0DD\uC9C0\uC5D0\uC11C \uC0AC\uB77C\uC9D0)"}`);
+    L.push(`- \uADFC\uAC70: ${rec.rationale ?? "(\uBBF8\uAE30\uC7AC)"}`);
+    L.push("- \uAE30\uAC01 \uC0AC\uC720:");
+    if (rec.rejected.length === 0) {
+      L.push("  - (\uC5C6\uC74C)");
+    } else {
+      for (const r of rec.rejected) {
+        const o = rec.options.find((x) => x.id === r.id);
+        L.push(`  - \`${r.id}\`${o ? ` (${o.title})` : ""}: ${r.reason}`);
+      }
+    }
+    L.push("");
+  }
+  return L.join("\n");
+}
 
 // core/src/cli.ts
 var HOOK_EVENTS = ["session-start", "pre-tool", "post-tool", "stop"];
@@ -8573,10 +9159,10 @@ function flag(argv, name) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs11.existsSync(harnessDir(root))) return;
-    fs11.mkdirSync(runtimeDir(root), { recursive: true });
-    fs11.appendFileSync(
-      path10.join(runtimeDir(root), "hook-errors.log"),
+    if (!fs13.existsSync(harnessDir(root))) return;
+    fs13.mkdirSync(runtimeDir(root), { recursive: true });
+    fs13.appendFileSync(
+      path12.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
     );
@@ -8595,7 +9181,7 @@ function run(argv, root) {
       let input = {};
       try {
         if (!process.stdin.isTTY) {
-          const raw = fs11.readFileSync(0, "utf8");
+          const raw = fs13.readFileSync(0, "utf8");
           if (raw.trim()) {
             try {
               input = JSON.parse(raw);
@@ -8657,7 +9243,19 @@ function run(argv, root) {
               throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${evidence} (claimed, code, measured \uC911 \uD558\uB098)`);
             }
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
-            console.log(`${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}`);
+            let packet = "";
+            try {
+              fs13.mkdirSync(packetsDir(root), { recursive: true });
+              packet = path12.join(packetsDir(root), `${phase}.md`);
+              fs13.writeFileSync(packet, buildReviewPacket(root, phase));
+            } catch (e) {
+              console.error(`\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`);
+              packet = "";
+            }
+            console.log(
+              `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
+\uB9AC\uBDF0 \uD328\uD0B7: ${path12.relative(root, packet)}` : "")
+            );
             return 0;
           }
           case "approve": {
@@ -8684,6 +9282,85 @@ function run(argv, root) {
             return 0;
           default:
             throw new Error(`\uC54C \uC218 \uC5C6\uB294 gate \uD558\uC704 \uBA85\uB839: ${sub}`);
+        }
+      }
+      case "report": {
+        switch (sub) {
+          case "packet": {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            console.log(buildReviewPacket(root, phase));
+            return 0;
+          }
+          case "rtm":
+            console.log(renderRtm(root));
+            return 0;
+          case "hub":
+            console.log(buildHub(root));
+            return 0;
+          default:
+            throw new Error(`\uC54C \uC218 \uC5C6\uB294 report \uD558\uC704 \uBA85\uB839: ${sub} (packet|rtm|hub)`);
+        }
+      }
+      case "adr": {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case "propose": {
+            const id = flag(args, "id");
+            const phase = flag(args, "phase");
+            const question = flag(args, "question");
+            if (!id || !question) throw new Error("\uC0AC\uC6A9\uBC95: harness adr propose --id <ADR-x> --phase <P0..P12> --question <\uC9C8\uBB38> --option <id:\uC81C\uBAA9> ...");
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`);
+            const options = args.map((a, i) => a === "--option" ? args[i + 1] : void 0).filter((v) => typeof v === "string" && v.length > 0).map((v) => {
+              const at = v.indexOf(":");
+              if (at <= 0) throw new Error(`--option \uD615\uC2DD\uC740 <id>:<\uC81C\uBAA9> \uC774\uB2E4: ${v}`);
+              return { id: v.slice(0, at), title: v.slice(at + 1), pros: [], cons: [] };
+            });
+            const rec = proposeAdr(root, { id, phase, question, options, recommended: flag(args, "recommend") });
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case "decide": {
+            const id = rest[0];
+            const chosen = flag(args, "choose");
+            const rationale = flag(args, "rationale");
+            if (!id || !chosen || !rationale) {
+              throw new Error("\uC0AC\uC6A9\uBC95: harness adr decide <ADR-x> --choose <\uC120\uD0DD\uC9C0id|\uC790\uC720\uAC12> --rationale <\uADFC\uAC70> --reject <id>:<\uC0AC\uC720> ...");
+            }
+            const rejectedReasons = {};
+            args.forEach((a, i) => {
+              if (a !== "--reject") return;
+              const v = args[i + 1] ?? "";
+              const at = v.indexOf(":");
+              if (at <= 0) throw new Error(`--reject \uD615\uC2DD\uC740 <\uC120\uD0DD\uC9C0id>:<\uAE30\uAC01 \uC0AC\uC720> \uC774\uB2E4: ${v}`);
+              rejectedReasons[v.slice(0, at)] = v.slice(at + 1);
+            });
+            const rec = decideAdr(root, id, { chosen, rationale, rejectedReasons });
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case "revise": {
+            const { record, affectedWaves, unverifiable } = reviseAdr(root, rest[0], {
+              question: flag(args, "question")
+            });
+            console.log(`${record.id} \u2192 v${record.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${affectedWaves.join(", ") || "\uC5C6\uC74C"}`);
+            if (unverifiable.length > 0) {
+              console.error(`STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00 \uC6E8\uC774\uBE0C: ${unverifiable.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`);
+              return 1;
+            }
+            return 0;
+          }
+          case "show": {
+            const rec = getAdr(root, rest[0]);
+            if (!rec) throw new Error(`ADR \uC5C6\uC74C: ${rest[0]}`);
+            console.log(renderAdrPacket(rec));
+            return 0;
+          }
+          case "list":
+            console.log(JSON.stringify(listAdrs(root), null, 2));
+            return 0;
+          default:
+            throw new Error(`\uC54C \uC218 \uC5C6\uB294 adr \uD558\uC704 \uBA85\uB839: ${sub}`);
         }
       }
       case "doc": {
