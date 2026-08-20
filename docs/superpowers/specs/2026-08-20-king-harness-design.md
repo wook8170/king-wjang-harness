@@ -33,6 +33,7 @@
     코드에서 디자인 시스템만 수정하면 톤·토큰 일괄 변경이 가능해야 한다 (지침 강주입).
 13. 기술 스택 / 운영·배포·확장 / 디자인 기반(오픈소스 라이브러리 vs 자체 구축)은
     시스템 성격·사용자 의도 기반 **추천 + 재정의** 가능해야 한다.
+14. 요구사항부터 배포까지 **문서로 추적 가능한 산출물 관리** (레지스트리 + 추적 매트릭스).
 
 ## 1. 아키텍처: 코어 엔진 + 3 어댑터 (접근안 C)
 
@@ -113,7 +114,7 @@
 
 모든 설계 요소는 ID를 가진 노드: `C-x`(컨셉) `D-x`(도메인) `M-x`(모듈) `F-x`(기능)
 `UX-x`(화면/시나리오) `API-x` `SCH-x`(스키마) `DS-TOK/PRIM/COMP/DCOMP-x`(디자인 시스템 4계층)
-`ADR-x`(결정 기록).
+`ADR-x`(결정 기록) `DOC-x`(산출물 문서, §3-7).
 
 - 노드 스키마: `id, title, parent, doc_anchor(파일#헤딩), version, status(draft→approved→stale)`
 - 웨이브 지시서 frontmatter가 구현 대상 노드 ID를 참조, 커밋 트레일러에도 기록.
@@ -169,6 +170,25 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 | 머신 교체 | `.harness/` git push/pull. 웨이브 루프는 안정 시점마다 커밋 |
 
 `harness doctor`: 무결성 검사 + 이벤트 재생 복구 + 진행 중 작업 보고.
+
+### 3-7. 산출물 레지스트리 · 요구사항 추적 매트릭스(RTM)
+
+**모든 페이즈 산출물은 등록된 문서다.** 설계 문서·ADR·감사 리포트·결함 대장·시각 증적·릴리스 노트가
+원장에 `DOC-x` 노드로 등록된다:
+
+```
+{id, phase, path, version, status(draft→submitted→approved→superseded), hash, linked_nodes}
+```
+
+- **게이트 연동**: `gate submit` = submitted, `gate approve` = approved + 해시 고정.
+  개정은 새 버전 생성 + 이전 버전 superseded (git 이력으로 언제든 회수).
+- **전 구간 추적 체인**: F-x(요구) → 설계 문서 섹션(doc_anchor) → ADR → 웨이브 → 커밋 →
+  테스트/E2E 증적 → 배포 기록 → 릴리스 노트. `harness trace <노드>`가 문서·증적 포함 전 체인 조회.
+- **`harness report rtm`** — 요구사항 추적 매트릭스 생성: 기능(F-x) × {설계 문서, ADR, 웨이브,
+  테스트, 증적, 배포}. 미커버 구간(설계만 있고 구현 없음, 구현만 있고 검증 없음)을 자동 표시.
+  게이트 리뷰 패킷과 P12 출하 체크리스트에 첨부, 아티팩트로 발행.
+- **배포 기록**: P11 배포마다 `{버전, 커밋 SHA, 환경, 시각, 검증 증적}` 등록 →
+  "이 요구사항이 어느 배포에 실렸나" 역추적 가능.
 
 ## 4. 게이트·훅 강제
 
@@ -376,7 +396,7 @@ claude plugin install king-harness@<마켓플레이스>
 각 항목은 개별 스펙→플랜→구현 사이클로 진행:
 
 1. **코어 엔진 v0**: state.json·events.jsonl·원장·웨이브 CRUD·`harness hook` 판정기 + 훅 배선 + 단위 테스트
-2. **게이트·리뷰 패킷**: submit/approve/무효화 + 아티팩트 생성 + 권한 다이얼로그 장치
+2. **게이트·리뷰 패킷**: submit/approve/무효화 + 아티팩트 생성 + 권한 다이얼로그 장치 + 산출물 레지스트리·RTM 리포트
 3. **설계 트랙 스킬 (P0~P6)** + researcher/design-auditor + ADR 결정 포인트
 4. **디자인 서브시스템**: Claude Design 연동(sync/추출) + HTML 정본 생성 + 토큰 파이프라인
 5. **구축 트랙**: 프로파일 2종 + 웨이브 루프 + executor/verifier + 시각 증적 + 룰팩·스왑 드릴
