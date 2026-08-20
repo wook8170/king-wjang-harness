@@ -29,11 +29,13 @@ export function writeState(root: string, state: HarnessState): void {
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: new Date().toISOString() };
   fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n');
-  fs.renameSync(tmp, target); // 같은 디렉토리 내 rename = POSIX 원자적
+  fs.renameSync(tmp, target); // 같은 디렉토리 내 rename = POSIX 원자적 (내구성은 events.jsonl 재생이 담당)
 }
 
 export function initHarness(root: string): void {
-  if (isInitialized(root)) throw new Error(`.harness/ 가 이미 초기화되어 있다: ${harnessDir(root)}`);
+  // 디렉토리 기준 가드: state.json만 사라진 상태에서 재실행하면 events.jsonl(진실의 원천)·
+  // config.yaml이 덮여 전멸한다 — isInitialized(state.json 존재)는 훅 비간섭 판정용으로 별도 유지.
+  if (fs.existsSync(harnessDir(root))) throw new Error(`.harness/ 가 이미 초기화되어 있다: ${harnessDir(root)}`);
   for (const d of [harnessDir(root), designDir(root), wavesDir(root), runtimeDir(root)]) {
     fs.mkdirSync(d, { recursive: true });
   }

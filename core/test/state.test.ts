@@ -39,8 +39,8 @@ describe('state', () => {
     const root = tmp();
     initHarness(root);
     const before = readState(root);
-    writeState(root, { ...before, phase: 'P1' });
-    expect(readState(root).updatedAt >= before.updatedAt).toBe(true);
+    writeState(root, { ...before, phase: 'P1', updatedAt: '1970-01-01T00:00:00.000Z' });
+    expect(readState(root).updatedAt).not.toBe('1970-01-01T00:00:00.000Z');
   });
 
   it('.runtime은 gitignore 처리된다', () => {
@@ -48,5 +48,14 @@ describe('state', () => {
     initHarness(root);
     const gi = fs.readFileSync(path.join(runtimeDir(root), '.gitignore'), 'utf8');
     expect(gi.trim()).toBe('*');
+  });
+
+  it('state.json만 사라져도 init 재실행이 events를 덮지 않는다', () => {
+    const root = tmp();
+    initHarness(root);
+    fs.appendFileSync(path.join(root, '.harness/events.jsonl'), '{"ts":"t","type":"x","data":{}}\n');
+    fs.rmSync(statePath(root));
+    expect(() => initHarness(root)).toThrow(/이미 초기화/);
+    expect(fs.readFileSync(path.join(root, '.harness/events.jsonl'), 'utf8')).toContain('"type":"x"');
   });
 });
