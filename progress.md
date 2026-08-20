@@ -1,5 +1,56 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-20 — ★ Critical 수정 웨이브 완료 — 최종 재판정 "머지 가능" (8커밋, 167 tests)
+
+계정 전환 후 서브에이전트 주도(구현→스펙 리뷰→품질 리뷰 2단계, 수정 루프 포함)로 진행.
+범위: 최종 리뷰 C1·C2·C3 + 값싼 수정 후보 (로드맵 이월 항목 I6·M1·M3 등은 범위 밖 유지).
+**Fable 최종 리뷰어가 원 Critical 3건을 E2E 재현으로 전부 "닫힘" 확인, 판정 "머지 가능
+(628cd60 포함)"** — 범위 64c99e2..628cd60, 실측 167/167 tests(12파일)·tsc 클린·tsup 빌드
+성공, 값싼 수정 5건도 전부 원 지목 취지대로 E2E 검증 완료.
+
+### 다음에 즉시 할 일
+1. **main 병합 여부 사용자 확인** (superpowers:finishing-a-development-branch) — push 금지
+   유지 중. 병합/보류/PR 은 사용자 결정 대기.
+2. 결정 후 → 로드맵 2번 "게이트·리뷰 패킷" 스펙→플랜 사이클 시작.
+
+### 최종 재판정 이월 기록 (Important 이하, 머지 비차단)
+- 보호 디렉토리 자체가 외부 심링크일 때 그 실경로 직접 쓰기는 P8에서 허용(hook.ts:283-331)
+  — 성립 조건·우회 수단 모두 애초 차단 범위 밖인 Bash로 가능해 기존 수용 표면 이내. "훅
+  강제력 범위" 문서화로 갈음 가능 (Minor).
+- deny 사유 문구 정밀화(hook.ts:306) · 신규 테스트 "C3:" 라벨 정정 (Cosmetic).
+- doctor 정산 후 웨이브 파일 복귀 시 frontmatter status:active 잔존(재활성화 가능, 일관 동작)
+  · 하드링크·Bash 직접 쓰기는 설계상 범위 밖 (Info).
+
+### 태스크별 기록
+- **Task 1 (C1+C2) 완료 — 2단계 리뷰 통과**: `a89d430`(구현: doctor activeWave 부재 issue
+  승격+--repair 시 wave-stale 이벤트 정산, createWave id 저널·디스크 최댓값 기반) +
+  `f3b7472`(품질 리뷰 지적 반영: **브랜치 되감김 잔존 증적 가드** — .harness/가 커밋 대상이라
+  저널도 되감기므로 id 단조성 대신 evidenceDir 비어있지 않으면 create 거부 + 마이너 3건).
+  스펙 리뷰 ✅, 품질 리뷰 Approved. 실측 142 passed.
+- **Task 2 (C3 심링크) 완료 — 2단계 리뷰 통과**: `2944e1e`(realOrSelf 정규화) →
+  `25d3872`(deny 검사 리터럴+realpath 이중 공간 합집합, 스펙 재리뷰 ✅) → `c0e8c3b`(품질
+  리뷰 반영: allow 판정도 합집합 + 테스트 보강 — 정상 통과 4·P8 realRel 분기·형태 불일치
+  회귀·대소문자 우회 봉인). 품질 재판정 Approved. 156 passed.
+- **Task 3 (값싼 수정 5건) 완료 — 2단계 리뷰 통과**: `19f6042`(prepare 스크립트·
+  .runtime/.gitignore 자기예외·bump 가드 해제 고지·doctor 훅 로그 정리·--refs 원장 검증,
+  163 passed, 스펙 리뷰 ✅) → 품질 리뷰 With fixes: **Important 2건** — (a) doctor --repair가
+  hook-errors.log를 비가역 truncate(이 diff의 회귀, --force 경로가 최악) → `.prev` 회전으로,
+  (b) 맨 클론(플러그인 배포 경로)에서 bin/harness가 MODULE_NOT_FOUND exit 1 → 훅 무해 계약
+  위반(기존 결함, 3줄 가드: hook이면 stderr 안내+exit 0). 수정 커밋 `c820dc6` 반영,
+  품질 재판정 Approved. 165 passed.
+- **추가 수정 (최종 재판정의 Important 즉시 반영)**: `628cd60` — evidenceFiles에 isFile()
+  필터. 빈 서브디렉토리(stat.size 64>0)만으로 UX 게이트·잔존 증적 가드가 "증적 있음" 오판하던
+  기존 구멍(최종 리뷰어 재현). 공유 헬퍼 단일 지점 수정으로 두 판정 기준 동일 유지, 테스트
+  2건 봉인. 최종 리뷰어 확인 완료. 167 passed.
+- Task 3 품질 리뷰 Minor 이월(머지 비차단): devDependencies 필수(--omit=dev 설치 시 prepare
+  실패) 설치 문서 한 줄 · 기존 .harness/의 옛 `*`-only .gitignore 마이그레이션(doctor 검사
+  후보) · --refs 검증이 CLI 전용(createWave 직접 호출은 우회 — v0 수용, 게이트 CLI 때 기억).
+- 리뷰어 부수 발견(기록): C3 수정으로 **대소문자 우회(.HARNESS/state.json)·심링크 별칭 간접
+  편집도 함께 닫힘**(base에서는 통과되던 구멍). realpath 판정의 TOCTOU 잔존은 "훅은 보안
+  경계가 아닌 사고 방지 장치" 계약 범위 — 문서에만 남기면 충분(로드맵 문서화 후보).
+- 환경 잡음: 서브에이전트가 "SubagentStop 알림 반복 수신"을 호소하며 멈추는 현상 관측
+  (orca claude-hook.sh 추정, 무해) — 재개 메시지로 무시 지시하면 진행됨.
+
 ## 2026-08-20 — ★ 코어 엔진 v0 구현 완료 (14/14 태스크, 로드맵 1번 종료)
 
 ### 최종 상태
