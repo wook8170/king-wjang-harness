@@ -60,8 +60,11 @@ const EXCERPT_MAX_LINE = 200;
  *     조작을 차단한다(SEC-12).
  *  3. 길이 캡: 주입 폭을 제한한다(턴 로그가 이미 쓰던 줄당 200자 절단과 동일 기준).
  */
-function sanitizeUntrusted(s: string, max = EXCERPT_MAX_LINE): string {
-  return s
+function sanitizeUntrusted(s: unknown, max = EXCERPT_MAX_LINE): string {
+  // String() 강제: 손상 state.json 이 형태 검증(phase·activeWave)은 통과하되 backtrack.reason 을
+  // 비문자열(수 등)로 실으면 `.replace` 가 throw 해 session-start 주입 전체가 드롭된다 —
+  // 무해 catch 로 흡수되나 정상 주입이 사라진다. 진입에서 문자열로 강제해 모든 호출부를 방어한다.
+  return String(s)
     .replace(/[\r\n]+/g, ' ')                       // 개행 → 공백 (지시 라인 위조 차단)
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, '') // 그 외 제어문자(C0/C1, ANSI ESC 포함) 제거
     .slice(0, max);

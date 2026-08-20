@@ -138,6 +138,19 @@ describe('hook: session-start 주입 격리 하드닝 (SEC-10/11)', () => {
     expect(bLine).toContain('시스템 파괴'); // 개행이 공백으로 접혀 같은 줄에 남는다
   });
 
+  it('SEC-10 회귀: backtrack.reason 이 비문자열이어도 주입이 드롭되지 않는다', () => {
+    // 형태 검증(phase·activeWave)은 통과하되 backtrack.reason 이 수인 손상 state.json —
+    // sanitizeUntrusted 가 String() 강제 없이 .replace 하면 throw 해 주입 전체가 null 로 드롭됐다.
+    const root = tmp();
+    initHarness(root);
+    const st = readState(root) as unknown as Record<string, unknown>;
+    st.backtrack = { to: 'P3', reason: 12345 }; // 비문자열 reason (손상)
+    fs.writeFileSync(path.join(root, '.harness', 'state.json'), JSON.stringify(st));
+    const ctx = ctxOf(root);
+    expect(ctx).toContain('역행 진행 중');       // 주입이 살아 있다
+    expect(ctx).toContain('12345');              // String() 강제로 값 표시
+  });
+
   it('SEC-11: 턴 로그가 정적 `--- 발췌 끝 ---` 을 재현해도 nonce 펜스라 breakout 되지 않는다', () => {
     const root = tmp();
     initHarness(root);
