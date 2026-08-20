@@ -34,6 +34,7 @@
 13. 기술 스택 / 운영·배포·확장 / 디자인 기반(오픈소스 라이브러리 vs 자체 구축)은
     시스템 성격·사용자 의도 기반 **추천 + 재정의** 가능해야 한다.
 14. 요구사항부터 배포까지 **문서로 추적 가능한 산출물 관리** (레지스트리 + 추적 매트릭스).
+15. 개발 진행 중 새 세션이 열리면 **Remote Control 활성화** — 모바일 환경에서 연속 확인 가능.
 
 ## 1. 아키텍처: 코어 엔진 + 3 어댑터 (접근안 C)
 
@@ -97,7 +98,7 @@
 ```
 .harness/
   state.json          # 상태 머신: 현재 페이즈, 게이트별 상태, 활성 웨이브 포인터 (원자적 쓰기)
-  config.yaml         # 게이트 정책(완화), 프로파일 선택, 모델 라우팅, terse, auto-retry opt-in
+  config.yaml         # 게이트 정책(완화), 프로파일 선택, 모델 라우팅, terse, auto-retry opt-in, remote_control
   design/
     00-concept.md …   # P0~P5 산출물 (사람이 읽는 정본)
     ledger.yaml       # 설계 원장 (기계가 읽는 추적 정본)
@@ -171,6 +172,18 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 
 `harness doctor`: 무결성 검사 + 이벤트 재생 복구 + 진행 중 작업 보고.
 
+### 3-6a. 모바일 원격 관제 (Remote Control) (요구 15)
+
+`config.yaml: remote_control: on`(기본 on)이면, `.harness/`가 활성인 프로젝트에서 **새 세션이 열릴
+때마다 SessionStart 주입이 Remote Control 활성화를 첫 행동으로 지시**한다(`/remote-control` 실행) —
+세션이 바뀌어도 사용자는 모바일에서 끊김 없이 진행 상황을 관제·개입할 수 있다.
+
+- **크리티컬 이벤트 소환(§4-4)과 결합**: 소환 알림(푸시)을 받고 모바일에서 바로 현재 세션에 접속해
+  응답하는 동선이 완성된다. 게이트 리뷰 패킷(아티팩트)·승인 요청도 같은 채널에서 이어짐.
+- **열화 경로**: 활성화는 모델 지시 기반(하드 강제 아님)이므로 실패할 수 있다 —
+  auto-retry의 headless 재개(`claude -p`)처럼 Remote Control이 불가한 실행 형태에서는
+  PushNotification + 아티팩트가 모바일 가시성의 폴백 채널.
+
 ### 3-7. 산출물 레지스트리 · 요구사항 추적 매트릭스(RTM)
 
 **모든 페이즈 산출물은 등록된 문서다.** 설계 문서·ADR·감사 리포트·결함 대장·시각 증적·릴리스 노트가
@@ -196,7 +209,7 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 
 | 훅 | 판단 |
 |---|---|
-| SessionStart | state + 활성 웨이브 + 페이즈 규칙 + (config에 따라) terse 규칙 주입 |
+| SessionStart | state + 활성 웨이브 + 페이즈 규칙 + (config에 따라) terse 규칙·Remote Control 활성화 지시(§3-6a) 주입 |
 | PreToolUse (Write·Edit·Bash) | 페이즈별 차단 매트릭스 + 디자인 시스템 동결 + raw 값 리터럴 경고 |
 | Stop | 턴 로그 신선도 차단 + 크리티컬 이벤트 소환 + 한도 티어별 핸드오프 강제 |
 | PostToolUse | 실패 카운터, usage 티어 갱신 (token-guard 이식) |
