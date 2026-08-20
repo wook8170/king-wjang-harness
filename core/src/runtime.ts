@@ -15,7 +15,10 @@ export function noteTurnLogged(root: string): void {
 }
 
 export function readRuntime(root: string): { lastActivityAt?: string; lastTurnAt?: string } {
-  const read = (name: string) =>
-    fs.existsSync(f(root, name)) ? fs.readFileSync(f(root, name), 'utf8').trim() : undefined;
+  const read = (name: string): string | undefined => {
+    if (!fs.existsSync(f(root, name))) return undefined;
+    const v = fs.readFileSync(f(root, name), 'utf8').trim();
+    return v || undefined;
+  };
   return { lastActivityAt: read('last-activity'), lastTurnAt: read('last-turn') };
 }
