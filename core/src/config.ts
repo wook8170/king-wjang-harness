@@ -9,6 +9,8 @@ export const DEFAULT_CONFIG: HarnessConfig = {
   terse: false,
   design_allowed_prefixes: ['.harness/', 'docs/'],
   design_blocked_bash: ['docker push', 'kubectl apply', 'vercel deploy', 'netlify deploy', 'fly deploy'],
+  design_system_frozen_roots: [],
+  block_raw_values: false,
 };
 
 const asBool = (v: unknown, d: boolean): boolean =>
@@ -33,5 +35,7 @@ export function loadConfig(root: string): HarnessConfig {
     terse: asBool(raw.terse, DEFAULT_CONFIG.terse),
     design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
     design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
+    design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
+    block_raw_values: raw.block_raw_values === true,
   };
 }

@@ -1,5 +1,41 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — 로드맵 §13.2~13.8 구현 착수 (ultragoal 13스토리, G001~G004 완료)
+
+**사용자 지시(/ultragoal): §13.2~§13.8 전부를 서브에이전트로 설계·구현하고 테스트 green 유지.**
+규모가 남은 제품 전부라 **한 세션에 안 끝난다** — ultragoal 원장으로 세션 넘김 가능하게 세움.
+
+- **원장**: `.omc/ultragoal/{goals.json,ledger.jsonl}` — 13스토리 등록(G001 게이트코어 · G002 레지스트리 ·
+  G003 리뷰패킷/RTM/허브 · G004 ADR · G005 설계스킬P0-P6 · G006 토큰파이프라인 · G007 ClaudeDesign연동 ·
+  G008 스택프로파일 · G009 웨이브루프 · G010 시각증적 · G011 출하트랙 · G012 흡수도구 · G013 패키징).
+  `omc ultragoal status` 로 조회.
+- **완료 G001~G004** (§13.2 게이트·리뷰패킷 **완료**, §5 ADR **완료**):
+  - `2e90344` gate.ts(submit/approve/verify/sweep, 해시고정→변조 자동무효화, **출하트랙 measured 강제**,
+    canEnterPhase/setPhaseViaGate) + registry.ts(DOC-x, **artifact_url 없이 submitted 불가**, 개정=새버전+superseded)
+  - `7ae08bd` report.ts(리뷰패킷·**RTM 갭 자동표시**·허브) + adr.ts(**선택지 2~4 강제**·**기각사유 필수**·
+    개정 시 STALE 전파+unverifiable 보고)
+  - CLI 배선 완료: `gate|doc|report|adr` 명령군. `gate submit` 이 `.harness/packets/<P>.md` 자동 생성.
+  - **테스트 198 → 339 green**, tsc0. E2E 실측 전건 기대대로.
+- **진행 중**: G005(설계 트랙 스킬 P0–P6 + researcher·design-auditor 에이전트, `skills/phase-*` `agents/*`),
+  G006(토큰 파이프라인 `core/src/tokens.ts` — 생성기·raw값 탐지·동결·스왑드릴). 둘 다 서브에이전트.
+- **다음 즉시 할 일**: G005·G006 결과 수령 → CLI/훅 배선(내가 직접, 충돌 방지) → green 재측정 → 커밋 →
+  G007(Claude Design 연동)·G008(스택 프로파일) 병렬 착수. 이후 G009~G013 순차.
+
+### ⚠ 확인 대기 (사용자만 가능)
+- **`/goal` 미설정** — ultragoal checkpoint 가 `/goal` 스냅샷을 요구하는데 슬래시 명령은 내가 못 건다.
+  **없는 활성 목표를 지어내지 않았다**(원장에 거짓 기록 금지). 사용자가 아래를 입력하면 일괄 checkpoint:
+  `/goal Complete all ultragoal stories in .omc/ultragoal/goals.json`
+  안 걸어도 구현은 진행되며 **실제 증거는 git 커밋**이다.
+- GitHub 리모트 없음 · LICENSE 없음 · push 금지 유지 · main 병합 보류 (이전 섹션 그대로).
+
+### 시스템 지식 (이번 웨이브)
+- **병렬 서브에이전트는 파일 완전 분리**가 절대 조건. 공유 타입(`types.ts`)·경로(`paths.ts`)는
+  **컨트롤러가 먼저 확정**하고 던져야 충돌이 없다. CLI 배선도 컨트롤러가 직접(에이전트에게 주면 충돌).
+- **계약 변경은 기존 테스트를 깬다** — `phase set` 을 게이트 경유로 바꾸자 cli.test.ts 2건 실패.
+  회귀가 아니라 의도된 계약 변경이므로 테스트를 새 계약(`--force` 부트스트랩 탈출구)에 맞췄다.
+- `phase set --force` = 게이트 검사 우회(부트스트랩·복구용), 이벤트에 `forced:true` 기록.
+- 서브에이전트 완료 알림의 `<result>` 는 비어 있다 — 실제 산출은 **파일·테스트로 직접 확인**해야 한다.
+
 ## 2026-08-21 — GitHub 런칭 README 4개 언어 + 아티팩트 (자율모드 완주)
 
 **사용자 지시: "GitHub 올릴 README를 개발자가 혹할 만하게, 다국어로" + 이후 "자율모드로 끝까지".**

@@ -98,4 +98,11 @@ export interface HarnessConfig {
   terse: boolean;
   design_allowed_prefixes: string[];
   design_blocked_bash: string[];
+  /**
+   * 디자인 시스템 동결 루트(§7) — P4 승인 후 이 경로들의 쓰기는 구축 트랙에서 차단된다.
+   * 빈 배열이면 동결하지 않는다(기본값) — 디자인 시스템을 안 쓰는 프로젝트를 막지 않기 위해.
+   */
+  design_system_frozen_roots: string[];
+  /** raw 값(색·간격·폰트 리터럴) 차단(§7 강제 3중의 훅 다리). 기본 off — 토큰 파일이 있어야 의미가 있다. */
+  block_raw_values: boolean;
 }

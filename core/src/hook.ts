@@ -20,6 +20,7 @@ import { readJournal, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, isPhase } from './types';
+import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -394,6 +395,37 @@ function preTool(
     const cmd = String(input.tool_input?.command ?? '');
     const hit = config.design_blocked_bash.find(b => cmd.includes(b));
     if (hit) return deny(`설계 트랙에서는 배포성 명령(${hit})을 실행할 수 없다.`, degraded);
+  }
+
+  // 디자인 시스템 강제(§7) — 페이즈와 무관하게 적용한다. 동결은 "승인된 디자인 시스템을
+  // 원장 밖에서 고치지 마라"이고, raw 값 차단은 "톤은 토큰 파일 하나의 함수다"를 지킨다.
+  // 둘 다 config 로 켜야 작동한다(기본 off) — 토큰을 안 쓰는 프로젝트를 막지 않기 위해.
+  if (isWrite && raw.trim()) {
+    const frozen = config.design_system_frozen_roots;
+    if (frozen.length > 0 && !state.backtrack) {
+      const hit = [rel, realRel].some(r => r !== '' && isFrozenPath(root, r, { frozenRoots: frozen }));
+      // 토큰 파일 자체는 동결 대상이 아니다 — 톤을 바꾸는 정당한 단일 지점이다.
+      if (hit && !isTokenFile(root, rel)) {
+        return deny(
+          `동결된 디자인 시스템 경로다(${frozen.join(', ')}) — 컴포넌트 신설·수정은 원장 개정이다. `
+          + '`harness backtrack P4 --reason "<사유>"` 로 공식 역행한 뒤 수정하라.',
+          degraded,
+        );
+      }
+    }
+    if (config.block_raw_values && !isTokenFile(root, rel)) {
+      const content = String(input.tool_input?.content ?? input.tool_input?.new_string ?? '');
+      const hits = findRawValues(content);
+      if (hits.length > 0) {
+        const shown = hits.slice(0, 3).map(h => `${h.line}행 ${h.value}(${h.kind})`).join(', ');
+        return deny(
+          `raw 값 리터럴은 기능 코드에 쓸 수 없다 — ${shown}${hits.length > 3 ? ` 외 ${hits.length - 3}건` : ''}. `
+          + '시맨틱 토큰을 참조하라(text.primary 는 되고 blue.500 은 안 된다). '
+          + '팔레트→시맨틱 매핑은 토큰 파일 내부 사정이다.',
+          degraded,
+        );
+      }
+    }
   }
 
   if (!inDesign && isWrite) {

@@ -24,6 +24,10 @@ import {
 } from './registry';
 import { buildReviewPacket, renderRtm, buildHub } from './report';
 import { proposeAdr, decideAdr, reviseAdr, getAdr, listAdrs, renderAdrPacket } from './adr';
+import {
+  loadTokens, generateCss, generateTs, generateTailwind, findRawValues,
+  isTokenFile, swapTokens, diffTokens, assertSwapIsMeaningful,
+} from './tokens';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
@@ -193,6 +197,61 @@ export function run(argv: string[], root: string): number {
           }
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
           default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+        }
+      }
+
+      case 'tokens': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'gen': {
+            // 토큰 파일 1개가 원천이고 나머지는 전부 생성물이다(§7) — 손으로 복제하지 않는다.
+            const doc = loadTokens(root);
+            const out = flag(args, 'out') ?? '.';
+            const targets: [string, string][] = [
+              ['tokens.css', generateCss(doc)],
+              ['tokens.ts', generateTs(doc)],
+              ['tailwind.tokens.js', generateTailwind(doc)],
+            ];
+            fs.mkdirSync(path.resolve(root, out), { recursive: true });
+            for (const [name, content] of targets) {
+              fs.writeFileSync(path.resolve(root, out, name), content);
+            }
+            console.log(targets.map(([n]) => path.join(out, n)).join('\n'));
+            return 0;
+          }
+          case 'lint': {
+            // 강제 3중의 린트 다리 — raw 값이 있으면 CI 레드(exit 1).
+            const files = rest.filter(f => !f.startsWith('--'));
+            if (files.length === 0) throw new Error('사용법: harness tokens lint <파일...>');
+            let total = 0;
+            for (const f of files) {
+              if (isTokenFile(root, f)) continue; // 토큰 파일 자체는 raw 값의 정당한 거처다
+              let src = '';
+              try { src = fs.readFileSync(path.resolve(root, f), 'utf8'); } catch { continue; }
+              for (const h of findRawValues(src)) {
+                console.log(`${f}:${h.line}:${h.column} ${h.kind} raw 값 ${h.value}`);
+                total++;
+              }
+            }
+            console.log(total === 0 ? 'raw 값 없음' : `raw 값 ${total}건 — 시맨틱 토큰을 참조하라`);
+            return total === 0 ? 0 : 1;
+          }
+          case 'swap': {
+            // 스왑 드릴: 대체 테마로 갈아끼운 뒤 전 화면을 다시 찍으면, 안 바뀌는 화면이
+            // 곧 하드코딩된 화면이다. 여기서는 스왑이 실제로 유의미한지까지 검사한다.
+            const overridePath = flag(args, 'with');
+            if (!overridePath) throw new Error('사용법: harness tokens swap --with <대체테마.json> [--out <경로>]');
+            const doc = loadTokens(root);
+            const overrides = JSON.parse(fs.readFileSync(path.resolve(root, overridePath), 'utf8'));
+            const swapped = swapTokens(doc, overrides);
+            assertSwapIsMeaningful(doc, swapped);
+            const changed = diffTokens(doc, swapped);
+            const out = flag(args, 'out');
+            if (out) fs.writeFileSync(path.resolve(root, out), generateCss(swapped));
+            console.log(`스왑 유효 — 변경 토큰 ${changed.length}건${out ? ` · CSS → ${out}` : ''}`);
+            return 0;
+          }
+          default: throw new Error(`알 수 없는 tokens 하위 명령: ${sub} (gen|lint|swap)`);
         }
       }
 
