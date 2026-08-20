@@ -1,2 +1,12 @@
 #!/usr/bin/env node
-require('../core/dist/cli.js').main(process.argv.slice(2));
+// core/dist 는 gitignore 다 — 플러그인 배포 경로(clone, npm install 없음)나
+// `npm install --ignore-scripts` 뒤에는 번들이 없다. 그때도 훅은 세션을 깨면 안 되므로
+// 훅 경로만 안내 한 줄 + exit 0 으로 침묵한다. 일반 CLI 는 실패를 숨기지 않는다(exit 1).
+let cli;
+try {
+  cli = require('../core/dist/cli.js');
+} catch {
+  console.error('king-wjang-harness: core/dist 빌드본이 없다 — `npm install`(prepare) 또는 `npm run prepare` 로 빌드하라.');
+  process.exit(process.argv[2] === 'hook' ? 0 : 1);
+}
+cli.main(process.argv.slice(2));

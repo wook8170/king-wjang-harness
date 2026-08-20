@@ -243,15 +243,39 @@ describe('doctor', () => {
     expect(runDoctor(root).warnings.join(' ')).toMatch(/2건/);
   });
 
-  it('--repair 는 발산이 없어도 훅 에러 로그를 정리하고 흔적을 남긴다', () => {
+  it('--repair 는 발산이 없어도 훅 에러 로그를 회전하고 흔적을 남긴다', () => {
     const root = setup();
     const log = hookErrorLog(root, 'e1\ne2\n');
     const r = runDoctor(root, { repair: true });
     expect(r.ok).toBe(true); // 고칠 발산이 없어도 로그 정리는 수행된다
-    expect(r.warnings.join(' ')).toMatch(/2건/); // 경고는 비우기 전 건수 그대로
-    expect(r.notes.join(' ')).toMatch(/hook-errors\.log 2건 확인 후 정리/);
-    expect(fs.readFileSync(log, 'utf8').trim()).toBe('');
-    expect(runDoctor(root).warnings.join(' ')).not.toMatch(/훅 판정 실패/); // 경고가 사라진다
+    expect(r.warnings.join(' ')).toMatch(/2건/); // 경고는 회전 전 건수 그대로
+    expect(r.notes.join(' ')).toMatch(/hook-errors\.log 2건 → \.prev 회전/);
+    // 파괴가 아니라 회전이다 — .runtime/ 은 gitignore 라 이 파일이 유일본이다
+    expect(fs.existsSync(log)).toBe(false);
+    expect(fs.readFileSync(`${log}.prev`, 'utf8')).toBe('e1\ne2\n');
+    expect(runDoctor(root).warnings.join(' ')).not.toMatch(/훅 판정 실패/); // 경고는 사라진다
+  });
+
+  it('--force 복구(저널 손상 조사 중)에서도 훅 로그 원문은 .prev 에 남는다', () => {
+    const root = setup();
+    const log = hookErrorLog(root, 'e1\n');
+    appendEvent(root, 'phase-set', { phase: 'P7' });
+    fs.appendFileSync(eventsPath(root), '{broken\n'); // 저널 손상 = 훅 로그가 교차 증거인 순간
+    fs.writeFileSync(statePath(root), '{corrupted');
+    const r = runDoctor(root, { repair: true, force: true });
+    expect(r.repaired).toBe(true);
+    expect(r.notes.join(' ')).toMatch(/\.prev 회전/);
+    expect(fs.readFileSync(`${log}.prev`, 'utf8')).toBe('e1\n');
+  });
+
+  it('회전 실패는 진단을 죽이지 않는다 (로그는 그대로 남는다)', () => {
+    const root = setup();
+    const log = hookErrorLog(root, 'e1\n');
+    fs.mkdirSync(`${log}.prev`); // rename 대상이 디렉토리 → renameSync 실패
+    const r = runDoctor(root, { repair: true });
+    expect(r.warnings.join(' ')).toMatch(/훅 판정 실패 1건/); // 경고는 남아 다음 실행에 다시 보인다
+    expect(r.notes.join(' ')).not.toMatch(/회전/);
+    expect(fs.readFileSync(log, 'utf8')).toBe('e1\n');
   });
 
   it('repair 없이 진단만 하면 훅 에러 로그를 보존한다', () => {

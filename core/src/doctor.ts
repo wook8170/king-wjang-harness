@@ -194,14 +194,18 @@ export function runDoctor(
 
   // 9. 훅 에러 로그 정리 — 비울 수단이 없으면 warning 이 영구히 남아 새 실패를 가린다.
   //    state 복구와 독립한 유지보수 동작이라 발산(issues)이 없어도 --repair 면 수행한다.
-  //    단 복구가 거부된 경우엔 손대지 않는다 — 원인 규명에 쓸 근거를 지우면 안 된다.
-  //    warning 은 비우기 전 건수 그대로 보고한다(이번 실행에서 무엇을 봤는지가 보고의 본체).
+  //    단 **비우지 않고 .prev 로 회전한다**: `.runtime/` 은 gitignore 라 이 파일이 유일본이고,
+  //    훅 자신이 "doctor --repair 권장"을 뿌리므로 무관한 사고 대응 중에 증거가 지워진다
+  //    (최악은 --force 경로 — 저널 손상 조사 중이라 훅 로그가 교차 증거인 순간이다).
+  //    `.prev` 도 `*` 규칙에 걸려 여전히 커밋되지 않는다.
+  //    복구가 거부된 경우엔 아예 손대지 않고, warning 은 회전 전 건수 그대로 보고한다.
   if (opts.repair && !refused && hookErrors > 0) {
+    const log = path.join(runtimeDir(root), 'hook-errors.log');
     try {
-      fs.writeFileSync(path.join(runtimeDir(root), 'hook-errors.log'), '');
-      notes.push(`hook-errors.log ${hookErrors}건 확인 후 정리`);
+      fs.renameSync(log, `${log}.prev`);
+      notes.push(`hook-errors.log ${hookErrors}건 → .prev 회전`);
     } catch {
-      // 정리 실패는 진단을 막지 않는다 — 경고가 남아 다음 실행에 다시 보인다
+      // 회전 실패는 진단을 막지 않는다 — 경고가 남아 다음 실행에 다시 보인다
     }
   }
 
