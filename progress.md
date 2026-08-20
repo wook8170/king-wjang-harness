@@ -1,5 +1,34 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — ★ 로드맵 §13.2~§13.8 완주 (13/13, 커밋 8개, 584 tests green)
+
+**정본.** 사용자 지시(/ultragoal)대로 **로드맵 남은 전부를 구현 완료**. 테스트 **198 → 584 green**, tsc0.
+
+- **커밋 8개**: `2e90344` gate+registry · `38432fd` 게이트 계약 테스트 반영 · `7ae08bd` report+adr ·
+  `e00d96b` tokens+skills · `8e6a55c` design+profile · `5a4589b` loop+evidence ·
+  `7c3b00d` ship+usage+migrate · `44d914c` P12스킬+readiness-auditor · `56b769e` MCP 어댑터
+- **신규 코어 모듈 13개**: gate registry report adr tokens design profile evidence loop ship
+  usage migrate mcp
+- **CLI 명령군**: gate doc report adr tokens design profile evidence loop ship usage migrate
+- **스킬 10종**(king-wjang-harness + phase-p0~p6 + p10 p11 p12) · **에이전트 5종**(researcher
+  design-auditor wave-executor wave-verifier readiness-auditor) · **MCP 도구 16종**
+- **최종 통합 검증(맨 클론 = 실제 배포 경로, 빌드·node_modules 없이)**: `--version`·`init`·`status`
+  정상, 훅 exit 0, **MCP tools/list 정상**, **`.harness/` 없는 프로젝트에서 0바이트 침묵**(비간섭).
+- **핵심 안전 속성 실증**: **MCP 로 게이트 승인 불가** — 승인 시도 후에도 게이트가 `submitted` 유지.
+  (§4-3 "최종 클릭은 사람" 장치가 MCP 로 우회되지 않음을 실행으로 확인.)
+
+### 다음 즉시 할 일
+- 구현은 완료. **전체 출하 검증**(`/verifying-production-readiness`)을 새 세션에서 돌릴 것을 권장 —
+  이번엔 축이 훨씬 넓어졌다(게이트·원장·디자인시스템·루프·출하·MCP).
+- ultragoal 원장은 여전히 `0/13 complete` 로 보인다 — `/goal` 미설정으로 checkpoint 가 막혔기 때문.
+  **실제 진행은 git 커밋이 정본**이다. 아래 확인 대기 참조.
+
+### ⚠ 확인 대기 (사용자만 가능)
+- **`/goal` 미설정** — ultragoal checkpoint 가 `/goal` 스냅샷을 요구하는데 슬래시 명령은 모델이 못 건다.
+  없는 활성 목표를 지어내지 않았다. 원장 동기화를 원하면:
+  `/goal Complete all ultragoal stories in .omc/ultragoal/goals.json`
+- GitHub 리모트 없음 · LICENSE 없음 · **push 금지 유지** · main 병합 보류 (이전 결정 그대로).
+
 ## 2026-08-21 — 로드맵 §13.2~13.8 구현 (12/13 완료, 커밋 6개, 563 tests green)
 
 **최신 정본.** 아래 이전 섹션들은 그 시점 기록.
