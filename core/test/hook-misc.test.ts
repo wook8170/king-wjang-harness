@@ -166,6 +166,27 @@ describe('hook: 심링크 root 정규화 (C3)', () => {
       expect(reason(out)).toMatch(/backtrack/);
     });
   });
+
+  describe('deny 사유는 두 공간의 교집합으로 고른다 (E2E)', () => {
+    // 사유 문구는 차단 여부와 별개다. 형태 불일치(root=link, file_path=real)에서는
+    // 리터럴 rel 만 `..` 로 이탈해 보이고 실제 위치는 루트 안이라, 합집합(||)으로 고르면
+    // "루트 밖" 이라는 거짓 안내가 나간다 — 차단은 정확한데 사용자가 엉뚱한 곳을 고친다.
+    it('형태 불일치 src/ 차단 사유는 "설계 트랙" 이다 — "루트 밖" 이 아니다 (P0)', () => {
+      const { real, link } = setupSymlinked('P0');
+      const out = write(link, path.join(real, 'src/a.ts'));
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toContain('설계 트랙');
+      expect(reason(out)).not.toContain('루트 밖');
+    });
+
+    it('진짜 루트 밖(외부 절대경로)은 여전히 "루트 밖" 사유다 (P0)', () => {
+      const { link } = setupSymlinked('P0');
+      const outside = path.join(fs.realpathSync(os.tmpdir()), 'kwh-바깥', 'a.ts');
+      const out = write(link, outside);
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toContain('루트 밖');
+    });
+  });
 });
 
 describe('hook: 대소문자 우회 방지 (품질 리뷰 보너스 — realpath 정규화의 부수 이득)', () => {

@@ -193,7 +193,7 @@ describe('wave', () => {
     expect(() => completeWave(root)).toThrow(/시각 증적/);
   });
 
-  it('C3: 빈 서브디렉토리는 증적이 아니다 — UX 게이트가 거부한다', () => {
+  it('증적 게이트: 빈 서브디렉토리는 증적이 아니다 — UX 게이트가 거부한다', () => {
     const root = setup();
     createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });
     activateWave(root, 'wave-001');
@@ -202,7 +202,7 @@ describe('wave', () => {
     expect(() => completeWave(root)).toThrow(/시각 증적/);
   });
 
-  it('C3: 대칭 — 빈 서브디렉토리뿐이면 잔존 증적 가드도 생성을 막지 않는다', () => {
+  it('증적 게이트 대칭: 빈 서브디렉토리뿐이면 잔존 증적 가드도 생성을 막지 않는다', () => {
     const root = setup();
     // 게이트가 증적으로 인정하지 않는 것은 가드도 막지 않는다(두 판정은 같은 로직이어야 한다)
     fs.mkdirSync(path.join(evidenceDir(root, 'wave-001'), 'sub'), { recursive: true });
@@ -212,6 +212,27 @@ describe('wave', () => {
     fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'sub', 'shot.png'), 'fake');
     activateWave(root, 'wave-001');
     expect(() => completeWave(root)).toThrow(/시각 증적/);
+  });
+
+  it('잠금 안내: 활성 웨이브 지시서가 없으면 ENOENT 원문 대신 doctor 안내로 막는다', () => {
+    const root = setup();
+    createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });
+    activateWave(root, 'wave-001');
+    fs.rmSync(wavePath(root, 'wave-001')); // 브랜치 전환·수동 삭제
+
+    for (const call of [() => logTurn(root, 'x'), () => completeWave(root)]) {
+      expect(call).toThrow(/wave-001/);
+      expect(call).toThrow(/doctor --repair/);
+      expect(call).not.toThrow(/ENOENT/);
+    }
+  });
+
+  it('잠금 안내: 파일 부재가 아닌 실패(형식 오류)는 원인을 감추지 않고 그대로 던진다', () => {
+    const root = setup();
+    createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });
+    activateWave(root, 'wave-001');
+    fs.writeFileSync(wavePath(root, 'wave-001'), 'frontmatter 없는 깨진 파일\n');
+    expect(() => logTurn(root, 'x')).toThrow(/형식 오류/);
   });
 
   it('I4: writeWave는 원자적 쓰기 — waves/ 에 .tmp- 잔여가 없다', () => {

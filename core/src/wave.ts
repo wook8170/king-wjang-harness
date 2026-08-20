@@ -158,11 +158,31 @@ export function activateWave(root: string, id: string): void {
   writeState(root, { ...state, activeWave: id });
 }
 
+/**
+ * 활성 웨이브 지시서 읽기. **파일 부재(ENOENT)만** 안내 에러로 바꾼다.
+ * 지시서가 유실되면 update·complete 가 모두 막히는데(잠금 상태), Node 원문
+ * "ENOENT: no such file or directory" 만 보여서는 탈출 경로를 알 수 없다.
+ * 문구는 doctor 의 C1 issue 와 톤을 맞춘다 — 복원이 먼저, 정말 유실이면 정산.
+ * 파싱 오류 등 다른 실패는 원인을 감추지 않도록 그대로 던진다.
+ */
+function readActiveWave(root: string, id: string): { meta: WaveMeta; body: string } {
+  try {
+    return readWave(root, id);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    throw new Error(
+      `활성 웨이브 ${id} 의 지시서가 없다 (${wavePath(root, id)}) — `
+      + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
+      + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라.',
+    );
+  }
+}
+
 export function logTurn(root: string, text: string): void {
   const state = readState(root);
   if (!state.activeWave) throw new Error('활성 웨이브가 없다');
   const id = state.activeWave;
-  const { meta, body } = readWave(root, id);
+  const { meta, body } = readActiveWave(root, id);
   const entry = `- [${new Date().toISOString()}] ${text}`;
   writeWave(root, id, meta, body.trimEnd() + '\n' + entry + '\n');
   appendEvent(root, 'wave-turn-logged', { id }); // 순서 계약: 저널이 먼저
@@ -173,7 +193,7 @@ export function completeWave(root: string): void {
   const state = readState(root);
   if (!state.activeWave) throw new Error('활성 웨이브가 없다');
   const id = state.activeWave;
-  const { meta, body } = readWave(root, id);
+  const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some(r => r.startsWith('UX-'))) {
     const dir = evidenceDir(root, id);
     const files = evidenceFiles(root, id); // createWave 의 잔존 증적 가드와 같은 기준

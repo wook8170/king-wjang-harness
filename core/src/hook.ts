@@ -300,10 +300,13 @@ function preTool(
       r => r !== '' && (allowList(config).some(pre => r.startsWith(pre)) || /^[^/]+\.md$/.test(r)),
     );
     if (!allowed) {
-      // 여기부터는 이미 deny 로 확정됐다 — 아래 union 은 차단 여부가 아니라 사유 문구
-      // 선택용이다("루트 밖" vs "설계 트랙 소스 금지"). 두 공간 중 하나라도 이탈을
-      // 가리키면 더 정확한 "루트 밖" 문구를 보여준다.
-      if (isOutsideRoot(rel) || isOutsideRoot(realRel)) {
+      // 여기부터는 이미 deny 로 확정됐다 — 아래 판정은 차단 여부가 아니라 사유 문구
+      // 선택용이다("루트 밖" vs "설계 트랙 소스 금지"). 매치 판정(합집합)과 달리 여기는
+      // **교집합**이다: 두 공간이 모두 이탈일 때만 "루트 밖"이라 부른다. root=심링크·
+      // file_path=실경로 조합에서는 리터럴 rel 만 `../..` 로 이탈해 보이고 실제 위치는
+      // 루트 안이라, 하나라도 안쪽이면 "루트 밖" 문구가 거짓이 된다(차단은 정확하되
+      // 사유가 사용자를 엉뚱한 곳으로 보낸다).
+      if (isOutsideRoot(rel) && isOutsideRoot(realRel)) {
         return deny(`프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${raw}`, degraded);
       }
       return deny(
