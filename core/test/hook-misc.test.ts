@@ -103,21 +103,23 @@ describe('hook: 심링크 root 정규화 (C3)', () => {
     return { real, link };
   };
 
-  it('심링크 root + 실경로 file_path 로도 state.json 직접 편집은 차단된다 (재현)', () => {
-    const { real, link } = setupSymlinked();
-    const out = write(link, path.join(real, '.harness/state.json'));
-    expect(out, '심링크 root 우회로 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
-    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(reason(out)).toContain('harness 명령으로만');
-  });
+  for (const phase of ['P0', 'P8'] as Phase[]) {
+    it(`${phase}: 심링크 root + 실경로 file_path 로도 state.json 직접 편집은 차단된다 (재현)`, () => {
+      const { real, link } = setupSymlinked(phase);
+      const out = write(link, path.join(real, '.harness/state.json'));
+      expect(out, '심링크 root 우회로 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toContain('harness 명령으로만');
+    });
 
-  it('실경로 root + 심링크 경유 file_path 도 차단된다 (역조합)', () => {
-    const { real, link } = setupSymlinked();
-    const out = write(real, path.join(link, '.harness/state.json'));
-    expect(out, '역조합도 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
-    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(reason(out)).toContain('harness 명령으로만');
-  });
+    it(`${phase}: 실경로 root + 심링크 경유 file_path 도 차단된다 (역조합)`, () => {
+      const { real, link } = setupSymlinked(phase);
+      const out = write(real, path.join(link, '.harness/state.json'));
+      expect(out, '역조합도 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toContain('harness 명령으로만');
+    });
+  }
 
   it('회귀: 심링크 root에서도 미존재 새 파일 판정은 그대로다 (docs/ 허용·src/ 차단)', () => {
     const { link } = setupSymlinked('P0'); // 설계 페이즈
@@ -125,6 +127,47 @@ describe('hook: 심링크 root 정규화 (C3)', () => {
     const out = write(link, path.join(link, 'src/새파일.ts'));
     expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
     expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+  });
+});
+
+describe('hook: root 안쪽 심링크 — realpath 단일 공간의 새 회귀 (후속 리뷰)', () => {
+  // root 자체는 심링크가 아니다. `.harness/` 하나만 외부 스토어로 심링크한다 — 이 경우
+  // realpath 정규화만 쓰면 `.harness/state.json` 이 root 밖으로 풀려 코어 파일 보호가
+  // 새거나(놓치면 deny→allow 반전), `.harness/` 무조건 허용 계약이 "루트 밖" 오판으로
+  // 깨진다. 리터럴 공간과의 합집합/역할 분리로 두 결과 모두 지켜져야 한다.
+  const setupInnerHarnessSymlink = (phase: Phase = 'P0') => {
+    const root = fs.realpathSync(tmp());
+    initHarness(root);
+    if (phase !== 'P0') writeState(root, { ...readState(root), phase });
+    const harnessReal = path.join(root, '.harness');
+    const external = `${harnessReal}-external`;
+    fs.renameSync(harnessReal, external);
+    fs.symlinkSync(external, harnessReal);
+    return root;
+  };
+
+  it('P8: .harness/ 가 외부 심링크여도 state.json 직접 편집은 여전히 차단된다', () => {
+    const root = setupInnerHarnessSymlink('P8');
+    const out = write(root, path.join(root, '.harness/state.json'));
+    expect(out, 'realpath 공간만 보면 이 쓰기가 root 밖으로 풀려 코어 파일 보호를 놓친다').not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('harness 명령으로만');
+  });
+
+  it('P8: 같은 상태에서 .harness/design/ 직접 수정도 여전히 차단된다', () => {
+    const root = setupInnerHarnessSymlink('P8');
+    const out = write(root, path.join(root, '.harness/design/03-feature.md'));
+    expect(out).not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toMatch(/backtrack/);
+  });
+
+  it('P0: .harness/ 가 외부 심링크여도 설계 산출물 쓰기는 여전히 허용된다', () => {
+    const root = setupInnerHarnessSymlink('P0');
+    expect(
+      write(root, path.join(root, '.harness/design/x.md')),
+      'realpath 공간만 보면 이 쓰기가 "루트 밖"으로 오판돼 `.harness/` 무조건 허용 계약이 깨진다',
+    ).toBeNull();
   });
 });
 
