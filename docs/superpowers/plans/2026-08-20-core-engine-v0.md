@@ -868,8 +868,8 @@ export function activateWave(root: string, id: string): void {
   if (meta.status === 'done') throw new Error(`${id} 는 이미 done 이다`);
   meta.status = 'active';
   writeWave(root, meta, body);
+  appendEvent(root, 'wave-activated', { id }); // 순서 계약: appendEvent가 writeState보다 먼저
   writeState(root, { ...state, activeWave: id });
-  appendEvent(root, 'wave-activated', { id });
 }
 
 export function logTurn(root: string, text: string): void {
@@ -898,8 +898,8 @@ export function completeWave(root: string): void {
   }
   meta.status = 'done';
   writeWave(root, meta, body);
+  appendEvent(root, 'wave-completed', { id: meta.id }); // 순서 계약: appendEvent가 writeState보다 먼저
   writeState(root, { ...state, activeWave: null });
-  appendEvent(root, 'wave-completed', { id: meta.id });
 }
 
 export function markStale(root: string, id: string): void {
@@ -1387,6 +1387,15 @@ git add core/ && git commit -m "test(core): stop 가드 — 턴 로그 신선도
 - Create: `core/src/doctor.ts`
 - Test: `core/test/doctor.test.ts`
 
+> **Task 4 리뷰 반영 (구현 시 아래 코드보다 우선):**
+> 1. `readEvents` 대신 `readJournal`을 사용해 `corruptLines`를 issue로 보고하고,
+>    `KNOWN_EVENT_TYPES`에 없는 타입 수를 세어 "미지 이벤트 N건 — 재생 결과 불신"을 보고한다.
+> 2. **corruptLines>0 또는 미지 타입 존재 시 `--repair`를 거부한다** (`--force` 없이는) —
+>    불완전 재생으로 덮어쓰는 것은 복구가 아니라 회귀다.
+> 3. 비교 범위와 덮어쓰기 범위를 일치시킨다: phase·activeWave뿐 아니라 gates·backtrack도
+>    비교에 포함 (JSON.stringify 비교로 충분).
+> 4. `.harness/state.json.tmp-*` 고아 파일을 스윕(삭제)하고 그 사실을 보고한다.
+
 - [ ] **Step 1: 실패하는 테스트 작성**
 
 `core/test/doctor.test.ts`:
@@ -1646,8 +1655,8 @@ export function run(argv: string[], root: string): number {
         if (sub !== 'set') throw new Error('사용법: harness phase set <P0..P12>');
         const phase = rest[0] as Phase;
         if (!PHASES.includes(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]}`);
+        appendEvent(root, 'phase-set', { phase }); // 순서 계약: appendEvent가 writeState보다 먼저
         writeState(root, { ...readState(root), phase });
-        appendEvent(root, 'phase-set', { phase });
         console.log(`페이즈 → ${phase} (v0 임시 명령 — 게이트 구현 후 대체 예정)`);
         return 0;
       }
@@ -1702,16 +1711,16 @@ export function run(argv: string[], root: string): number {
 
       case 'backtrack': {
         if (sub === 'clear') {
+          appendEvent(root, 'backtrack-cleared', {}); // 순서 계약
           writeState(root, { ...readState(root), backtrack: null });
-          appendEvent(root, 'backtrack-cleared', {});
           console.log('역행 종료');
           return 0;
         }
         const to = sub as Phase;
         if (!PHASES.includes(to)) throw new Error(`유효하지 않은 페이즈: ${sub}`);
         const reason = flag(rest, 'reason') ?? '(미기재)';
+        appendEvent(root, 'backtrack-started', { to, reason }); // 순서 계약
         writeState(root, { ...readState(root), backtrack: { to, reason } });
-        appendEvent(root, 'backtrack-started', { to, reason });
         console.log(`역행 시작 → ${to}: ${reason}`);
         return 0;
       }
