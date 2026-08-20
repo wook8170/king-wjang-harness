@@ -1,0 +1,7 @@
+# nextjs-prisma 명령 매핑 (스펙 §9).
+# 코어의 추상 질문("테스트 돌려")에 대한 구체 답. 값이 비면 "미정의"로 취급된다.
+test: npm test
+build: npm run build
+deploy: vercel deploy
+e2e: npx playwright test
+dev-server: npm run dev

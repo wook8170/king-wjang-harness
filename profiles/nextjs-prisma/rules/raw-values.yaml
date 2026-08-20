@@ -1,0 +1,65 @@
+# raw 값 룰팩 — §7 강제 3중의 "정적" 지분에 대한 **설명·설정 파일**.
+#
+# 탐지 구현은 여기에 없다. 정본은 `core/src/tokens.ts` 의 `findRawValues` 하나이고,
+# CI 린트와 PreToolUse 훅이 **같은 함수**를 부른다. 룰팩이 자기 정규식을 따로 들면
+# "린트는 통과했는데 훅이 막는다"가 생기고, 그 순간 사람은 둘 중 느슨한 쪽을 정본으로
+# 취급하기 시작한다 — 토큰 단일점이 무너지는 실제 경로다.
+#
+# 그래서 이 파일이 하는 일은 둘뿐이다: (1) 무엇이 왜 위반인지 사람에게 설명한다,
+# (2) 스택별 예외 경로를 선언한다.
+source_of_truth: core/src/tokens.ts#findRawValues
+enforced_at:
+  - CI 린트 (레드)
+  - PreToolUse 훅 (경고 — config.yaml 의 block_raw_values 가 true 면 차단)
+
+rules:
+  - id: raw-color
+    kind: color
+    severity: error
+    what: |
+      16진 색상(#rgb·#rgba·#rrggbb·#rrggbbaa)과 rgb()/rgba()/hsl()/hsla() 호출.
+    why: |
+      색을 코드에 직접 박으면 토큰 파일 1개를 바꿔도 그 화면만 안 바뀐다.
+      "제품의 시각적 톤 전체가 토큰 파일 1개의 함수"라는 불변식이 여기서 깨진다.
+    fix: var(--color-…) 또는 tokens.color["…"] 참조로 바꾼다.
+
+  - id: raw-space
+    kind: space
+    severity: error
+    what: |
+      간격·크기 속성(margin·padding·gap·inset·top/right/bottom/left·width/height·flex-basis 계열)
+      값에 박힌 px/rem/em. CSS 표기(margin-top)와 JS 표기(marginTop)를 같은 규칙으로 본다.
+    why: |
+      간격 리듬은 스케일이다. 한 자리만 17px 이면 스케일이 아니라 우연이 된다.
+    fix: var(--space-…) 또는 스케일 상수 참조.
+    allowed:
+      - '0 / 0px / 0rem / 0em — 크기가 0이면 시각적 무게도 0이라 스케일의 칸이 아니다'
+      - '1px / -1px — 헤어라인. 토큰화하면 도리어 가짜 간격 토큰(--space-hairline)이 생긴다'
+
+  - id: raw-font
+    kind: font
+    severity: error
+    what: |
+      font-family·font 의 첫 패밀리가 var()·점 참조(tokens.type.body)·CSS 전역 키워드
+      (inherit·initial·unset·revert·none·auto)가 아닌 경우.
+    why: |
+      서체는 톤의 절반이다. 한 파일에서만 다른 서체를 부르면 그 화면만 다른 제품이 된다.
+    fix: var(--font-…) 또는 tokens.type 참조.
+
+# findRawValues 가 애초에 잡지 않는 것들 — 룰팩이 다시 정의하지 않는다.
+not_flagged:
+  - 주석 안의 값 (/* */, //, <!-- -->)
+  - var(--x) 참조 — 단 var(--x, #fff) 의 폴백값은 진짜 위반이라 잡는다
+  - tokens.color["text.primary"] 같은 점 참조
+
+# 원천이 raw 값을 갖는 것은 위반이 아니라 그 파일의 존재 이유다.
+# 판정은 tokens.ts 의 isTokenFile 이 한다 — 아래는 그 결과에 대한 설명이다.
+exempt:
+  - .harness/design/tokens/design-tokens.json
+
+# 이 스택에서 생성물이라 손대면 안 되는(=린트 대상이 아니라 재생성 대상인) 자리.
+# 여기 파일을 손으로 고치면 다음 생성에서 조용히 덮인다.
+generated_targets:
+  - src/styles/tokens.css
+  - src/lib/tokens.ts
+  - tailwind.config.ts

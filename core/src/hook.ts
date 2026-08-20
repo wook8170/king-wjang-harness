@@ -21,6 +21,7 @@ import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, isPhase } from './types';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
+import { loadProfile, isDeployCommand } from './profile';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -395,6 +396,15 @@ function preTool(
     const cmd = String(input.tool_input?.command ?? '');
     const hit = config.design_blocked_bash.find(b => cmd.includes(b));
     if (hit) return deny(`설계 트랙에서는 배포성 명령(${hit})을 실행할 수 없다.`, degraded);
+    // 배포 명령의 정의는 프로파일도 제공한다(§4-2) — config 목록은 코어 기본값이고,
+    // 스택별 실제 배포 명령은 프로파일이 안다. 프로파일 해석 실패는 판정을 포기할 이유가
+    // 아니므로(무해 불변식) 조용히 config 판정만 남긴다.
+    try {
+      const profile = loadProfile(root);
+      if (isDeployCommand(profile, cmd)) {
+        return deny(`설계 트랙에서는 배포성 명령을 실행할 수 없다 (프로파일 ${profile.name}).`, degraded);
+      }
+    } catch { /* 프로파일 없음·손상 → config 판정으로 충분 */ }
   }
 
   // 디자인 시스템 강제(§7) — 페이즈와 무관하게 적용한다. 동결은 "승인된 디자인 시스템을

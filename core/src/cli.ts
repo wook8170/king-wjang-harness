@@ -28,6 +28,11 @@ import {
   loadTokens, generateCss, generateTs, generateTailwind, findRawValues,
   isTokenFile, swapTokens, diffTokens, assertSwapIsMeaningful,
 } from './tokens';
+import {
+  linkCanvas, syncCanvas, extractInventory, recordBaseline,
+  generateSourceOfTruthHtml, listCanvasLinks,
+} from './design';
+import { loadProfile, inspectProfile, commandFor } from './profile';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
@@ -197,6 +202,88 @@ export function run(argv: string[], root: string): number {
           }
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
           default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+        }
+      }
+
+      case 'profile': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'show': {
+            const { profile, problems } = inspectProfile(root, flag(args, 'name'));
+            console.log(JSON.stringify(profile, null, 2));
+            // 해석 중 문제가 있었다면 조용히 넘기지 않는다 — generic 폴백은 정상 동작처럼
+            // 보이기 때문에, 왜 폴백됐는지 말하지 않으면 잘못된 프로파일로 계속 간다.
+            if (problems.length > 0) {
+              console.error(`프로파일 해석 문제:\n${problems.map(p => `  - ${p}`).join('\n')}`);
+              return 1;
+            }
+            return 0;
+          }
+          case 'cmd': {
+            const p = loadProfile(root, flag(args, 'name'));
+            const c = commandFor(p, rest[0]);
+            if (!c) throw new Error(`프로파일 ${p.name} 에 '${rest[0]}' 명령이 없다 — commands.yaml 을 채워라`);
+            console.log(c);
+            return 0;
+          }
+          default: throw new Error(`알 수 없는 profile 하위 명령: ${sub} (show|cmd)`);
+        }
+      }
+
+      case 'design': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'link': {
+            const uxNodeId = flag(args, 'ux');
+            const url = flag(args, 'url');
+            if (!uxNodeId || !url) throw new Error('사용법: harness design link --ux <UX-x> --url <캔버스 URL> [--artboard <이름>]');
+            linkCanvas(root, { uxNodeId, url, artboard: flag(args, 'artboard') ?? uxNodeId });
+            console.log(`${uxNodeId} ↔ ${url}`);
+            return 0;
+          }
+          case 'sync': {
+            // 코어는 네트워크를 쓰지 않는다(§1) — 캔버스 내용은 에이전트가 가져와 파일로 준다.
+            const uxNodeId = rest[0];
+            const from = flag(args, 'from');
+            if (!uxNodeId || !from) {
+              throw new Error(
+                '사용법: harness design sync <UX-x> --from <가져온 캔버스 내용 파일>\n'
+                + '(코어는 네트워크를 쓰지 않는다 — 캔버스는 에이전트가 WebFetch 로 받아 파일로 넘긴다)',
+              );
+            }
+            const content = fs.readFileSync(path.resolve(root, from), 'utf8');
+            const r = syncCanvas(root, uxNodeId, content);
+            console.log(
+              r.changed
+                ? `${uxNodeId} 캔버스 변경 감지 → v${r.version} · STALE 웨이브: ${r.affectedWaves.join(', ') || '없음'}`
+                : `${uxNodeId} 변경 없음 (해시 동일)`,
+            );
+            if (r.unverifiable.length > 0) {
+              console.error(`STALE 전파 불완전 — 검증 불가 웨이브: ${r.unverifiable.join(', ')} — 수동 확인 필요`);
+              return 1;
+            }
+            return 0;
+          }
+          case 'inventory': {
+            const from = flag(args, 'from');
+            if (!from) throw new Error('사용법: harness design inventory --from <캔버스 내용 파일>');
+            console.log(JSON.stringify(extractInventory(fs.readFileSync(path.resolve(root, from), 'utf8')), null, 2));
+            return 0;
+          }
+          case 'baseline': {
+            recordBaseline(root, rest[0], rest[1] ?? '');
+            console.log(`${rest[0]} 기준 이미지 등록: ${rest[1]}`);
+            return 0;
+          }
+          case 'html': {
+            const out = flag(args, 'out');
+            const html = generateSourceOfTruthHtml(root);
+            if (out) { fs.writeFileSync(path.resolve(root, out), html); console.log(out); }
+            else console.log(html);
+            return 0;
+          }
+          case 'list': console.log(JSON.stringify(listCanvasLinks(root), null, 2)); return 0;
+          default: throw new Error(`알 수 없는 design 하위 명령: ${sub} (link|sync|inventory|baseline|html|list)`);
         }
       }
 
