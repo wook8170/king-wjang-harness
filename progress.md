@@ -1,5 +1,36 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — 로드맵 §13.2~13.8 구현 (12/13 완료, 커밋 6개, 563 tests green)
+
+**최신 정본.** 아래 이전 섹션들은 그 시점 기록.
+
+- **완료 G001~G012** — 커밋 `2e90344`(gate+registry) `7ae08bd`(report+adr) `e00d96b`(tokens+skills)
+  `8e6a55c`(design+profile) `5a4589b`(loop+evidence) `7c3b00d`(ship+usage+migrate).
+  **테스트 198 → 563 green**, tsc0. 매 스토리 E2E 실측 통과.
+- **신규 코어 모듈 12개**: `gate registry report adr tokens design profile evidence loop ship usage migrate`
+- **신규 CLI 명령군**: `gate|doc|report|adr|tokens|design|profile|evidence|loop|ship|usage|migrate`
+- **신규 스킬**: phase-p0~p6 (7종) + p10-harden·p11-deploy. **에이전트 4종**: researcher·
+  design-auditor·wave-executor·wave-verifier.
+- **진행 중(서브에이전트 2)**: ① `skills/phase-p12-ship` + `agents/readiness-auditor.md`
+  (G011 에이전트가 남기고 종료한 조각) ② **G013 패키징·MCP 어댑터**(`core/src/mcp.ts`+`mcp/server.js`,
+  의존성 무추가 stdio JSON-RPC 직접 구현 지시).
+- **다음 즉시 할 일**: 두 에이전트 수령 → 배선·green 재측정 → 커밋 → **13/13 완주**.
+  이후 전체 통합 검증(맨 클론 설치 E2E) 권장.
+
+### ⚠ G013 안전 요구 (반드시 확인할 것)
+**MCP 로 게이트 승인이 가능하면 §4-3 "승인의 최종 클릭은 사람" 장치가 통째로 우회된다.**
+지시문에 `harness_gate_approve` 를 목록에서 빼거나 거부 반환하도록 명시했다 — 수령 시 **실제로
+그렇게 됐는지 반드시 검증**하라(이게 뚫리면 하네스의 핵심 강제가 무의미해진다).
+
+### 시스템 지식 (이번 웨이브 추가)
+- **에이전트가 산출물 일부를 빠뜨리고 끝날 수 있다** — G011 이 ship.ts 는 냈지만 p12 스킬·
+  readiness-auditor 를 안 만들고 종료. **완료 알림을 믿지 말고 파일 목록을 직접 확인**하라.
+- **타입 불일치는 배선 때 드러난다** — `recordDeployment.evidence` 가 `string[]` 인데 CLI 에서
+  `string` 을 넘겨 tsc 가 잡음. 배선 전 `grep`으로 시그니처 확인이 빠르다.
+- 시간·홈 경로는 **파라미터로 주입**하게 만들면 결정적이고 테스트 가능해진다(usage.ts·migrate.ts).
+- 코어에 넣지 않기로 한 것(의도적): launchd/systemd 잡 설치, usage API 네트워크 호출,
+  Playwright 실주행, 캔버스 WebFetch — 전부 CLI/에이전트 몫(코어는 순수 로컬·결정적, §1).
+
 ## 2026-08-21 — 로드맵 §13.2~13.8 구현 (8/13 완료, 커밋 4개, 446 tests green)
 
 **최신 상태.** 아래 이전 섹션(G001~G004)은 그 시점 기록이며 진행분은 여기가 정본.
