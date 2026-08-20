@@ -1,5 +1,32 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — 로드맵 §13.2~13.8 구현 (8/13 완료, 커밋 4개, 446 tests green)
+
+**최신 상태.** 아래 이전 섹션(G001~G004)은 그 시점 기록이며 진행분은 여기가 정본.
+
+- **완료 G001~G008** — 커밋 `2e90344`(gate+registry) `7ae08bd`(report+adr) `e00d96b`(tokens+skills)
+  `8e6a55c`(design+profile). **테스트 198 → 446 green**, tsc0, 각 스토리마다 E2E 실측 통과.
+  - §13.2 게이트·리뷰패킷·RTM·허브 ✅ / §5 ADR ✅ / §13.3 설계스킬 P0–P6 + 에이전트 2종 ✅
+  - §13.4 토큰 파이프라인 + Claude Design 연동 ✅ / §13.5 스택 프로파일 ✅
+  - 신규 코어 모듈 8개: `gate registry report adr tokens design profile` (+ 기존)
+  - 신규 CLI 명령군: `gate|doc|report|adr|tokens|design|profile`
+  - 신규 훅 강제: raw 값 리터럴 차단·디자인시스템 동결 경로 차단·프로파일 배포명령 차단
+    (앞 둘은 config `block_raw_values`/`design_system_frozen_roots` 로 켠다, 기본 off=비간섭)
+- **진행 중(서브에이전트)**: G009 웨이브 실행 루프(`core/src/loop.ts` + `agents/wave-executor.md`·
+  `wave-verifier.md`), G010 시각 증적(`core/src/evidence.ts`).
+- **다음 즉시 할 일**: G009·G010 수령 → CLI/훅 배선(**컨트롤러가 직접**) → green 재측정 → 커밋 →
+  G011 출하 트랙 · G012 흡수 컴포넌트(token-guard·auto-retry) · G013 패키징(MCP 어댑터 포함) 순차.
+
+### 시스템 지식 (이번 웨이브 추가)
+- **에이전트 완료 알림의 `<result>` 는 비어 있다** — 산출은 파일·테스트로 직접 확인해야 한다.
+- **에이전트가 아직 쓰는 중인 파일을 건드리지 마라.** 테스트 1건 실패를 발견했을 때 `stat -f %m` 으로
+  mtime 을 보고 60초 무변경까지 기다렸더니 에이전트가 스스로 고쳤다(성급히 손대면 충돌).
+- **E2E 는 올바른 전제 조건에서 실행해야 유효하다** — P0(설계 트랙)에서 raw 값 차단을 테스트하니
+  설계트랙 소스 차단이 **먼저** 걸려 신규 규칙이 실행조차 안 됐다. `phase set P7 --force` 로 옮겨야 검증됨.
+- **코어는 네트워크·브라우저를 쓰지 않는다**(§1) — Claude Design 캔버스는 에이전트가 WebFetch 로 받아
+  파일로 넘기고(`design sync --from <파일>`), Playwright 도 코어는 스펙 생성·증적 검증만 한다.
+- 번들 프로파일 경로는 `dist` 에서도 해석돼야 한다(`bundledProfilesDir()`), E2E 로 실증함.
+
 ## 2026-08-21 — 로드맵 §13.2~13.8 구현 착수 (ultragoal 13스토리, G001~G004 완료)
 
 **사용자 지시(/ultragoal): §13.2~§13.8 전부를 서브에이전트로 설계·구현하고 테스트 green 유지.**

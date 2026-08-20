@@ -33,6 +33,14 @@ import {
   generateSourceOfTruthHtml, listCanvasLinks,
 } from './design';
 import { loadProfile, inspectProfile, commandFor } from './profile';
+import {
+  generatePlaywrightSpec, specFileNameFor, validateEvidence, buildComparisonPacket,
+} from './evidence';
+import {
+  nextAction, recordAttempt, attemptCount, checkThreshold, summonMessage,
+  pendingCritical, raiseCritical, clearCritical, buildExecutorBrief, buildVerifierBrief,
+} from './loop';
+import type { CriticalReason } from './loop';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
@@ -202,6 +210,94 @@ export function run(argv: string[], root: string): number {
           }
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
           default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+        }
+      }
+
+      case 'loop': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'next': {
+            // 컨트롤러가 "다음에 뭘 해야 하나"를 묻는 자리 — 판정만 하고 에이전트는 띄우지 않는다.
+            const a = nextAction(root, { failureLimit: Number(flag(args, 'limit')) || undefined });
+            console.log(JSON.stringify(a, null, 2));
+            // 소환은 사람을 불러야 하는 상태다 — 스크립트가 조용히 지나치지 않도록 비0으로 알린다.
+            return a.kind === 'summon' ? 2 : 0;
+          }
+          case 'attempt': {
+            const waveId = rest[0];
+            const outcome = flag(args, 'outcome');
+            if (!waveId || (outcome !== 'pass' && outcome !== 'fail')) {
+              throw new Error('사용법: harness loop attempt <wave-id> --outcome <pass|fail> [--detail <내용>]');
+            }
+            recordAttempt(root, waveId, outcome, flag(args, 'detail'));
+            const c = outcome === 'fail' ? checkThreshold(root, waveId, Number(flag(args, 'limit')) || undefined) : null;
+            console.log(`${waveId} ${outcome} · 연속 실패 ${attemptCount(root, waveId)}회`);
+            if (c) { console.error(summonMessage(c)); return 2; }
+            return 0;
+          }
+          case 'brief': {
+            const waveId = rest[0] || readState(root).activeWave;
+            if (!waveId) throw new Error('사용법: harness loop brief <wave-id> [--for <executor|verifier>]');
+            const forWho = flag(args, 'for') ?? 'executor';
+            console.log(forWho === 'verifier' ? buildVerifierBrief(root, waveId) : buildExecutorBrief(root, waveId));
+            return 0;
+          }
+          case 'critical': {
+            if (rest[0] === 'clear') { clearCritical(root, rest[1]); console.log('소환 해제'); return 0; }
+            if (rest[0] === 'raise') {
+              const reason = flag(args, 'reason');
+              const valid = ['repeated-failure', 'backtrack-needed', 'external-blocker', 'acceptance-unclear'];
+              if (!reason || !valid.includes(reason)) {
+                throw new Error(`사용법: harness loop critical raise --reason <${valid.join('|')}> [--wave <id>] [--detail <내용>]`);
+              }
+              raiseCritical(root, {
+                waveId: flag(args, 'wave'),
+                reason: reason as CriticalReason,
+                detail: flag(args, 'detail') ?? '',
+              });
+              console.log('소환 발동');
+              return 2;
+            }
+            const c = pendingCritical(root);
+            console.log(c ? summonMessage(c) : '대기 중인 소환 없음');
+            return c ? 2 : 0;
+          }
+          default: throw new Error(`알 수 없는 loop 하위 명령: ${sub} (next|attempt|brief|critical)`);
+        }
+      }
+
+      case 'evidence': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'spec': {
+            // 코어는 브라우저를 몰지 않는다 — 규율(headless·2x)이 박힌 스펙을 생성만 한다.
+            const uxNodeId = rest[0];
+            if (!uxNodeId) throw new Error('사용법: harness evidence spec <UX-x> [--wave <wave-id>] [--out <경로>]');
+            const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, 'wave') });
+            const out = flag(args, 'out') ?? specFileNameFor(uxNodeId);
+            fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
+            fs.writeFileSync(path.resolve(root, out), src);
+            console.log(out);
+            return 0;
+          }
+          case 'check': {
+            const waveId = rest[0] || readState(root).activeWave;
+            if (!waveId) throw new Error('사용법: harness evidence check <wave-id> (활성 웨이브가 없다)');
+            const r = validateEvidence(root, waveId);
+            console.log(JSON.stringify(r, null, 2));
+            return r.ok ? 0 : 1;
+          }
+          case 'packet': {
+            const uxNodeId = flag(args, 'ux');
+            const waveId = flag(args, 'wave') ?? readState(root).activeWave ?? '';
+            if (!uxNodeId || !waveId) throw new Error('사용법: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <경로>]');
+            const html = buildComparisonPacket(root, { uxNodeId, waveId });
+            const out = flag(args, 'out');
+            if (out) { fs.writeFileSync(path.resolve(root, out), html); console.log(out); }
+            else console.log(html);
+            return 0;
+          }
+          default: throw new Error(`알 수 없는 evidence 하위 명령: ${sub} (spec|check|packet)`);
         }
       }
 
