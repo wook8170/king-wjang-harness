@@ -1,6 +1,16 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-20 — ★ Critical 수정 웨이브 완료 — 최종 재판정 "머지 가능" (8커밋, 167 tests)
+## 2026-08-20 — ★ Critical 수정 웨이브 완료 — 최종 재판정 "머지 가능" (9커밋, 171 tests)
+
+### 추가: /verify E2E 검증 + findings 보완 (웨이브 종결 후)
+- **/verify PASS**: 빌드된 bin/harness를 샌드박스 6개에서 직접 구동(CLI+훅 stdin 두 표면),
+  C1·C2·C3·값싼 수정 5건 전부 표면에서 확인. 검증 레시피를 `.claude/skills/verify/SKILL.md`
+  로 영속화(`0ea7b8b`).
+- **findings 보완 `e48473d`** (171 passed, +4): ① deny 사유 선택 `||`→`&&`(형태 불일치 시
+  "루트 밖" 오표기 → "설계 트랙" 정문구, 차단 판정 불변) ② logTurn/completeWave의 활성
+  웨이브 파일 부재 ENOENT를 doctor 안내 에러로 변환(파싱 오류는 원문 전파) ③ wave.test.ts
+  "C3:" 오라벨 → "증적 게이트:". 표면 재검증 + 최종 리뷰어 확인 완료.
+- 신규 이월(Info): `wave activate <없는 id>` raw ENOENT.
 
 계정 전환 후 서브에이전트 주도(구현→스펙 리뷰→품질 리뷰 2단계, 수정 루프 포함)로 진행.
 범위: 최종 리뷰 C1·C2·C3 + 값싼 수정 후보 (로드맵 이월 항목 I6·M1·M3 등은 범위 밖 유지).
