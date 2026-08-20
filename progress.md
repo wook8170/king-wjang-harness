@@ -1,5 +1,80 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-20 — 하네스 운영 스킬 신설·검증 완료 (커밋 대기, 사용자 지시)
+
+**사용자가 "하네스를 거는 스킬"을 만들라고 지시.** 브레인스토밍→작성→RED/GREEN 검증→갭 수정 완료.
+- **결정(사용자)**: 범위 = **풀 운영 매뉴얼**, 위치 = **플러그인 동봉**, 이름 = **`king-wjang-harness`**.
+- **신규(미커밋)**: `skills/king-wjang-harness/SKILL.md`. 플러그인 루트 `skills/`(source `"./"`) →
+  `hooks/hooks.json`처럼 **자동 발견**(plugin.json에 skills 키 불필요). 호출 `king-wjang-harness:
+  king-wjang-harness` 또는 description 트리거로 자연어 활성. 내용: 부트스트랩·전 명령 퀵레퍼런스·
+  페이즈 모델(P0–P6 설계/P7–P9 구축/P10–P12 출하)·훅 deny/block 대처표·함정. **`cli.ts`·`hook.ts`·
+  `types.ts` 실물 대조**해 작성.
+- **검증 완료(RED-GREEN-REFACTOR)**: ① 내 **직접 CLI 실증**(샌드박스)으로 refs 선등록 가드·UX 증적
+  게이트·P0 소스 deny·코어파일 deny·루트 md allow 전부 확인. ② **RED**(스킬 없이 README만) 서브에이전트
+  = 목표 6(웨이브 complete) **완전 실패**(UX 증적 추가법을 못 찾고 "손편집 금지" 때문에 미완 방치),
+  페이즈 트랙·refs 규칙 판정 불가. **GREEN**(스킬 제공) = 6목표 전부 달성. → 스킬이 정확히 그 갭을 메움.
+  ③ **REFACTOR 반영 2건**: (a) UX 증적은 harness 명령이 아니라 **직접 파일로** 넣는다(코어 3파일
+  손편집 금지와 무관)를 명시, (b) `--help` 없음·표가 유일한 명령 출처 명시.
+- **다음 즉시 할 일**: 사용자 **커밋 여부 확인**(규율대로 **커밋/push는 지시 대기**). 커밋 시 기존
+  미커밋분(`.claude-plugin/`·`docs/release-readiness/`·구 감사 staged 삭제·`progress.md`)과 함께 결정.
+- **⚠ 지식**: 플러그인 스킬은 세션 시작 시 로드 → 이 스킬도 **재시작/새 세션부터** 자연어 트리거 활성.
+  서브에이전트 async 결과는 알림 `<result>`에 안 실림 — 회수는 에이전트가 `SendMessage(to:"main")`
+  해야 도착(내 평문 요청만으론 안 옴). 검증은 **내 직접 CLI 실증이 가장 확실**(관측·재현 완전 통제).
+
+## 2026-08-20 — 플러그인 설치 완료 (사용자 지시)
+
+**king-wjang-harness 를 Claude Code 플러그인으로 설치.** 마켓플레이스 채널(이전 "미정") 해소:
+- **신규 매니페스트(미커밋)**: `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`
+  (co-located, `source: "./"`). 실 설치본 스키마를 gsd/superpowers 예시에서 대조해 작성.
+- **설치**: `claude plugin marketplace add <repo>` → **Directory 소스**(라이브 워킹트리 참조, 클론
+  아님 → 미커밋 매니페스트도 인식·동작) → `claude plugin install king-wjang-harness@king-wjang-harness`.
+  **scope: user(전역)·enabled.** 컴포넌트: **Hooks 4(Session/Pre/Post/Stop)**, ~0 토큰.
+- **안전성**: 전역이어도 비간섭 불변식(LOGIC-01, 이번 감사서 실측)으로 `.harness/` 없는 프로젝트엔
+  완전 침묵 → 프로젝트별 `harness init` 로만 활성. **이 dev repo 자체엔 init 금지**(자기참조: 설계
+  페이즈 중 자기 core/src 편집이 막힌다).
+- **⚠ 발효 시점**: 훅은 세션 시작 시 로드 → **현재 세션엔 미발효, 재시작/새 세션부터 적용.**
+- **⚠ Directory 소스**: 플러그인이 이 repo 경로를 라이브 참조 → repo 이동·삭제 시 깨짐.
+  타 장비/클론 재설치엔 `.claude-plugin/` 커밋 필요(현재 미커밋). 제거: `claude plugin uninstall
+  king-wjang-harness@king-wjang-harness` + `claude plugin marketplace remove king-wjang-harness`.
+
+## 2026-08-20 — 경량 모드 재검증(사용자 지시: 정식감사 폐기·경량 새시작) → 판정 출하 가능(GO)
+
+**사용자가 기존 11축 정식 감사 산출물을 폐기하고 경량 모드로 새로 검증하라고 지시.** 수행 완료.
+- **폐기**: `docs/release-readiness/2026-08-20/` 전체를 `git rm`(워킹트리에서만 제거, **커밋 안 함** —
+  `bbbb9b6`에 커밋돼 있어 `git show bbbb9b6:...`로 언제든 복구). 커밋 여부는 사용자 결정 대기.
+- **신규 정본**: **`docs/release-readiness/readiness.md`** 단일 파일(경량 모드 골격). 축 ④⑧⑨ + ②·⑦
+  (변경이 닿는 축). 뺀 축 ①③⑤⑥⑩⑪은 파일 「보지 않은 것」에 사유 기재.
+- **판정: 출하 가능(GO)** — 신규 BLOCKER 0. **정적 감사가 아니라 빌드된 `bin/harness`를 실제 훅 표면
+  (stdin JSON)에서 구동한 E2E 23건 전건 PASS**로 뒷받침(Iron Rule 3). 게이트 9종 전건 measured:
+  G1 테스트 198×3 동일·G2 tsc0·G3 빌드·G4 훅무해·G5 훅강제력·G6 결정성·G7 자체완결dist(무 node_modules)·
+  **G8 공급망 0 vulns**(npm audit --omit=dev)·**G9 훅지연 p95 104ms**(<150ms). 근거는 `evidence/*.log`.
+- **대장**: 불변식 15행(심각도 —·verified·measured 확인 대장) + deferred 1(SEC-02 realpath TOCTOU,
+  "훅은 보안경계 아닌 사고방지" 계약 범위라 비차단). **ledger-lint: ✓ 16행 R1–R7 통과·open BLOCKER 0.**
+- **아티팩트(신규)**: https://claude.ai/code/artifact/3628dd71-1a71-411b-be91-4093382baa5d
+  (이전 정식감사 아티팩트 332d40fb…는 폐기 대상이라 갱신 안 함 — 별건).
+- **미커밋 워킹트리**: (staged 삭제) 구 감사 13파일 / (신규) `readiness.md`·`evidence/`·`report.html` /
+  (수정) `progress.md`. **커밋·push는 지시 대기.** main 병합은 직전 세션에서 **보류** 확정(변경 없음).
+- **다음 즉시 할 일**: 없음(검증 완결). 사용자가 커밋/병합/추가감사 지시 시 진행.
+- **⚠ 함정(경량 모드 lint)**: readiness.md 는 표 컬럼 8개(`ID|심각도|축|한줄|상태|근거등급|근거|닫은증거`)
+  고정. measured 행은 근거·닫은증거에 **실존·비어있지않은 파일** 최소 1개 인용해야 R1 통과 → 그래서
+  실측 출력을 `evidence/*.log`로 남기고 인용함. 판정줄 `**판정** 출하 가능 · …`는 장식 없는 순수 어휘.
+
+## 2026-08-20 — 재진입 재확인(/verifying-production-readiness): 커밋된 GO 라이브 재측정
+
+**판정 유지: 출하 가능(GO), 이번엔 라이브 재측정으로 재확인.** 직전 세션의 lint 수정은
+이미 **커밋 완료**(`bbbb9b6`) — 아래 이전 섹션의 "미커밋" 기록은 그 시점 것으로 **낡음**.
+현재 워킹트리 clean, HEAD는 docs-only, 마지막 제품코드 커밋은 `8d261d3`.
+- **재진입 lint 재실행**: `ledger-lint.sh docs/release-readiness/2026-08-20` → **✓ 45행 R1–R7
+  통과·open BLOCKER 0**. 판정 토큰은 순수 `## 출하 가능`(★ 제거분 반영됨).
+- **라이브 재측정(경량, 제품코드 무변경이라 이 둘만 의미)**: G1 `vitest run` **198 passed(12파일)**·
+  G2 `tsc --noEmit` **exit 0**. 무거운 게이트(G9 훅p95·G10 대형저널·G11/12 설치·롤백·G4 공급망·
+  G5 이력비밀)는 `8d261d3` 이후 제품코드 무변경이라 이전 measured 유효(재실행 불필요).
+- **병합 결정: 보류(b)** — 이번 세션에서 사용자가 **보류** 선택. 병합·push·PR 모두 안 함.
+  브랜치 `feature/core-engine-v0` 그대로 유지, GO 판정만 확정. push는 지시 전 금지 유지.
+  (재개 시 다시 물을 필요 없음 — 사용자가 새로 병합/PR 지시할 때까지 대기.)
+- **함정 재확인**: ledger-lint R6는 판정 토큰의 어떤 장식(★·볼드)도 거부 → 순수 어휘여야.
+  재진입 시 판정 전 lint 필수(커밋된 상태가 위반일 수 있음 — 직전 세션이 실제로 겪음).
+
 ## 2026-08-20 — 재진입 검증(/verifying-production-readiness): 커밋된 대장 lint 위반 발견·수정
 
 **판정 유지: 출하 가능(GO).** 재진입 규칙대로 판정 전 lint 재실행 → **커밋 `81639a1`의 대장이

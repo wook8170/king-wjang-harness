@@ -1,0 +1,23 @@
+{
+  "name": "king-wjang-harness",
+  "owner": {
+    "name": "장욱"
+  },
+  "metadata": {
+    "description": "king-wjang-harness 로컬 마켓플레이스 — 설계→구축→출하 규율 하네스",
+    "version": "0.0.1"
+  },
+  "plugins": [
+    {
+      "name": "king-wjang-harness",
+      "source": "./",
+      "description": "설계→구축→출하 프로세스 규율을 강제하는 훅·CLI 하네스. .harness/ 없는 프로젝트에서는 완전 침묵(비간섭).",
+      "version": "0.0.1",
+      "author": {
+        "name": "장욱"
+      },
+      "keywords": ["workflow", "hooks", "process-discipline", "harness"],
+      "category": "workflow"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+# 게이트 실측 로그 — bbbb9b6 (docs-only HEAD; 제품코드 8d261d3)
+## G2 tsc --noEmit
+exit=0
+## G3 build (tsup)
+CJS core/dist/cli.js 298.86 KB
+CJS ⚡️ Build success in 19ms
+## G1/G6 vitest run x3
+run1  Test Files  12 passed (12)
+run1       Tests  198 passed (198)
+run2  Test Files  12 passed (12)
+run2       Tests  198 passed (198)
+run3  Test Files  12 passed (12)
+run3       Tests  198 passed (198)
+## G6 결정경로 Math.random(주석 제외 실사용) — core/src
+core/src/hook.ts:78: * `Math.random` 금지(축⑨)를 지키면서도 예측 불가 — 같은 본문엔 결정적이라 테스트도 재현 가능하다.
+## G7 dist self-contained: require('yaml') count in built cli.js
+0
