@@ -193,6 +193,27 @@ describe('wave', () => {
     expect(() => completeWave(root)).toThrow(/시각 증적/);
   });
 
+  it('C3: 빈 서브디렉토리는 증적이 아니다 — UX 게이트가 거부한다', () => {
+    const root = setup();
+    createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });
+    activateWave(root, 'wave-001');
+    // stat.size 는 디렉토리에서도 0 이 아니다(macOS 64) — size 만 보면 여기서 통과해 버린다
+    fs.mkdirSync(path.join(evidenceDir(root, 'wave-001'), 'sub'), { recursive: true });
+    expect(() => completeWave(root)).toThrow(/시각 증적/);
+  });
+
+  it('C3: 대칭 — 빈 서브디렉토리뿐이면 잔존 증적 가드도 생성을 막지 않는다', () => {
+    const root = setup();
+    // 게이트가 증적으로 인정하지 않는 것은 가드도 막지 않는다(두 판정은 같은 로직이어야 한다)
+    fs.mkdirSync(path.join(evidenceDir(root, 'wave-001'), 'sub'), { recursive: true });
+    expect(createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' }).id)
+      .toBe('wave-001');
+    // 서브디렉토리 "안"의 파일도 증적이 아니다 — 게이트는 여전히 거부한다
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'sub', 'shot.png'), 'fake');
+    activateWave(root, 'wave-001');
+    expect(() => completeWave(root)).toThrow(/시각 증적/);
+  });
+
   it('I4: writeWave는 원자적 쓰기 — waves/ 에 .tmp- 잔여가 없다', () => {
     const root = setup();
     createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });

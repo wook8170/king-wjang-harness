@@ -67,15 +67,21 @@ function writeWave(root: string, id: string, meta: WaveMeta, body: string): void
 }
 
 /**
- * 증적으로 인정되는 파일 목록 — dot 파일과 빈 파일은 제외한다.
+ * 증적으로 인정되는 파일 목록 — dot 파일·빈 파일·디렉토리는 제외한다.
+ * 디렉토리 제외가 핵심이다: stat.size 는 디렉토리에서도 0 이 아니라(macOS 64) size 만
+ * 보면 **빈 서브디렉토리 하나로 UX 게이트가 통과된다**. 실제 파일만 증적으로 센다.
+ *
  * completeWave 의 UX 게이트와 createWave 의 잔존 증적 가드가 반드시 같은 기준을 써야
  * "생성은 통과했는데 완료가 거부"되거나 그 반대인 어긋남이 생기지 않는다.
  */
 function evidenceFiles(root: string, id: string): string[] {
   const dir = evidenceDir(root, id);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir)
-    .filter(f => !f.startsWith('.') && fs.statSync(path.join(dir, f)).size > 0);
+  return fs.readdirSync(dir).filter((f) => {
+    if (f.startsWith('.')) return false;
+    const st = fs.statSync(path.join(dir, f));
+    return st.isFile() && st.size > 0;
+  });
 }
 
 /**
