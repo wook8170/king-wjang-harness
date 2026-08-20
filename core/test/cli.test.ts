@@ -33,7 +33,7 @@ describe('cli', () => {
     const root = tmp();
     const q = quiet();
     run(['init'], root);
-    run(['phase', 'set', 'P8'], root);
+    run(['phase', 'set', 'P8', '--force'], root); // 게이트 경유가 정식 경로 — 이 테스트는 웨이브 수명주기가 대상이라 부트스트랩 탈출구를 쓴다
     expect(readState(root).phase).toBe('P8');
     run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
     run(['wave', 'create', '--milestone', 'M1', '--goal', '로그인', '--refs', 'F-1'], root);
@@ -88,7 +88,7 @@ describe('cli', () => {
     const root = tmp();
     const q = quiet();
     run(['init'], root);
-    run(['phase', 'set', 'P7'], root);
+    run(['phase', 'set', 'P7', '--force'], root);
     fs.appendFileSync(path.join(root, '.harness/events.jsonl'), '{broken\n');
     fs.writeFileSync(path.join(root, '.harness/state.json'), '{corrupted');
     expect(run(['doctor', '--repair'], root)).toBe(1);
