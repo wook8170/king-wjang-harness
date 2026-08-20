@@ -5,30 +5,33 @@
 
 # 판정
 
-> ## 조건부 출하 가능
-> 착수 시점: 이전 최종 리뷰 "머지 가능"(Critical 3건 수정 후) → 10축 정밀 감사로
-> **차단 결함(BLOCKER) 0** 확정. 모든 측정 게이트(G1~G12) 실측 PASS. 다만 축⑧·⑥·⑩이
-> **HIGH 3건**을 새로 드러냈다 — 전부 "코드가 스스로 선언한 안전 불변식"이 특정 조건에서
-> 침묵으로 깨지는 것으로, **출하 전 충족해야 할 조건**이다. 셋 다 근본 원인이 좁고 수정이 값싸다.
+> ## ★ 출하 가능
+> 착수: 이전 최종 리뷰 "머지 가능"(Critical 3건 수정 후) → 10축 정밀 감사가 **BLOCKER 0**
+> 확정하되 HIGH 3건을 드러내 "조건부 출하 가능"으로 판정 → **사용자 승인 후 HIGH 수정 라운드로
+> 3건 전부 verified 종결**(subagent-driven, 각 스펙+품질 리뷰 통과) → 재측정으로 전 게이트
+> PASS 재확인. **차단 결함 0 · HIGH 0 · 전 게이트 초록 · 잔여는 전부 MED/LOW 백로그.**
 
-**남은 조건**(출하 전 충족 — 누가·무엇을·어떻게):
-1. **LOGIC-11** — state.json 삭제 시 훅 전면 침묵(무흔적). `isInitialized`를 `harnessDir` 기준으로
-   바꾸고(initHarness 가드와 동일 정의) 저널 재생 폴백으로 재구성. → 재현 테스트 후 `hook`이
-   여전히 판정·`hook-errors.log` 흔적 남김 확인.
-2. **LOGIC-10** — state.json 형태 손상(유효 JSON)이 저널 폴백을 안 태워 설계트랙 소스 차단·stop
-   가드가 침묵 해제. `readState` 결과 형태 검증(phase·activeWave 형) 실패 시 파싱 실패와 동일
-   폴백. → `echo '{}' > state.json` 후 P0 src Write가 여전히 deny 확인.
-3. **SHIP-11** — 순수 클론 플러그인 설치 시 `core/dist` 부재로 하네스 inert(무동작). **패키징
-   결정**: `core/dist` 커밋 or 플러그인 설치에 빌드 단계 보장 + README 설치 절차. → 클론만으로
-   `bin/harness hook`가 실제 판정하는지 확인. (동작하는 수동 클론+빌드 경로는 존재·검증됨.)
+**닫은 HIGH 3건**(수정 라운드):
+1. **LOGIC-11** ✅ `b5d6248` — 비간섭 게이트를 `harnessDir` 기준으로 + 저널 재생 폴백. state.json
+   삭제해도 훅이 계속 판정(E2E: `rm state.json` 후 여전히 deny). F1 리뷰 Approved.
+2. **LOGIC-10** ✅ `b5d6248` — `isHarnessStateShape` 형태 검증 실패 시 저널 폴백. `echo '{}' >
+   state.json` 후 설계트랙 소스 차단 유지(E2E deny). F1 리뷰 Approved.
+3. **SHIP-11** ✅ `8d261d3` — (사용자 결정) `core/dist` 커밋 + **yaml 번들 인라인**. dist-only는
+   yaml external이라 node_modules 없는 클론서 여전히 inert였던 것을 E2E로 발견·수정. self-contained
+   dist로 재검증: node_modules 없는 클론서 `--version` exit0·pre-tool 실제 deny.
 
-세 조건은 코드 소유자/제품 결정이며, 원하면 이 자리에서 수정 라운드로 닫을 수 있다(전부 값쌈).
+**부수로 닫은 것**: SEC-10(MED 주입 격리)·SEC-11/12/13(LOW)·API-10(MED 파서 중복)·USE-01/API-12/
+OPS-11/LOGIC-16(LOW)·backtrack.reason 회귀·SHIP-12(README). 커밋 `2efe05d`·`74df666`·`2f0456d`·`8d261d3`.
+
+**출하 후 백로그(잔여 open, 비차단)**: SEC-01(외부 심링크 P8, Bash 표면 이내)·SHIP-02(구 .harness
+ gitignore 마이그레이션)·OPS-02/10/14(관측 보강)·LOGIC-13/14(스키마 확장 시 승격·시간축 증적)·
+OPS-16·API-11 등 — `ledger.md` open 행 참조. 전부 MED/LOW.
 
 # 게이트 실측 (목표 열은 착수 전 확정 — Iron Rule 1)
 
 | # | 게이트 | 목표 | 착수 전 | 최종 실측 |
 |---|---|---|---|---|
-| G1 | 테스트 3회 | 171 pass·fail0·skip0·3회 동일 | ⚠(미측정) | **171×3 동일 PASS** |
+| G1 | 테스트 3회 | pass·fail0·skip0·3회 동일 | ⚠(미측정) | **198×3 동일 PASS**(수정 후 재측정, +27) |
 | G2 | 타입 | 오류 0 | ⚠ | **tsc 0 PASS** |
 | G3 | 빌드·CLI | 성공+exit0 | ⚠ | **PASS** |
 | G4 | 공급망 | 프로덕션 도달 crit/high 0 | ⚠ | **0/0 PASS**(dev 5건 DEP-10 트래킹) |
@@ -36,7 +39,7 @@
 | G6 | 훅 무해 | 전 케이스 exit0·비간섭0 | ⚠ | **17/17 PASS** |
 | G7 | E2E 페르소나 | 실패 0 | ⚠ | **P1~P4 실패0 PASS** |
 | G8 | 조용한 실패 | 무관측 경로 0 | ⚠ | **조건부** — 삼킴 24/25 관측, 예외 OPS-10/12/14·LOGIC-10/11 |
-| G9 | 훅 지연 | p95<150ms ⚠가정 | ⚠ | **p95 59ms PASS**(가정 유지, 완화 불필요) |
+| G9 | 훅 지연 | p95<150ms ⚠가정 | ⚠ | **p95 57ms PASS**(self-contained dist 298KB 재측정, 가정 유지) |
 | G10 | 대형 저널 | doctor<5s·훅<500ms ⚠가정 | ⚠ | **doctor59·훅62ms PASS** |
 | G11 | 신규 설치 | 1회 성공·문서밖 단계0 | ⚠ | **PASS(수동 경로)** · 플러그인 형태 SHIP-11 |
 | G12 | 업그레이드·롤백 | 각 성공·유실0 | ⚠ | **양방향 PASS·유실0** |

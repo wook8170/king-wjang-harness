@@ -1,5 +1,43 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-20 — ★★ 출하 검증 "출하 가능" 승급 완료 (HIGH 3건 전부 verified 종결)
+
+**판정: 출하 가능** — BLOCKER 0·HIGH 0·전 게이트 재측정 PASS(198×3, 훅 p95 57ms). 수정 커밋:
+- `b5d6248` F1: LOGIC-10/11(HIGH fail-open)·SEC-13 — 리뷰 Approved
+- `2efe05d` F2: API-10=LOGIC-12·USE-01·API-12·OPS-11·LOGIC-16 — 리뷰 Approved
+- `74df666` F3: SEC-10/11/12 주입 격리(sanitize 헬퍼·본문 nonce) — 리뷰 Approved
+- `2f0456d` F3 리뷰 Minor 회귀: sanitizeUntrusted String() 강제(비문자열 backtrack.reason)
+- `8d261d3` SHIP-11(사용자 결정 dist 커밋)+SHIP-12(README): **yaml 번들 인라인**으로
+  self-contained dist — node_modules 없는 순수 클론서 하네스 실동작 E2E 검증(dist-only는
+  yaml external이라 여전히 inert였던 것을 실행으로 발견·수정).
+- **다음 즉시 할 일**: (1) 최종 보고서를 claude.ai 아티팩트로(사용자 요청, 원격 접속). (2) main
+  병합 결정(a 로컬병합/b 보류/c PR) — 출하 가능 판정 받았으니 병합 적기. **push는 사용자 지시 전 금지.**
+- **잔여 백로그(비차단 MED/LOW)**: SEC-01(외부심링크P8)·SHIP-02(구 .harness gitignore 마이그레이션)·
+  OPS-02/10/13/14·LOGIC-13/14/15·OPS-16·API-11·SEC-02·API-01/02·OPS-01·FEAT-10·DEP-10 — 대장 참조.
+- **⚠ 함정**: **커밋된 dist는 self-contained여야**(yaml external이면 클론서 inert) — tsup
+  noExternal:['yaml']. 소스 수정 시 `npm run build` 후 core/dist 재커밋(README·bin 주석 명시).
+  파이프 뒤 `$?`는 head exit. 절전이 서브에이전트 끊음(완성본은 컨트롤러 검증·커밋).
+
+## 2026-08-20 — HIGH 수정 라운드: 코드 3건 커밋 완료(이하 상세, 상위 섹션이 최신)
+
+출하 검증 "조건부 출하 가능"의 HIGH 3건을 닫는 중(사용자 A 선택). 대장: `docs/release-readiness/2026-08-20/ledger.md`.
+- ✅ **F1 `b5d6248`** — LOGIC-11·LOGIC-10(HIGH)·SEC-13. **리뷰 Approved, 대장 verified.**
+- ✅ **F2 `2efe05d`** — API-10=LOGIC-12·USE-01·API-12·OPS-11·LOGIC-16. **리뷰 Approved,
+  대장 verified.** (OPS-11 부분: 손상 state.json status 안내는 OPS-16으로 이월.)
+- ✅ **F3 `74df666`** — SEC-10/11/12 주입 격리(sanitizeUntrusted 헬퍼 통일, nonce=본문
+  SHA-256 앞 8자로 결정성 규칙 준수). 197 tests(+7)·E2E 6/6. **독립 리뷰 진행 중.**
+- 통합 트리(F1+F2+F3) 실측: **197 passed·tsc0·빌드 ok.**
+- **다음 즉시 할 일**: (1) F3 리뷰 통과 확인→SEC-10/11/12 verified 승급. (2) **SHIP-11 = core/dist
+  커밋**(사용자 결정): `.gitignore`에서 `core/dist/` 제거 + `npm run build` 후 dist 커밋 +
+  bin/harness 주석("gitignore다"→"커밋된다") 갱신. README.md(SHIP-12) 워킹트리에 작성 완료—함께 커밋.
+  (3) **최종 재측정**(조용한 창에서 G1~G3·G9·G10 재확인) → 대장 SHIP-11/12·SEC-10/11/12 verified.
+  (4) `00-summary.md` 판정 "조건부 출하 가능"→**"출하 가능"** 승급. (5) main 병합 결정(a/b/c).
+- **잔여 open(비차단, 백로그)**: SEC-01(MED 외부심링크)·SEC-02·API-11·OPS-16·LOGIC-13/14/15·
+  OPS-10/13/14 등 MED/LOW — 대장 open 행 참조. HIGH는 SHIP-11만 남고 그것도 dist 커밋으로 닫힘.
+- **⚠ 함정**: 절전이 서브에이전트를 끊음(완성본은 컨트롤러가 검증·커밋, 미착수는 재디스패치).
+  병렬 에이전트 파일 분리 필수(hook.ts=F1/F3 vs ledger·wave·cli=F2). 파이프 뒤 `$?`는 head exit.
+  dist 커밋 후엔 코드 수정 시 `npm run build`+dist 재커밋 필요(README에 명시).
+
 ## 2026-08-20 — ★ 출하 검증 완료 — 판정 "조건부 출하 가능" (10축 ③ 제외, BLOCKER 0)
 
 **대상 `e48473d`**. 산출: `docs/release-readiness/2026-08-20/` — 정본 `ledger.md`(대장),
