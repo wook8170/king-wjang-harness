@@ -131,17 +131,46 @@ describe('hook: 활동 집계 한정 (I5·I6)', () => {
 });
 
 describe('hook: session-start 하드닝', () => {
-  it('세션 시작 시 이전 세션 활동 마커를 리셋한다 (M10)', () => {
+  /** 활성 웨이브 + 미로그 활동(Write) 상태를 만든다. */
+  const withUnloggedWork = (): string => {
     const root = setup();
     createWave(root, { milestone: 'M', design_refs: [], acceptance: [], goal: 'g' });
     activateWave(root, 'wave-001');
     handleHook(root, 'post-tool', { tool_name: 'Write', tool_input: { file_path: 'a.ts' } });
     expect(readRuntime(root).lastActivityAt).toBeDefined();
+    return root;
+  };
 
-    handleHook(root, 'session-start', {});
+  it('startup 이면 이전 세션 활동 마커를 리셋한다 (M10)', () => {
+    const root = withUnloggedWork();
+    handleHook(root, 'session-start', { source: 'startup' });
     expect(readRuntime(root).lastActivityAt).toBeUndefined();
     // 마커가 리셋됐으니 아무 작업도 안 한 새 세션은 조용히 종료된다
     expect(handleHook(root, 'stop', {})).toBeNull();
+  });
+
+  it('clear 도 새 세션이므로 리셋한다', () => {
+    const root = withUnloggedWork();
+    handleHook(root, 'session-start', { source: 'clear' });
+    expect(readRuntime(root).lastActivityAt).toBeUndefined();
+  });
+
+  it('compact 는 같은 세션의 연속 — 미로그 활동 증거를 지우지 않는다', () => {
+    const root = withUnloggedWork();
+    const before = readRuntime(root).lastActivityAt;
+    handleHook(root, 'session-start', { source: 'compact' });
+    expect(readRuntime(root).lastActivityAt).toBe(before);
+    // 증거가 남아 있으므로 stop 가드가 여전히 정산을 요구한다
+    expect((handleHook(root, 'stop', {}) as any).decision).toBe('block');
+  });
+
+  it('resume·source 미지정도 증거를 보존한다 (안전 기본값)', () => {
+    for (const source of ['resume', undefined]) {
+      const root = withUnloggedWork();
+      const before = readRuntime(root).lastActivityAt;
+      handleHook(root, 'session-start', source ? { source } : {});
+      expect(readRuntime(root).lastActivityAt, String(source)).toBe(before);
+    }
   });
 
   it('턴 로그 인용은 구분자로 감싸이고 줄당 200자로 잘린다 (I8)', () => {

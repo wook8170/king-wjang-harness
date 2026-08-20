@@ -70,7 +70,7 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
     const config = loadConfig(root);
     switch (event) {
       case 'session-start':
-        return sessionStart(root, state, config, degraded);
+        return sessionStart(root, state, config, degraded, input);
       case 'pre-tool':
         return preTool(root, state, config, input, degraded);
       case 'post-tool':
@@ -121,10 +121,13 @@ function allowList(config: HarnessConfig): string[] {
 
 function sessionStart(
   root: string, state: HarnessState, config: HarnessConfig, degraded: Degraded | null,
+  input: HookInput,
 ): object {
-  // 이전 세션 활동 마커를 지운다 — stop 가드는 "현 세션에 작업이 있었나"만 본다.
-  // 세션을 넘긴 미정산 변경은 아래 정산 지시가 담당한다.
-  clearActivity(root);
+  // 활동 마커 리셋은 **새 세션이 열릴 때만** 한다 — startup(새로 실행)·clear(대화 비움).
+  // compact·resume 은 같은 세션의 연속이라 방금 한 미로그 작업의 증거가 그대로 남아야 한다.
+  // 여기서 무조건 지우면 컨텍스트가 날아간 직후, 즉 정산이 가장 필요한 순간에 stop 가드가
+  // 함께 풀린다. source 를 모르면(미지의 값·결측) 지우지 않는 쪽이 안전하다.
+  if (input.source === 'startup' || input.source === 'clear') clearActivity(root);
 
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
   const lines: string[] = [
