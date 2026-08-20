@@ -9,7 +9,14 @@ import * as fs from 'node:fs';
 import { eventsPath } from './paths';
 import { defaultState } from './state';
 import { isPhase } from './types';
-import type { HarnessEvent, HarnessState, GateRecord } from './types';
+import type { HarnessEvent, HarnessState } from './types';
+
+/** doctor가 아는 이벤트 타입 — 이 밖의 타입이 저널에 있으면 재생 신뢰도 하락 신호. */
+export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'init', 'phase-set', 'wave-created', 'wave-activated', 'wave-turn-logged',
+  'wave-completed', 'wave-stale', 'node-upserted', 'node-bumped',
+  'gate-submitted', 'gate-approved', 'backtrack-started', 'backtrack-cleared',
+]);
 
 export function appendEvent(
   root: string, type: string, data: Record<string, unknown>,
@@ -19,14 +26,35 @@ export function appendEvent(
   return ev;
 }
 
-export function readEvents(root: string): HarnessEvent[] {
-  if (!fs.existsSync(eventsPath(root))) return [];
-  const out: HarnessEvent[] = [];
+export interface Journal {
+  events: HarnessEvent[];
+  corruptLines: number;
+}
+
+/** 손상을 세고 노출한다 — doctor가 불완전 재생을 감지하는 근거. 은폐하지 않는다. */
+export function readJournal(root: string): Journal {
+  if (!fs.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  const events: HarnessEvent[] = [];
+  let corruptLines = 0;
   for (const line of fs.readFileSync(eventsPath(root), 'utf8').split('\n')) {
     if (!line.trim()) continue;
-    try { out.push(JSON.parse(line) as HarnessEvent); } catch { /* 손상 줄 스킵 */ }
+    let parsed: unknown;
+    try { parsed = JSON.parse(line); } catch { corruptLines++; continue; }
+    if (typeof parsed !== 'object' || parsed === null || typeof (parsed as any).type !== 'string') {
+      corruptLines++; continue; // 형태 불량(null·수·type 없음)도 손상으로 집계
+    }
+    const p = parsed as Record<string, unknown>;
+    events.push({
+      ts: typeof p.ts === 'string' ? p.ts : '',
+      type: p.type as string,
+      data: typeof p.data === 'object' && p.data !== null ? p.data as Record<string, unknown> : {},
+    });
   }
-  return out;
+  return { events, corruptLines };
+}
+
+export function readEvents(root: string): HarnessEvent[] {
+  return readJournal(root).events;
 }
 
 /** 이벤트가 진실. 이 함수가 doctor 복구의 근거다. */
@@ -36,13 +64,27 @@ export function replayState(events: HarnessEvent[]): HarnessState {
     const d = ev.data as Record<string, any>;
     switch (ev.type) {
       case 'phase-set': if (isPhase(d.phase)) s.phase = d.phase; break;
-      case 'wave-activated': s.activeWave = String(d.id); break;
+      case 'wave-activated':
+        if (typeof d.id === 'string' && d.id) s.activeWave = d.id;
+        break;
       case 'wave-completed': if (s.activeWave === d.id) s.activeWave = null; break;
       case 'gate-submitted':
-        if (isPhase(d.phase)) s.gates[d.phase] = { status: 'submitted', artifactHash: d.artifactHash } as GateRecord;
+        if (isPhase(d.phase)) {
+          s.gates[d.phase] = {
+            status: 'submitted',
+            artifactHash: typeof d.artifactHash === 'string' ? d.artifactHash : undefined,
+          };
+        }
         break;
       case 'gate-approved':
-        if (isPhase(d.phase)) s.gates[d.phase] = { status: 'approved', artifactHash: d.artifactHash, approvedAt: ev.ts };
+        if (isPhase(d.phase)) {
+          s.gates[d.phase] = {
+            ...s.gates[d.phase],
+            status: 'approved',
+            artifactHash: typeof d.artifactHash === 'string' ? d.artifactHash : s.gates[d.phase]?.artifactHash,
+            approvedAt: ev.ts,
+          };
+        }
         break;
       case 'backtrack-started':
         if (isPhase(d.to)) s.backtrack = { to: d.to, reason: String(d.reason ?? '') };

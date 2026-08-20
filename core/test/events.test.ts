@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { initHarness } from '../src/state';
-import { appendEvent, readEvents, replayState } from '../src/events';
+import { appendEvent, readEvents, readJournal, replayState, KNOWN_EVENT_TYPES } from '../src/events';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -58,5 +58,65 @@ describe('events', () => {
     const s = replayState(readEvents(root));
     expect(s.phase).toBe('P2');
     expect(readEvents(root)).toHaveLength(2);
+  });
+
+  it('형태 불량 줄(null·수·type 없음)은 throw 없이 손상으로 집계된다', () => {
+    const root = setup();
+    const lines = ['null', '123', JSON.stringify({ ts: 't' })].join('\n') + '\n';
+    fs.appendFileSync(path.join(root, '.harness/events.jsonl'), lines);
+    const j = readJournal(root);
+    expect(j.corruptLines).toBe(3);
+    expect(j.events).toHaveLength(0);
+  });
+
+  it('data 없는 phase-set은 유효 이벤트로 읽히되 replay에서는 무시된다', () => {
+    const root = setup();
+    fs.appendFileSync(
+      path.join(root, '.harness/events.jsonl'),
+      JSON.stringify({ type: 'phase-set' }) + '\n',
+    );
+    const j = readJournal(root);
+    expect(j.corruptLines).toBe(0);
+    expect(j.events).toHaveLength(1);
+    expect(replayState(j.events).phase).toBe('P0'); // 기본값 유지, 오염 안 됨
+  });
+
+  it('개행 유실로 병합된 줄은 손상 1건으로 집계되고 나머지는 읽힌다', () => {
+    const root = setup();
+    appendEvent(root, 'phase-set', { phase: 'P1' });
+    fs.appendFileSync(
+      path.join(root, '.harness/events.jsonl'),
+      '{"type":"phase-set","data":{"phase":"P8"}}{"type":"phase-set","data":{"phase":"P9"}}\n',
+    );
+    appendEvent(root, 'phase-set', { phase: 'P2' });
+    const j = readJournal(root);
+    expect(j.corruptLines).toBe(1);
+    expect(j.events.map(e => e.type)).toEqual(['phase-set', 'phase-set']);
+    expect(replayState(j.events).phase).toBe('P2');
+  });
+
+  it('wave-activated의 id가 문자열이 아니거나 필드명이 다르면 activeWave는 null 유지', () => {
+    const root = setup();
+    appendEvent(root, 'wave-activated', { waveId: 'wave-001' });
+    expect(replayState(readEvents(root)).activeWave).toBeNull();
+
+    const root2 = setup();
+    appendEvent(root2, 'wave-activated', { id: { n: 1 } });
+    expect(replayState(readEvents(root2)).activeWave).toBeNull();
+  });
+
+  it('gate-approved가 해시 없이 와도 gate-submitted의 해시를 보존한다 (병합 폴드)', () => {
+    const root = setup();
+    appendEvent(root, 'gate-submitted', { phase: 'P0', artifactHash: 'sha-abc' });
+    appendEvent(root, 'gate-approved', { phase: 'P0' });
+    const s = replayState(readEvents(root));
+    expect(s.gates.P0?.status).toBe('approved');
+    expect(s.gates.P0?.artifactHash).toBe('sha-abc');
+    expect(s.gates.P0?.approvedAt).toBeTruthy();
+  });
+
+  it('KNOWN_EVENT_TYPES에 주요 이벤트 타입이 포함된다', () => {
+    expect(KNOWN_EVENT_TYPES.has('phase-set')).toBe(true);
+    expect(KNOWN_EVENT_TYPES.has('gate-approved')).toBe(true);
   });
 });
