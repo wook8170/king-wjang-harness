@@ -39,10 +39,17 @@ describe('hook: session-start', () => {
   it('state.json 손상 시 저널 재생 폴백 + doctor 권장 주입', () => {
     const root = tmp();
     initHarness(root);
+    createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });
+    activateWave(root, 'wave-001');
     fs.writeFileSync(path.join(root, '.harness/state.json'), '{corrupted');
     const out = handleHook(root, 'session-start', {}) as any;
     expect(out).not.toBeNull();
-    expect(out.hookSpecificOutput.additionalContext).toContain('doctor');
+    const ctx: string = out.hookSpecificOutput.additionalContext;
+    expect(ctx).toContain('doctor');
+    // 저널 재생으로 활성 웨이브가 복구되어 판정·주입이 계속된다
+    expect(ctx).toContain('wave-001');
+    // 폴백은 인메모리 전용 — 손상된 state.json 을 고쳐 쓰지 않는다 (복구는 doctor --repair)
+    expect(fs.readFileSync(path.join(root, '.harness/state.json'), 'utf8')).toBe('{corrupted');
   });
 
   it('활성 웨이브 파일 유실 시 죽지 않고 정산 지시를 주입', () => {
