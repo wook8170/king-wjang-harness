@@ -1,8 +1,42 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-20 — 하네스 운영 스킬 신설·검증 완료 (커밋 대기, 사용자 지시)
+## 2026-08-21 — GitHub 런칭 README 4개 언어 + 아티팩트 (자율모드 완주)
 
-**사용자가 "하네스를 거는 스킬"을 만들라고 지시.** 브레인스토밍→작성→RED/GREEN 검증→갭 수정 완료.
+**사용자 지시: "GitHub 올릴 README를 개발자가 혹할 만하게, 다국어로" + 이후 "자율모드로 끝까지".**
+- **신규 README 4종**: `README.md`(EN 마스터·프론트) / `README.ko.md` / `README.ja.md` / `README.zh.md`.
+  상단 언어 스위처 상호 링크. 기존 기술 README 내용(설치·명령·상태저장소)은 전부 흡수.
+  구성: 훅 강제 vs 스킬 권고 **벤치마크 표**, 동작 방식(mermaid), **디자인 시스템 & Claude Design**,
+  보증 불변식 + 실측표, 사용자 관점 사용법, 명령 레퍼런스, 상태·로드맵, FAQ.
+- **정직성 원칙 확정(사용자 선택 "풀 비전 + 명확한 로드맵 라벨")**: v0 구현분은 ✅, 스펙 §7/§8
+  (디자인 시스템·Claude Design 연동)은 **"By design (roadmap)" 라벨**로 명확히 분리 —
+  미구현을 구현된 것처럼 쓰지 않는다. 로드맵 항목은 스펙 §13(8단계)에 정렬.
+- **아티팩트(4개 언어 단일 페이지·언어 스위처)**: https://claude.ai/code/artifact/d7f23867-9a1a-4d57-bb3b-66337208cd38
+  디자인: 철도 신호소 모티프(주제 = "unsafe route를 물리적으로 불가능하게"), Archivo+Source Serif 4+
+  JetBrains Mono, 시그널 앰버 강조, 라이트/다크 토큰 양방향.
+- **커밋**: 아래 참조(이 섹션 갱신과 함께 커밋).
+- **⚠ 함정·지식**: ① 번역 서브에이전트(JA)가 **본문만 번역하고 h2/h3 헤딩·표 헤더를 영어로 남김** —
+  구조 카운트(h2 수·표 수)만으로는 못 잡고 **헤딩 목록을 눈으로 대조**해야 발견됨(수정 완료).
+  ② 아티팩트 빌드: `marked`를 `npm i --no-save`로 설치(package.json 무오염, node_modules는 gitignore).
+  빌드 스크립트는 scratchpad(`build-artifact.js`) — 원문 상단 스위처 줄 제거 + ```mermaid →
+  `<pre class="mermaid">`(아티팩트 네이티브) 변환이 핵심. ③ pandoc·python-markdown 이 장비에 없음.
+
+### 확인 대기 (사용자 결정 필요 — 자율 진행 불가)
+- **GitHub 리모트 없음**(`git remote -v` 비어 있음) → 실제 호스팅 위치 미정. README 설치 안내의
+  `<this-repo>` 플레이스홀더도 실제 URL로 치환 필요.
+- **push 여부** — 지시 전 금지 유지 중(리모트도 없음).
+- **LICENSE 파일 없음**·package.json에 license 필드 없음 → 라이선스 선택은 사용자 몫
+  (README "License & author" 절이 저장소 라이선스를 참조하므로 공개 전 필요).
+- **main 병합** — 이전 세션 **보류** 확정 그대로 유지.
+
+## 2026-08-20 — 하네스 운영 스킬 신설·검증·커밋 완료 (`cb4b0ac`, 사용자 지시)
+
+**커밋 `cb4b0ac`** (사용자 "미커밋 전체 함께 커밋" 선택): 스킬 + `.claude-plugin/` +
+경량 readiness 정본(readiness.md·evidence·report.html, 구 11축 감사 13파일 삭제) + progress.md.
+23 files, +403/−1385. 소스 무변경(dist 무변경). **push 안 함**(지시 전 금지 유지) —
+브랜치 `feature/core-engine-v0`. main 병합도 여전히 **보류**(이전 세션 확정, 변경 없음).
+다음 즉시 할 일: 없음 — 사용자가 push/병합/추가작업 지시 시 진행.
+
+**작업 경위** — 브레인스토밍→작성→RED/GREEN 검증→갭 수정.
 - **결정(사용자)**: 범위 = **풀 운영 매뉴얼**, 위치 = **플러그인 동봉**, 이름 = **`king-wjang-harness`**.
 - **신규(미커밋)**: `skills/king-wjang-harness/SKILL.md`. 플러그인 루트 `skills/`(source `"./"`) →
   `hooks/hooks.json`처럼 **자동 발견**(plugin.json에 skills 키 불필요). 호출 `king-wjang-harness:
