@@ -68,6 +68,7 @@ export function replayState(events: HarnessEvent[]): HarnessState {
         if (typeof d.id === 'string' && d.id) s.activeWave = d.id;
         break;
       case 'wave-completed': if (s.activeWave === d.id) s.activeWave = null; break;
+      case 'wave-stale': if (typeof d.id === 'string' && s.activeWave === d.id) s.activeWave = null; break;
       case 'gate-submitted':
         if (isPhase(d.phase)) {
           s.gates[d.phase] = {

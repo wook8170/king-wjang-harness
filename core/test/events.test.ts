@@ -115,6 +115,13 @@ describe('events', () => {
     expect(s.gates.P0?.approvedAt).toBeTruthy();
   });
 
+  it('wave-activated 후 wave-stale을 replay하면 activeWave가 null이 된다', () => {
+    const root = setup();
+    appendEvent(root, 'wave-activated', { id: 'wave-001' });
+    appendEvent(root, 'wave-stale', { id: 'wave-001' });
+    expect(replayState(readEvents(root)).activeWave).toBeNull();
+  });
+
   it('KNOWN_EVENT_TYPES에 주요 이벤트 타입이 포함된다', () => {
     expect(KNOWN_EVENT_TYPES.has('phase-set')).toBe(true);
     expect(KNOWN_EVENT_TYPES.has('gate-approved')).toBe(true);
