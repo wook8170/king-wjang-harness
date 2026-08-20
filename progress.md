@@ -10,8 +10,12 @@
   - 설계 원장(추적성), 웨이브 지시서(연속성), 하드 게이트(훅 차단 + 권한 다이얼로그 승인)
   - ADR 결정 포인트(스택/운영/디자인 기반 — 추천+재정의), 디자인 시스템 4계층 + 토큰 단일점
     + 인터랙티브 HTML 정본 + 토큰 스왑 드릴, Claude Design 양방향 연동, 시각 증적 의무
+  - 산출물 레지스트리(DOC 노드) + 요구사항 추적 매트릭스(RTM) — 요구→배포 문서 추적
   - 자작 4종(token-guard/auto-retry/handoff-guard/terse) 흡수 계획 포함
 - 스펙 셀프 리뷰 완료 (토큰 원천 모순 수정: HTML 정본 단일 원천으로 고정)
+- 검토용 아티팩트 발행: https://claude.ai/code/artifact/ca5f0860-4d76-40c5-b2e9-166c9c7f5397
+  (갱신 시 scratchpad의 king-harness-spec.md 재발행 — 같은 URL 유지)
+- git 커밋 2건 (스펙 + RTM 보강)
 
 ### 진행 중
 - **사용자의 스펙 검토 대기** ← 지금 여기
