@@ -157,7 +157,25 @@ describe('cli', () => {
     expect(waves.find(w => w.id === 'wave-001')!.status).toBe('stale'); // 성공분은 진행
     expect(waves.find(w => w.id === 'wave-002')!.status).toBe('pending');
     expect(readEvents(root).map(e => e.type)).toContain('node-bumped'); // 저널은 루프보다 먼저
-    expect(q.logs.join('\n')).toContain('STALE 마킹 실패: wave-002');
+    expect(q.logs.join('\n')).toContain('STALE 전파 불완전');
+    expect(q.logs.join('\n')).toContain('wave-002');
+  });
+
+  it('bump 검증 불가 웨이브도 exit 1 로 보고한다 (침묵 스킵 아님)', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
+    run(['wave', 'create', '--milestone', 'M1', '--goal', 'a', '--refs', 'F-1'], root);
+    run(['wave', 'create', '--milestone', 'M1', '--goal', 'b', '--refs', 'F-1'], root);
+    // wave-002 를 해석 불가로 만든다 → 참조 여부 자체를 판정할 수 없다
+    fs.writeFileSync(path.join(root, '.harness/waves/wave-002.md'), '---\n{{{\n---\n');
+    expect(run(['node', 'bump', 'F-1'], root)).toBe(1);
+    q.restore();
+    expect(listWaves(root).find(w => w.id === 'wave-001')!.status).toBe('stale'); // 읽히는 쪽은 마킹
+    const ev = readEvents(root).find(e => e.type === 'node-bumped')!;
+    expect(ev.data.unverifiable).toEqual(['wave-002']); // 저널에도 남는다
+    expect(q.logs.join('\n')).toContain('검증 불가/실패 웨이브: wave-002');
   });
 
   it('잘못된 명령은 exit 1', () => {

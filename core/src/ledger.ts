@@ -37,8 +37,15 @@ export function upsertNode(root: string, node: LedgerNode): void {
  * 반환된 affectedWaves(해당 노드를 design_refs로 참조하며 status가 stale이 아닌 웨이브의
  * 파일명 stem — 소비처 markStale이 파일명으로 해석)는 호출측(CLI)이 wave.markStale로
  * 마킹한다 — 순환 의존 방지를 위한 분리.
+ *
+ * unverifiable = 읽기 실패(I/O)나 frontmatter 해석 실패로 **참조 여부를 판정할 수 없었던**
+ * 웨이브. 검증 불가는 침묵 스킵이 아니라 보고 대상이다 — 마킹할 수도, 무시해도 된다고
+ * 단정할 수도 없으므로 호출측이 사람에게 넘겨야 한다. 조용히 넘기면 STALE 전파가
+ * 뚫린 줄 아무도 모른다.
  */
-export function bumpNode(root: string, id: string): { node: LedgerNode; affectedWaves: string[] } {
+export function bumpNode(
+  root: string, id: string,
+): { node: LedgerNode; affectedWaves: string[]; unverifiable: string[] } {
   const nodes = loadLedger(root);
   const node = nodes.find(n => n.id === id);
   if (!node) throw new Error(`노드 ${id} 가 원장에 없다`);
@@ -47,18 +54,30 @@ export function bumpNode(root: string, id: string): { node: LedgerNode; affected
   saveLedger(root, nodes);
 
   const affectedWaves: string[] = [];
+  const unverifiable: string[] = [];
   if (fs.existsSync(wavesDir(root))) {
     for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
+      const stem = f.replace(/\.md$/, '');
       let txt: string;
-      try { txt = fs.readFileSync(path.join(wavesDir(root), f), 'utf8'); } catch { continue; } // 읽기 실패도 스킵(파싱 실패와 동일 관용)
+      try {
+        txt = fs.readFileSync(path.join(wavesDir(root), f), 'utf8');
+      } catch {
+        unverifiable.push(stem); continue; // 읽기 실패 — 참조 여부 판정 불가
+      }
       const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(txt);
-      if (!m) continue;
+      if (!m) { unverifiable.push(stem); continue; } // frontmatter 없음
       let meta: { design_refs?: string[]; status?: string };
-      try { meta = YAML.parse(m[1]) ?? {}; } catch { continue; } // 깨진 frontmatter는 스킵
+      try {
+        const parsed = YAML.parse(m[1]) ?? {}; // 빈 frontmatter는 정상적인 '참조 없음'
+        if (typeof parsed !== 'object') { unverifiable.push(stem); continue; } // 스칼라 = 해석 불가
+        meta = parsed as { design_refs?: string[]; status?: string };
+      } catch {
+        unverifiable.push(stem); continue; // 깨진 YAML
+      }
       if (meta.design_refs?.includes(id) && meta.status !== 'stale') {
-        affectedWaves.push(f.replace(/\.md$/, ''));
+        affectedWaves.push(stem);
       }
     }
   }
-  return { node, affectedWaves };
+  return { node, affectedWaves, unverifiable };
 }

@@ -61,11 +61,34 @@ describe('ledger', () => {
     expect(bumpNode(root, 'F-1').affectedWaves).toEqual([]);
   });
 
-  it('frontmatter 없는 웨이브 파일은 스캔에서 무시', () => {
+  it('frontmatter 없는 웨이브 파일은 unverifiable 로 보고(침묵 스킵 아님)', () => {
     const root = setup();
     upsertNode(root, { id: 'F-1', title: 'a', version: 1, status: 'approved' });
     fs.writeFileSync(path.join(wavesDir(root), 'wave-001.md'), 'frontmatter 없음\n');
-    expect(bumpNode(root, 'F-1').affectedWaves).toEqual([]);
+    const r = bumpNode(root, 'F-1');
+    expect(r.affectedWaves).toEqual([]);
+    expect(r.unverifiable).toEqual(['wave-001']);
+  });
+
+  it('읽을 수 없는 웨이브 파일은 unverifiable 로 보고', () => {
+    const root = setup();
+    upsertNode(root, { id: 'F-1', title: 'a', version: 1, status: 'approved' });
+    // 파일 자리에 디렉토리 → readFileSync EISDIR (chmod 보다 이식성 있는 I/O 실패 재현)
+    fs.mkdirSync(path.join(wavesDir(root), 'wave-001.md'));
+    const r = bumpNode(root, 'F-1');
+    expect(r.affectedWaves).toEqual([]);
+    expect(r.unverifiable).toEqual(['wave-001']);
+  });
+
+  it('정상 웨이브만 있으면 unverifiable 은 비어 있다', () => {
+    const root = setup();
+    upsertNode(root, { id: 'F-1', title: 'a', version: 1, status: 'approved' });
+    writeWave(root, 'wave-001.md', {
+      id: 'wave-001', milestone: 'M1', design_refs: '[F-1]', status: 'pending', acceptance: '[]',
+    });
+    const r = bumpNode(root, 'F-1');
+    expect(r.affectedWaves).toEqual(['wave-001']);
+    expect(r.unverifiable).toEqual([]);
   });
 
   it('wave-*.md 패턴이 아닌 파일은 design_refs가 일치해도 스캔에서 무시', () => {
@@ -77,11 +100,13 @@ describe('ledger', () => {
     expect(bumpNode(root, 'F-1').affectedWaves).toEqual([]);
   });
 
-  it('깨진 YAML frontmatter는 스캔에서 스킵', () => {
+  it('깨진 YAML frontmatter는 unverifiable 로 보고', () => {
     const root = setup();
     upsertNode(root, { id: 'F-1', title: 'a', version: 1, status: 'approved' });
     fs.writeFileSync(path.join(wavesDir(root), 'wave-001.md'), '---\n{{{\n---\n');
-    expect(bumpNode(root, 'F-1').affectedWaves).toEqual([]);
+    const r = bumpNode(root, 'F-1');
+    expect(r.affectedWaves).toEqual([]);
+    expect(r.unverifiable).toEqual(['wave-001']);
   });
 
   it('CRLF 개행 frontmatter도 감지', () => {

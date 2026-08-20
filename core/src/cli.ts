@@ -171,10 +171,12 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
         if (sub === 'bump') {
-          const { node, affectedWaves } = bumpNode(root, rest[0]);
+          const { node, affectedWaves, unverifiable } = bumpNode(root, rest[0]);
           // 저널 먼저 — 마킹 루프 도중에 죽어도 bump 가 일어났다는 사실은 남아야 한다.
           // affected 는 "마킹 대상"이지 "마킹 성공"이 아니다(성패는 아래 exit code 로 보고).
-          appendEvent(root, 'node-bumped', { id: node.id, version: node.version, affected: affectedWaves });
+          appendEvent(root, 'node-bumped', {
+            id: node.id, version: node.version, affected: affectedWaves, unverifiable,
+          });
           // 한 웨이브의 실패가 나머지 마킹을 막지 않는다 — 부분 실패는 감추지 말고 보고한다.
           const failed: string[] = [];
           for (const w of affectedWaves) {
@@ -182,8 +184,13 @@ export function run(argv: string[], root: string): number {
           }
           const marked = affectedWaves.filter(w => !failed.includes(w));
           console.log(`${node.id} v${node.version} — STALE 웨이브: ${marked.join(', ') || '없음'}`);
-          if (failed.length > 0) {
-            console.error(`STALE 마킹 실패: ${failed.join(', ')} — 수동 확인 필요`);
+          // 판정 못 한 웨이브(unverifiable)와 마킹 못 한 웨이브(failed)는 둘 다 STALE 전파가
+          // 뚫린 것이다 — 사람이 확인해야 하므로 성공으로 끝내지 않는다.
+          const incomplete = [...unverifiable, ...failed];
+          if (incomplete.length > 0) {
+            console.error(
+              `STALE 전파 불완전 — 검증 불가/실패 웨이브: ${incomplete.join(', ')} — 수동 확인 필요`,
+            );
             return 1;
           }
           return 0;
