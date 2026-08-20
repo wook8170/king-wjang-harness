@@ -163,6 +163,36 @@ describe('wave', () => {
     expect(() => completeWave(root)).toThrow(/시각 증적/);
   });
 
+  it('C2: 브랜치 되감김 — 저널·웨이브 파일이 없어도 잔존 증적이 있으면 생성을 거부한다', () => {
+    const root = setup();
+    // git 브랜치 전환 재현: .harness/ 는 커밋 대상이라 events.jsonl 이 waves/ 와 함께
+    // 되감긴다. 미커밋 evidence/ 만 untracked 로 살아남는다.
+    fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), 'fake');
+
+    expect(() => createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' }))
+      .toThrow(/이전 증적/);
+    // 거부는 완전해야 한다 — 지시서도 저널 항목도 남기지 않는다
+    expect(fs.existsSync(wavePath(root, 'wave-001'))).toBe(false);
+    expect(listWaves(root)).toHaveLength(0);
+
+    // 증적을 치우면 정상 생성된다
+    fs.rmSync(evidenceDir(root, 'wave-001'), { recursive: true });
+    expect(createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' }).id)
+      .toBe('wave-001');
+  });
+
+  it('C2: 잔존 증적 판정은 UX 게이트와 같은 기준 — 숨김·빈 파일은 생성을 막지 않는다', () => {
+    const root = setup();
+    fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), '.DS_Store'), 'x');
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'empty.png'), '');
+    // 게이트가 증적으로 인정하지 않는 것은 가드도 막지 않는다 (M7 과 동일 기준)
+    createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });
+    activateWave(root, 'wave-001');
+    expect(() => completeWave(root)).toThrow(/시각 증적/);
+  });
+
   it('I4: writeWave는 원자적 쓰기 — waves/ 에 .tmp- 잔여가 없다', () => {
     const root = setup();
     createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });

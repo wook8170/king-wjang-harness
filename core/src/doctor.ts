@@ -168,8 +168,11 @@ export function runDoctor(
     } else {
       // 정산 판정은 repair 가 실제로 쓸 상태(replayed) 기준이다 — current 기준으로 정산하면
       // 발산 복구가 되살릴 activeWave 와 어긋나 다음 doctor 가 다시 발산을 본다.
-      const settledActiveWave = replayed.activeWave
-        && !fs.existsSync(wavePath(root, replayed.activeWave)) ? replayed.activeWave : null;
+      const replayedWave = replayed.activeWave;
+      const settledActiveWave =
+        replayedWave !== null && !fs.existsSync(wavePath(root, replayedWave))
+          ? replayedWave
+          : null;
       let target = replayed;
       if (settledActiveWave) {
         // 순서 계약: 저널이 먼저. writeState 로만 비우면 재생 결과와 발산해 영구 red 가 된다.

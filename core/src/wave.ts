@@ -67,11 +67,27 @@ function writeWave(root: string, id: string, meta: WaveMeta, body: string): void
 }
 
 /**
+ * 증적으로 인정되는 파일 목록 — dot 파일과 빈 파일은 제외한다.
+ * completeWave 의 UX 게이트와 createWave 의 잔존 증적 가드가 반드시 같은 기준을 써야
+ * "생성은 통과했는데 완료가 거부"되거나 그 반대인 어긋남이 생기지 않는다.
+ */
+function evidenceFiles(root: string, id: string): string[] {
+  const dir = evidenceDir(root, id);
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter(f => !f.startsWith('.') && fs.statSync(path.join(dir, f)).size > 0);
+}
+
+/**
  * 다음 웨이브 번호 = max(디스크 파일명, 저널 wave-created) + 1.
- * 디스크만 보면 웨이브 파일이 사라졌을 때(수동 삭제·git 브랜치 전환) 같은 id 가 재발급되어
- * 새 웨이브가 이전 웨이브의 evidence/wave-NNN/ 을 자기 증적으로 물려받는다 —
- * 스크린샷 0장으로 UX 게이트를 통과하는 익스플로잇이 된다. 저널은 지워지지 않으므로
- * 번호는 단조 증가한다.
+ * 디스크만 보면 웨이브 파일이 사라졌을 때(수동 삭제) 같은 id 가 재발급되어 새 웨이브가
+ * 이전 웨이브의 evidence/wave-NNN/ 을 자기 증적으로 물려받는다 — 스크린샷 0장으로 UX
+ * 게이트를 통과하는 익스플로잇이 된다.
+ *
+ * 단, 이 이중 최댓값이 보장하는 단조 증가는 **한 브랜치 안에서만** 성립한다.
+ * `.harness/` 는 git 커밋 대상이라 브랜치를 전환하면 events.jsonl 이 waves/ 와 **함께**
+ * 되감기고, 그때 미커밋 evidence/ 만 untracked 로 살아남아 번호가 되돌아간다.
+ * 그 경로는 createWave 의 잔존 증적 가드가 막는다 — 번호가 아니라 증적을 직접 지킨다.
  */
 function nextWaveId(root: string): string {
   const nums: number[] = [];
@@ -101,6 +117,16 @@ export function createWave(
   // 남의 웨이브 지시서를 조용히 덮는 것보다 생성을 거부하는 쪽이 안전하다.
   if (fs.existsSync(wavePath(root, id))) {
     throw new Error(`${id} 파일이 이미 존재한다 — 동시 생성 의심으로 웨이브 생성을 중단한다`);
+  }
+  // 잔존 증적 가드: 새 웨이브가 남의 스크린샷을 물려받은 채 시작하면 UX 게이트가 무의미해진다.
+  // 브랜치 전환으로 저널이 되감겨 번호가 재발급된 경우가 실제 경로다(nextWaveId 주석 참조).
+  const inherited = evidenceFiles(root, id);
+  if (inherited.length > 0) {
+    throw new Error(
+      `${evidenceDir(root, id)} 에 이전 증적 ${inherited.length}건(${inherited.slice(0, 3).join(', ')}`
+      + `${inherited.length > 3 ? ', …' : ''})이 남아 있다 — 새 웨이브가 남의 시각 증적을 `
+      + '물려받으면 UX 게이트가 무력화된다. 해당 디렉토리를 확인해 보관하거나 삭제한 뒤 다시 생성하라.',
+    );
   }
   const meta: WaveMeta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: 'pending', acceptance: opts.acceptance };
   const body = [
@@ -144,9 +170,7 @@ export function completeWave(root: string): void {
   const { meta, body } = readWave(root, id);
   if (meta.design_refs.some(r => r.startsWith('UX-'))) {
     const dir = evidenceDir(root, id);
-    const files = fs.existsSync(dir)
-      ? fs.readdirSync(dir).filter(f => !f.startsWith('.') && fs.statSync(path.join(dir, f)).size > 0)
-      : [];
+    const files = evidenceFiles(root, id); // createWave 의 잔존 증적 가드와 같은 기준
     if (files.length === 0) {
       throw new Error(
         `UX 노드(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')})를 참조하는 웨이브는 ` +

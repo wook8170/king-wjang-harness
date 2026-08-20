@@ -185,7 +185,28 @@ describe('doctor', () => {
     expect(readEvents(root).some(e => e.type === 'wave-stale')).toBe(true);
   });
 
-  it('C1: 정산이 없으면 doctor-repaired 에 settledActiveWave 흔적을 남기지 않는다', () => {
+  it('C1: state.json 손상 + 웨이브 파일 부재 동시 발생 → 한 번의 repair 로 둘 다 정산·수렴', () => {
+    const root = setup();
+    appendEvent(root, 'phase-set', { phase: 'P7' });
+    appendEvent(root, 'wave-activated', { id: 'wave-001' }); // 지시서는 만들지 않는다
+    fs.writeFileSync(statePath(root), '{corrupted');
+
+    // state 를 못 읽으므로 부재 판정은 재생 결과(effective = replayed)를 근거로 한다
+    const r = runDoctor(root, { repair: true });
+    expect(r.repaired).toBe(true);
+    expect(r.issues.join(' ')).toMatch(/state\.json 손상/);
+    expect(r.issues.join(' ')).toMatch(/wave-001 의 웨이브 파일 부재/);
+
+    // 손상 복구(phase)와 정산(activeWave)이 한 번에 반영된다
+    expect(readState(root).phase).toBe('P7');
+    expect(readState(root).activeWave).toBeNull();
+
+    const again = runDoctor(root);
+    expect(again.ok).toBe(true);
+    expect(again.warnings).toEqual([]);
+  });
+
+  it('C1: 정산이 없으면 doctor-repaired 의 settledActiveWave 는 null 이다', () => {
     const root = setup();
     appendEvent(root, 'phase-set', { phase: 'P7' });
     runDoctor(root, { repair: true });
