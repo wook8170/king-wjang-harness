@@ -35,6 +35,7 @@
     시스템 성격·사용자 의도 기반 **추천 + 재정의** 가능해야 한다.
 14. 요구사항부터 배포까지 **문서로 추적 가능한 산출물 관리** (레지스트리 + 추적 매트릭스).
 15. 개발 진행 중 새 세션이 열리면 **Remote Control 활성화** — 모바일 환경에서 연속 확인 가능.
+16. 생성되는 모든 문서·산출물은 **claude.ai 아티팩트 URL로 발행 (강제)** — 어디서든 열람 가능.
 
 ## 1. 아키텍처: 코어 엔진 + 3 어댑터 (접근안 C)
 
@@ -190,7 +191,7 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 원장에 `DOC-x` 노드로 등록된다:
 
 ```
-{id, phase, path, version, status(draft→submitted→approved→superseded), hash, linked_nodes}
+{id, phase, path, version, status(draft→submitted→approved→superseded), hash, linked_nodes, artifact_url}
 ```
 
 - **게이트 연동**: `gate submit` = submitted, `gate approve` = approved + 해시 고정.
@@ -202,6 +203,21 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
   게이트 리뷰 패킷과 P12 출하 체크리스트에 첨부, 아티팩트로 발행.
 - **배포 기록**: P11 배포마다 `{버전, 커밋 SHA, 환경, 시각, 검증 증적}` 등록 →
   "이 요구사항이 어느 배포에 실렸나" 역추적 가능.
+
+**아티팩트 발행 강제 (요구 16)** — 모든 산출물은 claude.ai 아티팩트 URL을 가져야 한다:
+
+- DOC 노드는 `artifact_url` 없이는 **submitted 상태로 전이 불가** (코어가 기계 검증).
+  `gate submit`은 심사 대상 문서의 artifact_url 존재 + 발행본 해시 일치를 요구 —
+  "로컬에만 있는 문서"로는 게이트에 올릴 수 없다.
+- **URL 영속성**: 문서당 아티팩트 1개 — 갱신은 registry의 artifact_url을 `url` 파라미터로 넘겨
+  같은 URL에 재발행. 어느 세션·어느 머신에서 갱신해도 사용자의 북마크가 깨지지 않는다.
+- **시각 증적 패킷**: UI 웨이브의 evidence(스크린샷·비교 리뷰)는 base64 임베드 HTML 아티팩트로
+  발행 — `wave complete`의 시각 증적 검사(§3-3)가 artifact_url까지 확인.
+- **프로젝트 허브 아티팩트**: `harness report hub` — 전 산출물의 현재 승인본 링크·상태·RTM 요약을
+  담은 목차 아티팩트를 자동 생성·갱신. 사용자는 **URL 하나만 북마크**하면 모바일 어디서든
+  전 문서에 도달. 게이트 승인·문서 개정 시 코어가 허브 갱신을 지시.
+- 열화 경로: 아티팩트 발행은 claude.ai 연결이 필요 — 발행 불가 환경(오프라인 등)에서는
+  DOC 노드가 draft에 머물고, 코어가 발행 대기 큐에 적재 후 다음 발행 가능 시점에 일괄 처리.
 
 ## 4. 게이트·훅 강제
 

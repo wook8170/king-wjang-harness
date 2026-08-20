@@ -12,6 +12,8 @@
     + 인터랙티브 HTML 정본 + 토큰 스왑 드릴, Claude Design 양방향 연동, 시각 증적 의무
   - 산출물 레지스트리(DOC 노드) + 요구사항 추적 매트릭스(RTM) — 요구→배포 문서 추적
   - 모바일 원격 관제(§3-6a): 새 세션마다 SessionStart가 /remote-control 활성화 지시 (요구 15)
+  - 아티팩트 발행 강제(§3-7, 요구 16): DOC 노드 artifact_url 필수, 문서당 1 URL 영속,
+    허브 아티팩트(harness report hub)로 전 산출물 단일 진입점
   - 자작 4종(token-guard/auto-retry/handoff-guard/terse) 흡수 계획 포함
 - 스펙 셀프 리뷰 완료 (토큰 원천 모순 수정: HTML 정본 단일 원천으로 고정)
 - 검토용 아티팩트 발행: https://claude.ai/code/artifact/ca5f0860-4d76-40c5-b2e9-166c9c7f5397
