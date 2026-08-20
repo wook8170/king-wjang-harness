@@ -209,11 +209,31 @@ function deny(reason: string, degraded: Degraded | null): object {
 }
 
 /**
+ * 존재하는 조상까지만 realpath 로 정규화한다. Write 는 아직 없는 파일도 대상으로 삼으므로
+ * 전체 경로에 realpath 를 걸면 대부분 ENOENT 로 던진다 — 그 경우 실패한 마디의 부모로
+ * 올라가 정규화하고, 아직 존재하지 않는 나머지 구성요소는 원본 그대로 이어 붙인다.
+ * 최상위(`dirname(p) === p`)까지 못 풀면 원본을 그대로 반환한다 — 무해 불변식.
+ */
+function realOrSelf(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    const parent = path.dirname(p);
+    if (parent === p) return p;
+    return path.join(realOrSelf(parent), path.basename(p));
+  }
+}
+
+/**
  * root 기준 정규화 상대경로. resolve 를 거치므로 `docs/../src/a.ts` 는 `src/a.ts` 가 되어
  * 프리픽스 검사를 우회할 수 없다. root 밖이면 `..` 로 시작하거나(같은 볼륨) 절대경로다.
+ *
+ * root 와 대상 양쪽을 realpath 로 같은 정규화 공간에 놓은 뒤 비교한다 — 한쪽만 심링크를
+ * 거치면(root 가 심링크거나, 도구가 file_path 를 실경로로 주는 경우) `path.relative` 가
+ * `../..` 를 뱉어 CORE_FILES·설계 트랙 보호를 그대로 우회한다(최종 리뷰 C3).
  */
 function relPath(root: string, p: string): string {
-  return path.relative(root, path.resolve(root, p));
+  return path.relative(realOrSelf(root), realOrSelf(path.resolve(root, p)));
 }
 
 function isOutsideRoot(rel: string): boolean {

@@ -90,6 +90,44 @@ describe('hook: 코어 파일 보호 (I2)', () => {
   });
 });
 
+describe('hook: 심링크 root 정규화 (C3)', () => {
+  // mkdtempSync 가 주는 경로 자체가 macOS 에서 /var → /private/var 심링크라, real 을
+  // 먼저 realpathSync 로 고정한 뒤 별도 심링크 link 를 만들어야 재현이 결정적이다.
+  const setupSymlinked = (phase: Phase = 'P0') => {
+    const root = tmp();
+    initHarness(root);
+    if (phase !== 'P0') writeState(root, { ...readState(root), phase });
+    const real = fs.realpathSync(root);
+    const link = `${real}-link`;
+    fs.symlinkSync(real, link);
+    return { real, link };
+  };
+
+  it('심링크 root + 실경로 file_path 로도 state.json 직접 편집은 차단된다 (재현)', () => {
+    const { real, link } = setupSymlinked();
+    const out = write(link, path.join(real, '.harness/state.json'));
+    expect(out, '심링크 root 우회로 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('harness 명령으로만');
+  });
+
+  it('실경로 root + 심링크 경유 file_path 도 차단된다 (역조합)', () => {
+    const { real, link } = setupSymlinked();
+    const out = write(real, path.join(link, '.harness/state.json'));
+    expect(out, '역조합도 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('harness 명령으로만');
+  });
+
+  it('회귀: 심링크 root에서도 미존재 새 파일 판정은 그대로다 (docs/ 허용·src/ 차단)', () => {
+    const { link } = setupSymlinked('P0'); // 설계 페이즈
+    expect(write(link, path.join(link, 'docs/새파일.md'))).toBeNull();
+    const out = write(link, path.join(link, 'src/새파일.ts'));
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+  });
+});
+
 describe('hook: 활동 집계 한정 (I5·I6)', () => {
   const post = (root: string, tool_name: string, tool_input: Record<string, any>) =>
     handleHook(root, 'post-tool', { tool_name, tool_input });
