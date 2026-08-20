@@ -16,6 +16,7 @@ export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set([
   'init', 'phase-set', 'wave-created', 'wave-activated', 'wave-turn-logged',
   'wave-completed', 'wave-stale', 'node-upserted', 'node-bumped',
   'gate-submitted', 'gate-approved', 'backtrack-started', 'backtrack-cleared',
+  'doctor-repaired', // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
 ]);
 
 export function appendEvent(
