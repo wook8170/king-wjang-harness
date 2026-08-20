@@ -11,9 +11,12 @@ import { readEvents } from '../src/events';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
 const quiet = () => {
   const logs: string[] = [];
+  const errs: string[] = []; // stderr 만 따로 — 경고 유무를 stdout 과 섞지 않고 단언한다
   const l = vi.spyOn(console, 'log').mockImplementation(m => { logs.push(String(m)); });
-  const e = vi.spyOn(console, 'error').mockImplementation(m => { logs.push(String(m)); });
-  return { logs, restore: () => { l.mockRestore(); e.mockRestore(); } };
+  const e = vi.spyOn(console, 'error').mockImplementation(m => {
+    logs.push(String(m)); errs.push(String(m));
+  });
+  return { logs, errs, restore: () => { l.mockRestore(); e.mockRestore(); } };
 };
 
 describe('cli', () => {
@@ -32,6 +35,7 @@ describe('cli', () => {
     run(['init'], root);
     run(['phase', 'set', 'P8'], root);
     expect(readState(root).phase).toBe('P8');
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
     run(['wave', 'create', '--milestone', 'M1', '--goal', '로그인', '--refs', 'F-1'], root);
     run(['wave', 'activate', 'wave-001'], root);
     run(['wave', 'update', '골격 완료'], root);
@@ -176,6 +180,58 @@ describe('cli', () => {
     const ev = readEvents(root).find(e => e.type === 'node-bumped')!;
     expect(ev.data.unverifiable).toEqual(['wave-002']); // 저널에도 남는다
     expect(q.logs.join('\n')).toContain('검증 불가/실패 웨이브: wave-002');
+  });
+
+  it('bump 가 활성 웨이브를 STALE 정산하면 가드 해제를 고지한다', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
+    run(['wave', 'create', '--milestone', 'M1', '--goal', 'a', '--refs', 'F-1'], root);
+    run(['wave', 'activate', 'wave-001'], root);
+    expect(run(['node', 'bump', 'F-1'], root)).toBe(0); // 경고일 뿐 실패가 아니다
+    q.restore();
+    expect(readState(root).activeWave).toBeNull(); // 정산되어 stop 가드가 풀린 상태
+    expect(q.errs.join('\n')).toContain('wave-001');
+    expect(q.errs.join('\n')).toMatch(/가드/);
+  });
+
+  it('활성 웨이브가 bump 대상이 아니면 가드 해제 경고가 없다', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
+    run(['wave', 'create', '--milestone', 'M1', '--goal', 'a', '--refs', 'F-1'], root);
+    run(['wave', 'create', '--milestone', 'M1', '--goal', 'b'], root); // 참조 없음
+    run(['wave', 'activate', 'wave-002'], root);
+    expect(run(['node', 'bump', 'F-1'], root)).toBe(0);
+    q.restore();
+    expect(readState(root).activeWave).toBe('wave-002'); // 활성 웨이브는 그대로
+    expect(q.errs.join('\n')).toBe('');
+  });
+
+  it('원장에 없는 --refs 는 전부 나열해 거부한다', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
+    expect(run(['wave', 'create', '--milestone', 'M1', '--goal', 'a', '--refs', 'F-1,UX-99,SCH-3'], root)).toBe(1);
+    q.restore();
+    const err = q.errs.join('\n');
+    expect(err).toContain('UX-99');
+    expect(err).toContain('SCH-3');
+    expect(listWaves(root)).toEqual([]); // 지시서도 만들지 않는다
+  });
+
+  it('원장에 등록된 --refs 는 정상 생성된다', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
+    run(['node', 'upsert', '--id', 'UX-1', '--title', '로그인 화면'], root);
+    expect(run(['wave', 'create', '--milestone', 'M1', '--goal', 'a', '--refs', 'F-1,UX-1'], root)).toBe(0);
+    q.restore();
+    expect(readWave(root, 'wave-001').meta.design_refs).toEqual(['F-1', 'UX-1']);
   });
 
   it('잘못된 명령은 exit 1', () => {

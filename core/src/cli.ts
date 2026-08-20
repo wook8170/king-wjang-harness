@@ -126,10 +126,20 @@ export function run(argv: string[], root: string): number {
         const args = [sub, ...rest];
         switch (sub) {
           case 'create': {
+            // 원장에 없는 id 를 조용히 받으면 STALE 전파도 UX 게이트도 걸리지 않는 유령
+            // 참조가 된다(게이트는 'UX-' 프리픽스만 본다) — 생성 시점에 거부한다.
+            const refs = csv(flag(args, 'refs'));
+            const missing = refs.filter(id => !getNode(root, id));
+            if (missing.length > 0) {
+              throw new Error(
+                `원장에 없는 설계 참조: ${missing.join(', ')} — `
+                + '`harness node upsert --id <id> --title <제목>` 로 먼저 등록하라',
+              );
+            }
             const meta = createWave(root, {
               milestone: flag(args, 'milestone') ?? '(미지정)',
               goal: flag(args, 'goal') ?? '(미지정)',
-              design_refs: csv(flag(args, 'refs')),
+              design_refs: refs,
               acceptance: csv(flag(args, 'accept')),
             });
             console.log(meta.id);
@@ -177,6 +187,11 @@ export function run(argv: string[], root: string): number {
           appendEvent(root, 'node-bumped', {
             id: node.id, version: node.version, affected: affectedWaves, unverifiable,
           });
+          // 활성 웨이브가 STALE 대상이면 markStale 이 activeWave 를 정산한다 — 그러면
+          // 이 세션의 stop 가드가 함께 풀리므로 마킹 전 상태를 기억해 두었다가 고지한다.
+          // state 를 못 읽는 상황이라도 마킹 루프는 진행해야 하니 실패는 경고 포기로 흡수한다.
+          let activeBefore: string | null = null;
+          try { activeBefore = readState(root).activeWave; } catch { /* 판정 불가 → 고지 생략 */ }
           // 한 웨이브의 실패가 나머지 마킹을 막지 않는다 — 부분 실패는 감추지 말고 보고한다.
           const failed: string[] = [];
           for (const w of affectedWaves) {
@@ -184,6 +199,12 @@ export function run(argv: string[], root: string): number {
           }
           const marked = affectedWaves.filter(w => !failed.includes(w));
           console.log(`${node.id} v${node.version} — STALE 웨이브: ${marked.join(', ') || '없음'}`);
+          if (activeBefore && marked.includes(activeBefore)) {
+            console.error(
+              `활성 웨이브 ${activeBefore} 가 STALE 정산되어 이 세션의 턴 로그 가드가 해제됐다 — `
+              + '미정산 작업이 있으면 새 웨이브를 만들어 기록하라.',
+            );
+          }
           // 판정 못 한 웨이브(unverifiable)와 마킹 못 한 웨이브(failed)는 둘 다 STALE 전파가
           // 뚫린 것이다 — 사람이 확인해야 하므로 성공으로 끝내지 않는다.
           const incomplete = [...unverifiable, ...failed];

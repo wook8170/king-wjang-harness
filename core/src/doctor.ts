@@ -192,6 +192,19 @@ export function runDoctor(
     }
   }
 
+  // 9. 훅 에러 로그 정리 — 비울 수단이 없으면 warning 이 영구히 남아 새 실패를 가린다.
+  //    state 복구와 독립한 유지보수 동작이라 발산(issues)이 없어도 --repair 면 수행한다.
+  //    단 복구가 거부된 경우엔 손대지 않는다 — 원인 규명에 쓸 근거를 지우면 안 된다.
+  //    warning 은 비우기 전 건수 그대로 보고한다(이번 실행에서 무엇을 봤는지가 보고의 본체).
+  if (opts.repair && !refused && hookErrors > 0) {
+    try {
+      fs.writeFileSync(path.join(runtimeDir(root), 'hook-errors.log'), '');
+      notes.push(`hook-errors.log ${hookErrors}건 확인 후 정리`);
+    } catch {
+      // 정리 실패는 진단을 막지 않는다 — 경고가 남아 다음 실행에 다시 보인다
+    }
+  }
+
   // issues 는 복구 후에도 남긴다 — 무엇이 어긋나 있었는지가 보고의 본체다.
   return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
 }

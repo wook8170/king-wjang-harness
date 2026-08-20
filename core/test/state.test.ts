@@ -43,11 +43,13 @@ describe('state', () => {
     expect(readState(root).updatedAt).not.toBe('1970-01-01T00:00:00.000Z');
   });
 
-  it('.runtime은 gitignore 처리된다', () => {
+  it('.runtime은 gitignore 처리되되 .gitignore 자신은 예외다', () => {
     const root = tmp();
     initHarness(root);
     const gi = fs.readFileSync(path.join(runtimeDir(root), '.gitignore'), 'utf8');
-    expect(gi.trim()).toBe('*');
+    // `*` 만 두면 .gitignore 자신도 무시되어 클론 시 .runtime/ 이 통째로 사라진다 —
+    // 그러면 훅의 hook-errors.log append 가 조용히 실패한다.
+    expect(gi.trim().split('\n')).toEqual(['*', '!.gitignore']);
   });
 
   it('state.json만 사라져도 init 재실행이 events를 덮지 않는다', () => {

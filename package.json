@@ -5,6 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsup",
+    "prepare": "tsup",
     "test": "vitest run",
     "check": "tsc --noEmit"
   },

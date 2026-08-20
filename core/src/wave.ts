@@ -184,6 +184,12 @@ export function completeWave(root: string): void {
   writeState(root, { ...state, activeWave: null });
 }
 
+/**
+ * STALE 마킹. 대상이 활성 웨이브면 activeWave 를 정산(null)한다 —
+ * **그 순간 stop 가드(활성 웨이브가 있어야 턴 로그를 강제)도 함께 풀린다.**
+ * 즉 마킹 이전의 미정산 작업이 로그 없이 세션을 끝낼 수 있으므로, 호출측은 활성 웨이브가
+ * 정산됐다는 사실을 사용자에게 고지해야 한다(cli.ts 의 `node bump` 분기 참조).
+ */
 export function markStale(root: string, id: string): void {
   const { meta, body } = readWave(root, id);
   meta.status = 'stale';

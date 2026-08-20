@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { appendEvent, readEvents, KNOWN_EVENT_TYPES } from '../src/events';
-import { statePath, eventsPath, wavePath } from '../src/paths';
+import { statePath, eventsPath, wavePath, runtimeDir } from '../src/paths';
 import { runDoctor } from '../src/doctor';
 
 const setup = () => {
@@ -17,6 +17,13 @@ const setup = () => {
 const putWaveFile = (root: string, id: string) => {
   fs.writeFileSync(wavePath(root, id),
     `---\nid: ${id}\nmilestone: M1\ndesign_refs: []\nstatus: active\nacceptance: []\n---\n## 턴 로그\n`);
+};
+
+/** 훅 에러 로그를 심어 두고 경로를 돌려준다. */
+const hookErrorLog = (root: string, content: string): string => {
+  const p = path.join(runtimeDir(root), 'hook-errors.log');
+  fs.writeFileSync(p, content);
+  return p;
 };
 
 /** 저널 없이 state 만 진행 상태로 만든다 — 절단·부재 시나리오의 재료. */
@@ -234,5 +241,33 @@ describe('doctor', () => {
     fs.mkdirSync(path.join(root, '.harness/.runtime'), { recursive: true });
     fs.writeFileSync(path.join(root, '.harness/.runtime/hook-errors.log'), 'e1\ne2\n');
     expect(runDoctor(root).warnings.join(' ')).toMatch(/2건/);
+  });
+
+  it('--repair 는 발산이 없어도 훅 에러 로그를 정리하고 흔적을 남긴다', () => {
+    const root = setup();
+    const log = hookErrorLog(root, 'e1\ne2\n');
+    const r = runDoctor(root, { repair: true });
+    expect(r.ok).toBe(true); // 고칠 발산이 없어도 로그 정리는 수행된다
+    expect(r.warnings.join(' ')).toMatch(/2건/); // 경고는 비우기 전 건수 그대로
+    expect(r.notes.join(' ')).toMatch(/hook-errors\.log 2건 확인 후 정리/);
+    expect(fs.readFileSync(log, 'utf8').trim()).toBe('');
+    expect(runDoctor(root).warnings.join(' ')).not.toMatch(/훅 판정 실패/); // 경고가 사라진다
+  });
+
+  it('repair 없이 진단만 하면 훅 에러 로그를 보존한다', () => {
+    const root = setup();
+    const log = hookErrorLog(root, 'e1\ne2\n');
+    runDoctor(root);
+    expect(fs.readFileSync(log, 'utf8')).toBe('e1\ne2\n');
+  });
+
+  it('복구가 거부되면 훅 에러 로그도 지우지 않는다', () => {
+    const root = setup();
+    const log = hookErrorLog(root, 'e1\n');
+    advanceStateOnly(root, 'P7');
+    fs.rmSync(eventsPath(root)); // 저널 부재 → 신뢰 불가
+    const r = runDoctor(root, { repair: true });
+    expect(r.refused).toBe(true);
+    expect(fs.readFileSync(log, 'utf8')).toBe('e1\n'); // 진단 근거는 남는다
   });
 });

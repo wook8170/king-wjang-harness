@@ -39,7 +39,10 @@ export function initHarness(root: string): void {
   for (const d of [harnessDir(root), designDir(root), wavesDir(root), runtimeDir(root)]) {
     fs.mkdirSync(d, { recursive: true });
   }
-  fs.writeFileSync(path.join(runtimeDir(root), '.gitignore'), '*\n'); // 세션 스크래치는 커밋 금지
+  // 세션 스크래치는 커밋 금지. 단 `*` 만 두면 .gitignore 자신도 무시되어 디렉토리가
+  // 통째로 커밋에서 빠진다 — 클론하면 .runtime/ 이 없어 훅의 hook-errors.log append 가
+  // 조용히 실패한다(로깅은 비간섭 때문에 mkdir 하지 않는다).
+  fs.writeFileSync(path.join(runtimeDir(root), '.gitignore'), '*\n!.gitignore\n');
   fs.writeFileSync(ledgerPath(root), 'nodes: []\n');
   fs.writeFileSync(configPath(root), [
     'profile: generic',
