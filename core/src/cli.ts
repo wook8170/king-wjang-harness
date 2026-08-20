@@ -41,6 +41,13 @@ import {
   pendingCritical, raiseCritical, clearCritical, buildExecutorBrief, buildVerifierBrief,
 } from './loop';
 import type { CriticalReason } from './loop';
+import { tierFor, shouldInject, guidanceFor, recordTier, lastTier } from './usage';
+import { detectLegacyTools, migrationReport, legacyHarnessGitignore } from './migrate';
+import {
+  addDefect, updateDefect, openBlockers, renderDefectLedger,
+  recordDeployment, listDeployments, shipVerdict, renderReleaseChecklist,
+} from './ship';
+import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
@@ -211,6 +218,86 @@ export function run(argv: string[], root: string): number {
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
           default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
         }
+      }
+
+      case 'ship': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'defect': {
+            const op = rest[0];
+            if (op === 'add') {
+              const d = addDefect(root, {
+                id: flag(args, 'id') ?? '',
+                severity: (flag(args, 'severity') ?? 'medium') as DefectRecord['severity'],
+                title: flag(args, 'title') ?? '',
+                evidence: flag(args, 'evidence') ?? '',
+              });
+              console.log(`${d.id} [${d.severity}] ${d.status}`);
+              return 0;
+            }
+            if (op === 'update') {
+              const d = updateDefect(root, rest[1], {
+                status: flag(args, 'status') as DefectRecord['status'] | undefined,
+                deferReason: flag(args, 'defer-reason'),
+                evidence: flag(args, 'evidence'),
+              });
+              console.log(`${d.id} → ${d.status}`);
+              return 0;
+            }
+            if (op === 'list') { console.log(renderDefectLedger(root)); return 0; }
+            throw new Error('사용법: harness ship defect <add|update|list> ...');
+          }
+          case 'deploy': {
+            const d = recordDeployment(root, {
+              version: flag(args, 'version') ?? '',
+              commitSha: flag(args, 'sha') ?? '',
+              environment: flag(args, 'env') ?? '',
+              // 배포 증적은 여럿일 수 있다(스모크·카나리·E2E) — 쉼표 구분으로 받는다.
+              evidence: csv(flag(args, 'evidence')),
+            });
+            console.log(`배포 기록: ${d.version} @ ${d.environment} (${d.commitSha.slice(0, 12)})`);
+            return 0;
+          }
+          case 'deployments': console.log(JSON.stringify(listDeployments(root), null, 2)); return 0;
+          case 'verdict': {
+            // P12 최종 go/no-go — measured 근거 없이는 통과할 수 없다.
+            const v = shipVerdict(root);
+            console.log(v.ok ? '출하 가능(GO)' : '출하 불가(NO-GO)');
+            if (v.reasons.length > 0) console.log(v.reasons.map(r => `  - ${r}`).join('\n'));
+            return v.ok ? 0 : 1;
+          }
+          case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
+          default: throw new Error(`알 수 없는 ship 하위 명령: ${sub} (defect|deploy|deployments|verdict|checklist)`);
+        }
+      }
+
+      case 'usage': {
+        const args = [sub, ...rest];
+        // 코어는 usage API 를 직접 부르지 않는다(네트워크 금지) — 퍼센트는 호출측이 넘긴다.
+        if (sub === 'tier') {
+          const pct = Number(flag(args, 'percent'));
+          if (!Number.isFinite(pct)) throw new Error('사용법: harness usage tier --percent <0-100>');
+          const tier = tierFor(pct);
+          const prev = lastTier(root);
+          const inject = shouldInject(prev, tier);
+          if (inject) recordTier(root, tier);
+          console.log(JSON.stringify({ percent: pct, tier, previous: prev, inject }, null, 2));
+          if (inject) console.log(guidanceFor(tier));
+          return 0;
+        }
+        if (sub === 'status') { console.log(JSON.stringify({ lastTier: lastTier(root) }, null, 2)); return 0; }
+        throw new Error(`알 수 없는 usage 하위 명령: ${sub} (tier|status)`);
+      }
+
+      case 'migrate': {
+        // 사용자의 ~/.claude 를 절대 건드리지 않는다 — 탐지하고 안내만 한다.
+        const home = flag([sub, ...rest], 'home') ?? process.env.HOME ?? '';
+        const tools = detectLegacyTools(home);
+        console.log(migrationReport(tools));
+        if (legacyHarnessGitignore(root)) {
+          console.log('\n⚠ 구 `.harness/.runtime/.gitignore` 형식(`*` 단독) 감지 — 자기 자신도 무시된다.');
+        }
+        return 0;
       }
 
       case 'loop': {

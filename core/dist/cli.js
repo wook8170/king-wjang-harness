@@ -107,17 +107,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path17) {
-      const ctrl = callVisitor(key, node, visitor, path17);
+    function visit_(key, node, visitor, path20) {
+      const ctrl = callVisitor(key, node, visitor, path20);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visit_(key, ctrl, visitor, path17);
+        replaceNode(key, path20, ctrl);
+        return visit_(key, ctrl, visitor, path20);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path20 = Object.freeze(path20.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path17);
+            const ci = visit_(i, node.items[i], visitor, path20);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -128,13 +128,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = visit_("key", node.key, visitor, path17);
+          path20 = Object.freeze(path20.concat(node));
+          const ck = visit_("key", node.key, visitor, path20);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path17);
+          const cv = visit_("value", node.value, visitor, path20);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -155,17 +155,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path17) {
-      const ctrl = await callVisitor(key, node, visitor, path17);
+    async function visitAsync_(key, node, visitor, path20) {
+      const ctrl = await callVisitor(key, node, visitor, path20);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visitAsync_(key, ctrl, visitor, path17);
+        replaceNode(key, path20, ctrl);
+        return visitAsync_(key, ctrl, visitor, path20);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path20 = Object.freeze(path20.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path17);
+            const ci = await visitAsync_(i, node.items[i], visitor, path20);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -176,13 +176,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path17);
+          path20 = Object.freeze(path20.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path20);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path17);
+          const cv = await visitAsync_("value", node.value, visitor, path20);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -209,23 +209,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path17) {
+    function callVisitor(key, node, visitor, path20) {
       if (typeof visitor === "function")
-        return visitor(key, node, path17);
+        return visitor(key, node, path20);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path17);
+        return visitor.Map?.(key, node, path20);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path17);
+        return visitor.Seq?.(key, node, path20);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path17);
+        return visitor.Pair?.(key, node, path20);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path17);
+        return visitor.Scalar?.(key, node, path20);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path17);
+        return visitor.Alias?.(key, node, path20);
       return void 0;
     }
-    function replaceNode(key, path17, node) {
-      const parent = path17[path17.length - 1];
+    function replaceNode(key, path20, node) {
+      const parent = path20[path20.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -835,10 +835,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path17, value) {
+    function collectionFromPath(schema, path20, value) {
       let v = value;
-      for (let i = path17.length - 1; i >= 0; --i) {
-        const k = path17[i];
+      for (let i = path20.length - 1; i >= 0; --i) {
+        const k = path20[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -857,7 +857,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path17) => path17 == null || typeof path17 === "object" && !!path17[Symbol.iterator]().next().done;
+    var isEmptyPath = (path20) => path20 == null || typeof path20 === "object" && !!path20[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -887,11 +887,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path17, value) {
-        if (isEmptyPath(path17))
+      addIn(path20, value) {
+        if (isEmptyPath(path20))
           this.add(value);
         else {
-          const [key, ...rest] = path17;
+          const [key, ...rest] = path20;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -905,8 +905,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        const [key, ...rest] = path17;
+      deleteIn(path20) {
+        const [key, ...rest] = path20;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -920,8 +920,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        const [key, ...rest] = path17;
+      getIn(path20, keepScalar) {
+        const [key, ...rest] = path20;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -939,8 +939,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path17) {
-        const [key, ...rest] = path17;
+      hasIn(path20) {
+        const [key, ...rest] = path20;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -950,8 +950,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        const [key, ...rest] = path17;
+      setIn(path20, value) {
+        const [key, ...rest] = path20;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -1498,7 +1498,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify6(item, ctx, onComment, onChompKeep) {
+    function stringify7(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -1527,7 +1527,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str}`;
     }
     exports2.createStringifyContext = createStringifyContext;
-    exports2.stringify = stringify6;
+    exports2.stringify = stringify7;
   }
 });
 
@@ -1537,7 +1537,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify6 = require_stringify();
+    var stringify7 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -1559,7 +1559,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str = stringify6.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str = stringify7.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -1611,7 +1611,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify6.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify7.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -1752,7 +1752,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge = require_merge();
-    var stringify6 = require_stringify();
+    var stringify7 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
@@ -1788,7 +1788,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify6.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify7.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -1855,12 +1855,12 @@ var require_stringifyCollection = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify6 = require_stringify();
+    var stringify7 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify7 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify7(collection, ctx, options);
+      const stringify8 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify8(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment: comment2, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -1885,7 +1885,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str2 = stringify6.stringify(item, itemCtx, () => comment3 = null, () => chompKeep = true);
+        let str2 = stringify7.stringify(item, itemCtx, () => comment3 = null, () => chompKeep = true);
         if (comment3)
           str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment3));
         if (chompKeep && comment3)
@@ -1952,7 +1952,7 @@ ${indent}${line}` : "\n";
         }
         if (comment2)
           reqNewline = true;
-        let str = stringify6.stringify(item, itemCtx, () => comment2 = null);
+        let str = stringify7.stringify(item, itemCtx, () => comment2 = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
         if (i < items.length - 1) {
           str += ",";
@@ -3313,7 +3313,7 @@ var require_stringifyDocument = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify6 = require_stringify();
+    var stringify7 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -3328,7 +3328,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify6.createStringifyContext(doc, options);
+      const ctx = stringify7.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -3350,7 +3350,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify6.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify7.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -3358,7 +3358,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify6.stringify(doc.contents, ctx));
+        lines.push(stringify7.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -3466,9 +3466,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path17, value) {
+      addIn(path20, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path17, value);
+          this.contents.addIn(path20, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3543,14 +3543,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        if (Collection.isEmptyPath(path17)) {
+      deleteIn(path20) {
+        if (Collection.isEmptyPath(path20)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path17) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path20) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3565,10 +3565,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        if (Collection.isEmptyPath(path17))
+      getIn(path20, keepScalar) {
+        if (Collection.isEmptyPath(path20))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path17, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path20, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3579,10 +3579,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path17) {
-        if (Collection.isEmptyPath(path17))
+      hasIn(path20) {
+        if (Collection.isEmptyPath(path20))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path17) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path20) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3599,13 +3599,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        if (Collection.isEmptyPath(path17)) {
+      setIn(path20, value) {
+        if (Collection.isEmptyPath(path20)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path17), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path20), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path17, value);
+          this.contents.setIn(path20, value);
         }
       }
       /**
@@ -5493,7 +5493,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "node_modules/yaml/dist/parse/cst-stringify.js"(exports2) {
     "use strict";
-    var stringify6 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify7 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -5546,7 +5546,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports2.stringify = stringify6;
+    exports2.stringify = stringify7;
   }
 });
 
@@ -5565,9 +5565,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path17) => {
+    visit.itemAtPath = (cst, path20) => {
       let item = cst;
-      for (const [field, index] of path17) {
+      for (const [field, index] of path20) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5576,23 +5576,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path17) => {
-      const parent = visit.itemAtPath(cst, path17.slice(0, -1));
-      const field = path17[path17.length - 1][0];
+    visit.parentCollection = (cst, path20) => {
+      const parent = visit.itemAtPath(cst, path20.slice(0, -1));
+      const field = path20[path20.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path17, item, visitor) {
-      let ctrl = visitor(item, path17);
+    function _visit(path20, item, visitor) {
+      let ctrl = visitor(item, path20);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path17.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path20.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5603,10 +5603,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path17);
+            ctrl = ctrl(item, path20);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path17) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path20) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs19 = this.flowScalar(this.type);
+              const fs22 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs19, sep: [] });
+                map.items.push({ start, key: fs22, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs19);
+                this.stack.push(fs22);
               } else {
-                Object.assign(it, { key: fs19, sep: [] });
+                Object.assign(it, { key: fs22, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs19 = this.flowScalar(this.type);
+              const fs22 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs19, sep: [] });
+                fc.items.push({ start: [], key: fs22, sep: [] });
               else if (it.sep)
-                this.stack.push(fs19);
+                this.stack.push(fs22);
               else
-                Object.assign(it, { key: fs19, sep: [] });
+                Object.assign(it, { key: fs22, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7257,7 +7257,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse8(src, reviver, options) {
+    function parse9(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7276,7 +7276,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify6(value, replacer, options) {
+    function stringify7(value, replacer, options) {
       let _replacer = null;
       if (typeof replacer === "function" || Array.isArray(replacer)) {
         _replacer = replacer;
@@ -7298,10 +7298,10 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse8;
+    exports2.parse = parse9;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
-    exports2.stringify = stringify6;
+    exports2.stringify = stringify7;
   }
 });
 
@@ -7364,8 +7364,8 @@ __export(cli_exports, {
   run: () => run
 });
 module.exports = __toCommonJS(cli_exports);
-var fs18 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
+var fs21 = __toESM(require("fs"));
+var path19 = __toESM(require("path"));
 
 // core/src/state.ts
 var fs = __toESM(require("fs"));
@@ -10830,6 +10830,520 @@ function buildVerifierBrief(root, waveId) {
   return lines.join("\n");
 }
 
+// core/src/usage.ts
+var fs18 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
+var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
+var tierFile = (root) => path16.join(runtimeDir(root), "usage-tier");
+function tierFor(percent) {
+  if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
+  if (percent >= 99) return "final-handoff";
+  if (percent >= 95) return "settle-every-turn";
+  if (percent >= 90) return "reduce";
+  return "normal";
+}
+function shouldInject(prevTier, nextTier) {
+  return TIER_ORDER.indexOf(nextTier) > TIER_ORDER.indexOf(prevTier);
+}
+function guidanceFor(tier) {
+  switch (tier) {
+    case "reduce":
+      return "[harness] \uC0AC\uC6A9\uB7C9 90% \uB3C4\uB2EC \u2014 \uC6E8\uC774\uBE0C\uB97C \uB354 \uC9E7\uAC8C \uCABC\uAC1C\uB77C. \uAC01 \uC6E8\uC774\uBE0C \uC885\uB8CC \uC2DC\uC810\uC774 \uCEE4\uBC0B \uAC00\uB2A5\uD55C \uC548\uC815 \uC0C1\uD0DC\uC5EC\uC57C \uD55C\uB2E4.";
+    case "settle-every-turn":
+      return "[harness] \uC0AC\uC6A9\uB7C9 95% \uB3C4\uB2EC \u2014 \uB9E4 \uD134 \uC885\uB8CC\uB9C8\uB2E4 \uC9C0\uC2DC\uC11C(\uD578\uB4DC\uC624\uD504)\uB97C \uAC31\uC2E0\uD558\uB77C. \uC815\uC0B0 \uC2A4\uB85C\uD2C0\uC740 \uD574\uC81C\uB410\uB2E4.";
+    case "final-handoff":
+      return "[harness] \uC0AC\uC6A9\uB7C9 99% \u2014 \uC784\uACC4. \uC9C0\uAE08 \uC791\uC5C5\uC744 \uC548\uC804\uD55C \uC9C0\uC810\uC5D0\uC11C \uBA48\uCD94\uACE0 \uCD5C\uC885 \uD578\uB4DC\uC624\uD504\uB97C \uC644\uB8CC\uD55C \uB4A4 \uC0AC\uC6A9\uC790\uB97C \uC18C\uD658\uD558\uB77C. \uC0C8 \uC791\uC5C5\uC744 \uC2DC\uC791\uD558\uC9C0 \uB9C8\uB77C.";
+    case "normal":
+    default:
+      return "[harness] \uC0AC\uC6A9\uB7C9 \uC5EC\uC720 \u2014 \uD3C9\uC0C1 \uC6B4\uC601.";
+  }
+}
+function recordTier(root, tier) {
+  fs18.mkdirSync(runtimeDir(root), { recursive: true });
+  fs18.writeFileSync(tierFile(root), tier + "\n");
+}
+function lastTier(root) {
+  try {
+    const v = fs18.readFileSync(tierFile(root), "utf8").trim();
+    return TIER_ORDER.includes(v) ? v : "normal";
+  } catch {
+    return "normal";
+  }
+}
+
+// core/src/migrate.ts
+var fs19 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
+var CANDIDATES = [
+  {
+    name: "handoff-guard",
+    kind: "hook",
+    rel: ".claude/handoff-guard",
+    type: "dir",
+    action: "\uD558\uB124\uC2A4\uAC00 Stop \uCC28\uB2E8\xB7SessionStart \uC8FC\uC785\uC744 \uB300\uCCB4\uD55C\uB2E4(\uC6E8\uC774\uBE0C \uC0C1\uD0DC \uAE30\uBC18 \uC815\uD655 \uD310\uC815). settings.json \uC758 handoff-guard \uD6C5 \uB4F1\uB85D\uC744 \uC9C0\uC6CC\uB77C \u2014 \uB450 \uD6C5\uC774 \uAC19\uC740 \uD134\uC744 \uC774\uC911\uC73C\uB85C \uB9C9\uB294\uB2E4."
+  },
+  {
+    name: "token-guard",
+    kind: "hook",
+    rel: ".claude/token-guard",
+    type: "dir",
+    action: "\uD558\uB124\uC2A4\uAC00 \uC0AC\uC6A9\uB7C9 \uD2F0\uC5B4 \uD310\uC815\xB7\uC9C0\uCE68 \uC8FC\uC785\uC744 \uB300\uCCB4\uD55C\uB2E4. settings.json \uC758 PostToolUse\xB7UserPromptSubmit \uD6C5 \uB4F1\uB85D\uC744 \uC9C0\uC6CC\uB77C \u2014 \uAC19\uC740 \uD2F0\uC5B4 \uBB38\uAD6C\uAC00 \uB450 \uBC88 \uC8FC\uC785\uB41C\uB2E4."
+  },
+  {
+    name: "auto-retry",
+    kind: "job",
+    rel: ".claude/auto-retry",
+    type: "dir",
+    action: "\uD55C\uB3C4 \uB3C4\uB2EC \uD6C4 \uC7AC\uAC1C\uB294 \uC544\uC9C1 \uD558\uB124\uC2A4\uAC00 \uB300\uCCB4\uD558\uC9C0 \uC54A\uB294\uB2E4(\uC635\uC158 \uCEF4\uD3EC\uB10C\uD2B8). \uADF8\uB300\uB85C \uB450\uC5B4\uB3C4 \uCDA9\uB3CC\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uB2E4\uB9CC \uD558\uB124\uC2A4\uAC00 \uC7AC\uAC1C \uCEF4\uD3EC\uB10C\uD2B8\uB97C \uCF1C\uBA74 launchd \uC7A1\uC774 \uC911\uBCF5\uB418\uB2C8 \uADF8\uB54C \uD55C\uCABD\uC744 \uAEBC\uB77C."
+  },
+  {
+    name: "terse-mode",
+    kind: "hook",
+    rel: ".claude/hooks/terse-mode.sh",
+    type: "file",
+    action: "\uD558\uB124\uC2A4\uAC00 `config.yaml: terse: on` \uC73C\uB85C \uD761\uC218\uD588\uB2E4(SessionStart \uC8FC\uC785\uC5D0 \uB3D9\uBD09). settings.json \uC758 terse-mode.sh \uB4F1\uB85D\uC744 \uC9C0\uC6CC\uB77C."
+  }
+];
+function detectLegacyTools(homeDir) {
+  const found = [];
+  for (const c of CANDIDATES) {
+    const p = path17.join(homeDir, c.rel);
+    let st;
+    try {
+      st = fs19.statSync(p);
+    } catch {
+      continue;
+    }
+    if (c.type === "dir" ? !st.isDirectory() : !st.isFile()) continue;
+    found.push({ name: c.name, kind: c.kind, path: p, action: c.action });
+  }
+  return found;
+}
+function migrationReport(tools) {
+  if (tools.length === 0) {
+    return "\uAE30\uC874 \uC790\uC791 \uD6C5 \uAC10\uC9C0: \uC5C6\uC74C. \uC911\uBCF5 \uB4F1\uB85D \uD574\uC81C \uC548\uB0B4 \uC0AC\uD56D\uC774 \uC5C6\uB2E4.";
+  }
+  const lines = [
+    `\uAE30\uC874 \uC790\uC791 \uD6C5 ${tools.length}\uAC74 \uAC10\uC9C0 \u2014 \uC544\uB798\uB294 \uC548\uB0B4\uC774\uBA70 \uD558\uB124\uC2A4\uB294 \uC0AC\uC6A9\uC790\uC758 ~/.claude/ \uB97C \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uB294\uB2E4.`,
+    "\uC911\uBCF5 \uB4F1\uB85D\uC744 \uADF8\uB300\uB85C \uB450\uBA74 \uAC19\uC740 \uD134\uC5D0 \uB450 \uC2DC\uC2A4\uD15C\uC774 \uB3D9\uC2DC\uC5D0 \uBC1C\uD654\uD55C\uB2E4. \uC544\uB798 \uC870\uCE58\uB294 \uC9C1\uC811 \uC218\uD589\uD558\uB77C.",
+    ""
+  ];
+  for (const t of tools) {
+    lines.push(`- ${t.name} (${t.kind}) \u2014 ${t.path}`);
+    lines.push(`  \uC870\uCE58: ${t.action}`);
+  }
+  lines.push("");
+  lines.push("\uD6C5 \uB4F1\uB85D\uC740 ~/.claude/settings.json \uC5D0 \uC788\uB2E4. \uD3B8\uC9D1 \uD6C4 \uC138\uC158\uC744 \uC0C8\uB85C \uC2DC\uC791\uD574\uC57C \uBC18\uC601\uB41C\uB2E4.");
+  return lines.join("\n");
+}
+function legacyHarnessGitignore(root) {
+  try {
+    const body = fs19.readFileSync(path17.join(runtimeDir(root), ".gitignore"), "utf8");
+    return body.trim() === "*";
+  } catch {
+    return false;
+  }
+}
+
+// core/src/ship.ts
+var fs20 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
+var YAML8 = __toESM(require_dist());
+var shipDir = (root) => path18.join(harnessDir(root), "ship");
+var defectsPath = (root) => path18.join(shipDir(root), "defects.yaml");
+var readinessPath = (root) => path18.join(shipDir(root), "readiness.md");
+var deploymentsPath = (root) => path18.join(shipDir(root), "deployments.yaml");
+var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
+var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
+function writeAtomic(target, content) {
+  fs20.mkdirSync(path18.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs20.writeFileSync(tmp, content);
+  fs20.renameSync(tmp, target);
+}
+function readRecords(file, key, to) {
+  if (!fs20.existsSync(file)) return [];
+  let doc;
+  try {
+    doc = YAML8.parse(fs20.readFileSync(file, "utf8"));
+  } catch (e) {
+    throw new Error(`${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+  }
+  if (doc === null || doc === void 0) return [];
+  const list = doc[key];
+  if (list === void 0 || list === null) return [];
+  if (!Array.isArray(list)) {
+    throw new Error(`${file} \uC758 ${key} \uAC00 \uBAA9\uB85D\uC774 \uC544\uB2C8\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC190\uC0C1\uB410\uB2E4. git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+  }
+  return list.map((entry, i) => {
+    const rec = to(entry);
+    if (!rec) {
+      throw new Error(
+        `${file} \uC758 ${key}[${i}] \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD615\uD0DC \uBD88\uB7C9 \uD56D\uBAA9\uC744 \uC870\uC6A9\uD788 \uBC84\uB9AC\uBA74 \uCC28\uB2E8 \uACB0\uD568 \uD55C \uC904\uC774 \uC0AC\uB77C\uC9C4 \uCC44 \uCD9C\uD558 \uD310\uC815\uC774 \uD1B5\uACFC\uD55C\uB2E4. \uD56D\uBAA9\uC744 \uACE0\uCE58\uAC70\uB098 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`
+      );
+    }
+    return rec;
+  });
+}
+var isSeverity = (v) => DEFECT_SEVERITIES.includes(v);
+var isStatus = (v) => DEFECT_STATUSES.includes(v);
+function toDefect(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.title !== "string" || typeof o.evidence !== "string") return null;
+  if (!isSeverity(o.severity) || !isStatus(o.status)) return null;
+  const rec = {
+    id: o.id,
+    severity: o.severity,
+    title: o.title,
+    evidence: o.evidence,
+    status: o.status
+  };
+  if (typeof o.deferReason === "string" && o.deferReason) rec.deferReason = o.deferReason;
+  return rec;
+}
+function listDefects(root) {
+  return readRecords(defectsPath(root), "defects", toDefect);
+}
+function saveDefects(root, defects) {
+  writeAtomic(defectsPath(root), YAML8.stringify({ defects }));
+  writeAtomic(readinessPath(root), renderLedger(defects));
+}
+function assertDeferReason(rec) {
+  if (rec.status === "deferred" && !rec.deferReason) {
+    throw new Error(
+      `deferred \uB85C \uB450\uB824\uBA74 \uC0AC\uC720\uAC00 \uD544\uC694\uD558\uB2E4: ${rec.id} \u2014 \uC0AC\uC720 \uC5C6\uB294 \uC720\uC608\uB294 \uC720\uC608\uAC00 \uC544\uB2C8\uB77C \uC740\uD3D0\uB2E4. \`harness ship defect update ${rec.id} --status deferred --defer-reason "<\uC65C \uC9C0\uAE08 \uC548 \uACE0\uCCD0\uB3C4 \uB418\uB294\uAC00>"\``
+    );
+  }
+}
+function addDefect(root, input) {
+  const id = String(input.id ?? "").trim();
+  if (!id) throw new Error("\uACB0\uD568 id \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `SEC-01` \uCC98\uB7FC \uB300\uC7A5\uC5D0\uC11C \uBD80\uB97C \uC774\uB984\uC744 \uBD99\uC5EC\uB77C");
+  if (!isSeverity(input.severity)) {
+    throw new Error(
+      `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(input.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)`
+    );
+  }
+  const status = input.status ?? "open";
+  if (!isStatus(status)) {
+    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+  }
+  const title = String(input.title ?? "").trim();
+  if (!title) throw new Error(`\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uBB34\uC5C7\uC774 \uC798\uBABB\uB410\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C`);
+  const evidence = String(input.evidence ?? "").trim();
+  if (!evidence) {
+    throw new Error(
+      `\uACB0\uD568 ${id} \uC5D0 \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uBC1C\uACAC\uC774 \uC544\uB2C8\uB77C \uC778\uC0C1\uC774\uB2E4. \`\uD30C\uC77C:\uC904\`(\`src/auth.ts:88\`) \uB610\uB294 \uC7AC\uD604 \uBA85\uB839\xB7\uC99D\uC801 \uACBD\uB85C\uB97C \uB2EC\uC544\uB77C`
+    );
+  }
+  const defects = listDefects(root);
+  if (defects.some((d) => d.id === id)) {
+    throw new Error(
+      `\uC774\uBBF8 \uB300\uC7A5\uC5D0 \uC788\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \uAC19\uC740 id \uB450 \uC904\uC740 \uCD94\uC801\uC744 \uBB34\uB108\uB728\uB9B0\uB2E4. \uACE0\uCE60 \uB0B4\uC6A9\uC774\uBA74 \`harness ship defect update ${id}\` \uB97C \uC4F0\uACE0, \uB2E4\uB978 \uACB0\uD568\uC774\uBA74 \uB2E4\uB978 id \uB97C \uBD99\uC5EC\uB77C`
+    );
+  }
+  const rec = {
+    id,
+    severity: input.severity,
+    title,
+    evidence,
+    status,
+    ...input.deferReason?.trim() ? { deferReason: input.deferReason.trim() } : {}
+  };
+  assertDeferReason(rec);
+  appendEvent(root, "defect-added", {
+    id: rec.id,
+    severity: rec.severity,
+    status: rec.status,
+    evidence: rec.evidence
+  });
+  saveDefects(root, [...defects, rec]);
+  return rec;
+}
+function updateDefect(root, id, patch) {
+  const defects = listDefects(root);
+  const i = defects.findIndex((d) => d.id === id);
+  if (i < 0) {
+    throw new Error(
+      `\uB300\uC7A5\uC5D0 \uC5C6\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \`harness ship defect list\` \uB85C id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness ship defect add\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+    );
+  }
+  if (patch.severity !== void 0 && !isSeverity(patch.severity)) {
+    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(patch.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)`);
+  }
+  if (patch.status !== void 0 && !isStatus(patch.status)) {
+    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(patch.status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+  }
+  if (patch.evidence !== void 0 && !patch.evidence.trim()) {
+    throw new Error(`\uACB0\uD568 ${id} \uC758 \uADFC\uAC70\uB97C \uBE44\uC6B8 \uC218 \uC5C6\uB2E4 \u2014 \uADFC\uAC70\uB97C \uC9C0\uC6B0\uBA74 \uB300\uC7A5 \uD55C \uC904\uC774 \uC778\uC0C1\uC73C\uB85C \uB0B4\uB824\uC549\uB294\uB2E4`);
+  }
+  if (patch.title !== void 0 && !patch.title.trim()) {
+    throw new Error(`\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC744 \uBE44\uC6B8 \uC218 \uC5C6\uB2E4`);
+  }
+  const prev = defects[i];
+  const status = patch.status ?? prev.status;
+  const deferReason = (patch.deferReason ?? prev.deferReason ?? "").trim();
+  const next = {
+    ...prev,
+    severity: patch.severity ?? prev.severity,
+    status,
+    title: patch.title?.trim() ?? prev.title,
+    evidence: patch.evidence?.trim() ?? prev.evidence
+  };
+  delete next.deferReason;
+  if (status === "deferred" && deferReason) next.deferReason = deferReason;
+  assertDeferReason(next);
+  appendEvent(root, "defect-updated", {
+    id: next.id,
+    from: prev.status,
+    to: next.status,
+    severity: next.severity
+  });
+  const all = [...defects];
+  all[i] = next;
+  saveDefects(root, all);
+  return next;
+}
+var cell3 = (s) => String(s).replace(/\|/g, "\\|");
+function ledgerRows(defects) {
+  return defects.map((d) => [
+    "",
+    d.id,
+    d.severity.toUpperCase(),
+    cell3(d.title),
+    d.status,
+    `\`${cell3(d.evidence)}\``,
+    d.deferReason ? cell3(d.deferReason) : "\u2014",
+    ""
+  ].join(" | ").trim());
+}
+function renderLedger(defects) {
+  const open = defects.filter((d) => d.status === "open");
+  const out = [
+    "# \uACB0\uD568 \uB300\uC7A5 \u2014 P10 HARDEN",
+    "",
+    "\uC815\uBCF8\uC740 `.harness/ship/defects.yaml` \uC774\uB2E4. \uC774 \uD30C\uC77C\uC740 \uAC70\uAE30\uC11C \uB80C\uB354\uD55C **\uC0AC\uBCF8**\uC774\uBBC0\uB85C \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C \u2014",
+    "\uB2E4\uC74C `harness ship defect` \uC2E4\uD589\uC774 \uB36E\uC5B4\uC4F4\uB2E4.",
+    "",
+    `- open BLOCKER **${defects.filter((d) => d.severity === "blocker" && d.status === "open").length}\uAC74** \xB7 open \uC804\uCCB4 ${open.length}\uAC74 \xB7 fixed ${defects.filter((d) => d.status === "fixed").length}\uAC74 \xB7 verified ${defects.filter((d) => d.status === "verified").length}\uAC74 \xB7 deferred ${defects.filter((d) => d.status === "deferred").length}\uAC74 \xB7 \uC804\uCCB4 ${defects.length}\uAC74`,
+    ""
+  ];
+  if (defects.length === 0) {
+    out.push(
+      "\uB4F1\uB85D\uB41C \uACB0\uD568\uC774 \uC5C6\uB2E4 \u2014 `verifying-production-readiness` \uD310\uC815\uC744 \uC544\uC9C1 \uB3CC\uB9AC\uC9C0 \uC54A\uC558\uB2E4\uBA74 \uC774 \uB300\uC7A5\uC740",
+      '\uC544\uBB34\uAC83\uB3C4 \uBCF4\uC99D\uD558\uC9C0 \uC54A\uB294\uB2E4. \uBE48 \uB300\uC7A5\uC740 "\uACB0\uD568\uC774 \uC5C6\uB2E4"\uAC00 \uC544\uB2C8\uB77C "\uC544\uC9C1 \uBCF4\uC9C0 \uC54A\uC558\uB2E4"\uC774\uB2E4.',
+      ""
+    );
+    return out.join("\n");
+  }
+  out.push(
+    "| ID | \uC2EC\uAC01\uB3C4 | \uD55C \uC904 | \uC0C1\uD0DC | \uADFC\uAC70 | \uBBF8\uB8EC \uC0AC\uC720 |",
+    "|---|---|---|---|---|---|",
+    ...ledgerRows(defects),
+    ""
+  );
+  return out.join("\n");
+}
+function renderDefectLedger(root) {
+  return renderLedger(listDefects(root));
+}
+function toDeployment(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.version !== "string" || !o.version) return null;
+  if (typeof o.commitSha !== "string" || !o.commitSha) return null;
+  if (typeof o.environment !== "string" || !o.environment) return null;
+  return {
+    version: o.version,
+    commitSha: o.commitSha,
+    environment: o.environment,
+    evidence: Array.isArray(o.evidence) ? o.evidence.map(String) : [],
+    recordedAt: typeof o.recordedAt === "string" ? o.recordedAt : ""
+  };
+}
+function listDeployments(root) {
+  return readRecords(deploymentsPath(root), "deployments", toDeployment);
+}
+function recordDeployment(root, input) {
+  const version = String(input.version ?? "").trim();
+  const commitSha = String(input.commitSha ?? "").trim();
+  const environment = String(input.environment ?? "").trim();
+  if (!version) {
+    throw new Error(
+      "\uBC30\uD3EC \uBC84\uC804\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `v1.2.0` \uCC98\uB7FC \uB9B4\uB9AC\uC2A4 \uB178\uD2B8\uAC00 \uAC00\uB9AC\uD0AC \uC774\uB984\uC774 \uD544\uC694\uD558\uB2E4 (`harness ship deploy --version <\uBC84\uC804> --sha <\uCEE4\uBC0B> --env <\uD658\uACBD>`)"
+    );
+  }
+  if (!commitSha) {
+    throw new Error(
+      `\uBC30\uD3EC ${version} \uC758 \uCEE4\uBC0B SHA \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 SHA \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC73C\uB85C\uB294 "\uC774 \uC694\uAD6C\uC0AC\uD56D\uC774 \uC5B4\uB290 \uBC30\uD3EC\uC5D0 \uC2E4\uB838\uB098"\uB97C \uC5ED\uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4(\xA73-7). \`git rev-parse HEAD\` \uAC12\uC744 \`--sha\` \uB85C \uB118\uACA8\uB77C`
+    );
+  }
+  if (!environment) {
+    throw new Error(
+      `\uBC30\uD3EC ${version} \uC758 \uD658\uACBD\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`production\`\xB7\`staging\` \uCC98\uB7FC \uC5B4\uB514\uB85C \uB098\uAC14\uB294\uC9C0 \`--env\` \uB85C \uBC1D\uD600\uB77C. \uD658\uACBD \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC740 \uC2A4\uBAA8\uD06C \uC99D\uC801\uC774 \uC5B4\uB290 \uD658\uACBD \uAC83\uC778\uC9C0 \uB9D0\uD558\uC9C0 \uBABB\uD55C\uB2E4`
+    );
+  }
+  const evidence = (input.evidence ?? []).map((e) => String(e).trim()).filter(Boolean);
+  const rec = {
+    version,
+    commitSha,
+    environment,
+    evidence,
+    // 판정이 아니라 기록이다 — `shipVerdict` 는 이 값을 읽지 않는다(계약 3).
+    recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  appendEvent(root, "deployment-recorded", {
+    version,
+    commitSha,
+    environment,
+    evidence
+  });
+  writeAtomic(deploymentsPath(root), YAML8.stringify({ deployments: [...listDeployments(root), rec] }));
+  return rec;
+}
+function attempt2(fn) {
+  try {
+    return { ok: true, value: fn() };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+function waveEntries2(root) {
+  const entries = [];
+  const unreadable = [];
+  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
+  let files;
+  try {
+    files = fs20.readdirSync(wavesDir(root));
+  } catch (e) {
+    return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
+  }
+  for (const f2 of files.filter((n) => /^wave-\d+\.md$/.test(n)).sort()) {
+    const id = f2.replace(/\.md$/, "");
+    const r = attempt2(() => parseWave(fs20.readFileSync(path18.join(wavesDir(root), f2), "utf8")).meta);
+    if (r.ok) entries.push({ id, meta: r.value });
+    else unreadable.push(`\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error} \u2014 \uC99D\uC801 \uD310\uC815 \uBD88\uAC00\uB294 \uD1B5\uACFC\uAC00 \uC544\uB2C8\uB2E4`);
+  }
+  return { entries, unreadable };
+}
+function shipVerdict(root) {
+  const reasons = [];
+  const defects = attempt2(() => listDefects(root));
+  if (!defects.ok) {
+    reasons.push(`\uACB0\uD568 \uB300\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${defects.error} \u2014 \uB300\uC7A5\uC744 \uBABB \uC77D\uB294 \uC0C1\uD0DC\uB294 "\uACB0\uD568 \uC5C6\uC74C"\uC774 \uC544\uB2C8\uB2E4`);
+  } else {
+    for (const d of defects.value) {
+      if (d.severity !== "blocker") continue;
+      if (d.status === "open") {
+        reasons.push(
+          `\uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
+        );
+      } else if (d.status === "fixed") {
+        reasons.push(
+          `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
+        );
+      }
+    }
+  }
+  const state = attempt2(() => readState(root));
+  if (!state.ok) {
+    reasons.push(`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error} \u2014 \`harness doctor --repair\` \uB85C \uBA3C\uC800 \uBCF5\uAD6C\uD558\uB77C`);
+  } else {
+    for (const phase of ["P10", "P11"]) {
+      const g = state.value.gates[phase];
+      if (g?.status === "approved") continue;
+      reasons.push(
+        `\uCD9C\uD558 \uAC8C\uC774\uD2B8 \uBBF8\uC2B9\uC778: ${phase} (\uD604\uC7AC: ${g?.status ?? "pending"}) \u2014 \`harness gate submit ${phase} --evidence measured --paths <\uC0B0\uCD9C\uBB3C>\` \uB4A4 \uC0AC\uC6A9\uC790 \uC2B9\uC778\uC774 \uD544\uC694\uD558\uB2E4`
+      );
+    }
+    for (const phase of SHIP_PHASES) {
+      const g = state.value.gates[phase];
+      if (!g || g.status === "pending") continue;
+      if (g.evidence !== "measured") {
+        reasons.push(
+          `\uCD9C\uD558 \uAC8C\uC774\uD2B8 ${phase} \uC758 \uADFC\uAC70 \uB4F1\uAE09\uC774 measured \uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${g.evidence ?? "\uC5C6\uC74C"}) \u2014 \uCD9C\uD558 \uD2B8\uB799\uC740 measured \uB9CC \uD1B5\uACFC\uD55C\uB2E4(Iron Rule, \uC2A4\uD399 \xA73-4). \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C`
+        );
+      }
+    }
+  }
+  const waves = waveEntries2(root);
+  for (const { id, meta } of waves.entries) {
+    const ux = meta.design_refs.filter((r) => r.startsWith("UX-"));
+    if (ux.length === 0) continue;
+    if (hasMeasuredEvidence(root, id)) continue;
+    reasons.push(
+      `UX \uB178\uB4DC(${ux.join(", ")})\uB97C \uCC38\uC870\uD558\uB294 ${id} \uC5D0 \uC2E4\uC8FC\uD589 \uCEA1\uCC98 \uC99D\uC801\uC774 \uC5C6\uB2E4 \u2014 headless 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 ${evidenceDir(root, id)} \uC5D0 \uB0A8\uACA8\uC57C measured \uB97C \uC8FC\uC7A5\uD560 \uC218 \uC788\uB2E4(\xA73-5)`
+    );
+  }
+  reasons.push(...waves.unreadable);
+  return { ok: reasons.length === 0, reasons };
+}
+var generatedAt2 = () => `\uC0DD\uC131: ${(/* @__PURE__ */ new Date()).toISOString()}`;
+function renderReleaseChecklist(root) {
+  const verdict = shipVerdict(root);
+  const out = ["# \uCD9C\uD558 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8 \u2014 P12 SHIP", "", generatedAt2(), "", "## \uD310\uC815", ""];
+  if (verdict.ok) {
+    out.push(
+      "**\uCD9C\uD558 \uAC00\uB2A5** \u2014 \uC544\uB798 \uCC28\uB2E8 \uC870\uAC74\uC774 \uBAA8\uB450 \uBE44\uC5B4 \uC788\uB2E4.",
+      "",
+      "- \uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568 \uC5C6\uC74C \xB7 P10\xB7P11 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC644\uB8CC \xB7 \uCD9C\uD558 \uAC8C\uC774\uD2B8 \uADFC\uAC70 measured \xB7 UX \uC6E8\uC774\uBE0C \uC2E4\uC8FC\uD589 \uC99D\uC801 \uC788\uC74C",
+      "",
+      "\uC774 \uD310\uC815\uC740 \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0 \uC5F4\uC9C0 \uC54A\uB294\uB2E4 \u2014 `harness gate approve P12` \uB294 \uC0AC\uB78C\uC774 \uB204\uB978\uB2E4."
+    );
+  } else {
+    out.push(`**\uCD9C\uD558 \uBD88\uAC00** \u2014 \uCC28\uB2E8 \uC0AC\uC720 ${verdict.reasons.length}\uAC74. \uD558\uB098\uB77C\uB3C4 \uB0A8\uC73C\uBA74 \uCD9C\uD558\uD558\uC9C0 \uC54A\uB294\uB2E4.`, "");
+    out.push(...verdict.reasons.map((r) => `- ${r}`));
+  }
+  out.push("");
+  out.push("## \uACB0\uD568 \uB300\uC7A5", "");
+  const defects = attempt2(() => listDefects(root));
+  if (!defects.ok) {
+    out.push(`\uB300\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${defects.error}`, "");
+  } else if (defects.value.length === 0) {
+    out.push('\uB4F1\uB85D\uB41C \uACB0\uD568\uC774 \uC5C6\uB2E4 \u2014 \uD310\uC815\uC744 \uB3CC\uB9AC\uC9C0 \uC54A\uC558\uB2E4\uBA74 \uC774 \uCE78\uC740 "\uACB0\uD568 \uC5C6\uC74C"\uC774 \uC544\uB2C8\uB77C "\uC544\uC9C1 \uBCF4\uC9C0 \uC54A\uC558\uB2E4"\uC774\uB2E4.', "");
+  } else {
+    const openish = defects.value.filter((d) => d.status !== "verified");
+    out.push(
+      `\uC815\uBCF8: \`.harness/ship/defects.yaml\` \xB7 \uC0AC\uB78C\uC774 \uC77D\uB294 \uC0AC\uBCF8: \`.harness/ship/readiness.md\``,
+      "",
+      `- \uC804\uCCB4 ${defects.value.length}\uAC74 \xB7 \uBBF8\uC885\uACB0(verified \uC544\uB2D8) ${openish.length}\uAC74 \xB7 open BLOCKER ${defects.value.filter((d) => d.severity === "blocker" && d.status === "open").length}\uAC74`,
+      ""
+    );
+    if (openish.length > 0) {
+      out.push(
+        "| ID | \uC2EC\uAC01\uB3C4 | \uD55C \uC904 | \uC0C1\uD0DC | \uADFC\uAC70 | \uBBF8\uB8EC \uC0AC\uC720 |",
+        "|---|---|---|---|---|---|",
+        ...ledgerRows(openish),
+        ""
+      );
+    }
+  }
+  out.push("## \uBC30\uD3EC \uAE30\uB85D", "");
+  const deployments = attempt2(() => listDeployments(root));
+  if (!deployments.ok) {
+    out.push(`\uBC30\uD3EC \uAE30\uB85D\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${deployments.error}`, "");
+  } else if (deployments.value.length === 0) {
+    out.push(
+      "\uBC30\uD3EC \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 P11 \uC5D0\uC11C `harness ship deploy --version <\uBC84\uC804> --sha <\uCEE4\uBC0B> --env <\uD658\uACBD>` \uB85C",
+      '\uB4F1\uB85D\uD558\uB77C. \uAE30\uB85D\uC774 \uC5C6\uC73C\uBA74 "\uC774 \uC694\uAD6C\uC0AC\uD56D\uC774 \uC5B4\uB290 \uBC30\uD3EC\uC5D0 \uC2E4\uB838\uB098"\uB97C \uC5ED\uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4(\xA73-7).',
+      ""
+    );
+  } else {
+    out.push("| \uBC84\uC804 | \uCEE4\uBC0B | \uD658\uACBD | \uC2DC\uAC01 | \uC99D\uC801 |", "|---|---|---|---|---|");
+    for (const d of deployments.value) {
+      out.push(
+        `| ${cell3(d.version)} | \`${cell3(d.commitSha)}\` | ${cell3(d.environment)} | ${d.recordedAt || "\u2014"} | ${d.evidence.length ? d.evidence.map(cell3).join(", ") : "**\uC5C6\uC74C**"} |`
+      );
+    }
+    out.push("");
+  }
+  out.push("## \uCCA8\uBD80 \u2014 \uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4", "");
+  const rtm = attempt2(() => renderRtm(root));
+  out.push(rtm.ok ? rtm.value : `RTM \uC744 \uC0DD\uC131\uD560 \uC218 \uC5C6\uB2E4: ${rtm.error}`);
+  return out.join("\n").replace(/\n+$/, "\n");
+}
+
 // core/src/cli.ts
 var HOOK_EVENTS = ["session-start", "pre-tool", "post-tool", "stop"];
 function flag(argv, name) {
@@ -10838,10 +11352,10 @@ function flag(argv, name) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs18.existsSync(harnessDir(root))) return;
-    fs18.mkdirSync(runtimeDir(root), { recursive: true });
-    fs18.appendFileSync(
-      path16.join(runtimeDir(root), "hook-errors.log"),
+    if (!fs21.existsSync(harnessDir(root))) return;
+    fs21.mkdirSync(runtimeDir(root), { recursive: true });
+    fs21.appendFileSync(
+      path19.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
     );
@@ -10860,7 +11374,7 @@ function run(argv, root) {
       let input = {};
       try {
         if (!process.stdin.isTTY) {
-          const raw = fs18.readFileSync(0, "utf8");
+          const raw = fs21.readFileSync(0, "utf8");
           if (raw.trim()) {
             try {
               input = JSON.parse(raw);
@@ -10924,16 +11438,16 @@ function run(argv, root) {
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
             let packet = "";
             try {
-              fs18.mkdirSync(packetsDir(root), { recursive: true });
-              packet = path16.join(packetsDir(root), `${phase}.md`);
-              fs18.writeFileSync(packet, buildReviewPacket(root, phase));
+              fs21.mkdirSync(packetsDir(root), { recursive: true });
+              packet = path19.join(packetsDir(root), `${phase}.md`);
+              fs21.writeFileSync(packet, buildReviewPacket(root, phase));
             } catch (e) {
               console.error(`\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`);
               packet = "";
             }
             console.log(
               `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
-\uB9AC\uBDF0 \uD328\uD0B7: ${path16.relative(root, packet)}` : "")
+\uB9AC\uBDF0 \uD328\uD0B7: ${path19.relative(root, packet)}` : "")
             );
             return 0;
           }
@@ -10962,6 +11476,91 @@ function run(argv, root) {
           default:
             throw new Error(`\uC54C \uC218 \uC5C6\uB294 gate \uD558\uC704 \uBA85\uB839: ${sub}`);
         }
+      }
+      case "ship": {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case "defect": {
+            const op = rest[0];
+            if (op === "add") {
+              const d = addDefect(root, {
+                id: flag(args, "id") ?? "",
+                severity: flag(args, "severity") ?? "medium",
+                title: flag(args, "title") ?? "",
+                evidence: flag(args, "evidence") ?? ""
+              });
+              console.log(`${d.id} [${d.severity}] ${d.status}`);
+              return 0;
+            }
+            if (op === "update") {
+              const d = updateDefect(root, rest[1], {
+                status: flag(args, "status"),
+                deferReason: flag(args, "defer-reason"),
+                evidence: flag(args, "evidence")
+              });
+              console.log(`${d.id} \u2192 ${d.status}`);
+              return 0;
+            }
+            if (op === "list") {
+              console.log(renderDefectLedger(root));
+              return 0;
+            }
+            throw new Error("\uC0AC\uC6A9\uBC95: harness ship defect <add|update|list> ...");
+          }
+          case "deploy": {
+            const d = recordDeployment(root, {
+              version: flag(args, "version") ?? "",
+              commitSha: flag(args, "sha") ?? "",
+              environment: flag(args, "env") ?? "",
+              // 배포 증적은 여럿일 수 있다(스모크·카나리·E2E) — 쉼표 구분으로 받는다.
+              evidence: csv(flag(args, "evidence"))
+            });
+            console.log(`\uBC30\uD3EC \uAE30\uB85D: ${d.version} @ ${d.environment} (${d.commitSha.slice(0, 12)})`);
+            return 0;
+          }
+          case "deployments":
+            console.log(JSON.stringify(listDeployments(root), null, 2));
+            return 0;
+          case "verdict": {
+            const v = shipVerdict(root);
+            console.log(v.ok ? "\uCD9C\uD558 \uAC00\uB2A5(GO)" : "\uCD9C\uD558 \uBD88\uAC00(NO-GO)");
+            if (v.reasons.length > 0) console.log(v.reasons.map((r) => `  - ${r}`).join("\n"));
+            return v.ok ? 0 : 1;
+          }
+          case "checklist":
+            console.log(renderReleaseChecklist(root));
+            return 0;
+          default:
+            throw new Error(`\uC54C \uC218 \uC5C6\uB294 ship \uD558\uC704 \uBA85\uB839: ${sub} (defect|deploy|deployments|verdict|checklist)`);
+        }
+      }
+      case "usage": {
+        const args = [sub, ...rest];
+        if (sub === "tier") {
+          const pct = Number(flag(args, "percent"));
+          if (!Number.isFinite(pct)) throw new Error("\uC0AC\uC6A9\uBC95: harness usage tier --percent <0-100>");
+          const tier = tierFor(pct);
+          const prev = lastTier(root);
+          const inject = shouldInject(prev, tier);
+          if (inject) recordTier(root, tier);
+          console.log(JSON.stringify({ percent: pct, tier, previous: prev, inject }, null, 2));
+          if (inject) console.log(guidanceFor(tier));
+          return 0;
+        }
+        if (sub === "status") {
+          console.log(JSON.stringify({ lastTier: lastTier(root) }, null, 2));
+          return 0;
+        }
+        throw new Error(`\uC54C \uC218 \uC5C6\uB294 usage \uD558\uC704 \uBA85\uB839: ${sub} (tier|status)`);
+      }
+      case "migrate": {
+        const home = flag([sub, ...rest], "home") ?? process.env.HOME ?? "";
+        const tools = detectLegacyTools(home);
+        console.log(migrationReport(tools));
+        if (legacyHarnessGitignore(root)) {
+          console.log("\n\u26A0 \uAD6C `.harness/.runtime/.gitignore` \uD615\uC2DD(`*` \uB2E8\uB3C5) \uAC10\uC9C0 \u2014 \uC790\uAE30 \uC790\uC2E0\uB3C4 \uBB34\uC2DC\uB41C\uB2E4.");
+        }
+        return 0;
       }
       case "loop": {
         const args = [sub, ...rest];
@@ -11029,8 +11628,8 @@ function run(argv, root) {
             if (!uxNodeId) throw new Error("\uC0AC\uC6A9\uBC95: harness evidence spec <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]");
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
-            fs18.mkdirSync(path16.dirname(path16.resolve(root, out)), { recursive: true });
-            fs18.writeFileSync(path16.resolve(root, out), src);
+            fs21.mkdirSync(path19.dirname(path19.resolve(root, out)), { recursive: true });
+            fs21.writeFileSync(path19.resolve(root, out), src);
             console.log(out);
             return 0;
           }
@@ -11048,7 +11647,7 @@ function run(argv, root) {
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, "out");
             if (out) {
-              fs18.writeFileSync(path16.resolve(root, out), html);
+              fs21.writeFileSync(path19.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -11100,7 +11699,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
                 "\uC0AC\uC6A9\uBC95: harness design sync <UX-x> --from <\uAC00\uC838\uC628 \uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>\n(\uCF54\uC5B4\uB294 \uB124\uD2B8\uC6CC\uD06C\uB97C \uC4F0\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uCE94\uBC84\uC2A4\uB294 \uC5D0\uC774\uC804\uD2B8\uAC00 WebFetch \uB85C \uBC1B\uC544 \uD30C\uC77C\uB85C \uB118\uAE34\uB2E4)"
               );
             }
-            const content = fs18.readFileSync(path16.resolve(root, from), "utf8");
+            const content = fs21.readFileSync(path19.resolve(root, from), "utf8");
             const r = syncCanvas(root, uxNodeId, content);
             console.log(
               r.changed ? `${uxNodeId} \uCE94\uBC84\uC2A4 \uBCC0\uACBD \uAC10\uC9C0 \u2192 v${r.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${r.affectedWaves.join(", ") || "\uC5C6\uC74C"}` : `${uxNodeId} \uBCC0\uACBD \uC5C6\uC74C (\uD574\uC2DC \uB3D9\uC77C)`
@@ -11114,7 +11713,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           case "inventory": {
             const from = flag(args, "from");
             if (!from) throw new Error("\uC0AC\uC6A9\uBC95: harness design inventory --from <\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>");
-            console.log(JSON.stringify(extractInventory(fs18.readFileSync(path16.resolve(root, from), "utf8")), null, 2));
+            console.log(JSON.stringify(extractInventory(fs21.readFileSync(path19.resolve(root, from), "utf8")), null, 2));
             return 0;
           }
           case "baseline": {
@@ -11126,7 +11725,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const out = flag(args, "out");
             const html = generateSourceOfTruthHtml(root);
             if (out) {
-              fs18.writeFileSync(path16.resolve(root, out), html);
+              fs21.writeFileSync(path19.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -11149,11 +11748,11 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
               ["tokens.ts", generateTs(doc)],
               ["tailwind.tokens.js", generateTailwind(doc)]
             ];
-            fs18.mkdirSync(path16.resolve(root, out), { recursive: true });
+            fs21.mkdirSync(path19.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
-              fs18.writeFileSync(path16.resolve(root, out, name), content);
+              fs21.writeFileSync(path19.resolve(root, out, name), content);
             }
-            console.log(targets.map(([n]) => path16.join(out, n)).join("\n"));
+            console.log(targets.map(([n]) => path19.join(out, n)).join("\n"));
             return 0;
           }
           case "lint": {
@@ -11164,7 +11763,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
               if (isTokenFile(root, f2)) continue;
               let src = "";
               try {
-                src = fs18.readFileSync(path16.resolve(root, f2), "utf8");
+                src = fs21.readFileSync(path19.resolve(root, f2), "utf8");
               } catch {
                 continue;
               }
@@ -11180,12 +11779,12 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const overridePath = flag(args, "with");
             if (!overridePath) throw new Error("\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]");
             const doc = loadTokens(root);
-            const overrides = JSON.parse(fs18.readFileSync(path16.resolve(root, overridePath), "utf8"));
+            const overrides = JSON.parse(fs21.readFileSync(path19.resolve(root, overridePath), "utf8"));
             const swapped = swapTokens(doc, overrides);
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
-            if (out) fs18.writeFileSync(path16.resolve(root, out), generateCss(swapped));
+            if (out) fs21.writeFileSync(path19.resolve(root, out), generateCss(swapped));
             console.log(`\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74${out ? ` \xB7 CSS \u2192 ${out}` : ""}`);
             return 0;
           }
