@@ -413,3 +413,122 @@ describe('hook: 관측 가능한 실패 (I3·I4)', () => {
     expect(reason(write(root, path.join(root, 'src/a.ts')))).toContain('저널 2줄 손상');
   });
 });
+
+describe('hook: state.json 삭제 — 저널 재생 폴백 (LOGIC-11)', () => {
+  // 활성 웨이브 + 미로그 활동(Write) 을 만든 뒤 state.json 만 삭제한다. events.jsonl(진실)과
+  // 활성 웨이브가 멀쩡한데도 구 게이트(isInitialized=state.json 존재)는 이를 "하네스 미사용"
+  // 으로 오판해 훅을 전면 침묵시켰다 — 하네스가 조용히 꺼진다.
+  const setupDeletedState = (phase: Phase = 'P0') => {
+    const root = setup(phase);
+    createWave(root, { milestone: 'M', design_refs: [], acceptance: [], goal: 'g' });
+    activateWave(root, 'wave-001');
+    handleHook(root, 'post-tool', { tool_name: 'Write', tool_input: { file_path: 'a.ts' } });
+    fs.rmSync(path.join(root, '.harness/state.json'));
+    return root;
+  };
+
+  it('pre-tool: state.json 이 삭제돼도 설계 트랙 소스 쓰기는 여전히 차단된다', () => {
+    const root = setupDeletedState('P0');
+    const out = write(root, path.join(root, 'src/a.ts'));
+    expect(out, 'state.json 삭제가 하네스를 조용히 끄면 안 된다').not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+    expect(reason(out)).toContain('harness doctor --repair'); // degraded 태그
+  });
+
+  it('session-start: state.json 삭제 후에도 활성 웨이브 컨텍스트를 degraded 로 주입한다', () => {
+    const root = setupDeletedState('P0');
+    const out = handleHook(root, 'session-start', {}) as any;
+    expect(out).not.toBeNull();
+    const ctx: string = out.hookSpecificOutput.additionalContext;
+    expect(ctx).toContain('wave-001'); // 저널 재생으로 활성 웨이브 복구
+    expect(ctx).toContain('doctor');   // degraded 신호
+  });
+
+  it('stop: state.json 삭제 후에도 미로그 활동이면 여전히 차단한다', () => {
+    const root = setupDeletedState('P0');
+    const out = handleHook(root, 'stop', {}) as any;
+    expect(out).not.toBeNull();
+    expect(out.decision).toBe('block');
+  });
+
+  it('폴백은 인메모리 전용 — 삭제된 state.json 을 되살려 쓰지 않는다', () => {
+    const root = setupDeletedState('P0');
+    handleHook(root, 'session-start', {});
+    write(root, path.join(root, 'src/a.ts'));
+    expect(fs.existsSync(path.join(root, '.harness/state.json'))).toBe(false);
+  });
+
+  it('회귀(비간섭): .harness/ 자체가 없으면 여전히 null 이고 파일도 안 만든다', () => {
+    const root = tmp();
+    for (const e of ['session-start', 'pre-tool', 'post-tool', 'stop'] as const) {
+      expect(
+        handleHook(root, e, { tool_name: 'Write', tool_input: { file_path: path.join(root, 'src/a.ts') } }),
+        e,
+      ).toBeNull();
+    }
+    expect(fs.existsSync(path.join(root, '.harness'))).toBe(false);
+  });
+});
+
+describe('hook: state.json 형태 손상(유효 JSON) — 저널 재생 폴백 (LOGIC-10)', () => {
+  // `{}`·`[]`·`"hello"`·`null` 은 전부 유효 JSON 이라 JSON.parse 가 throw 하지 않는다 —
+  // catch 를 안 태워 저널 폴백이 안 돌고, phase=undefined 로 설계 트랙 판정이 조용히 풀려
+  // 소스 차단·stop 가드가 침묵 해제된다. 파싱 실패와 같은 경로로 보내야 한다.
+  const setupMalformed = (content: string, phase: Phase = 'P0') => {
+    const root = setup(phase);
+    createWave(root, { milestone: 'M', design_refs: [], acceptance: [], goal: 'g' });
+    activateWave(root, 'wave-001');
+    fs.writeFileSync(path.join(root, '.harness/state.json'), content);
+    return root;
+  };
+
+  for (const content of ['{}', '[]', '"hello"', 'null', '42']) {
+    it(`형태 손상(${content})이어도 P0 소스 쓰기는 deny 유지 + degraded 태그`, () => {
+      const root = setupMalformed(content, 'P0');
+      const out = write(root, path.join(root, 'src/a.ts'));
+      expect(out, `${content} 는 유효 JSON 이지만 형태가 깨져 판정이 뚫리면 안 된다`).not.toBeNull();
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+      expect(reason(out)).toContain('harness doctor --repair');
+    });
+  }
+
+  it('phase 가 무효 문자열(P99)이어도 형태 손상으로 폴백한다', () => {
+    const bad = JSON.stringify(
+      { schemaVersion: 1, phase: 'P99', activeWave: 'wave-001', gates: {}, backtrack: null, updatedAt: 'x' },
+    );
+    const root = setupMalformed(bad, 'P0');
+    const out = write(root, path.join(root, 'src/a.ts'));
+    expect(out).not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('harness doctor --repair');
+  });
+
+  it('정상 state.json 은 폴백 없이 그대로 판정한다 (대조군, degraded 태그 없음)', () => {
+    const root = setup('P0');
+    const out = write(root, path.join(root, 'src/a.ts'));
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).not.toContain('harness doctor --repair');
+  });
+});
+
+describe('hook: fail-open 관측 — .runtime 자기치유 (SEC-13)', () => {
+  it('.runtime 부재 상태에서 내부 실패가 나도 디렉토리를 만들어 로그를 남긴다', () => {
+    const root = setup();
+    // 신규 클론 재현: .runtime 은 gitignore 라 첫 CLI/활동 전까지 부재다.
+    fs.rmSync(path.join(root, '.harness/.runtime'), { recursive: true, force: true });
+    // 내부 실패 유발: state.json 손상 + 저널 재생까지 실패(events.jsonl 을 디렉토리로).
+    fs.writeFileSync(path.join(root, '.harness/state.json'), '{corrupted');
+    fs.rmSync(path.join(root, '.harness/events.jsonl'));
+    fs.mkdirSync(path.join(root, '.harness/events.jsonl'));
+
+    expect(
+      handleHook(root, 'pre-tool', { tool_name: 'Write', tool_input: { file_path: path.join(root, 'src/a.ts') } }),
+    ).toBeNull();
+
+    const logPath = path.join(root, '.harness/.runtime/hook-errors.log');
+    expect(fs.existsSync(logPath), 'fail-open 이 무흔적이면 하네스가 꺼진 걸 아무도 모른다').toBe(true);
+    expect(fs.readFileSync(logPath, 'utf8')).toContain('pre-tool');
+  });
+});

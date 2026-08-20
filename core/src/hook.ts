@@ -12,13 +12,13 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isInitialized, readState } from './state';
+import { readState } from './state';
 import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournal, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { runtimeDir } from './paths';
-import { DESIGN_PHASES } from './types';
+import { harnessDir, runtimeDir } from './paths';
+import { DESIGN_PHASES, isPhase } from './types';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -53,16 +53,38 @@ interface Degraded {
   corruptLines: number;
 }
 
+/**
+ * readState 가 성공(유효 JSON)해도 형태가 HarnessState 가 아니면 판정이 조용히 뚫린다:
+ * `{}`·`[]`·`"hello"`·`null`·수는 전부 유효 JSON 이라 throw 하지 않지만 phase=undefined 가
+ * 되어 설계 트랙 판정(DESIGN_PHASES.includes)이 false 로 풀리고 소스 차단·stop 가드가
+ * 침묵으로 해제된다(LOGIC-10). 최소 형태(phase 가 유효 Phase, activeWave 가 string|null)만
+ * 확인하고, 어긋나면 handleHook 이 파싱 실패와 **같은** 저널 재생 폴백으로 보낸다.
+ */
+function isHarnessStateShape(s: unknown): s is HarnessState {
+  if (typeof s !== 'object' || s === null || Array.isArray(s)) return false;
+  const o = s as Record<string, unknown>;
+  return isPhase(o.phase) && (o.activeWave === null || typeof o.activeWave === 'string');
+}
+
 export function handleHook(root: string, event: HookEvent, input: HookInput): object | null {
   try {
-    if (!isInitialized(root)) return null; // 불변식(1) 비간섭
+    // 불변식(1) 비간섭: `.harness/` 자체가 없어야 "하네스 미사용 프로젝트"다 — 완전 침묵.
+    // state.json(파생 캐시)만 사라진 걸 미사용으로 오판하면(구 isInitialized 게이트) events.jsonl·
+    // 활성 웨이브가 멀쩡한데도 하네스가 조용히 꺼진다(LOGIC-11). 디렉토리 기준은 initHarness
+    // 가드와 동일 정의 — state.json 부재는 아래 저널 재생 폴백이 흡수한다.
+    if (!fs.existsSync(harnessDir(root))) return null;
     let state: HarnessState;
     let degraded: Degraded | null = null;
     try {
-      state = readState(root);
+      const parsed = readState(root);
+      // 유효 JSON 이라도 형태가 어긋나면(위 isHarnessStateShape 주석) throw 하지 않아 catch 를
+      // 안 태운다 — 파싱 실패와 같은 경로로 보내려 여기서 명시적으로 던진다.
+      if (!isHarnessStateShape(parsed)) throw new Error('state.json 형태 손상: HarnessState 형태 아님');
+      state = parsed;
     } catch {
-      // state.json 은 파생 캐시다 — 깨졌다고 판정을 포기하지 않고 진실(저널)로 재구성한다.
-      // 인메모리 전용: 여기서 쓰지 않는다. 복구 쓰기는 `harness doctor --repair` 의 책임.
+      // state.json 은 파생 캐시다 — 없거나(삭제) 깨졌다고(파싱·형태 불량) 판정을 포기하지 않고
+      // 진실(저널)로 재구성한다. 인메모리 전용: 여기서 쓰지 않는다. 복구 쓰기는
+      // `harness doctor --repair` 의 책임.
       const journal = readJournal(root);
       state = replayState(journal.events);
       degraded = { corruptLines: journal.corruptLines };
@@ -88,13 +110,18 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
 
 /**
  * fail-open 을 관측 가능하게 만든다.
- * 일부러 mkdir 하지 않는다 — `.harness/` 가 없는 프로젝트에 디렉토리를 만들면 비간섭 위반이다.
- * 경로가 없으면 append 가 실패하고, 그 실패는 그냥 삼킨다.
+ * 이 함수는 handleHook 의 harnessDir 존재 게이트를 통과한 뒤에만 도달하므로 `.harness/` 가
+ * 보장된다 — `.runtime/` 을 만드는 건 비간섭 위반이 아니다(cli.ts 의 logHookIssue 와 같은 논리).
+ * mkdir 없이 append 만 하면, `.runtime/` 이 gitignore 라 첫 활동 전까지 부재인 신규 클론에서
+ * append 가 조용히 실패해 흔적이 사라진다(SEC-13). 관측되지 않는 fail-open 은 무의미하다.
+ * mkdir·append 전체를 try 로 감싸 무해 불변식은 그대로 지킨다.
  */
 function logHookError(root: string, event: HookEvent, err: unknown): void {
   try {
+    const dir = runtimeDir(root);
+    fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(
-      path.join(runtimeDir(root), 'hook-errors.log'),
+      path.join(dir, 'hook-errors.log'),
       `${new Date().toISOString()} ${event} ${String(err)}\n`,
     );
   } catch {
