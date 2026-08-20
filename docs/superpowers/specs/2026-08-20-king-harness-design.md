@@ -1,4 +1,4 @@
-# king-harness — 풀사이클 SDLC 하네스 플러그인 설계 스펙
+# king-wjang-harness — 풀사이클 SDLC 하네스 플러그인 설계 스펙
 
 - 작성일: 2026-08-20
 - 상태: 사용자 검토 대기
@@ -372,7 +372,7 @@ king-wjang-harness/
 ### 사용자 여정
 
 ```
-claude plugin install king-harness@<마켓플레이스>
+claude plugin install king-wjang-harness@<마켓플레이스>
 /harness init     # .harness/ 생성, 프로파일 후보 제시, config 대화
 /harness start    # P0 진입, 이후 파이프라인이 주도
 ```

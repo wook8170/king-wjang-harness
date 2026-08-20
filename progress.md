@@ -1,4 +1,4 @@
-# king-harness 진행상황 (핸드오프)
+# king-wjang-harness 진행상황 (핸드오프)
 
 ## 2026-08-20 — 설계 브레인스토밍 완료, 스펙 검토 대기
 
@@ -26,7 +26,7 @@
    "코어 엔진 v0"부터 (개별 스펙→플랜→구현 사이클)
 
 ### 미해결·확인 대기
-- 플러그인 공개 이름 미정 (가칭 king-harness)
+- ~~플러그인 공개 이름 미정~~ → **`king-wjang-harness` 확정** (2026-08-20 사용자 지정)
 - 마켓플레이스 배포 채널 (자체 marketplace.json 가정)
 - auto-retry bypassPermissions opt-in 문구/고지 수위
 
