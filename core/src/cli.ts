@@ -17,8 +17,15 @@ import { createWave, activateWave, logTurn, completeWave, listWaves, markStale }
 import { getNode, upsertNode, bumpNode } from './ledger';
 import { runDoctor } from './doctor';
 import { handleHook, HookEvent, HookInput } from './hook';
+import { submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate } from './gate';
+import {
+  getDoc, upsertDoc, submitDoc, approveDoc, reviseDoc, setDocArtifactUrl,
+  staleDocs, loadRegistry,
+} from './registry';
+import { isEvidenceGrade, isDocStatus } from './types';
+import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir } from './paths';
-import { PHASES, isPhase } from './types';
+import { PHASES, isPhase, DOC_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
 /** 배선된 훅 이벤트. 이 밖의 값은 오타이거나 미지원 이벤트다 — 침묵하되 기록한다. */
@@ -119,10 +126,99 @@ export function run(argv: string[], root: string): number {
         if (sub !== 'set') throw new Error('사용법: harness phase set <P0..P12>');
         const phase = rest[0];
         if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
-        appendEvent(root, 'phase-set', { phase }); // 순서 계약: 저널 먼저
-        writeState(root, { ...readState(root), phase });
-        console.log(`페이즈 → ${phase} (v0 임시 명령 — 게이트 구현 후 대체 예정)`);
+        // 페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 발생한다(§2 흐름 규칙).
+        // setPhaseViaGate 가 직전 페이즈 게이트 승인 여부를 검사하고 거부 사유를 던진다.
+        // --force 는 게이트 검사를 건너뛰는 탈출구다(부트스트랩·복구용, 이벤트에 흔적을 남긴다).
+        if (argv.includes('--force')) {
+          appendEvent(root, 'phase-set', { phase, forced: true }); // 순서 계약: 저널 먼저
+          writeState(root, { ...readState(root), phase });
+          console.log(`페이즈 → ${phase} (--force: 게이트 검사를 건너뛰었다)`);
+          return 0;
+        }
+        setPhaseViaGate(root, phase);
+        console.log(`페이즈 → ${phase}`);
         return 0;
+      }
+
+      case 'gate': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'submit': {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
+            const evidence = (flag(args, 'evidence') ?? 'claimed') as EvidenceGrade;
+            if (!isEvidenceGrade(evidence)) {
+              throw new Error(`유효하지 않은 근거 등급: ${evidence} (claimed, code, measured 중 하나)`);
+            }
+            const r = submitGate(root, phase, { paths: csv(flag(args, 'paths')), evidence });
+            console.log(`${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`);
+            return 0;
+          }
+          case 'approve': {
+            // 이 명령은 **의도적으로 permission allowlist 에서 제외**한다(§4-3) — 실행마다
+            // 권한 다이얼로그가 떠서 승인의 최종 클릭은 항상 사람이 한다.
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
+            const r = approveGate(root, phase);
+            console.log(`${phase} 승인됨 — ${r.approvedAt} · 근거 ${r.evidence}`);
+            return 0;
+          }
+          case 'verify': {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
+            const v = verifyGate(root, phase);
+            console.log(JSON.stringify(v, null, 2));
+            return v.ok ? 0 : 1;
+          }
+          case 'sweep': {
+            const flipped = invalidateStaleGates(root);
+            console.log(flipped.length ? `무효화: ${flipped.join(', ')}` : '무효화 대상 없음');
+            return 0;
+          }
+          case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
+          default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+        }
+      }
+
+      case 'doc': {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case 'upsert': {
+            const id = flag(args, 'id');
+            const docPath = flag(args, 'path');
+            const phase = flag(args, 'phase');
+            if (!id || !docPath) throw new Error('사용법: harness doc upsert --id <DOC-x> --path <경로> --phase <P0..P12>');
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${String(phase)} (${PHASES.join(', ')})`);
+            const prev = getDoc(root, id);
+            const statusFlag = flag(args, 'status');
+            if (statusFlag !== undefined && !isDocStatus(statusFlag)) {
+              throw new Error(`유효하지 않은 status: ${statusFlag} (${DOC_STATUSES.join(', ')} 중 하나)`);
+            }
+            const node: DocNode = {
+              id, phase, path: docPath,
+              version: prev?.version ?? 1,
+              status: statusFlag ?? prev?.status ?? 'draft',
+              hash: prev?.hash,
+              linkedNodes: csv(flag(args, 'refs')).length ? csv(flag(args, 'refs')) : (prev?.linkedNodes ?? []),
+              artifactUrl: flag(args, 'url') ?? prev?.artifactUrl,
+            };
+            upsertDoc(root, node);
+            appendEvent(root, 'doc-upserted', { id });
+            console.log(id);
+            return 0;
+          }
+          case 'url': {
+            const d = setDocArtifactUrl(root, rest[0], rest[1] ?? '');
+            console.log(`${d.id} → ${d.artifactUrl}`);
+            return 0;
+          }
+          case 'submit': { const d = submitDoc(root, rest[0]); console.log(`${d.id} v${d.version} submitted`); return 0; }
+          case 'approve': { const d = approveDoc(root, rest[0]); console.log(`${d.id} v${d.version} approved`); return 0; }
+          case 'revise': { const d = reviseDoc(root, rest[0], flag(args, 'path')); console.log(`${d.id} → v${d.version} (이전 버전 superseded)`); return 0; }
+          case 'stale': { const s = staleDocs(root); console.log(s.length ? s.map(d => `${d.id} v${d.version}`).join('\n') : '변조된 승인 문서 없음'); return 0; }
+          case 'list': console.log(JSON.stringify(loadRegistry(root), null, 2)); return 0;
+          default: throw new Error(`알 수 없는 doc 하위 명령: ${sub}`);
+        }
       }
 
       case 'wave': {

@@ -107,17 +107,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path9) {
-      const ctrl = callVisitor(key, node, visitor, path9);
+    function visit_(key, node, visitor, path11) {
+      const ctrl = callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path9, ctrl);
-        return visit_(key, ctrl, visitor, path9);
+        replaceNode(key, path11, ctrl);
+        return visit_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path9 = Object.freeze(path9.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path9);
+            const ci = visit_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -128,13 +128,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path9 = Object.freeze(path9.concat(node));
-          const ck = visit_("key", node.key, visitor, path9);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = visit_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path9);
+          const cv = visit_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -155,17 +155,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path9) {
-      const ctrl = await callVisitor(key, node, visitor, path9);
+    async function visitAsync_(key, node, visitor, path11) {
+      const ctrl = await callVisitor(key, node, visitor, path11);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path9, ctrl);
-        return visitAsync_(key, ctrl, visitor, path9);
+        replaceNode(key, path11, ctrl);
+        return visitAsync_(key, ctrl, visitor, path11);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path9 = Object.freeze(path9.concat(node));
+          path11 = Object.freeze(path11.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path9);
+            const ci = await visitAsync_(i, node.items[i], visitor, path11);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -176,13 +176,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path9 = Object.freeze(path9.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path9);
+          path11 = Object.freeze(path11.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path11);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path9);
+          const cv = await visitAsync_("value", node.value, visitor, path11);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -209,23 +209,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path9) {
+    function callVisitor(key, node, visitor, path11) {
       if (typeof visitor === "function")
-        return visitor(key, node, path9);
+        return visitor(key, node, path11);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path9);
+        return visitor.Map?.(key, node, path11);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path9);
+        return visitor.Seq?.(key, node, path11);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path9);
+        return visitor.Pair?.(key, node, path11);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path9);
+        return visitor.Scalar?.(key, node, path11);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path9);
+        return visitor.Alias?.(key, node, path11);
       return void 0;
     }
-    function replaceNode(key, path9, node) {
-      const parent = path9[path9.length - 1];
+    function replaceNode(key, path11, node) {
+      const parent = path11[path11.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -835,10 +835,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path9, value) {
+    function collectionFromPath(schema, path11, value) {
       let v = value;
-      for (let i = path9.length - 1; i >= 0; --i) {
-        const k = path9[i];
+      for (let i = path11.length - 1; i >= 0; --i) {
+        const k = path11[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -857,7 +857,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path9) => path9 == null || typeof path9 === "object" && !!path9[Symbol.iterator]().next().done;
+    var isEmptyPath = (path11) => path11 == null || typeof path11 === "object" && !!path11[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -887,11 +887,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path9, value) {
-        if (isEmptyPath(path9))
+      addIn(path11, value) {
+        if (isEmptyPath(path11))
           this.add(value);
         else {
-          const [key, ...rest] = path9;
+          const [key, ...rest] = path11;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -905,8 +905,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path9) {
-        const [key, ...rest] = path9;
+      deleteIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -920,8 +920,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path9, keepScalar) {
-        const [key, ...rest] = path9;
+      getIn(path11, keepScalar) {
+        const [key, ...rest] = path11;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -939,8 +939,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path9) {
-        const [key, ...rest] = path9;
+      hasIn(path11) {
+        const [key, ...rest] = path11;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -950,8 +950,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path9, value) {
-        const [key, ...rest] = path9;
+      setIn(path11, value) {
+        const [key, ...rest] = path11;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -1498,7 +1498,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify3(item, ctx, onComment, onChompKeep) {
+    function stringify4(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -1527,7 +1527,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str}`;
     }
     exports2.createStringifyContext = createStringifyContext;
-    exports2.stringify = stringify3;
+    exports2.stringify = stringify4;
   }
 });
 
@@ -1537,7 +1537,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify3 = require_stringify();
+    var stringify4 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -1559,7 +1559,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str = stringify3.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str = stringify4.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -1611,7 +1611,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify3.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify4.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -1752,7 +1752,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge = require_merge();
-    var stringify3 = require_stringify();
+    var stringify4 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
@@ -1788,7 +1788,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify3.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify4.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -1855,12 +1855,12 @@ var require_stringifyCollection = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify3 = require_stringify();
+    var stringify4 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify4 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify4(collection, ctx, options);
+      const stringify5 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify5(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -1885,7 +1885,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str2 = stringify3.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
+        let str2 = stringify4.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
         if (comment2)
           str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment2));
         if (chompKeep && comment2)
@@ -1952,7 +1952,7 @@ ${indent}${line}` : "\n";
         }
         if (comment)
           reqNewline = true;
-        let str = stringify3.stringify(item, itemCtx, () => comment = null);
+        let str = stringify4.stringify(item, itemCtx, () => comment = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
         if (i < items.length - 1) {
           str += ",";
@@ -3313,7 +3313,7 @@ var require_stringifyDocument = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify3 = require_stringify();
+    var stringify4 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -3328,7 +3328,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify3.createStringifyContext(doc, options);
+      const ctx = stringify4.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -3350,7 +3350,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify3.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify4.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -3358,7 +3358,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify3.stringify(doc.contents, ctx));
+        lines.push(stringify4.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -3466,9 +3466,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path9, value) {
+      addIn(path11, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path9, value);
+          this.contents.addIn(path11, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3543,14 +3543,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path9) {
-        if (Collection.isEmptyPath(path9)) {
+      deleteIn(path11) {
+        if (Collection.isEmptyPath(path11)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path9) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path11) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3565,10 +3565,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path9, keepScalar) {
-        if (Collection.isEmptyPath(path9))
+      getIn(path11, keepScalar) {
+        if (Collection.isEmptyPath(path11))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path9, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path11, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3579,10 +3579,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path9) {
-        if (Collection.isEmptyPath(path9))
+      hasIn(path11) {
+        if (Collection.isEmptyPath(path11))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path9) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path11) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3599,13 +3599,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path9, value) {
-        if (Collection.isEmptyPath(path9)) {
+      setIn(path11, value) {
+        if (Collection.isEmptyPath(path11)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path9), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path11), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path9, value);
+          this.contents.setIn(path11, value);
         }
       }
       /**
@@ -5493,7 +5493,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "node_modules/yaml/dist/parse/cst-stringify.js"(exports2) {
     "use strict";
-    var stringify3 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify4 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -5546,7 +5546,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports2.stringify = stringify3;
+    exports2.stringify = stringify4;
   }
 });
 
@@ -5565,9 +5565,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path9) => {
+    visit.itemAtPath = (cst, path11) => {
       let item = cst;
-      for (const [field, index] of path9) {
+      for (const [field, index] of path11) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5576,23 +5576,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path9) => {
-      const parent = visit.itemAtPath(cst, path9.slice(0, -1));
-      const field = path9[path9.length - 1][0];
+    visit.parentCollection = (cst, path11) => {
+      const parent = visit.itemAtPath(cst, path11.slice(0, -1));
+      const field = path11[path11.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path9, item, visitor) {
-      let ctrl = visitor(item, path9);
+    function _visit(path11, item, visitor) {
+      let ctrl = visitor(item, path11);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path9.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path11.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5603,10 +5603,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path9);
+            ctrl = ctrl(item, path11);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path9) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path11) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs10 = this.flowScalar(this.type);
+              const fs12 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs10, sep: [] });
+                map.items.push({ start, key: fs12, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs10);
+                this.stack.push(fs12);
               } else {
-                Object.assign(it, { key: fs10, sep: [] });
+                Object.assign(it, { key: fs12, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs10 = this.flowScalar(this.type);
+              const fs12 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs10, sep: [] });
+                fc.items.push({ start: [], key: fs12, sep: [] });
               else if (it.sep)
-                this.stack.push(fs10);
+                this.stack.push(fs12);
               else
-                Object.assign(it, { key: fs10, sep: [] });
+                Object.assign(it, { key: fs12, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7257,7 +7257,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse4(src, reviver, options) {
+    function parse5(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7276,7 +7276,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify3(value, replacer, options) {
+    function stringify4(value, replacer, options) {
       let _replacer = null;
       if (typeof replacer === "function" || Array.isArray(replacer)) {
         _replacer = replacer;
@@ -7298,10 +7298,10 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse4;
+    exports2.parse = parse5;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
-    exports2.stringify = stringify3;
+    exports2.stringify = stringify4;
   }
 });
 
@@ -7364,8 +7364,8 @@ __export(cli_exports, {
   run: () => run
 });
 module.exports = __toCommonJS(cli_exports);
-var fs9 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
+var fs11 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
 
 // core/src/state.ts
 var fs = __toESM(require("fs"));
@@ -7379,6 +7379,7 @@ var eventsPath = (root) => path.join(harnessDir(root), "events.jsonl");
 var configPath = (root) => path.join(harnessDir(root), "config.yaml");
 var designDir = (root) => path.join(harnessDir(root), "design");
 var ledgerPath = (root) => path.join(designDir(root), "ledger.yaml");
+var registryPath = (root) => path.join(designDir(root), "registry.yaml");
 var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
@@ -7448,6 +7449,11 @@ var PHASES = [
 ];
 var isPhase = (v) => PHASES.includes(v);
 var DESIGN_PHASES = ["P0", "P1", "P2", "P3", "P4", "P5", "P6"];
+var SHIP_PHASES = ["P10", "P11", "P12"];
+var EVIDENCE_GRADES = ["claimed", "code", "measured"];
+var isEvidenceGrade = (v) => EVIDENCE_GRADES.includes(v);
+var DOC_STATUSES = ["draft", "submitted", "approved", "superseded"];
+var isDocStatus = (v) => DOC_STATUSES.includes(v);
 
 // core/src/events.ts
 var KNOWN_EVENT_TYPES = /* @__PURE__ */ new Set([
@@ -8216,6 +8222,349 @@ function stopGuard(root, state, input) {
   return null;
 }
 
+// core/src/gate.ts
+var crypto = __toESM(require("crypto"));
+var fs9 = __toESM(require("fs"));
+var path8 = __toESM(require("path"));
+function normalizePaths(relPaths) {
+  return [...new Set(relPaths.map((p) => p.trim()).filter(Boolean))].sort();
+}
+function computeArtifactHash(root, relPaths) {
+  const h = crypto.createHash("sha256");
+  for (const rel of normalizePaths(relPaths)) {
+    let content;
+    try {
+      content = fs9.readFileSync(path8.resolve(root, rel));
+    } catch {
+      throw new Error(
+        `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+      );
+    }
+    h.update(`${rel}\0${content.length}\0`);
+    h.update(content);
+  }
+  return h.digest("hex");
+}
+function recordedPaths(root, phase) {
+  const events = readEvents(root);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type !== "gate-submitted" || ev.data.phase !== phase) continue;
+    const raw = ev.data.paths;
+    if (!Array.isArray(raw)) return null;
+    const paths = raw.filter((p) => typeof p === "string");
+    return paths.length > 0 ? paths : null;
+  }
+  return null;
+}
+function submitGate(root, phase, opts) {
+  const paths = normalizePaths(opts.paths);
+  if (paths.length === 0) {
+    throw new Error(
+      `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+    );
+  }
+  if (!isEvidenceGrade(opts.evidence)) {
+    throw new Error(
+      `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+    );
+  }
+  const artifactHash = computeArtifactHash(root, paths);
+  const state = readState(root);
+  const prevStatus = state.gates[phase]?.status ?? "pending";
+  const record = {
+    status: "submitted",
+    artifactHash,
+    evidence: opts.evidence,
+    submittedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  appendEvent(root, "gate-submitted", { phase, artifactHash, evidence: opts.evidence, paths, prevStatus });
+  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
+  return record;
+}
+function approveGate(root, phase) {
+  const state = readState(root);
+  const current = state.gates[phase];
+  if (!current || current.status !== "submitted") {
+    throw new Error(
+      `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uC2B9\uC778\uD560 \uC218 \uC788\uB294 \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${current?.status ?? "pending"}) \u2014 \`harness gate submit ${phase}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`
+    );
+  }
+  if (SHIP_PHASES.includes(phase) && current.evidence !== "measured") {
+    throw new Error(
+      `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${current.evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+    );
+  }
+  const paths = recordedPaths(root, phase);
+  if (!paths) {
+    throw new Error(
+      `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase}\` \uB85C \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+    );
+  }
+  const artifactHash = computeArtifactHash(root, paths);
+  if (artifactHash !== current.artifactHash) {
+    throw new Error(
+      `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC0B0\uCD9C\uBB3C\uC774 \uC81C\uCD9C \uC774\uD6C4 \uBCC0\uACBD\uB410\uB2E4 \u2014 \uC2EC\uC0AC\uD55C \uB0B4\uC6A9\uACFC \uC2B9\uC778\uD560 \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4. \`harness gate submit ${phase}\` \uB85C \uC7AC\uC81C\uCD9C\uD55C \uB4A4 \uC2B9\uC778\uD558\uB77C`
+    );
+  }
+  const record = { ...current, status: "approved", approvedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  appendEvent(root, "gate-approved", { phase, artifactHash, evidence: current.evidence, paths });
+  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
+  return record;
+}
+function verifyGate(root, phase) {
+  const g = readState(root).gates[phase];
+  if (!g || g.status === "pending") return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4` };
+  if (g.status === "invalidated") {
+    return { ok: false, reason: g.invalidatedReason ?? `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4` };
+  }
+  if (!g.artifactHash) return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4` };
+  const paths = recordedPaths(root, phase);
+  if (!paths) return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694` };
+  let hash;
+  try {
+    hash = computeArtifactHash(root, paths);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  if (hash !== g.artifactHash) {
+    return {
+      ok: false,
+      reason: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
+    };
+  }
+  return { ok: true };
+}
+function invalidateStaleGates(root) {
+  const state = readState(root);
+  const invalidated = [];
+  for (const phase of PHASES) {
+    const g = state.gates[phase];
+    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
+    const verdict = verifyGate(root, phase);
+    if (verdict.ok) continue;
+    const reason = verdict.reason ?? "\uC0B0\uCD9C\uBB3C \uAC80\uC99D \uC2E4\uD328";
+    appendEvent(root, "gate-invalidated", { phase, prevStatus: g.status, reason });
+    state.gates[phase] = { ...g, status: "invalidated", invalidatedReason: reason };
+    invalidated.push(phase);
+  }
+  if (invalidated.length > 0) writeState(root, state);
+  return invalidated;
+}
+function canEnterPhase(root, phase) {
+  const i = PHASES.indexOf(phase);
+  if (i <= 0) return { ok: true };
+  const prev = PHASES[i - 1];
+  const g = readState(root).gates[prev];
+  if (g?.status === "approved") return { ok: true };
+  return {
+    ok: false,
+    reason: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
+  };
+}
+function setPhaseViaGate(root, phase) {
+  const verdict = canEnterPhase(root, phase);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  appendEvent(root, "phase-set", { phase, via: "gate" });
+  writeState(root, { ...readState(root), phase });
+}
+
+// core/src/registry.ts
+var fs10 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
+var crypto2 = __toESM(require("crypto"));
+var YAML4 = __toESM(require_dist());
+function toDocNode(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.path !== "string" || !o.path) return null;
+  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
+  if (!isPhase(o.phase) || !isDocStatus(o.status)) return null;
+  const node = {
+    id: o.id,
+    phase: o.phase,
+    path: o.path,
+    version: o.version,
+    status: o.status,
+    linkedNodes: Array.isArray(o.linkedNodes) ? o.linkedNodes.map(String) : []
+  };
+  if (typeof o.hash === "string" && o.hash) node.hash = o.hash;
+  if (typeof o.artifactUrl === "string" && o.artifactUrl) node.artifactUrl = o.artifactUrl;
+  return node;
+}
+function readEntries(root) {
+  if (!fs10.existsSync(registryPath(root))) return { entries: [] };
+  let doc;
+  try {
+    doc = YAML4.parse(fs10.readFileSync(registryPath(root), "utf8"));
+  } catch (e) {
+    return { entries: [], parseError: e.message };
+  }
+  const docs = doc?.docs;
+  return { entries: Array.isArray(docs) ? docs : [] };
+}
+function writeEntries(root, entries) {
+  const target = registryPath(root);
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs10.writeFileSync(tmp, YAML4.stringify({ docs: entries }));
+  fs10.renameSync(tmp, target);
+}
+function inspectRegistry(root) {
+  const { entries, parseError } = readEntries(root);
+  const docs = [];
+  const invalid = [];
+  for (const e of entries) {
+    const n = toDocNode(e);
+    if (n) docs.push(n);
+    else invalid.push(e);
+  }
+  return parseError ? { docs, invalid, parseError } : { docs, invalid };
+}
+function loadRegistry(root) {
+  return { docs: inspectRegistry(root).docs };
+}
+function getDoc(root, id) {
+  let best;
+  for (const d of loadRegistry(root).docs) {
+    if (d.id !== id || d.status === "superseded") continue;
+    if (!best || d.version > best.version) best = d;
+  }
+  return best;
+}
+function upsertDoc(root, node) {
+  const { entries } = readEntries(root);
+  const i = entries.findIndex((e) => {
+    const n = toDocNode(e);
+    return !!n && n.id === node.id && n.version === node.version;
+  });
+  if (i >= 0) entries[i] = node;
+  else entries.push(node);
+  writeEntries(root, entries);
+}
+function computeDocHash(root, doc) {
+  const abs = path9.join(root, doc.path);
+  let buf;
+  try {
+    buf = fs10.readFileSync(abs);
+  } catch {
+    throw new Error(
+      `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+    );
+  }
+  return crypto2.createHash("sha256").update(buf).digest("hex");
+}
+function require_(root, id) {
+  const doc = getDoc(root, id);
+  if (!doc) throw new Error(`\uBB38\uC11C ${id} \uAC00 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC5C6\uB2E4`);
+  return doc;
+}
+function submitDoc(root, id) {
+  const doc = require_(root, id);
+  if (doc.status !== "draft") {
+    throw new Error(
+      `\uBB38\uC11C ${id} \uB294 draft \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uC81C\uCD9C\uBCF8\uC744 \uACE0\uCE58\uB824\uBA74 harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E0 \uB4A4 \uC81C\uCD9C\uD558\uB77C`
+    );
+  }
+  if (!doc.artifactUrl) {
+    throw new Error(
+      `\uBB38\uC11C ${id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 \uB85C\uCEEC\uC5D0\uB9CC \uC788\uB294 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16). claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBA3C\uC800 \uBC1C\uD589\uD558\uACE0 setDocArtifactUrl \uB85C URL \uC744 \uB4F1\uB85D\uD558\uB77C`
+    );
+  }
+  const hash = computeDocHash(root, doc);
+  const next = { ...doc, status: "submitted", hash };
+  appendEvent(root, "doc-submitted", {
+    id,
+    version: next.version,
+    phase: next.phase,
+    hash,
+    artifactUrl: next.artifactUrl
+  });
+  upsertDoc(root, next);
+  return next;
+}
+function approveDoc(root, id) {
+  const doc = require_(root, id);
+  if (doc.status !== "submitted") {
+    throw new Error(`\uBB38\uC11C ${id} \uB294 submitted \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`);
+  }
+  if (!doc.hash) {
+    throw new Error(`\uBB38\uC11C ${id} \uC5D0 \uACE0\uC815\uB41C \uD574\uC2DC\uAC00 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uAC00 \uC190\uC0C1\uB410\uB2E4. \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`);
+  }
+  const current = computeDocHash(root, doc);
+  if (current !== doc.hash) {
+    throw new Error(
+      `\uBB38\uC11C ${id} \uC758 \uD574\uC2DC\uAC00 \uC81C\uCD9C \uC2DC\uC810\uACFC \uB2E4\uB974\uB2E4 \u2014 \uC81C\uCD9C \uD6C4 ${doc.path} \uB0B4\uC6A9\uC774 \uBC14\uB00C\uC5C8\uB2E4. harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E4\uC5B4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+    );
+  }
+  const next = { ...doc, status: "approved" };
+  appendEvent(root, "doc-approved", {
+    id,
+    version: next.version,
+    phase: next.phase,
+    hash: doc.hash
+  });
+  upsertDoc(root, next);
+  return next;
+}
+function reviseDoc(root, id, newPath) {
+  const prev = require_(root, id);
+  const next = {
+    id: prev.id,
+    phase: prev.phase,
+    path: newPath ?? prev.path,
+    version: prev.version + 1,
+    status: "draft",
+    linkedNodes: [...prev.linkedNodes],
+    ...prev.artifactUrl ? { artifactUrl: prev.artifactUrl } : {}
+  };
+  appendEvent(root, "doc-revised", {
+    id,
+    from: prev.version,
+    to: next.version,
+    path: next.path
+  });
+  const { entries } = readEntries(root);
+  const i = entries.findIndex((e) => {
+    const n = toDocNode(e);
+    return !!n && n.id === prev.id && n.version === prev.version;
+  });
+  if (i >= 0) entries[i] = { ...prev, status: "superseded" };
+  entries.push(next);
+  writeEntries(root, entries);
+  return next;
+}
+function setDocArtifactUrl(root, id, url) {
+  const doc = require_(root, id);
+  let parsed;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    throw new Error(`\uC544\uD2F0\uD329\uD2B8 URL \uC774 https URL \uC774 \uC544\uB2C8\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C`);
+  }
+  if (parsed.protocol !== "https:" || !parsed.hostname) {
+    throw new Error(`\uC544\uD2F0\uD329\uD2B8 URL \uC740 https \uC5EC\uC57C \uD55C\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C`);
+  }
+  const next = { ...doc, artifactUrl: parsed.toString() };
+  appendEvent(root, "doc-artifact-url-set", {
+    id,
+    version: next.version,
+    artifactUrl: next.artifactUrl
+  });
+  upsertDoc(root, next);
+  return next;
+}
+function staleDocs(root) {
+  return loadRegistry(root).docs.filter((d) => {
+    if (d.status !== "approved" || !d.hash) return false;
+    try {
+      return computeDocHash(root, d) !== d.hash;
+    } catch {
+      return true;
+    }
+  });
+}
+
 // core/src/cli.ts
 var HOOK_EVENTS = ["session-start", "pre-tool", "post-tool", "stop"];
 function flag(argv, name) {
@@ -8224,10 +8573,10 @@ function flag(argv, name) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs9.existsSync(harnessDir(root))) return;
-    fs9.mkdirSync(runtimeDir(root), { recursive: true });
-    fs9.appendFileSync(
-      path8.join(runtimeDir(root), "hook-errors.log"),
+    if (!fs11.existsSync(harnessDir(root))) return;
+    fs11.mkdirSync(runtimeDir(root), { recursive: true });
+    fs11.appendFileSync(
+      path10.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
     );
@@ -8246,7 +8595,7 @@ function run(argv, root) {
       let input = {};
       try {
         if (!process.stdin.isTTY) {
-          const raw = fs9.readFileSync(0, "utf8");
+          const raw = fs11.readFileSync(0, "utf8");
           if (raw.trim()) {
             try {
               input = JSON.parse(raw);
@@ -8287,10 +8636,116 @@ function run(argv, root) {
         if (sub !== "set") throw new Error("\uC0AC\uC6A9\uBC95: harness phase set <P0..P12>");
         const phase = rest[0];
         if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
-        appendEvent(root, "phase-set", { phase });
-        writeState(root, { ...readState(root), phase });
-        console.log(`\uD398\uC774\uC988 \u2192 ${phase} (v0 \uC784\uC2DC \uBA85\uB839 \u2014 \uAC8C\uC774\uD2B8 \uAD6C\uD604 \uD6C4 \uB300\uCCB4 \uC608\uC815)`);
+        if (argv.includes("--force")) {
+          appendEvent(root, "phase-set", { phase, forced: true });
+          writeState(root, { ...readState(root), phase });
+          console.log(`\uD398\uC774\uC988 \u2192 ${phase} (--force: \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uC5C8\uB2E4)`);
+          return 0;
+        }
+        setPhaseViaGate(root, phase);
+        console.log(`\uD398\uC774\uC988 \u2192 ${phase}`);
         return 0;
+      }
+      case "gate": {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case "submit": {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            const evidence = flag(args, "evidence") ?? "claimed";
+            if (!isEvidenceGrade(evidence)) {
+              throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${evidence} (claimed, code, measured \uC911 \uD558\uB098)`);
+            }
+            const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
+            console.log(`${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}`);
+            return 0;
+          }
+          case "approve": {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            const r = approveGate(root, phase);
+            console.log(`${phase} \uC2B9\uC778\uB428 \u2014 ${r.approvedAt} \xB7 \uADFC\uAC70 ${r.evidence}`);
+            return 0;
+          }
+          case "verify": {
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            const v = verifyGate(root, phase);
+            console.log(JSON.stringify(v, null, 2));
+            return v.ok ? 0 : 1;
+          }
+          case "sweep": {
+            const flipped = invalidateStaleGates(root);
+            console.log(flipped.length ? `\uBB34\uD6A8\uD654: ${flipped.join(", ")}` : "\uBB34\uD6A8\uD654 \uB300\uC0C1 \uC5C6\uC74C");
+            return 0;
+          }
+          case "status":
+            console.log(JSON.stringify(readState(root).gates, null, 2));
+            return 0;
+          default:
+            throw new Error(`\uC54C \uC218 \uC5C6\uB294 gate \uD558\uC704 \uBA85\uB839: ${sub}`);
+        }
+      }
+      case "doc": {
+        const args = [sub, ...rest];
+        switch (sub) {
+          case "upsert": {
+            const id = flag(args, "id");
+            const docPath = flag(args, "path");
+            const phase = flag(args, "phase");
+            if (!id || !docPath) throw new Error("\uC0AC\uC6A9\uBC95: harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase <P0..P12>");
+            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`);
+            const prev = getDoc(root, id);
+            const statusFlag = flag(args, "status");
+            if (statusFlag !== void 0 && !isDocStatus(statusFlag)) {
+              throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${DOC_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+            }
+            const node = {
+              id,
+              phase,
+              path: docPath,
+              version: prev?.version ?? 1,
+              status: statusFlag ?? prev?.status ?? "draft",
+              hash: prev?.hash,
+              linkedNodes: csv(flag(args, "refs")).length ? csv(flag(args, "refs")) : prev?.linkedNodes ?? [],
+              artifactUrl: flag(args, "url") ?? prev?.artifactUrl
+            };
+            upsertDoc(root, node);
+            appendEvent(root, "doc-upserted", { id });
+            console.log(id);
+            return 0;
+          }
+          case "url": {
+            const d = setDocArtifactUrl(root, rest[0], rest[1] ?? "");
+            console.log(`${d.id} \u2192 ${d.artifactUrl}`);
+            return 0;
+          }
+          case "submit": {
+            const d = submitDoc(root, rest[0]);
+            console.log(`${d.id} v${d.version} submitted`);
+            return 0;
+          }
+          case "approve": {
+            const d = approveDoc(root, rest[0]);
+            console.log(`${d.id} v${d.version} approved`);
+            return 0;
+          }
+          case "revise": {
+            const d = reviseDoc(root, rest[0], flag(args, "path"));
+            console.log(`${d.id} \u2192 v${d.version} (\uC774\uC804 \uBC84\uC804 superseded)`);
+            return 0;
+          }
+          case "stale": {
+            const s = staleDocs(root);
+            console.log(s.length ? s.map((d) => `${d.id} v${d.version}`).join("\n") : "\uBCC0\uC870\uB41C \uC2B9\uC778 \uBB38\uC11C \uC5C6\uC74C");
+            return 0;
+          }
+          case "list":
+            console.log(JSON.stringify(loadRegistry(root), null, 2));
+            return 0;
+          default:
+            throw new Error(`\uC54C \uC218 \uC5C6\uB294 doc \uD558\uC704 \uBA85\uB839: ${sub}`);
+        }
       }
       case "wave": {
         const args = [sub, ...rest];
