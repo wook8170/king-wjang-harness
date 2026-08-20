@@ -46,6 +46,13 @@ describe('wave', () => {
     expect(() => logTurn(setup(), 'x')).toThrow(/활성 웨이브가 없다/);
   });
 
+  it('activate: 없는 id 는 ENOENT 원문 대신 안내로 막는다 (USE-01)', () => {
+    const root = setup();
+    expect(() => activateWave(root, 'wave-999')).toThrow(/wave-999/);
+    expect(() => activateWave(root, 'wave-999')).toThrow(/wave list/);
+    expect(() => activateWave(root, 'wave-999')).not.toThrow(/ENOENT/);
+  });
+
   it('complete: UX 참조 웨이브는 증적 없으면 거부, 있으면 done', () => {
     const root = setup();
     createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });

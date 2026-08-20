@@ -11,7 +11,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initHarness, readState, writeState } from './state';
+import { initHarness, isInitialized, readState, writeState } from './state';
 import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale } from './wave';
 import { getNode, upsertNode, bumpNode } from './ledger';
@@ -99,6 +99,9 @@ export function run(argv: string[], root: string): number {
         return 0;
 
       case 'status':
+        // 미초기화(state.json 부재)면 raw ENOENT 대신 init 안내. 부재만 변환하고
+        // state.json 손상 등 다른 실패는 readState 가 원문 그대로 던지게 둔다.
+        if (!isInitialized(root)) throw new Error('.harness/ 가 없다 — `harness init` 을 먼저 실행하라');
         console.log(JSON.stringify(readState(root), null, 2));
         return 0;
 
@@ -167,13 +170,20 @@ export function run(argv: string[], root: string): number {
           const id = flag(args, 'id');
           const title = flag(args, 'title');
           if (!id || !title) throw new Error('사용법: harness node upsert --id <id> --title <제목>');
+          // 원장 CLI 는 캐스트만 하던 탓에 열거형 밖 값(예: '승인됨')이 그대로 기록됐다(LOGIC-16).
+          // frontmatter(wave.ts)처럼 값이 주어졌을 때만 검증한다 — 미지정이면 prev/기본값 유지.
+          const statusFlag = flag(args, 'status');
+          const LEDGER_STATUSES: readonly LedgerNode['status'][] = ['draft', 'approved', 'stale'];
+          if (statusFlag !== undefined && !LEDGER_STATUSES.includes(statusFlag as LedgerNode['status'])) {
+            throw new Error(`유효하지 않은 status: ${statusFlag} (${LEDGER_STATUSES.join(', ')} 중 하나)`);
+          }
           const prev = getNode(root, id);
           const node: LedgerNode = {
             id, title,
             parent: flag(args, 'parent') ?? prev?.parent,
             doc_anchor: flag(args, 'anchor') ?? prev?.doc_anchor,
             version: prev?.version ?? 1,                       // bump 이력 보존
-            status: (flag(args, 'status') as LedgerNode['status']) ?? prev?.status ?? 'draft',
+            status: (statusFlag as LedgerNode['status']) ?? prev?.status ?? 'draft',
           };
           upsertNode(root, node);
           appendEvent(root, 'node-upserted', { id });

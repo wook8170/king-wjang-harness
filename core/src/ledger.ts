@@ -2,7 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { ledgerPath, wavesDir } from './paths';
-import type { LedgerNode } from './types';
+import { parseWave } from './wave';
+import type { LedgerNode, WaveMeta } from './types';
 
 // 원장은 저널 파생이 아니다 — replayState가 node-* 이벤트를 폴드하지 않으며, 손상 시
 // 복구 수단은 git이다. 파일 없음은 조용히 [], 파싱 손상은 throw(CLI에서 시끄럽게)가 의도다.
@@ -64,17 +65,17 @@ export function bumpNode(
       } catch {
         unverifiable.push(stem); continue; // 읽기 실패 — 참조 여부 판정 불가
       }
-      const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(txt);
-      if (!m) { unverifiable.push(stem); continue; } // frontmatter 없음
-      let meta: { design_refs?: string[]; status?: string };
+      // 참조 인정 기준을 정본 parseWave 로 단일화한다. 자체 파싱은 스칼라 design_refs 를
+      // 배열로 정규화하지 못해 `"UX-10".includes("UX-1")` 부분문자열 오탐을 냈다(API-10).
+      // parseWave 는 asArr 로 정규화하므로 정확 일치(배열 멤버십)만 인정된다.
+      // parseWave throw = frontmatter 없음·깨진 YAML·스칼라 frontmatter → 검증 불가(침묵 스킵 아님).
+      let meta: WaveMeta;
       try {
-        const parsed = YAML.parse(m[1]) ?? {}; // 빈 frontmatter는 정상적인 '참조 없음'
-        if (typeof parsed !== 'object') { unverifiable.push(stem); continue; } // 스칼라 = 해석 불가
-        meta = parsed as { design_refs?: string[]; status?: string };
+        meta = parseWave(txt).meta;
       } catch {
-        unverifiable.push(stem); continue; // 깨진 YAML
+        unverifiable.push(stem); continue;
       }
-      if (meta.design_refs?.includes(id) && meta.status !== 'stale') {
+      if (meta.design_refs.includes(id) && meta.status !== 'stale') {
         affectedWaves.push(stem);
       }
     }

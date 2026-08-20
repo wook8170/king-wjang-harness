@@ -129,6 +129,29 @@ describe('ledger', () => {
     expect(bumpNode(root, 'F-1').affectedWaves).toEqual(['wave-001', 'wave-003']);
   });
 
+  it('스칼라 design_refs 는 부분문자열이 아니라 정확 일치로만 STALE (API-10/LOGIC-12)', () => {
+    const root = setup();
+    upsertNode(root, { id: 'UX-1', title: 'a', version: 1, status: 'approved' });
+    upsertNode(root, { id: 'UX-10', title: 'b', version: 1, status: 'approved' });
+    // 스칼라(문자열) frontmatter — parseWave 가 ['UX-10'] 로 정규화해야 한다
+    writeWave(root, 'wave-001.md', {
+      id: 'wave-001', milestone: 'M1', design_refs: 'UX-10', status: 'pending', acceptance: '[]',
+    });
+    // bump UX-1 → "UX-10".includes("UX-1") 부분문자열 오탐이 없어야 한다
+    expect(bumpNode(root, 'UX-1').affectedWaves).toEqual([]);
+    // bump UX-10 → 그 웨이브만 STALE 대상
+    expect(bumpNode(root, 'UX-10').affectedWaves).toEqual(['wave-001']);
+  });
+
+  it('배열 design_refs 도 정확 일치 — UX-1 은 UX-10 참조 웨이브를 건드리지 않는다', () => {
+    const root = setup();
+    upsertNode(root, { id: 'UX-1', title: 'a', version: 1, status: 'approved' });
+    writeWave(root, 'wave-001.md', {
+      id: 'wave-001', milestone: 'M1', design_refs: '[UX-10]', status: 'pending', acceptance: '[]',
+    });
+    expect(bumpNode(root, 'UX-1').affectedWaves).toEqual([]);
+  });
+
   it('ledger.yaml의 nodes가 배열이 아니면 빈 배열 반환', () => {
     const root = setup();
     fs.writeFileSync(ledgerPath(root), 'nodes: 문자열\n');

@@ -234,6 +234,34 @@ describe('cli', () => {
     expect(readWave(root, 'wave-001').meta.design_refs).toEqual(['F-1', 'UX-1']);
   });
 
+  it('미초기화 status 는 ENOENT 원문 대신 init 안내 + exit 1 (OPS-11)', () => {
+    const root = tmp();
+    const q = quiet();
+    expect(run(['status'], root)).toBe(1);
+    q.restore();
+    const err = q.errs.join('\n');
+    expect(err).toContain('harness init');
+    expect(err).not.toContain('ENOENT');
+  });
+
+  it('node upsert --status 는 열거형 밖 값을 거부한다 + exit 1 (LOGIC-16)', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    expect(run(['node', 'upsert', '--id', 'UX-1', '--title', 't', '--status', '승인됨'], root)).toBe(1);
+    q.restore();
+    expect(getNode(root, 'UX-1')).toBeUndefined(); // 밖의 값은 기록되지 않는다
+  });
+
+  it('node upsert --status approved 는 정상 기록 (LOGIC-16)', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    expect(run(['node', 'upsert', '--id', 'UX-1', '--title', 't', '--status', 'approved'], root)).toBe(0);
+    q.restore();
+    expect(getNode(root, 'UX-1')?.status).toBe('approved');
+  });
+
   it('잘못된 명령은 exit 1', () => {
     const q = quiet();
     expect(run(['없는명령'], tmp())).toBe(1);

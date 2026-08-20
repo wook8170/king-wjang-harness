@@ -150,7 +150,18 @@ export function activateWave(root: string, id: string): void {
   if (state.activeWave && state.activeWave !== id) {
     throw new Error(`이미 활성 웨이브가 있다: ${state.activeWave}. 먼저 complete 하라.`);
   }
-  const { meta, body } = readWave(root, id);
+  let meta: WaveMeta, body: string;
+  try {
+    ({ meta, body } = readWave(root, id));
+  } catch (e) {
+    // 파일 부재(ENOENT)만 안내로 바꾼다 — 오타난 id 로 activate 하면 raw ENOENT 대신
+    // 목록 확인 경로를 알려준다. 파싱 오류 등 다른 실패는 원인을 감추지 않도록 그대로 던진다.
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    throw new Error(
+      `웨이브 ${id} 지시서가 없다 (${wavePath(root, id)}) — `
+      + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
+    );
+  }
   if (meta.status === 'done') throw new Error(`${id} 는 이미 done 이다`);
   meta.status = 'active';
   writeWave(root, id, meta, body);
