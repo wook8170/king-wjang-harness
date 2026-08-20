@@ -6,7 +6,7 @@ import { initHarness, readState } from '../src/state';
 import {
   createWave, activateWave, logTurn, completeWave, markStale, readWave, listWaves,
 } from '../src/wave';
-import { evidenceDir, wavesDir } from '../src/paths';
+import { evidenceDir, wavesDir, wavePath } from '../src/paths';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -133,6 +133,33 @@ describe('wave', () => {
     const dir = evidenceDir(root, 'wave-001');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, '.DS_Store'), 'x');
+    expect(() => completeWave(root)).toThrow(/시각 증적/);
+  });
+
+  it('C2: 웨이브 파일이 삭제돼도 id 는 재발급되지 않는다 (저널이 최댓값을 기억한다)', () => {
+    const root = setup();
+    const w1 = createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'a' });
+    expect(w1.id).toBe('wave-001');
+    fs.rmSync(wavePath(root, 'wave-001'));
+    const w2 = createWave(root, { milestone: 'M1', design_refs: [], acceptance: [], goal: 'b' });
+    expect(w2.id).toBe('wave-002');
+  });
+
+  it('C2 익스플로잇 회귀: 삭제된 웨이브의 증적을 새 웨이브가 물려받지 못한다', () => {
+    const root = setup();
+    createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });
+    activateWave(root, 'wave-001');
+    fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), 'fake');
+    completeWave(root);
+
+    // 브랜치 전환·수동 삭제로 웨이브 파일만 사라진 상황
+    fs.rmSync(wavePath(root, 'wave-001'));
+
+    const w = createWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui 재탕' });
+    expect(w.id).toBe('wave-002'); // wave-001 재발급이면 evidence/wave-001 을 물려받는다
+    activateWave(root, 'wave-002');
+    expect(fs.existsSync(evidenceDir(root, 'wave-002'))).toBe(false);
     expect(() => completeWave(root)).toThrow(/시각 증적/);
   });
 

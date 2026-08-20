@@ -4,13 +4,19 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { appendEvent, readEvents, KNOWN_EVENT_TYPES } from '../src/events';
-import { statePath, eventsPath } from '../src/paths';
+import { statePath, eventsPath, wavePath } from '../src/paths';
 import { runDoctor } from '../src/doctor';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
   initHarness(root);
   return root;
+};
+
+/** wave-activated 에 대응하는 실제 지시서. 없으면 doctor 가 정산 대상으로 본다(C1). */
+const putWaveFile = (root: string, id: string) => {
+  fs.writeFileSync(wavePath(root, id),
+    `---\nid: ${id}\nmilestone: M1\ndesign_refs: []\nstatus: active\nacceptance: []\n---\n## 턴 로그\n`);
 };
 
 /** 저널 없이 state 만 진행 상태로 만든다 — 절단·부재 시나리오의 재료. */
@@ -39,6 +45,7 @@ describe('doctor', () => {
     const root = setup();
     appendEvent(root, 'phase-set', { phase: 'P7' });
     appendEvent(root, 'wave-activated', { id: 'wave-001' });
+    putWaveFile(root, 'wave-001'); // 지시서가 살아 있으므로 activeWave 는 정산 대상이 아니다
     fs.writeFileSync(statePath(root), '{corrupted');
     const r = runDoctor(root, { repair: true });
     expect(r.repaired).toBe(true);
@@ -124,11 +131,67 @@ describe('doctor', () => {
     expect(r.issues.join(' ')).toMatch(/gates/);
   });
 
-  it('activeWave 가 가리키는 웨이브 파일 부재를 경고한다', () => {
+  it('C1: activeWave 가 가리키는 웨이브 파일 부재는 issue 다 (경고가 아니라 복구 대상)', () => {
     const root = setup();
     appendEvent(root, 'wave-activated', { id: 'wave-001' });
     writeState(root, { ...readState(root), activeWave: 'wave-001' });
-    expect(runDoctor(root).warnings.join(' ')).toMatch(/wave-001/);
+    const r = runDoctor(root);
+    expect(r.ok).toBe(false);
+    expect(r.issues.join(' ')).toMatch(/wave-001/);
+    expect(r.warnings.join(' ')).not.toMatch(/wave-001/);
+    // 안내가 둘 다 있어야 한다: 브랜치 전환이면 복원이 먼저, 정말 유실이면 --repair
+    expect(r.issues.join(' ')).toMatch(/브랜치/);
+    expect(r.issues.join(' ')).toMatch(/--repair/);
+  });
+
+  it('C1: --repair 가 activeWave 를 정산하고 다시 돌리면 수렴한다', () => {
+    const root = setup();
+    appendEvent(root, 'wave-activated', { id: 'wave-001' });
+    writeState(root, { ...readState(root), activeWave: 'wave-001' });
+
+    const r = runDoctor(root, { repair: true });
+    expect(r.repaired).toBe(true);
+    expect(readState(root).activeWave).toBeNull();
+
+    const stale = readEvents(root).filter(e => e.type === 'wave-stale');
+    expect(stale).toHaveLength(1);
+    expect(stale[0].data.id).toBe('wave-001');
+    expect(stale[0].data.reason).toBe('wave-file-missing');
+    const evs = readEvents(root);
+    expect(evs[evs.length - 1].type).toBe('doctor-repaired');
+    expect(evs[evs.length - 1].data.settledActiveWave).toBe('wave-001');
+
+    // 수렴: 정산이 저널에도 남았으므로 다음 실행은 발산을 보지 않는다
+    const again = runDoctor(root);
+    expect(again.ok).toBe(true);
+    expect(again.warnings).toEqual([]);
+  });
+
+  it('C1: 저널 손상 + 파일 부재 → --repair 만으로는 정산 거부, --force 면 정산', () => {
+    const root = setup();
+    appendEvent(root, 'wave-activated', { id: 'wave-001' });
+    writeState(root, { ...readState(root), activeWave: 'wave-001' });
+    fs.appendFileSync(eventsPath(root), '{broken\n');
+
+    const r1 = runDoctor(root, { repair: true });
+    expect(r1.refused).toBe(true);
+    expect(r1.repaired).toBe(false);
+    expect(readState(root).activeWave).toBe('wave-001'); // 손대지 않았다
+    expect(readEvents(root).some(e => e.type === 'wave-stale')).toBe(false);
+
+    const r2 = runDoctor(root, { repair: true, force: true });
+    expect(r2.repaired).toBe(true);
+    expect(readState(root).activeWave).toBeNull();
+    expect(readEvents(root).some(e => e.type === 'wave-stale')).toBe(true);
+  });
+
+  it('C1: 정산이 없으면 doctor-repaired 에 settledActiveWave 흔적을 남기지 않는다', () => {
+    const root = setup();
+    appendEvent(root, 'phase-set', { phase: 'P7' });
+    runDoctor(root, { repair: true });
+    const evs = readEvents(root);
+    expect(evs[evs.length - 1].type).toBe('doctor-repaired');
+    expect(evs[evs.length - 1].data.settledActiveWave).toBeNull();
   });
 
   it('죽은 pid 의 tmp 만 스윕한다', () => {

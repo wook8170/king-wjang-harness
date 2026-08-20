@@ -133,10 +133,16 @@ export function runDoctor(
     }
   }
 
-  // 5. activeWave 가 가리키는 웨이브 파일 — 없으면 지시 대상이 사라진 것
+  // 5. activeWave 가 가리키는 웨이브 파일 — 없으면 지시 대상이 사라진 것.
+  //    warning 으로 두면 complete/update/activate 가 전부 ENOENT 로 죽는데 복구 수단이
+  //    없어진다(state.json 직접 편집은 훅이 막는다). issue 로 올려 repair 의 대상으로 삼는다.
   const effective = current ?? replayed;
   if (effective.activeWave && !fs.existsSync(wavePath(root, effective.activeWave))) {
-    warnings.push(`activeWave ${effective.activeWave} 의 웨이브 파일 부재`);
+    issues.push(
+      `activeWave ${effective.activeWave} 의 웨이브 파일 부재 — `
+      + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
+      + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라',
+    );
   }
 
   // 6. 고아 tmp 스윕 — 죽은 pid 것만이라 항상 안전하게 수행한다
@@ -160,11 +166,24 @@ export function runDoctor(
         + '저널 손상 원인을 먼저 확인하라. 그래도 복구하려면 --force',
       );
     } else {
-      writeState(root, replayed);
+      // 정산 판정은 repair 가 실제로 쓸 상태(replayed) 기준이다 — current 기준으로 정산하면
+      // 발산 복구가 되살릴 activeWave 와 어긋나 다음 doctor 가 다시 발산을 본다.
+      const settledActiveWave = replayed.activeWave
+        && !fs.existsSync(wavePath(root, replayed.activeWave)) ? replayed.activeWave : null;
+      let target = replayed;
+      if (settledActiveWave) {
+        // 순서 계약: 저널이 먼저. writeState 로만 비우면 재생 결과와 발산해 영구 red 가 된다.
+        appendEvent(root, 'wave-stale', {
+          id: settledActiveWave, reason: 'wave-file-missing', via: 'doctor-repair',
+        });
+        target = { ...replayed, activeWave: null }; // = wave-stale 을 포함한 재생 결과
+      }
+      writeState(root, target);
       // 복구는 흔적을 남긴다 — 나중에 "왜 state 가 이렇게 됐나"의 답이 저널 안에 있어야 한다.
       appendEvent(root, 'doctor-repaired', {
         hadCorruptJournal: !trustworthy,
         forced: !!opts.force,
+        settledActiveWave,
       });
       repaired = true;
     }

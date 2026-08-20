@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { wavesDir, wavePath, evidenceDir } from './paths';
 import { readState, writeState } from './state';
-import { appendEvent } from './events';
+import { appendEvent, readEvents } from './events';
 import { noteTurnLogged } from './runtime';
 import type { WaveMeta } from './types';
 
@@ -66,14 +66,42 @@ function writeWave(root: string, id: string, meta: WaveMeta, body: string): void
   fs.renameSync(tmp, target);
 }
 
+/**
+ * 다음 웨이브 번호 = max(디스크 파일명, 저널 wave-created) + 1.
+ * 디스크만 보면 웨이브 파일이 사라졌을 때(수동 삭제·git 브랜치 전환) 같은 id 가 재발급되어
+ * 새 웨이브가 이전 웨이브의 evidence/wave-NNN/ 을 자기 증적으로 물려받는다 —
+ * 스크린샷 0장으로 UX 게이트를 통과하는 익스플로잇이 된다. 저널은 지워지지 않으므로
+ * 번호는 단조 증가한다.
+ */
+function nextWaveId(root: string): string {
+  const nums: number[] = [];
+  if (fs.existsSync(wavesDir(root))) {
+    for (const f of fs.readdirSync(wavesDir(root))) {
+      const m = /^wave-(\d+)\.md$/.exec(f);
+      if (m) nums.push(parseInt(m[1], 10));
+    }
+  }
+  for (const ev of readEvents(root)) {
+    if (ev.type !== 'wave-created') continue;
+    const id = (ev.data as Record<string, unknown>).id;
+    if (typeof id !== 'string') continue; // 손상·비문자열은 무시 (목록 조회의 손상 관용과 동일)
+    const m = /^wave-(\d+)$/.exec(id);
+    if (m) nums.push(parseInt(m[1], 10));
+  }
+  return `wave-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0')}`;
+}
+
 export function createWave(
   root: string,
   opts: { milestone: string; design_refs: string[]; acceptance: string[]; goal: string },
 ): WaveMeta {
-  const nums = fs.existsSync(wavesDir(root))
-    ? fs.readdirSync(wavesDir(root)).map(f => /^wave-(\d+)\.md$/.exec(f)).filter(Boolean).map(m => parseInt(m![1], 10))
-    : [];
-  const id = `wave-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0')}`;
+  const id = nextWaveId(root);
+  // 디스크·저널 최댓값을 모두 반영하므로 정상 경로에서는 도달 불가능한 분기다.
+  // 두 프로세스가 같은 순간에 같은 번호를 발급받은 TOCTOU 상황의 안전망 —
+  // 남의 웨이브 지시서를 조용히 덮는 것보다 생성을 거부하는 쪽이 안전하다.
+  if (fs.existsSync(wavePath(root, id))) {
+    throw new Error(`${id} 파일이 이미 존재한다 — 동시 생성 의심으로 웨이브 생성을 중단한다`);
+  }
   const meta: WaveMeta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: 'pending', acceptance: opts.acceptance };
   const body = [
     `## 목표`, opts.goal, '',
