@@ -121,12 +121,72 @@ describe('hook: 심링크 root 정규화 (C3)', () => {
     });
   }
 
-  it('회귀: 심링크 root에서도 미존재 새 파일 판정은 그대로다 (docs/ 허용·src/ 차단)', () => {
-    const { link } = setupSymlinked('P0'); // 설계 페이즈
-    expect(write(link, path.join(link, 'docs/새파일.md'))).toBeNull();
+  it('회귀: 심링크 root에서도 미존재 새 파일 판정은 그대로다 (docs/ 허용, root/file_path 형태 일치 시 src/ 차단)', () => {
+    const { real, link } = setupSymlinked('P0'); // 설계 페이즈
+    // root=link, file_path=real 로 일부러 형태를 섞는다 — 둘 다 link 면 리터럴 공간이
+    // 애초에 어긋나지 않아 이 판정이 실제로 무엇을 정규화하는지 검증하지 못한다.
+    expect(write(link, path.join(real, 'docs/새파일.md'))).toBeNull();
+    // 여기는 형태를 일치시킨다(root·file_path 둘 다 link) — 형태를 섞으면 리터럴 rel 이
+    // 그 자체로 `..`(형제 디렉터리) 경유가 되어 "루트 밖" 사유로 갈리는, 이 케이스가
+    // 검증하려는 것과 무관한 별개 분기가 걸린다.
     const out = write(link, path.join(link, 'src/새파일.ts'));
     expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
     expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+  });
+
+  describe('allow 판정도 두 공간의 합집합이다 (품질 리뷰)', () => {
+    // C3 가 막는 바로 그 환경(root=심링크, file_path=실경로 — 또는 역조합)에서 allow 판정을
+    // 리터럴 공간만으로 하면 정당한 `.harness/`·`docs/`·루트 md 쓰기까지 "루트 밖"으로
+    // 오판돼 설계 트랙이 전면 잠긴다. 아래는 그 환경에서도 정상 통과해야 하는 대조군이다.
+    it('root=link, file_path=real 의 .harness/design/ 쓰기는 허용된다 (P0)', () => {
+      const { real, link } = setupSymlinked('P0');
+      expect(write(link, path.join(real, '.harness/design/x.md'))).toBeNull();
+    });
+
+    it('역조합(root=real, file_path=link) 의 .harness/design/ 쓰기도 허용된다 (P0)', () => {
+      const { real, link } = setupSymlinked('P0');
+      expect(write(real, path.join(link, '.harness/design/x.md'))).toBeNull();
+    });
+
+    it('root=link, file_path=real 의 docs/ 쓰기는 허용된다 (P0)', () => {
+      const { real, link } = setupSymlinked('P0');
+      expect(write(link, path.join(real, 'docs/a.md'))).toBeNull();
+    });
+
+    it('root=link, file_path=real 의 루트 *.md 쓰기는 허용된다 (P0)', () => {
+      const { real, link } = setupSymlinked('P0');
+      expect(write(link, path.join(real, 'README.md'))).toBeNull();
+    });
+
+    it('root=link, file_path=real 의 .harness/design/ 쓰기는 구축 트랙에서 여전히 차단된다 (P8, realRel 분기)', () => {
+      const { real, link } = setupSymlinked('P8');
+      const out = write(link, path.join(real, '.harness/design/x.md'));
+      expect(out, 'allow 가 관대해졌다고 구축 트랙의 설계 문서 보호까지 뚫리면 안 된다').not.toBeNull();
+      expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+      expect(reason(out)).toMatch(/backtrack/);
+    });
+  });
+});
+
+describe('hook: 대소문자 우회 방지 (품질 리뷰 보너스 — realpath 정규화의 부수 이득)', () => {
+  // fs.realpathSync.native 는 대소문자 무시 파일시스템(기본 macOS APFS 등)에서 입력
+  // 대소문자와 무관하게 디스크상의 실제 대소문자로 정규화한다 — 이 회귀 스위트가 지키는
+  // 것 중 하나다. 대소문자 구분 FS(Linux 등)에선 애초에 다른 파일이라 재현 불가하므로
+  // 프로브로 감지해 건너뛴다.
+  const caseInsensitiveFs = (() => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-ci-probe-'));
+    fs.writeFileSync(path.join(dir, 'probe'), '');
+    const insensitive = fs.existsSync(path.join(dir, 'PROBE'));
+    fs.rmSync(dir, { recursive: true, force: true });
+    return insensitive;
+  })();
+
+  it.skipIf(!caseInsensitiveFs)('.HARNESS/state.json 대소문자 우회도 차단된다', () => {
+    const root = setup();
+    const out = write(root, path.join(root, '.HARNESS/state.json'));
+    expect(out, '대소문자 우회로 코어 파일 편집이 통과하면 안 된다').not.toBeNull();
+    expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(reason(out)).toContain('harness 명령으로만');
   });
 });
 

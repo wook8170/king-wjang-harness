@@ -242,8 +242,10 @@ function relPath(root: string, p: string): string {
  * 반대로 realpath 공간만 보면, root **안쪽**의 심링크가 root 밖(예: 외부 스토어)을
  * 가리킬 때 `.harness/` 같은 정상 상대경로가 realpath 상으로는 root 밖으로 풀려
  * CORE_FILES 보호가 새어나가거나(deny 를 놓침), 반대로 `.harness/` 무조건 허용 계약이
- * "루트 밖" 오판으로 깨진다. 그래서 두 공간을 **함께** 계산해 호출측에서 용도별로
- * 합치거나(deny 계열) 리터럴만 쓴다(allow 계열) — 이 함수 하나가 두 결과를 결정하지 않는다.
+ * "루트 밖" 오판으로 깨진다. 그래서 두 공간을 **함께** 계산해 preTool 에서 매치 판정에
+ * 쓴다 — CORE_FILES·설계 allowlist·구축 트랙 `.harness/design/` 보호는 전부 rel·realRel
+ * 어느 한쪽만 걸려도 매치로 본다. 이 함수는 "정규화된 값"만 내놓을 뿐, 그 매치를 deny 에
+ * 쓸지 allow 에 쓸지는 호출측(preTool)이 정한다.
  */
 function realRelPath(root: string, p: string): string {
   return path.relative(realOrSelf(root), realOrSelf(path.resolve(root, p)));
@@ -261,19 +263,25 @@ function preTool(
   const isWrite = WRITE_TOOLS.includes(tool);
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
   const raw = String(input.tool_input?.file_path ?? '');
-  // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산한다. deny 계열 검사(코어 파일
-  // 보호·구축 트랙 설계 문서 보호·"루트 밖" 판정)는 둘의 **합집합** — 한쪽이라도 걸리면
-  // 차단한다. root 자체가 심링크면 리터럴 공간이 새고, root **안쪽**(예: `.harness/`)이
-  // 외부를 가리키면 realpath 공간이 샌다(최종 리뷰 C3 + 후속 리뷰). allow 계열 검사(설계
-  // allowlist 프리픽스, 루트 *.md)는 **리터럴 공간만** 쓴다 — `.harness/` 를 외부 스토어로
-  // 심링크해도 에이전트 자신의 설계 산출물 쓰기는 여전히 허용돼야 한다(hook.ts 상단
-  // "`.harness/` 는 무조건 허용" 계약).
+  // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산해, 아래 모든 프리픽스/파일명
+  // 매치(CORE_FILES 보호, 설계 allowlist, 구축 트랙 `.harness/design/` 보호)에 "두 공간 중
+  // 하나라도 걸리면 매치"로 쓴다. root 자체가 심링크면 리터럴 공간이 새고(C3), root
+  // **안쪽**(예: `.harness/`)이 외부를 가리키면 realpath 공간이 샌다(후속 리뷰) — 매치
+  // 판정을 한쪽 공간에만 맡기면 반대 방향의 우회나 오판을 놓친다.
+  //
+  // CORE_FILES 매치는 항상 deny 이므로 이 union 은 "더 엄격하게" 작동한다. 설계 allowlist
+  // 매치는 반대로 allow 이므로 union 이 "더 관대하게" 작동하는데, 이게 새 구멍을 열지
+  // 않는 이유: realRel 이 `.harness/` 로 시작해 allowlist 를 통과하더라도 그게 CORE_FILES
+  // 3개 지정 파일 중 하나였다면 아래 CORE_FILES union deny 가 이 지점보다 **먼저** 걸려
+  // 애초에 도달하지 않는다. 내부 심링크로 `.harness/` 가 밖을 가리키는 경우엔 반대로
+  // 리터럴 rel 이 그대로 `.harness/...` 로 잡혀 있어 그쪽에서 허용된다 — 두 경우 모두
+  // CORE_FILES 는 항상 차단되고, 그 외 `.harness/` 산출물만 통과한다.
   const rel = raw ? relPath(root, raw) : '';
   const realRel = raw ? realRelPath(root, raw) : '';
 
   // 코어 파일 보호는 페이즈·config 와 무관하며, `.harness/` 무조건 허용보다 **먼저** 온다.
-  if (isWrite && (CORE_FILES.includes(rel) || CORE_FILES.includes(realRel))) {
-    const core = CORE_FILES.includes(rel) ? rel : realRel;
+  const core = [rel, realRel].find(r => CORE_FILES.includes(r));
+  if (isWrite && core) {
     return deny(
       `${core} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`,
       degraded,
@@ -284,10 +292,17 @@ function preTool(
     if (!raw.trim()) {
       return deny('도구 입력에 파일 경로가 없다 — 차단(안전 기본값).', degraded);
     }
-    // allow 판정을 먼저 내린다 — 리터럴 공간에서 `.harness/`·`docs/` 등에 이미 속하면
-    // realpath 상 root 밖으로 풀리더라도(내부 심링크) 그건 허용 계약의 정상 범위다.
-    const allowed = allowList(config).some(pre => rel.startsWith(pre)) || /^[^/]+\.md$/.test(rel);
+    // allow 판정도 두 공간의 합집합이다 — root=심링크·file_path=실경로 조합(C3 가 막는
+    // 바로 그 환경)에서 리터럴 rel 만 보면 `../..` 로 새 정당한 `.harness/`·`docs/` 쓰기
+    // 까지 "루트 밖"으로 오판돼 설계 트랙이 전면 잠긴다. 왜 안전한지는 위 union 주석과
+    // realRelPath 주석 참고 — CORE_FILES 는 이미 앞에서 걸러졌다.
+    const allowed = [rel, realRel].some(
+      r => r !== '' && (allowList(config).some(pre => r.startsWith(pre)) || /^[^/]+\.md$/.test(r)),
+    );
     if (!allowed) {
+      // 여기부터는 이미 deny 로 확정됐다 — 아래 union 은 차단 여부가 아니라 사유 문구
+      // 선택용이다("루트 밖" vs "설계 트랙 소스 금지"). 두 공간 중 하나라도 이탈을
+      // 가리키면 더 정확한 "루트 밖" 문구를 보여준다.
       if (isOutsideRoot(rel) || isOutsideRoot(realRel)) {
         return deny(`프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${raw}`, degraded);
       }
