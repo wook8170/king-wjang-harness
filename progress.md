@@ -1,5 +1,21 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-20 — 재진입 검증(/verifying-production-readiness): 커밋된 대장 lint 위반 발견·수정
+
+**판정 유지: 출하 가능(GO).** 재진입 규칙대로 판정 전 lint 재실행 → **커밋 `81639a1`의 대장이
+실제로는 R6 위반**이었음을 발견(이전 세션 "lint 통과" 기록은 스킬 진화 전 상태). 원인·수정:
+- **R6 위반**: 판정 토큰이 `★ 출하 가능` — `★` 장식이 고정 어휘 접두 매칭을 깨 「판정 어휘 인식
+  불가」. 스킬 규칙상 **lint 미통과 대장으로 낸 판정은 무효**.
+- **수정(형식만, 판정 불변)**: `ledger.md:3`·`00-summary.md:8`에서 `★` 제거 → `출하 가능` 순수 토큰.
+- **재측정**: `ledger-lint.sh` → **✓ 45행 R1–R7 통과, open BLOCKER 0**. G1 테스트 **198 passed
+  (12파일)**·G2 tsc exit 0·dist yaml 인라인(SHIP-11 함정 clear) 재확인. 무거운 게이트(G9 훅p95·
+  G10 대형저널·G11/12 설치/롤백·G4 공급망·G5 비밀)는 제품코드 무변경이라 이전 measured 유효.
+- **미커밋**: `ledger.md`·`00-summary.md`(lint 수정) + `progress.md`. **커밋/push는 지시 대기.**
+  단 lint 수정은 어느 병합 경로든 feature 브랜치 HEAD를 lint-valid로 만들어야 하므로 함께 커밋 대상.
+- **다음 즉시 할 일**: 사용자 병합 결정(a 로컬병합/b 보류/c PR) 대기. 결정 후 lint 수정 커밋 동반.
+- **⚠ 새 함정**: **ledger-lint R6는 판정 토큰의 어떤 장식(`★`·볼드 등)도 거부** — `**판정** 출하 가능 ·`
+  처럼 순수 어휘여야. 재진입 시 판정 전·후 lint 필수(이번처럼 커밋된 상태가 위반일 수 있다).
+
 ## 2026-08-20 — ★★ 출하 검증 "출하 가능" 승급 완료 (HIGH 3건 전부 verified 종결)
 
 **판정: 출하 가능** — BLOCKER 0·HIGH 0·전 게이트 재측정 PASS(198×3, 훅 p95 57ms). 수정 커밋:
@@ -10,8 +26,13 @@
 - `8d261d3` SHIP-11(사용자 결정 dist 커밋)+SHIP-12(README): **yaml 번들 인라인**으로
   self-contained dist — node_modules 없는 순수 클론서 하네스 실동작 E2E 검증(dist-only는
   yaml external이라 여전히 inert였던 것을 실행으로 발견·수정).
-- **다음 즉시 할 일**: (1) 최종 보고서를 claude.ai 아티팩트로(사용자 요청, 원격 접속). (2) main
-  병합 결정(a 로컬병합/b 보류/c PR) — 출하 가능 판정 받았으니 병합 적기. **push는 사용자 지시 전 금지.**
+- **최종 보고서 아티팩트**: https://claude.ai/code/artifact/332d40fb-4f25-4be3-bc88-ac2730207c4a
+- **대장 기계 검증 통과**(`81639a1`): 신버전 스킬 `ledger-lint.sh`(R1–R7) 실행 — 초기 16건 위반
+  (어휘 볼드·(승격)/(부분) 접미사·deferred 사유 누락·이월 measured 인용 미해결) 전부 형식 문제,
+  수정 후 "45행 R1–R7 통과, open BLOCKER 0". GO 기계 유효(LOGIC-02는 근거가 코드뿐→measured 강등).
+  **재진입 세션은 판정 전·직후 lint 재실행 필수:**
+  `bash ~/.claude/skills/verifying-production-readiness/bin/ledger-lint.sh docs/release-readiness/2026-08-20`
+- **다음 즉시 할 일**: main 병합 결정(a 로컬병합/b 보류/c PR) — 출하 가능·lint 통과. **push는 지시 전 금지.**
 - **잔여 백로그(비차단 MED/LOW)**: SEC-01(외부심링크P8)·SHIP-02(구 .harness gitignore 마이그레이션)·
   OPS-02/10/13/14·LOGIC-13/14/15·OPS-16·API-11·SEC-02·API-01/02·OPS-01·FEAT-10·DEP-10 — 대장 참조.
 - **⚠ 함정**: **커밋된 dist는 self-contained여야**(yaml external이면 클론서 inert) — tsup

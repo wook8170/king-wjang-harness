@@ -1,6 +1,6 @@
 # 결함 대장 — king-wjang-harness 코어 엔진 v0 @ e48473d
 
-**갱신** 2026-08-20(HIGH 수정 라운드 완료·재측정) · **판정** ★ 출하 가능 ·
+**갱신** 2026-08-20(HIGH 수정 라운드 완료·재측정) · **판정** 출하 가능 ·
 **open BLOCKER** 0 · **open HIGH** 0 · **open MED** ~7 · **open LOW** ~12 · **deferred** ~7
 
 **HIGH 3건 전부 verified 종결**: LOGIC-10·LOGIC-11(`b5d6248`, fail-open 침묵 해제 차단) ·
