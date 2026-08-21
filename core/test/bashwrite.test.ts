@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { scanBashWrites, mentionsPath } from '../src/bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions } from '../src/bashwrite';
 import { initHarness, readState, writeState } from '../src/state';
 import { submitGate, approveGate, invalidateStaleGates } from '../src/gate';
 import { replayState, readJournal, readJournalForReplay, appendEvent, EVENT_TYPES } from '../src/events';
@@ -177,5 +177,46 @@ describe('DET-54: 이벤트 타입 드리프트 — 무효화가 복구로 되�
     for (const t of EVENT_TYPES) appendEvent(root, t, {});
     const r = runDoctor(root, {});
     expect(r.warnings.join(' ')).not.toMatch(/미지 이벤트|Unknown event/);
+  });
+});
+
+/**
+ * `>|` 는 noclobber(`set -o noclobber`)를 무시하는 리다이렉트다. `>` 와 같은 자리에서
+ * 같은 일을 하므로 **같은 판정**을 받아야 한다 — 한 글자 차이로 설계 트랙 소스 차단이
+ * 풀리면 그건 차단이 아니라 우연이다.
+ */
+describe('bashwrite — noclobber 무시 리다이렉트(>|)', () => {
+  it('>| 대상도 쓰기 대상으로 뽑는다', () => {
+    expect(scanBashWrites('echo x >| src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('>>| 는 bash 문법이 아니므로 >> 와 같이 동작하면 된다', () => {
+    expect(scanBashWrites('echo x >> src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('공백 없는 >|파일 도 잡는다', () => {
+    expect(scanBashWrites('echo x >|src/app.ts').targets).toContain('src/app.ts');
+  });
+});
+
+/**
+ * 대상 추출이 실패하는 변형 명령(`python -c "open('src/x.ts','w')"`, `prettier --write src/`)을
+ * 위한 안전망의 재료. `.harness/` 코어 파일에는 `mentionsPath` 안전망이 이미 있었는데
+ * **설계 트랙 소스에는 없어서** 같은 수법이 (b)에서는 막히고 (a)에서는 통과했다.
+ * 여기서는 「명령에 등장한 경로처럼 생긴 토큰」만 뽑는다 — 판정은 호출측(judgeWritePath)이 한다.
+ */
+describe('bashwrite — pathLikeMentions (변형 명령 안전망 재료)', () => {
+  it('따옴표 안의 경로도 뽑는다', () => {
+    expect(pathLikeMentions(`python3 -c "open('src/i.ts','w')"`)).toContain('src/i.ts');
+  });
+  it('평범한 인자 경로도 뽑는다', () => {
+    expect(pathLikeMentions('prettier --write src/app.ts')).toContain('src/app.ts');
+  });
+  it('플래그는 경로가 아니다', () => {
+    expect(pathLikeMentions('eslint --fix --max-warnings=0')).toEqual([]);
+  });
+  it('슬래시 없는 낱말은 뽑지 않는다 (오탐 방지)', () => {
+    expect(pathLikeMentions('npm test')).toEqual([]);
+  });
+  it('중복은 한 번만', () => {
+    expect(pathLikeMentions('cp src/a.ts src/a.ts').filter(t => t === 'src/a.ts')).toHaveLength(1);
   });
 });

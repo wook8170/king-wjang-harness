@@ -8503,7 +8503,7 @@ function commandName(tokens) {
 }
 function redirectTargets(segment) {
   const out = [];
-  const re = /\d*>>?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  const re = /\d*>>?\|?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
   let m;
   while ((m = re.exec(segment)) !== null) {
     const t = m[1] ?? m[2] ?? m[3] ?? "";
@@ -8552,6 +8552,17 @@ function scanBashWrites(cmd) {
     }
   }
   return { targets: [...new Set(targets.filter(Boolean))], mutating };
+}
+function pathLikeMentions(cmd) {
+  const out = [];
+  const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const t = m[0];
+    if (isFlag(t) || !looksLikePath(t)) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
 }
 function mentionsPath(cmd, needles) {
   return needles.find((n) => cmd.includes(n));
@@ -9461,6 +9472,11 @@ function preTool(root, state, config, input, degraded) {
       if (verdict) return verdict;
     }
     if (scan.mutating) {
+      for (const target of pathLikeMentions(cmd)) {
+        if (scan.targets.includes(target)) continue;
+        const verdict = judgeWritePath(root, state, config, target, degraded, true);
+        if (verdict) return verdict;
+      }
       const named = mentionsPath(cmd, CORE_FILES);
       if (named) {
         return deny(L(

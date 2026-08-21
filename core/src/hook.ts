@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -481,6 +481,14 @@ function preTool(
     // 이름이 **변형 명령과 함께** 등장하면 막는다. 순수 조회(`cat`·`grep`)는 걸리지 않는다 —
     // 저널을 읽어 디버깅하는 건 정당하고, 그것까지 막으면 사람이 하네스를 끈다.
     if (scan.mutating) {
+      // 같은 안전망을 **설계 트랙 소스에도** 건다. 대칭이 아니면 뚫리는 쪽이 정본이 된다:
+      // 이 net 이 없던 동안 `python3 -c "open('src/x.ts','w')"` 는 코어 파일에는 막히고
+      // 소스에는 통과했다. `mutating` 과 AND 이므로 `cat src/app.ts` 같은 조회는 걸리지 않는다.
+      for (const target of pathLikeMentions(cmd)) {
+        if (scan.targets.includes(target)) continue; // 위에서 이미 판정했다
+        const verdict = judgeWritePath(root, state, config, target, degraded, true);
+        if (verdict) return verdict;
+      }
       const named = mentionsPath(cmd, CORE_FILES);
       if (named) {
         return deny(L(

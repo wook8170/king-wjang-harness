@@ -1,6 +1,8 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 (라운드 3 완료) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1)
+**갱신** 2026-08-21 (라운드 3 완료) · **판정** 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1)
+
+라운드 2까지의 「조건부 출하 가능」에서 승격했다 — 명시했던 조건(PERF-26 절대 p95 재측정)이 충족돼 **남은 출하 조건이 0건**이다. CI·리모트·main 병합은 출하 조건이 아니라 **출시 결정**이라 판정 밖이다.
 
 라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
 라운드 2(생성 문서 i18n + CLI 플래그 정합성) — 상세는 `fixes-round2.md`, 닫은 증거는 `evidence/round2-verify.log`.
@@ -58,3 +60,5 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | LOGIC-63 | HIGH | 08 | 턴 로그 파싱 앵커가 **언어에 의존** — `hook.ts` 가 `'## 턴 로그'` 문자열로 찾는데 지시서 본문은 생성 시점 `lang` 을 따라간다. 영문 프로젝트에서 발췌가 **조용히 빔**(이어받기가 가장 중요한 순간에 무음 실패). `lang` 전환 시 과거 파일도 전부 안 읽힘. **라운드 2가 만든 회귀** | verified | measured | `core/src/hook.ts:59` | `fixes-round3.md` · `evidence/round3-verify.log` — 두 언어 매칭 정규식, 건별 테스트 2건(수정 전 레드 실증) |
 | I18N-62 | HIGH | 04 | 라운드 2의 「산출물 한국어 0」이 과다 주장 — 잔여 표면 8모듈(adr 렌더 패킷·doctor 진단 전량·gate verifyGate 사유·wave 예외 3·usage 티어 지침·migrate 안내 전문·profile 진단 전량·hook 발췌 펜스)과 번들 `profiles/` 전량(profile/commands yaml·guidance 3종·raw-values 룰팩) | verified | measured | `core/test/i18n-en-default.test.ts:140` | `fixes-round3.md` · `evidence/round3-verify.log` — 전량 처리 + **회귀 가드 자동화**(6절, 오염 주입으로 무는 것 실증) |
 | OPS-64 | MED | 11 | 「한국어 0」을 사람이 매번 손으로 재는 구조 자체가 결함 — 라운드 2의 과다 주장이 그 산물이다. 측정 범위가 코드에 없으면 새 명령·새 오류 경로가 사정권 밖으로 조용히 빠진다 | verified | measured | `core/test/i18n-en-default.test.ts:45` | `fixes-round3.md` — help 레지스트리 순회라 **새 명령이 자동 편입**, 고장 상태 주입 절 포함 |
+| SEC-65 | HIGH | 06 | noclobber 무시 리다이렉트(`>` 뒤에 파이프를 붙인 형태)가 쓰기 대상 추출을 빠져나간다 — `echo x >PIPE src/app.ts` 로 설계 트랙 소스 차단이, 같은 형태로 `.harness/events.jsonl` 코어 파일 보호가 한 글자 차이로 풀린다 (표에 파이프 문자를 쓸 수 없어 `PIPE` 로 표기) | verified | measured | `core/src/bashwrite.ts:83` | `fixes-round3.md` · `evidence/round3-verify.log` §7 — 우회 매트릭스 31종 전건 재측정, 회귀 테스트 3건 |
+| SEC-66 | HIGH | 06 | 변형 명령 안전망이 **비대칭** — `python3 -c "open('x','w')"` 류가 `.harness/` 코어 파일에는 막히는데 **설계 트랙 소스에는 통과**했다. 방어가 대칭이 아니면 뚫리는 쪽이 정본이 된다 | verified | measured | `core/src/hook.ts:487` | `fixes-round3.md` · `evidence/round3-verify.log` §7 — `pathLikeMentions` 안전망을 소스에도 적용, 과차단 0(조회·루트밖 쓰기 전건 allow) |

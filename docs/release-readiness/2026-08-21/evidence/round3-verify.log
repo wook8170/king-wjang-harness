@@ -111,3 +111,90 @@ $ (복구) → npx vitest run core/test/i18n-en-default.test.ts
      않았기 때문이다. 그래서 「일부러 만든 고장 상태」 절(state 부재·저널 손상·미지 이벤트·
      프로파일 불량·없는 대상 12종)을 추가했다. **런타임 테스트는 실행한 경로만 잰다** —
      이것이 라운드 2 과다 주장과 같은 뿌리다.
+
+## 7. [SEC-65 · SEC-66] 우회 매트릭스 31종 전수 재측정
+재감정 채점을 위해 실효성 조건을 HEAD 에서 다시 쟀다가 **두 건이 걸렸다.**
+(shell 인용이 파이프 문자를 먹어 오측정을 내서, 프로브를 파일 기반 python 으로 다시 짰다.
+ 이 라운드에서 shell 측정이 틀린 것은 이번이 두 번째다 — §5 참조.)
+
+### 수정 전 (HEAD~1 상당: SEC-65/66 수정 이전)
+  (a) 설계 트랙 소스 쓰기  (기대: deny)
+    ✅ deny   Write src/app.ts
+    ✅ deny   echo > src/a.ts
+    ❌ allow  echo >| src/a.ts (noclobber)
+    ❌ allow  echo >|src/a.ts (공백없음)
+    ✅ deny   heredoc > src/a.ts
+    ✅ deny   heredoc quoted
+    ✅ deny   heredoc <<-
+    ✅ deny   cat > f <<EOF (순서 반대)
+    ✅ deny   touch
+    ✅ deny   sed -i
+    ✅ deny   cp
+    ✅ deny   mv
+    ✅ deny   tee
+    ✅ deny   tee -a
+    ✅ deny   1> fd 명시
+    ✅ deny   >> 추가
+    ✅ deny   ln -s
+    ❌ allow  python open()
+  (b) .harness 코어 파일  (기대: deny)
+    ✅ deny   Write state.json
+    ✅ deny   >> events.jsonl (저널 위조)
+    ❌ allow  >| events.jsonl
+    ✅ deny   python open(events)
+    ✅ deny   rm events.jsonl
+    ✅ deny   truncate state.json
+  (c) --force 자기해제  (기대: deny)
+    ✅ deny   harness phase set --force
+    ✅ deny   ./bin/harness phase set --force
+  (d) 의도적 허용 — 과차단이면 사람이 하네스를 끈다  (기대: allow)
+    ✅ allow  루트 밖 쓰기
+    ✅ allow  저널 조회
+    ✅ allow  루트 md 쓰기
+    ✅ allow  git status
+    ✅ allow  설계 산출물 쓰기
+
+  → 불일치 4 건
+
+### 수정 후 (HEAD)
+  (a) 설계 트랙 소스 쓰기  (기대: deny)
+    ✅ deny   Write src/app.ts
+    ✅ deny   echo > src/a.ts
+    ✅ deny   echo >| src/a.ts (noclobber)
+    ✅ deny   echo >|src/a.ts (공백없음)
+    ✅ deny   heredoc > src/a.ts
+    ✅ deny   heredoc quoted
+    ✅ deny   heredoc <<-
+    ✅ deny   cat > f <<EOF (순서 반대)
+    ✅ deny   touch
+    ✅ deny   sed -i
+    ✅ deny   cp
+    ✅ deny   mv
+    ✅ deny   tee
+    ✅ deny   tee -a
+    ✅ deny   1> fd 명시
+    ✅ deny   >> 추가
+    ✅ deny   ln -s
+    ✅ deny   python open()
+  (b) .harness 코어 파일  (기대: deny)
+    ✅ deny   Write state.json
+    ✅ deny   >> events.jsonl (저널 위조)
+    ✅ deny   >| events.jsonl
+    ✅ deny   python open(events)
+    ✅ deny   rm events.jsonl
+    ✅ deny   truncate state.json
+  (c) --force 자기해제  (기대: deny)
+    ✅ deny   harness phase set --force
+    ✅ deny   ./bin/harness phase set --force
+  (d) 의도적 허용 — 과차단이면 사람이 하네스를 끈다  (기대: allow)
+    ✅ allow  루트 밖 쓰기
+    ✅ allow  저널 조회
+    ✅ allow  루트 md 쓰기
+    ✅ allow  git status
+    ✅ allow  설계 산출물 쓰기
+
+  → 불일치 0 건
+
+  → 31종 전건 기대대로. **(d) 의도적 허용 5종이 그대로 allow** 인 것이 중요하다 —
+     과차단하면 사람이 하네스를 꺼버리고 그러면 방어가 0이 된다.
+  → 회귀 테스트: core/test/bashwrite.test.ts (noclobber 3건 + pathLikeMentions 5건)

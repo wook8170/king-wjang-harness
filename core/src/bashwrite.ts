@@ -78,7 +78,9 @@ export interface BashWriteScan {
  */
 function redirectTargets(segment: string): string[] {
   const out: string[] = [];
-  const re = /\d*>>?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  // `>|` 는 noclobber 를 무시하는 리다이렉트다 — `>` 와 같은 자리에서 같은 일을 하므로
+  // 같은 판정을 받아야 한다. 한 글자 차이로 차단이 풀리면 그건 차단이 아니라 우연이다.
+  const re = /\d*>>?\|?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(segment)) !== null) {
     const t = m[1] ?? m[2] ?? m[3] ?? '';
@@ -145,6 +147,34 @@ export function scanBashWrites(cmd: string): BashWriteScan {
  * `python -c "open('.harness/events.jsonl','a')..."` 처럼 구문을 못 읽는 경우를 덮는다.
  * 호출측이 `mutating` 과 AND 로 묶어 쓰므로 순수 조회는 걸리지 않는다.
  */
+/**
+ * 명령 원문에 등장한 **경로처럼 생긴 토큰**을 전부 뽑는다(따옴표 안쪽 포함).
+ *
+ * 존재 이유: `scanBashWrites` 는 리다이렉트와 알려진 쓰기 명령만 대상을 뽑는다. 그 밖의
+ * 변형(`python -c "open('src/x.ts','w')"`, `prettier --write src/app.ts`)은 대상 추출이
+ * 실패하고, 그러면 **판정 자체가 일어나지 않는다.** `.harness/` 코어 파일에는 이름 대조
+ * 안전망(`mentionsPath`)이 있었지만 설계 트랙 소스에는 없어서, 같은 수법이 코어 파일에는
+ * 막히고 소스에는 통과했다 — 방어가 대칭이 아니면 뚫리는 쪽이 정본이 된다.
+ *
+ * 여기서는 **뽑기만** 한다. 무엇이 금지인지는 호출측(`judgeWritePath`)이 프로파일·페이즈로
+ * 판정하고, 호출측은 이 목록을 반드시 `mutating` 과 AND 로 묶어 쓴다 — 그러지 않으면
+ * `cat src/app.ts` 같은 순수 조회까지 막혀 사람이 하네스를 꺼버린다.
+ *
+ * 슬래시가 있는 토큰만 본다. 확장자만 있는 낱말(`app.ts`)까지 넣으면 커밋 메시지·로그 문구가
+ * 경로로 잡혀 오탐이 폭증한다 — 안전망은 조용해야 쓸모가 있다.
+ */
+export function pathLikeMentions(cmd: string): string[] {
+  const out: string[] = [];
+  const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cmd)) !== null) {
+    const t = m[0];
+    if (isFlag(t) || !looksLikePath(t)) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
 export function mentionsPath(cmd: string, needles: readonly string[]): string | undefined {
   return needles.find(n => cmd.includes(n));
 }
