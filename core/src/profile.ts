@@ -37,6 +37,14 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { harnessDir } from './paths';
 import { loadConfig } from './config';
+import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
+
+/**
+ * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
+ * 언어를 진입점(`inspectProfile`)에서 한 번 해석해 헬퍼에 함수로 넘긴다.
+ */
+type Tr = (m: Msg) => string;
+const trFor = (lang: Lang): Tr => (m: Msg) => pick(m, lang);
 
 /** 어디서 온 프로파일인가 — 폴백이 일어났는지 사람이 알 수 있어야 한다. */
 export type ProfileOrigin = 'local' | 'bundled' | 'floor';
@@ -78,7 +86,8 @@ const GENERIC = 'generic';
  */
 export const GENERIC_FLOOR: Readonly<Profile> = Object.freeze({
   name: GENERIC,
-  description: '스택 미확정·번들 프로파일 밖 스택을 위한 최소 프로파일. 명령 매핑은 사용자가 채운다.',
+  description: 'Minimal profile for an undecided stack, or one outside the bundled profiles. '
+    + 'The command mapping is left for you to fill in.',
   sourceGlobs: Object.freeze(['src/**', 'lib/**', 'app/**']) as unknown as string[],
   deployCommands: Object.freeze([
     'docker push', 'kubectl apply', 'vercel deploy', 'netlify deploy', 'fly deploy',
@@ -129,42 +138,51 @@ function strList(v: unknown): { list: string[]; dropped: number } | null {
 
 function readList(
   m: Record<string, unknown>, key: string, fallback: readonly string[],
-  yamlPath: string, problems: string[], required: boolean,
+  yamlPath: string, problems: string[], required: boolean, t: Tr,
 ): string[] {
   if (!(key in m) || m[key] === null || m[key] === undefined) {
     if (required) {
-      problems.push(
-        `${yamlPath}: \`${key}\` 가 없다 — generic 기본값으로 메운다. ` +
-        '비워두면 해당 차단(§4-2)이 통째로 열린다. 스택에 맞는 값을 채워라',
-      );
+      problems.push(t({
+        en: `${yamlPath}: \`${key}\` is missing — filling in the generic default. Leaving it empty opens `
+          + 'that block (§4-2) entirely. Put the values your stack needs',
+        ko: `${yamlPath}: \`${key}\` 가 없다 — generic 기본값으로 메운다. `
+          + '비워두면 해당 차단(§4-2)이 통째로 열린다. 스택에 맞는 값을 채워라',
+      }));
     }
     return [...fallback];
   }
   const parsed = strList(m[key]);
   if (!parsed) {
-    problems.push(
-      `${yamlPath}: \`${key}\` 는 문자열 목록이어야 한다(현재 ${typeof m[key]}) — ` +
-      `${required ? 'generic 기본값' : '빈 목록'}으로 진행한다`,
-    );
+    problems.push(t({
+      en: `${yamlPath}: \`${key}\` must be a list of strings (currently ${typeof m[key]}) — continuing with `
+        + `${required ? 'the generic default' : 'an empty list'}`,
+      ko: `${yamlPath}: \`${key}\` 는 문자열 목록이어야 한다(현재 ${typeof m[key]}) — `
+        + `${required ? 'generic 기본값' : '빈 목록'}으로 진행한다`,
+    }));
     return required ? [...fallback] : [];
   }
   if (parsed.dropped > 0) {
-    problems.push(`${yamlPath}: \`${key}\` 의 문자열 아닌 항목 ${parsed.dropped}개를 무시했다`);
+    problems.push(t({
+      en: `${yamlPath}: ignored ${parsed.dropped} non-string entrie(s) under \`${key}\``,
+      ko: `${yamlPath}: \`${key}\` 의 문자열 아닌 항목 ${parsed.dropped}개를 무시했다`,
+    }));
   }
   return parsed.list;
 }
 
 /** commands.yaml 최상위는 `키: 명령문자열` 매핑이다. 빈 값 = 미정의(정상, 자리표). */
-function readCommands(dir: string, problems: string[]): Record<string, string> {
+function readCommands(dir: string, problems: string[], t: Tr): Record<string, string> {
   const p = path.join(dir, 'commands.yaml');
   let text: string;
   try {
     text = fs.readFileSync(p, 'utf8');
   } catch {
-    problems.push(
-      `${p} 가 없다 — 명령 매핑 없이 진행한다. 코어가 테스트·빌드·배포 명령을 물으면 ` +
-      '"미정의"로 답하게 되고, P7~P9 자동 판정이 전부 사람에게 넘어온다',
-    );
+    problems.push(t({
+      en: `${p} is missing — continuing without a command mapping. When the core asks for the test, build or `
+        + 'deploy command the answer will be "undefined", and every P7–P9 automatic decision falls to a human',
+      ko: `${p} 가 없다 — 명령 매핑 없이 진행한다. 코어가 테스트·빌드·배포 명령을 물으면 `
+        + '"미정의"로 답하게 되고, P7~P9 자동 판정이 전부 사람에게 넘어온다',
+    }));
     return {};
   }
 
@@ -172,12 +190,18 @@ function readCommands(dir: string, problems: string[]): Record<string, string> {
   try {
     raw = YAML.parse(text);
   } catch (e) {
-    problems.push(`${p} 파싱 실패(${errMsg(e)}) — 명령 매핑 없이 진행한다`);
+    problems.push(t({
+      en: `failed to parse ${p} (${errMsg(e)}) — continuing without a command mapping`,
+      ko: `${p} 파싱 실패(${errMsg(e)}) — 명령 매핑 없이 진행한다`,
+    }));
     return {};
   }
   if (raw === null || raw === undefined) return {};
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    problems.push(`${p}: 최상위가 \`키: 명령\` 매핑이 아니다 — 명령 매핑 없이 진행한다`);
+    problems.push(t({
+      en: `${p}: the top level is not a \`key: command\` mapping — continuing without a command mapping`,
+      ko: `${p}: 최상위가 \`키: 명령\` 매핑이 아니다 — 명령 매핑 없이 진행한다`,
+    }));
     return {};
   }
 
@@ -189,20 +213,26 @@ function readCommands(dir: string, problems: string[]): Record<string, string> {
       continue;
     }
     if (v === null || v === undefined) continue; // `test:` 만 적은 자리표
-    problems.push(`${p}: \`${k}\` 는 명령 문자열이어야 한다(현재 ${typeof v}) — 무시했다`);
+    problems.push(t({
+      en: `${p}: \`${k}\` must be a command string (currently ${typeof v}) — ignored`,
+      ko: `${p}: \`${k}\` 는 명령 문자열이어야 한다(현재 ${typeof v}) — 무시했다`,
+    }));
   }
   return out;
 }
 
 /** 디렉토리 하나를 프로파일로 읽는다. 읽을 수 없으면 null(사유는 problems 에). */
-function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[]): Profile | null {
+function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], t: Tr): Profile | null {
   const yamlPath = path.join(dir, 'profile.yaml');
 
   let text: string;
   try {
     text = fs.readFileSync(yamlPath, 'utf8');
   } catch (e) {
-    problems.push(`${yamlPath} 를 읽을 수 없다(${errMsg(e)}) — 이 프로파일을 건너뛴다`);
+    problems.push(t({
+      en: `cannot read ${yamlPath} (${errMsg(e)}) — skipping this profile`,
+      ko: `${yamlPath} 를 읽을 수 없다(${errMsg(e)}) — 이 프로파일을 건너뛴다`,
+    }));
     return null;
   }
 
@@ -210,11 +240,17 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[]):
   try {
     raw = YAML.parse(text);
   } catch (e) {
-    problems.push(`${yamlPath} 파싱 실패(${errMsg(e)}) — 이 프로파일을 건너뛴다`);
+    problems.push(t({
+      en: `failed to parse ${yamlPath} (${errMsg(e)}) — skipping this profile`,
+      ko: `${yamlPath} 파싱 실패(${errMsg(e)}) — 이 프로파일을 건너뛴다`,
+    }));
     return null;
   }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    problems.push(`${yamlPath}: 최상위가 매핑이 아니다 — 이 프로파일을 건너뛴다`);
+    problems.push(t({
+      en: `${yamlPath}: the top level is not a mapping — skipping this profile`,
+      ko: `${yamlPath}: 최상위가 매핑이 아니다 — 이 프로파일을 건너뛴다`,
+    }));
     return null;
   }
   const m = raw as Record<string, unknown>;
@@ -226,12 +262,12 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[]):
     name,
     ...(description ? { description } : {}),
     // 소스·배포는 비면 차단이 열리는 쪽이라 generic 기본값으로 메운다(+보고).
-    sourceGlobs: readList(m, 'source_globs', GENERIC_FLOOR.sourceGlobs, yamlPath, problems, true),
+    sourceGlobs: readList(m, 'source_globs', GENERIC_FLOOR.sourceGlobs, yamlPath, problems, true, t),
     deployCommands:
-      readList(m, 'deploy_commands', GENERIC_FLOOR.deployCommands, yamlPath, problems, true),
+      readList(m, 'deploy_commands', GENERIC_FLOOR.deployCommands, yamlPath, problems, true, t),
     // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
-    designSystemRoots: readList(m, 'design_system_roots', [], yamlPath, problems, false),
-    commands: readCommands(dir, problems),
+    designSystemRoots: readList(m, 'design_system_roots', [], yamlPath, problems, false, t),
+    commands: readCommands(dir, problems, t),
     origin,
     dir,
   };
@@ -247,7 +283,8 @@ function floorProfile(): Profile {
   };
 }
 
-function resolve(root: string, name?: string): { profile: Profile; problems: string[] } {
+function resolve(root: string, name?: string, lang: Lang = DEFAULT_LANG): { profile: Profile; problems: string[] } {
+  const t = trFor(lang);
   const problems: string[] = [];
 
   // 이름: 인자 > config.yaml 의 profile > generic.
@@ -259,9 +296,12 @@ function resolve(root: string, name?: string): { profile: Profile; problems: str
   const local = localProfileDir(root);
   if (fs.existsSync(local)) {
     if (!isDir(local)) {
-      problems.push(`${local} 가 디렉토리가 아니다 — 프로젝트 로컬 프로파일을 건너뛴다`);
+      problems.push(t({
+        en: `${local} is not a directory — skipping the project-local profile`,
+        ko: `${local} 가 디렉토리가 아니다 — 프로젝트 로컬 프로파일을 건너뛴다`,
+      }));
     } else {
-      const p = readProfileDir(local, 'local', problems);
+      const p = readProfileDir(local, 'local', problems, t);
       if (p) return { profile: p, problems };
     }
   }
@@ -271,29 +311,41 @@ function resolve(root: string, name?: string): { profile: Profile; problems: str
   // (2) 번들 <이름>.
   if (!isSafeName(wanted)) {
     problems.push(
-      `프로파일 이름 '${wanted}' 이 올바르지 않다(영숫자·. _ - 만 허용) — generic 으로 진행한다. ` +
-      '`.harness/config.yaml` 의 `profile` 을 고쳐라',
+      t({
+        en: `The profile name '${wanted}' is invalid (only alphanumerics and . _ - are allowed) — `
+          + 'continuing with generic. Fix `profile` in `.harness/config.yaml`',
+        ko: `프로파일 이름 '${wanted}' 이 올바르지 않다(영숫자·. _ - 만 허용) — generic 으로 진행한다. `
+          + '`.harness/config.yaml` 의 `profile` 을 고쳐라',
+      }),
     );
   } else if (isDir(path.join(bundled, wanted))) {
-    const p = readProfileDir(path.join(bundled, wanted), 'bundled', problems);
+    const p = readProfileDir(path.join(bundled, wanted), 'bundled', problems, t);
     if (p) return { profile: p, problems };
   } else {
     problems.push(
-      `프로파일 '${wanted}' 를 ${bundled} 에서 찾을 수 없다 — generic 으로 진행한다. ` +
-      '번들 목록을 확인하거나, 번들 밖 스택이면 `.harness/profile/` 에 프로젝트 로컬 프로파일을 두어라',
+      t({
+        en: `Profile '${wanted}' was not found in ${bundled} — continuing with generic. Check the bundled `
+          + 'list, or for a stack outside the bundles put a project-local profile in `.harness/profile/`',
+        ko: `프로파일 '${wanted}' 를 ${bundled} 에서 찾을 수 없다 — generic 으로 진행한다. `
+          + '번들 목록을 확인하거나, 번들 밖 스택이면 `.harness/profile/` 에 프로젝트 로컬 프로파일을 두어라',
+      }),
     );
   }
 
   // (3) 번들 generic.
   if (wanted !== GENERIC && isDir(path.join(bundled, GENERIC))) {
-    const p = readProfileDir(path.join(bundled, GENERIC), 'bundled', problems);
+    const p = readProfileDir(path.join(bundled, GENERIC), 'bundled', problems, t);
     if (p) return { profile: p, problems };
   }
 
   // (4) 코드 내장 바닥 — 여기까지 왔으면 설치본이 깨진 것이다.
   problems.push(
-    `${bundled} 의 generic 프로파일을 읽지 못했다 — 코드 내장 바닥값으로 진행한다. ` +
-    '플러그인 설치본이 온전한지 확인하라',
+    t({
+      en: `Could not read the generic profile in ${bundled} — continuing with the built-in floor values. `
+        + 'Check that the plugin installation is intact',
+      ko: `${bundled} 의 generic 프로파일을 읽지 못했다 — 코드 내장 바닥값으로 진행한다. `
+        + '플러그인 설치본이 온전한지 확인하라',
+    }),
   );
   return { profile: floorProfile(), problems };
 }
@@ -303,11 +355,20 @@ function resolve(root: string, name?: string): { profile: Profile; problems: str
  * 정상 경로에서는 `problems` 가 빈 배열이다.
  */
 export function inspectProfile(root: string, name?: string): { profile: Profile; problems: string[] } {
+  // 언어 해석 자체가 실패해도 진단은 나와야 한다 — config 를 못 읽으면 기본값(en)으로 간다.
+  let lang: Lang = DEFAULT_LANG;
+  try { lang = loadConfig(root).lang; } catch { /* 바닥값으로 진행 */ }
   try {
-    return resolve(root, name);
+    return resolve(root, name, lang);
   } catch (e) {
     // 여기 오면 안 되지만, 훅은 절대 죽지 않는다.
-    return { profile: floorProfile(), problems: [`프로파일 해석 중 예외(${errMsg(e)}) — 바닥값 사용`] };
+    return {
+      profile: floorProfile(),
+      problems: [trFor(lang)({
+        en: `exception while resolving the profile (${errMsg(e)}) — using the floor profile`,
+        ko: `프로파일 해석 중 예외(${errMsg(e)}) — 바닥값 사용`,
+      })],
+    };
   }
 }
 

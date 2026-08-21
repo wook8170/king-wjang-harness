@@ -107,15 +107,22 @@ describe('shouldInject', () => {
 
 describe('guidanceFor', () => {
   it('티어마다 서로 다른 비어있지 않은 지침', () => {
-    const texts = (['normal', 'reduce', 'settle-every-turn', 'final-handoff'] as const).map(guidanceFor);
+    // 화살표로 감싼다 — `.map(guidanceFor)` 는 index 를 두 번째 인자(lang)로 흘린다.
+    const texts = (['normal', 'reduce', 'settle-every-turn', 'final-handoff'] as const)
+      .map(t => guidanceFor(t));
     for (const t of texts) expect(t.trim().length).toBeGreaterThan(0);
     expect(new Set(texts).size).toBe(4);
   });
 
-  it('최고 티어 지침은 핸드오프와 소환을 모두 지시', () => {
-    const g = guidanceFor('final-handoff');
-    expect(g).toContain('핸드오프');
-    expect(g).toContain('소환');
+  it('최고 티어 지침은 핸드오프와 소환을 모두 지시 (양 언어)', () => {
+    // guidanceFor 는 순수라 env 를 보지 않는다 — 언어를 명시적으로 넘긴다(기본값은 en).
+    const ko = guidanceFor('final-handoff', 'ko');
+    expect(ko).toContain('핸드오프');
+    expect(ko).toContain('소환');
+    const en = guidanceFor('final-handoff');
+    expect(en).toContain('handoff');
+    expect(en).toContain('summon');
+    expect(en).not.toMatch(/[가-힣]/); // 기본 출력에 한국어가 섞이지 않는다
   });
 });
 

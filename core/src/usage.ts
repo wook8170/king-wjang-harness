@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runtimeDir } from './paths';
+import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 
 /** 원본 token-guard 의 캐시 TTL. 줄이지 말 것(모듈 주석 참조). */
 export const USAGE_CACHE_TTL_MS = 180_000;
@@ -91,19 +92,35 @@ export function shouldInject(prevTier: UsageTier, nextTier: UsageTier): boolean 
   return TIER_ORDER.indexOf(nextTier) > TIER_ORDER.indexOf(prevTier);
 }
 
-/** 티어별 주입 문구. 짧은 명령형 — 긴 설명은 읽히지 않는다. */
-export function guidanceFor(tier: UsageTier): string {
-  switch (tier) {
-    case 'reduce':
-      return '[harness] 사용량 90% 도달 — 웨이브를 더 짧게 쪼개라. 각 웨이브 종료 시점이 커밋 가능한 안정 상태여야 한다.';
-    case 'settle-every-turn':
-      return '[harness] 사용량 95% 도달 — 매 턴 종료마다 지시서(핸드오프)를 갱신하라. 정산 스로틀은 해제됐다.';
-    case 'final-handoff':
-      return '[harness] 사용량 99% — 임계. 지금 작업을 안전한 지점에서 멈추고 최종 핸드오프를 완료한 뒤 사용자를 소환하라. 새 작업을 시작하지 마라.';
-    case 'normal':
-    default:
-      return '[harness] 사용량 여유 — 평상 운영.';
-  }
+/**
+ * 티어별 주입 문구. 짧은 명령형 — 긴 설명은 읽히지 않는다.
+ *
+ * 이 모듈은 순수(퍼센트 → 티어)라 `root` 가 없다. 그래서 언어를 **인자로** 받고 호출측
+ * (cli·hook)이 config 에서 해석해 넘긴다 — tokens.ts 생성기와 같은 형태다.
+ */
+const GUIDANCE: Record<UsageTier, Msg> = {
+  reduce: {
+    en: '[harness] usage at 90% — split waves smaller. Every wave must end at a committable, stable point.',
+    ko: '[harness] 사용량 90% 도달 — 웨이브를 더 짧게 쪼개라. 각 웨이브 종료 시점이 커밋 가능한 안정 상태여야 한다.',
+  },
+  'settle-every-turn': {
+    en: '[harness] usage at 95% — update the instruction sheet (handoff) at the end of every turn. '
+      + 'The settle throttle is off.',
+    ko: '[harness] 사용량 95% 도달 — 매 턴 종료마다 지시서(핸드오프)를 갱신하라. 정산 스로틀은 해제됐다.',
+  },
+  'final-handoff': {
+    en: '[harness] usage at 99% — critical. Stop the current work at a safe point, finish the final handoff, '
+      + 'then summon the user. Do not start anything new.',
+    ko: '[harness] 사용량 99% — 임계. 지금 작업을 안전한 지점에서 멈추고 최종 핸드오프를 완료한 뒤 사용자를 소환하라. 새 작업을 시작하지 마라.',
+  },
+  normal: {
+    en: '[harness] usage has headroom — normal operation.',
+    ko: '[harness] 사용량 여유 — 평상 운영.',
+  },
+};
+
+export function guidanceFor(tier: UsageTier, lang: Lang = DEFAULT_LANG): string {
+  return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 
 /** 마지막으로 주입한 티어를 남긴다. 훅 호출은 매번 새 프로세스라 상승 판정이 파일로 살아남아야 한다. */

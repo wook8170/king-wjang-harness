@@ -49,6 +49,7 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { designDir, wavesDir } from './paths';
 import { tr } from './tr';
+import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { getNode, upsertNode } from './ledger';
 import { parseWave, markStale } from './wave';
@@ -429,36 +430,57 @@ export function reviseAdr(root: string, id: string, input: ReviseAdrInput): Revi
 
 // ── 추천 패킷 렌더 ──────────────────────────────────────────────────────────
 
-const STATUS_LABEL: Record<AdrRecord['status'], string> = {
-  proposed: '제안됨',
-  accepted: '채택됨',
-  superseded: '대체됨',
+const STATUS_LABEL: Record<AdrRecord['status'], Msg> = {
+  proposed: { en: 'proposed', ko: '제안됨' },
+  accepted: { en: 'accepted', ko: '채택됨' },
+  superseded: { en: 'superseded', ko: '대체됨' },
 };
 
-/** 사람이 읽고 고르는 화면 — 순수 문자열 빌더(디스크·시각 무접촉). */
-export function renderAdrPacket(rec: AdrRecord): string {
+const M = {
+  status: { en: 'Status', ko: '상태' },
+  options: { en: 'Options', ko: '선택지' },
+  chosenMark: { en: ' ← chosen', ko: ' ← 채택' },
+  recommendedMark: { en: ' ← recommended', ko: ' ← 추천' },
+  pros: { en: 'Pros', ko: '장점' },
+  cons: { en: 'Cons', ko: '단점' },
+  unstated: { en: '(not stated)', ko: '(미기재)' },
+  recommendation: { en: 'Recommendation', ko: '추천안' },
+  goneFromOptions: { en: '(no longer among the options)', ko: '(선택지에서 사라짐)' },
+  decision: { en: 'Decision', ko: '결정' },
+  chosen: { en: 'Chosen', ko: '채택' },
+  rationale: { en: 'Rationale', ko: '근거' },
+  rejectedReasons: { en: 'Rejection reasons', ko: '기각 사유' },
+  none: { en: '(none)', ko: '(없음)' },
+} satisfies Record<string, Msg>;
+
+/**
+ * 사람이 읽고 고르는 화면 — 순수 문자열 빌더(디스크·시각 무접촉).
+ * 순수하므로 `root` 가 없다. 언어는 인자로 받고 호출측(cli)이 config 에서 해석해 넘긴다.
+ */
+export function renderAdrPacket(rec: AdrRecord, lang: Lang = DEFAULT_LANG): string {
+  const t = (m: Msg): string => pick(m, lang);
   const L: string[] = [];
   L.push(`# ${rec.id} · ${rec.phase} — ${rec.question}`, '');
-  L.push(`- 상태: ${STATUS_LABEL[rec.status]} (v${rec.version})`, '');
-  L.push('## 선택지', '');
+  L.push(`- ${t(M.status)}: ${t(STATUS_LABEL[rec.status])} (v${rec.version})`, '');
+  L.push(`## ${t(M.options)}`, '');
   for (const o of rec.options) {
-    const mark = o.id === rec.chosen ? ' ← 채택' : o.id === rec.recommended ? ' ← 추천' : '';
+    const mark = o.id === rec.chosen ? t(M.chosenMark) : o.id === rec.recommended ? t(M.recommendedMark) : '';
     L.push(`### ${o.title} (\`${o.id}\`)${mark}`);
-    L.push(`- 장점: ${o.pros.length ? o.pros.join(', ') : '(미기재)'}`);
-    L.push(`- 단점: ${o.cons.length ? o.cons.join(', ') : '(미기재)'}`, '');
+    L.push(`- ${t(M.pros)}: ${o.pros.length ? o.pros.join(', ') : t(M.unstated)}`);
+    L.push(`- ${t(M.cons)}: ${o.cons.length ? o.cons.join(', ') : t(M.unstated)}`, '');
   }
   if (rec.recommended) {
     const r = rec.options.find(o => o.id === rec.recommended);
-    L.push('## 추천안', '', `\`${rec.recommended}\` — ${r ? r.title : '(선택지에서 사라짐)'}`, '');
+    L.push(`## ${t(M.recommendation)}`, '', `\`${rec.recommended}\` — ${r ? r.title : t(M.goneFromOptions)}`, '');
   }
   if (rec.chosen) {
     const c = rec.options.find(o => o.id === rec.chosen);
-    L.push('## 결정', '');
-    L.push(`- 채택: \`${rec.chosen}\` — ${c ? c.title : '(선택지에서 사라짐)'}`);
-    L.push(`- 근거: ${rec.rationale ?? '(미기재)'}`);
-    L.push('- 기각 사유:');
+    L.push(`## ${t(M.decision)}`, '');
+    L.push(`- ${t(M.chosen)}: \`${rec.chosen}\` — ${c ? c.title : t(M.goneFromOptions)}`);
+    L.push(`- ${t(M.rationale)}: ${rec.rationale ?? t(M.unstated)}`);
+    L.push(`- ${t(M.rejectedReasons)}:`);
     if (rec.rejected.length === 0) {
-      L.push('  - (없음)');
+      L.push(`  - ${t(M.none)}`);
     } else {
       for (const r of rec.rejected) {
         const o = rec.options.find(x => x.id === r.id);

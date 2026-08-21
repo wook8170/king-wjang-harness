@@ -1,6 +1,6 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 (라운드 2) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 1 (+ deferred 1)
+**갱신** 2026-08-21 (라운드 3-PERF 분편) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1) — 판정 재집계는 라운드 3 본편(i18n 정정) 반영 후
 
 라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
 라운드 2(생성 문서 i18n + CLI 플래그 정합성) — 상세는 `fixes-round2.md`, 닫은 증거는 `evidence/round2-verify.log`.
@@ -17,7 +17,7 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | FEAT-23 | HIGH | 01 | `harness gate feedback` 미구현 — 공개 README 4개 언어 모두가 기능으로 광고한다 | verified | measured | `README.md:88` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
 | UX-24 | HIGH | 02 | `--help`·`-h`·`help`·무인자가 전부 exit 1 「알 수 없는 명령」 — 13개 명령군·60여 하위명령의 진입점이 0 | verified | measured | `core/src/cli.ts:775` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
 | SEC-25 | MED | 06 | 게이트 산출물 경로가 루트 밖(`../../../etc/passwd`·`/etc/hosts`)이어도 제출·승인된다 — 웨이브 id 는 검증하면서 산출물 경로는 안 한다 | verified | measured | `core/src/gate.ts:38` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
-| PERF-26 | MED | 05 | state.json 부재(저널 폴백) + 저널 10만 건에서 pre-tool p95 169ms — G9 목표 150ms 초과 | fixed | measured | `docs/release-readiness/2026-08-21/evidence/latency.log` | `fixes-round1.md` — 기제는 단위 테스트로 확인. **절대 p95 재측정은 조용한 창 필요**(측정 창 load 12~17로 무효) |
+| PERF-26 | MED | 05 | state.json 부재(저널 폴백) + 저널 10만 건에서 pre-tool p95 169ms — G9 목표 150ms 초과 | verified | measured | `docs/release-readiness/2026-08-21/evidence/latency.log` | 라운드 3 재측정 — 폴백 p95 82~101ms < 150ms(2창×정순·역순, 통제 무이상). load<2 조건 편차·채택 사유는 `fixes-round3-perf.md`·latency.log 라운드3 절 |
 | API-27 | MED | 02 | 명령군 절반(gate·adr·doc·wave·node)은 하위명령 목록을 안 알려주고 나머지 절반은 알려준다 | verified | measured | `core/src/cli.ts:219` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
 | SEC-28 | MED | 06 | 인젝션 방어 규칙 `sanitizeUntrusted` 가 두 벌이고 구현이 서로 다르다(정규식 vs 코드포인트 루프) | verified | measured | `core/src/loop.ts:100` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
 | API-29 | MED | 02 | `wave create` 를 인자 없이 부르면 exit 0 으로 목표·마일스톤 없는 `wave-001` 이 생긴다(침묵 성공) | verified | measured | `core/src/cli.ts:649` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |

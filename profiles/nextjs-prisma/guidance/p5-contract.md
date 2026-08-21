@@ -1,38 +1,42 @@
-# P5 CONTRACT — nextjs-prisma 지침
+# P5 CONTRACT — nextjs-prisma guidance
 
-## DB 스키마 = `prisma/schema.prisma`
+## The DB schema IS `prisma/schema.prisma`
 
-P5의 산출물은 문서가 아니라 **스키마 파일 그 자체**다. 별도 문서로 한 번 더 적으면
-두 곳이 갈라지고, 갈라진 순간 어느 쪽이 계약인지 아무도 모른다. 원장에는 스키마 노드가
-파일을 가리키게 하고, 문서에는 **왜 그렇게 나눴는지**(경계·불변식·삭제 정책)만 남긴다.
+The P5 artifact is not a document, it is **the schema file itself**. Writing it out a second
+time in a separate document makes the two diverge, and the moment they diverge nobody knows
+which one is the contract. Have the ledger's schema node point at the file, and keep only the
+**reasoning** in the document (boundaries, invariants, deletion policy).
 
-정해야 할 것:
+What you must decide:
 
-- 관계의 삭제 규칙 (`onDelete: Cascade` / `Restrict` / `SetNull`) — 기본값에 맡기지 마라.
-- 고유 제약(`@@unique`)과 조회 인덱스(`@@index`) — API 계약의 목록 조회 필터에서 역산한다.
-- ID 전략 (cuid / uuid / autoincrement) 과 그것이 URL 에 노출되는지.
-- `DateTime` 의 타임존 취급 — Prisma 는 UTC 로 저장한다. 표시 시점 변환 책임을 명시하라.
+- Deletion rules on relations (`onDelete: Cascade` / `Restrict` / `SetNull`) — do not leave these
+  to the default.
+- Unique constraints (`@@unique`) and lookup indexes (`@@index`) — derive them backwards from the
+  list-query filters in the API contract.
+- The ID strategy (cuid / uuid / autoincrement), and whether it is exposed in URLs.
+- Timezone handling for `DateTime` — Prisma stores UTC. State explicitly who converts at display time.
 
-## 마이그레이션은 배포 명령이다
+## A migration is a deploy command
 
-`prisma migrate deploy` 는 이 프로파일의 `deploy_commands` 에 있다 — 게이트 미승인 상태에서
-훅이 물리 차단한다. 개발 중 스키마 반복은 `prisma migrate dev` 로 한다(차단 대상 아님).
+`prisma migrate deploy` is in this profile's `deploy_commands` — with an unapproved gate the hook
+physically blocks it. Iterate on the schema during development with `prisma migrate dev` (not blocked).
 
-되돌릴 수 없는 마이그레이션(컬럼 삭제·타입 축소)은 P11 배포 계획에 **별도 항목**으로
-올린다. 롤백이 코드 되돌리기로 끝나지 않는 유일한 부류다.
+Irreversible migrations (dropping a column, narrowing a type) go into the P11 deploy plan as a
+**separate item**. They are the one class where rolling back is not just reverting the code.
 
-## API 계약
+## The API contract
 
-App Router 기준 두 표면이 있다. 어느 쪽을 쓰는지 P5에서 확정하라 — 섞으면 에러 규약이
-두 벌이 된다.
+Under App Router there are two surfaces. Settle which one you use at P5 — mixing them gives you
+two sets of error conventions.
 
-- Route Handler (`app/api/**/route.ts`) — 외부 클라이언트·웹훅용.
-- Server Action — 같은 앱 안의 폼 제출용.
+- Route Handler (`app/api/**/route.ts`) — for external clients and webhooks.
+- Server Action — for form submissions inside the same app.
 
-에러 규약은 **한 벌**로 정한다: 형태(`{ error: { code, message, details? } }` 등),
-HTTP 상태 매핑, 검증 실패의 필드 단위 표현. 성공 응답의 날짜·소수 표현도 여기서 못 박는다.
+Define **one** error convention: the shape (`{ error: { code, message, details? } }` or similar),
+the HTTP status mapping, and how validation failures are expressed per field. Pin down date and
+decimal representation in success responses here too.
 
-## Prisma 타입을 API 타입으로 그대로 새지 않게
+## Do not leak Prisma types straight into API types
 
-`prisma.user.findMany()` 결과를 그대로 응답하면 스키마 변경이 곧 API 파괴 변경이 된다.
-경계에서 명시적으로 매핑하고, 그 매핑 타입이 P5 계약의 정본이다.
+Returning the result of `prisma.user.findMany()` as-is makes every schema change an API breaking
+change. Map explicitly at the boundary — that mapped type is the source of truth for the P5 contract.

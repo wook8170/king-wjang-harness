@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { createWave, activateWave, logTurn } from '../src/wave';
 import { handleHook } from '../src/hook';
+import { recordTier } from '../src/usage';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
 
@@ -189,4 +190,65 @@ describe('hook: session-start 주입 격리 하드닝 (SEC-10/11)', () => {
     };
     expect(mk('로그 A')).not.toBe(mk('로그 B'));
   });
+});
+
+/**
+ * 스펙 §10 (token-guard 흡수) — 티어 지침이 **세션에 전달돼야** 흡수가 완성된다.
+ * 원본 훅은 「상승할 때만」 주입했지만 새 세션에는 상승 이력이 없다: 95% 에서 세션이 갈리면
+ * 새 세션은 자기가 임계 근처인 줄 모른 채 평소처럼 크게 벌인다. 그래서 SessionStart 는
+ * 상승이 아니라 **현재 서 있는 티어**를 말한다(§3-6 연속성 불변식).
+ */
+describe('SessionStart — 사용량 티어 주입 (§10)', () => {
+  const ctxOf = (root: string): string => {
+    const out = handleHook(root, 'session-start', { source: 'startup' }) as
+      { hookSpecificOutput?: { additionalContext?: string } } | null;
+    return out?.hookSpecificOutput?.additionalContext ?? '';
+  };
+
+  it('normal 이면 티어 문구를 넣지 않는다 (노이즈 금지)', () => {
+    const root = tmp();
+    initHarness(root);
+    expect(ctxOf(root)).not.toMatch(/사용량|usage at/);
+  });
+
+  it('기록된 티어가 normal 이 아니면 그 티어의 지침을 주입한다', () => {
+    const root = tmp();
+    initHarness(root);
+    recordTier(root, 'settle-every-turn');
+    expect(ctxOf(root)).toContain('95%');
+  });
+
+  it('최고 티어는 임계 지침을 주입한다', () => {
+    const root = tmp();
+    initHarness(root);
+    recordTier(root, 'final-handoff');
+    expect(ctxOf(root)).toContain('99%');
+  });
+});
+
+/**
+ * 턴 로그 헤딩은 **파싱 앵커**다. 지시서 본문이 언어를 따라가면서(`## Turn log` / `## 턴 로그`)
+ * 훅이 한쪽만 찾으면 다른 쪽 프로젝트에서 발췌가 **조용히 빈다** — 이어받기가 가장 중요한
+ * 순간에 아무 말도 안 하는 실패다. `lang` 을 도중에 바꾼 프로젝트의 과거 파일도 계속 읽혀야 한다.
+ */
+describe('SessionStart — 턴 로그 발췌는 언어에 의존하지 않는다', () => {
+  const ctxOf = (root: string): string => {
+    const out = handleHook(root, 'session-start', { source: 'startup' }) as
+      { hookSpecificOutput?: { additionalContext?: string } } | null;
+    return out?.hookSpecificOutput?.additionalContext ?? '';
+  };
+
+  for (const [label, heading] of [['영문', '## Turn log'], ['한국어', '## 턴 로그']] as const) {
+    it(`${heading} 헤딩의 지시서에서도 턴 로그를 읽는다 (${label})`, () => {
+      const root = tmp();
+      initHarness(root);
+      createWave(root, { milestone: 'M1', design_refs: ['F-1'], acceptance: ['ok'], goal: 'g' });
+      activateWave(root, 'wave-001');
+      const p = path.join(root, '.harness', 'waves', 'wave-001.md');
+      const raw = fs.readFileSync(p, 'utf8');
+      // 본문의 턴 로그 헤딩을 대상 언어로 바꿔 쓴다(= 그 언어로 생성된 지시서와 같은 모양).
+      fs.writeFileSync(p, raw.replace(/^## (Turn log|턴 로그)$/m, heading) + '\n- [t] LOGGED_MARKER\n');
+      expect(ctxOf(root)).toContain('LOGGED_MARKER');
+    });
+  }
 });

@@ -361,7 +361,7 @@ describe('adr — 이벤트 저널', () => {
 
 describe('adr — renderAdrPacket', () => {
   it('제안 단계: 질문·선택지 장단점·추천안', () => {
-    const md = renderAdrPacket(propose(setup(), { options: opts(3), recommended: 'opt-2' }));
+    const md = renderAdrPacket(propose(setup(), { options: opts(3), recommended: 'opt-2' }), 'ko');
     expect(md).toContain('기술 스택을 무엇으로 할 것인가');
     expect(md).toContain('선택지 1');
     expect(md).toContain('장점 3');
@@ -378,7 +378,7 @@ describe('adr — renderAdrPacket', () => {
       rationale: '운영 역량이 부족해 관리형을 택한다',
       rejectedReasons: { 'opt-1': '자체 운영 비용 과다', 'opt-3': '팀에 경험 없음' },
     });
-    const md = renderAdrPacket(rec);
+    const md = renderAdrPacket(rec, 'ko');
     expect(md).toContain('## 결정');
     expect(md).toContain('운영 역량이 부족해 관리형을 택한다');
     expect(md).toContain('자체 운영 비용 과다');
@@ -392,5 +392,29 @@ describe('adr — renderAdrPacket', () => {
       chosen: 'Deno + Fresh', rationale: 'r', rejectedReasons: { 'opt-1': 'a', 'opt-2': 'b' },
     });
     expect(renderAdrPacket(rec)).toContain('Deno + Fresh');
+  });
+});
+
+/**
+ * 렌더 패킷은 **생성 문서**다 — 기본 언어(en)에서 한국어가 섞이면 안 된다.
+ * 라운드 2 가 이 파일을 놓쳐 「산출물 한국어 0」 주장이 과했다(USE-59 정정).
+ */
+describe('adr — 영문 기본 출력', () => {
+  it('lang 미지정이면 문서 골격에 한국어가 없다', () => {
+    const root = setup();
+    propose(root, { options: opts(3), recommended: 'opt-2' });
+    const rec = decideAdr(root, 'ADR-1', {
+      chosen: 'opt-2', rationale: 'r', rejectedReasons: { 'opt-1': 'a', 'opt-3': 'b' },
+    });
+    const md = renderAdrPacket(rec); // 기본 en
+    // 사용자가 넣은 값(질문·선택지 제목·장단점)은 한국어일 수 있다 — **라벨만** 본다.
+    const labels = md.split('\n')
+      // `### <선택지 제목>` 과 중첩 불릿(`  - <id> (<제목>): <사유>`)은 사용자 데이터라 제외한다.
+      .filter(l => /^## /.test(l) || /^- /.test(l))
+      .map(l => l.split(':')[0]);
+    expect(labels.join('\n')).not.toMatch(/[가-힣]/);
+    expect(md).toContain('## Decision');
+    expect(md).toContain('## Options');
+    expect(md).toContain('## Recommendation');
   });
 });

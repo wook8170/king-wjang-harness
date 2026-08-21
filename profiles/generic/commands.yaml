@@ -1,10 +1,11 @@
-# generic 명령 매핑 (스펙 §9) — 전부 비어 있다. **사용자가 채워야 한다.**
+# generic command mapping (spec §9) — everything is empty. **You are meant to fill this in.**
 #
-# 빈 문자열 = 미정의. 코어가 "테스트 돌려"라고 물으면 `commandFor` 가 undefined 를 돌려주고,
-# 호출측은 명령을 지어내는 대신 사람에게 묻는다. 스택을 모르면서 그럴듯한 명령을 박아두면
-# P7 CI 그린 판정이 "실행된 적 없는 명령이 실패하지 않았다"로 조용히 통과한다.
+# An empty string means undefined. When the core asks "run the tests", `commandFor` returns
+# undefined and the caller asks a human instead of inventing a command. Nailing down a
+# plausible-looking command for a stack we do not know would let the P7 "CI green" decision
+# pass silently as "a command that never ran did not fail".
 #
-# 채우는 법: 이 파일을 `.harness/profile/commands.yaml` 로 복사한 뒤 값만 채운다.
+# How to fill it in: copy this file to `.harness/profile/commands.yaml` and set the values.
 test: ''
 build: ''
 deploy: ''

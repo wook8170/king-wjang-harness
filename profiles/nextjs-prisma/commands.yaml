@@ -1,5 +1,5 @@
-# nextjs-prisma 명령 매핑 (스펙 §9).
-# 코어의 추상 질문("테스트 돌려")에 대한 구체 답. 값이 비면 "미정의"로 취급된다.
+# nextjs-prisma command mapping (spec §9).
+# Concrete answers to the core's abstract questions ("run the tests"). An empty value means undefined.
 test: npm test
 build: npm run build
 deploy: vercel deploy

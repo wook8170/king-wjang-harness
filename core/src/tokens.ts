@@ -156,7 +156,9 @@ function resolve(doc: TokenDoc, tokenPath: string, mode: Mode, seen: string[] = 
   }
   const raw = rawAt(doc, tokenPath, mode);
   if (raw === undefined) {
-    const from = seen.length ? ` (${seen[seen.length - 1]} 에서 참조)` : '';
+    // 이 함수는 순수 해석기라 root·lang 이 없다 — 주변 메시지와 같이 영어 고정
+    // (i18n 예외 사유는 파일 머리말 참조).
+    const from = seen.length ? ` (referenced from ${seen[seen.length - 1]})` : '';
     throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
   }
   const next = aliasTarget(raw);

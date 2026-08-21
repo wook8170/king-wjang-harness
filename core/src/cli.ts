@@ -157,6 +157,17 @@ export function run(argv: string[], root: string): number {
         initHarness(root);
         appendEvent(root, 'init', {});
         console.log(L('.harness/ initialised — run `harness --help` to see the command map.', '.harness/ 초기화 완료 — `harness --help` 로 명령 지도를 볼 수 있다.'));
+        // 스펙 §12(알려진 한계) 가 "init 시 경고 고지"를 명시한다. 승인 장치는 권한 다이얼로그에
+        // 의존하므로, 사용자가 `harness gate approve` 를 allowlist 에 넣으면 「최종 클릭은 사람」
+        // (§4-3)이 통째로 무력화된다. 이것은 코드로 막을 수 없는 한계라 **처음에 말하는 것**이
+        // 유일한 방어다. stderr 로 보내 stdout 계약(JSON 파싱 가능)을 깨지 않는다.
+        console.error(L(
+          'NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the '
+          + 'permission dialog so that the final approval click is always a human — allowlisting it lets an '
+          + 'agent open gates on its own.',
+          '고지: `harness gate approve` 를 권한 allowlist 에 넣지 마라. 게이트는 권한 다이얼로그에 기대어 '
+          + '「승인의 최종 클릭은 사람」을 지킨다 — allowlist 에 넣으면 에이전트가 스스로 게이트를 열 수 있다.',
+        ));
         return 0;
 
       case 'status':
@@ -351,7 +362,7 @@ export function run(argv: string[], root: string): number {
           const inject = shouldInject(prev, tier);
           if (inject) recordTier(root, tier);
           console.log(JSON.stringify({ percent: pct, tier, previous: prev, inject }, null, 2));
-          if (inject) console.log(guidanceFor(tier));
+          if (inject) console.log(guidanceFor(tier, lang));
           return 0;
         }
         if (sub === 'status') { console.log(JSON.stringify({ lastTier: lastTier(root) }, null, 2)); return 0; }
@@ -361,8 +372,8 @@ export function run(argv: string[], root: string): number {
       case 'migrate': {
         // 사용자의 ~/.claude 를 절대 건드리지 않는다 — 탐지하고 안내만 한다.
         const home = flag([sub, ...rest], 'home') ?? process.env.HOME ?? '';
-        const tools = detectLegacyTools(home);
-        console.log(migrationReport(tools));
+        const tools = detectLegacyTools(home, lang);
+        console.log(migrationReport(tools, lang));
         if (legacyHarnessGitignore(root)) {
           console.log(L('\n⚠ Old `.harness/.runtime/.gitignore` form (bare `*`) detected — it ignores itself too.', '\n⚠ 구 `.harness/.runtime/.gitignore` 형식(`*` 단독) 감지 — 자기 자신도 무시된다.'));
         }
@@ -635,7 +646,7 @@ export function run(argv: string[], root: string): number {
                 return { id: v.slice(0, at), title: v.slice(at + 1), pros: [], cons: [] };
               });
             const rec = proposeAdr(root, { id, phase, question, options, recommended: flag(args, 'recommend') });
-            console.log(renderAdrPacket(rec));
+            console.log(renderAdrPacket(rec, lang));
             return 0;
           }
           case 'decide': {
@@ -654,7 +665,7 @@ export function run(argv: string[], root: string): number {
               rejectedReasons[v.slice(0, at)] = v.slice(at + 1);
             });
             const rec = decideAdr(root, id, { chosen, rationale, rejectedReasons });
-            console.log(renderAdrPacket(rec));
+            console.log(renderAdrPacket(rec, lang));
             return 0;
           }
           case 'revise': {
@@ -671,7 +682,7 @@ export function run(argv: string[], root: string): number {
           case 'show': {
             const rec = getAdr(root, rest[0]);
             if (!rec) throw new Error(L(`No such ADR: ${rest[0]}`, `ADR 없음: ${rest[0]}`));
-            console.log(renderAdrPacket(rec));
+            console.log(renderAdrPacket(rec, lang));
             return 0;
           }
           case 'list': console.log(JSON.stringify(listAdrs(root), null, 2)); return 0;

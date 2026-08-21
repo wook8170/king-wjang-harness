@@ -169,8 +169,12 @@ export function activateWave(root: string, id: string): void {
     // 목록 확인 경로를 알려준다. 파싱 오류 등 다른 실패는 원인을 감추지 않도록 그대로 던진다.
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     throw new Error(
-      `웨이브 ${id} 지시서가 없다 (${wavePath(root, id)}) — `
-      + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
+      tr(root, {
+        en: `No instruction sheet for wave ${id} (${wavePath(root, id)}) — check the id, or list them `
+          + 'with `harness wave list`',
+        ko: `웨이브 ${id} 지시서가 없다 (${wavePath(root, id)}) — `
+          + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
+      }),
     );
   }
   if (meta.status === 'done') throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} 는 이미 done 이다` }));
@@ -193,9 +197,14 @@ function readActiveWave(root: string, id: string): { meta: WaveMeta; body: strin
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     throw new Error(
-      `활성 웨이브 ${id} 의 지시서가 없다 (${wavePath(root, id)}) — `
-      + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
-      + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라.',
+      tr(root, {
+        en: `The instruction sheet for the active wave ${id} is missing (${wavePath(root, id)}) — it may be `
+          + 'temporarily absent (a git branch switch, say), so restoring the file comes first. If it really '
+          + 'is lost, settle activeWave to null with `harness doctor --repair`.',
+        ko: `활성 웨이브 ${id} 의 지시서가 없다 (${wavePath(root, id)}) — `
+          + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
+          + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라.',
+      }),
     );
   }
 }
@@ -221,8 +230,13 @@ export function completeWave(root: string): void {
     const files = evidenceFiles(root, id); // createWave 의 잔존 증적 가드와 같은 기준
     if (files.length === 0) {
       throw new Error(
-        `UX 노드(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')})를 참조하는 웨이브는 ` +
-        `시각 증적 없이 완료할 수 없다. ${dir} 에 스크린샷을 넣어라.`,
+        tr(root, {
+          en: `A wave referencing UX nodes `
+            + `(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')}) cannot be completed without `
+            + `visual evidence. Put a screenshot in ${dir}.`,
+          ko: `UX 노드(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')})를 참조하는 웨이브는 `
+            + `시각 증적 없이 완료할 수 없다. ${dir} 에 스크린샷을 넣어라.`,
+        }),
       );
     }
   }

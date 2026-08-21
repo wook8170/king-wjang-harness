@@ -284,7 +284,9 @@ describe('cli', () => {
     expect(run(['node', 'bump', 'F-1'], root)).toBe(0);
     q.restore();
     expect(readState(root).activeWave).toBe('wave-002'); // 활성 웨이브는 그대로
-    expect(q.errs.join('\n')).toBe('');
+    // stderr 가 통째로 비었는지가 아니라 **가드 해제 경고가 없는지**를 본다 — init 이 내는
+    // allowlist 고지(§12)처럼 무관한 stderr 가 늘어도 이 계약은 그대로여야 한다.
+    expect(q.errs.join('\n')).not.toMatch(/STALE|가드|guard/i);
   });
 
   it('원장에 없는 --refs 는 전부 나열해 거부한다', () => {

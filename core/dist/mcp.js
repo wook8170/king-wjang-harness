@@ -7756,14 +7756,33 @@ function readGateFeedback(root, phase) {
   }
 }
 function verifyGate(root, phase) {
+  const t = (m) => tr(root, m);
   const g = readState(root).gates[phase];
-  if (!g || g.status === "pending") return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4` };
-  if (g.status === "invalidated") {
-    return { ok: false, reason: g.invalidatedReason ?? `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4` };
+  if (!g || g.status === "pending") {
+    return { ok: false, reason: t({
+      en: `there is no record for gate ${phase} \u2014 it has not been submitted`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4`
+    }) };
   }
-  if (!g.artifactHash) return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4` };
+  if (g.status === "invalidated") {
+    return { ok: false, reason: g.invalidatedReason ?? t({
+      en: `gate ${phase} is invalidated`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4`
+    }) };
+  }
+  if (!g.artifactHash) {
+    return { ok: false, reason: t({
+      en: `gate ${phase} has no pinned artifact hash`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4`
+    }) };
+  }
   const paths = recordedPaths(root, phase);
-  if (!paths) return { ok: false, reason: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694` };
+  if (!paths) {
+    return { ok: false, reason: t({
+      en: `the submission history for gate ${phase} is not in the journal \u2014 resubmit`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694`
+    }) };
+  }
   let hash;
   try {
     hash = computeArtifactHash(root, paths);
@@ -7773,7 +7792,10 @@ function verifyGate(root, phase) {
   if (hash !== g.artifactHash) {
     return {
       ok: false,
-      reason: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
+      reason: t({
+        en: `artifact hash mismatch \u2014 pinned ${g.artifactHash.slice(0, 12)} \u2260 current ${hash.slice(0, 12)} (paths: ${paths.join(", ")})`,
+        ko: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
+      })
     };
   }
   return { ok: true };
@@ -7910,7 +7932,10 @@ function activateWave(root, id) {
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
     throw new Error(
-      `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
+      tr(root, {
+        en: `No instruction sheet for wave ${id} (${wavePath(root, id)}) \u2014 check the id, or list them with \`harness wave list\``,
+        ko: `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
+      })
     );
   }
   if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
@@ -7925,7 +7950,10 @@ function readActiveWave(root, id) {
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
     throw new Error(
-      `\uD65C\uC131 \uC6E8\uC774\uBE0C ${id} \uC758 \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C.`
+      tr(root, {
+        en: `The instruction sheet for the active wave ${id} is missing (${wavePath(root, id)}) \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\`.`,
+        ko: `\uD65C\uC131 \uC6E8\uC774\uBE0C ${id} \uC758 \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C.`
+      })
     );
   }
 }
@@ -7949,7 +7977,10 @@ function completeWave(root) {
     const files = evidenceFiles(root, id);
     if (files.length === 0) {
       throw new Error(
-        `UX \uB178\uB4DC(${meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ")})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801 \uC5C6\uC774 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4. ${dir} \uC5D0 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB123\uC5B4\uB77C.`
+        tr(root, {
+          en: `A wave referencing UX nodes (${meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ")}) cannot be completed without visual evidence. Put a screenshot in ${dir}.`,
+          ko: `UX \uB178\uB4DC(${meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ")})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801 \uC5C6\uC774 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4. ${dir} \uC5D0 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB123\uC5B4\uB77C.`
+        })
       );
     }
   }
@@ -8911,6 +8942,7 @@ var isPristine = (s) => {
   return COMPARED_FIELDS.every((f2) => JSON.stringify(s[f2]) === JSON.stringify(d[f2]));
 };
 function runDoctor(root, opts = {}) {
+  const t = (m) => tr(root, m);
   const issues = [];
   const warnings = [];
   const notes = [];
@@ -8919,40 +8951,60 @@ function runDoctor(root, opts = {}) {
   const replayed = replayState(events);
   let current = null;
   if (!fs14.existsSync(statePath(root))) {
-    issues.push("state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694");
+    issues.push(t({
+      en: "state.json is missing \u2014 it must be rebuilt by replaying the journal",
+      ko: "state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694"
+    }));
   } else {
     try {
       const parsed = readState(root);
-      if (typeof parsed !== "object" || parsed === null) throw new Error("object \uC544\uB2D8");
+      if (typeof parsed !== "object" || parsed === null) throw new Error("not an object");
       current = parsed;
     } catch {
-      issues.push("state.json \uC190\uC0C1 \u2014 \uD30C\uC2F1 \uBD88\uAC00");
+      issues.push(t({ en: "state.json is damaged \u2014 cannot parse", ko: "state.json \uC190\uC0C1 \u2014 \uD30C\uC2F1 \uBD88\uAC00" }));
     }
   }
   let trustworthy = true;
   if (!journalExists) {
-    warnings.push("events.jsonl \uBD80\uC7AC \u2014 \uC7AC\uC0DD\uD560 \uC99D\uAC70\uAC00 \uC5C6\uB2E4");
+    warnings.push(t({
+      en: "events.jsonl is missing \u2014 there is no evidence to replay",
+      ko: "events.jsonl \uBD80\uC7AC \u2014 \uC7AC\uC0DD\uD560 \uC99D\uAC70\uAC00 \uC5C6\uB2E4"
+    }));
     trustworthy = false;
   }
   if (corruptLines > 0) {
-    warnings.push(`events.jsonl ${corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uBD88\uC644\uC804`);
+    warnings.push(t({
+      en: `${corruptLines} line(s) of events.jsonl are corrupt \u2014 the replay is incomplete`,
+      ko: `events.jsonl ${corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uBD88\uC644\uC804`
+    }));
     trustworthy = false;
   }
   const unknown = events.filter((e) => !KNOWN_EVENT_TYPES.has(e.type));
   if (unknown.length > 0) {
     const types = [...new Set(unknown.map((e) => e.type))].join(", ");
-    warnings.push(`\uBBF8\uC9C0 \uC774\uBCA4\uD2B8 \uD0C0\uC785 ${unknown.length}\uAC74(${types}) \u2014 \uC7AC\uC0DD \uACB0\uACFC \uBD88\uC2E0(\uBC84\uC804 \uC2A4\uD050 \uAC00\uB2A5)`);
+    warnings.push(t({
+      en: `${unknown.length} event(s) of unknown type (${types}) \u2014 the replay result is untrustworthy (possible version skew)`,
+      ko: `\uBBF8\uC9C0 \uC774\uBCA4\uD2B8 \uD0C0\uC785 ${unknown.length}\uAC74(${types}) \u2014 \uC7AC\uC0DD \uACB0\uACFC \uBD88\uC2E0(\uBC84\uC804 \uC2A4\uD050 \uAC00\uB2A5)`
+    }));
     trustworthy = false;
   }
   if (journalExists && events.length === 0 && current && !isPristine(current)) {
-    warnings.push("\uC800\uB110\uC774 \uBE44\uC5B4 \uC788\uC73C\uB098 state \uB294 \uC9C4\uD589 \uC0C1\uD0DC \u2014 \uC808\uB2E8 \uC758\uC2EC");
+    warnings.push(t({
+      en: "the journal is empty but state shows progress \u2014 suspect truncation",
+      ko: "\uC800\uB110\uC774 \uBE44\uC5B4 \uC788\uC73C\uB098 state \uB294 \uC9C4\uD589 \uC0C1\uD0DC \u2014 \uC808\uB2E8 \uC758\uC2EC"
+    }));
     trustworthy = false;
   }
   if (current) {
     for (const field of COMPARED_FIELDS) {
       const a = JSON.stringify(current[field]);
       const b = JSON.stringify(replayed[field]);
-      if (a !== b) issues.push(`${field} \uBD88\uC77C\uCE58: state=${a}, \uC774\uBCA4\uD2B8 \uC7AC\uC0DD=${b}`);
+      if (a !== b) {
+        issues.push(t({
+          en: `${field} mismatch: state=${a}, journal replay=${b}`,
+          ko: `${field} \uBD88\uC77C\uCE58: state=${a}, \uC774\uBCA4\uD2B8 \uC7AC\uC0DD=${b}`
+        }));
+      }
     }
   }
   const effective = current ?? replayed;
@@ -8973,10 +9025,15 @@ function runDoctor(root, opts = {}) {
     );
   }
   const swept = sweepOrphanTmp(root);
-  if (swept > 0) notes.push(`\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC`);
+  if (swept > 0) {
+    notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC` }));
+  }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    warnings.push(`\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778 \uD655\uC778 \uD544\uC694`);
+    warnings.push(t({
+      en: `${hookErrors} hook decision failure(s) recorded \u2014 find out why`,
+      ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778 \uD655\uC778 \uD544\uC694`
+    }));
   }
   let repaired = false;
   let refused = false;
@@ -9014,7 +9071,10 @@ function runDoctor(root, opts = {}) {
     const log = path13.join(runtimeDir(root), "hook-errors.log");
     try {
       fs14.renameSync(log, `${log}.prev`);
-      notes.push(`hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`);
+      notes.push(t({
+        en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
+        ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
+      }));
     } catch {
     }
   }
@@ -9027,7 +9087,7 @@ var NO_ARGS = { type: "object", properties: {} };
 var phaseProp = {
   type: "string",
   enum: [...PHASES],
-  description: "\uD398\uC774\uC988 ID (P0~P12)"
+  description: "Phase id (P0\u2013P12)"
 };
 var strArrProp = (description) => ({
   type: "array",
@@ -9038,7 +9098,7 @@ function toolDefinitions() {
   return [
     {
       name: "harness_status",
-      description: "\uD558\uB124\uC2A4 \uC0C1\uD0DC(\uD604\uC7AC \uD398\uC774\uC988\xB7\uD65C\uC131 \uC6E8\uC774\uBE0C\xB7\uAC8C\uC774\uD2B8\xB7\uC5ED\uD589)\uB97C JSON \uC73C\uB85C \uC870\uD68C\uD55C\uB2E4.",
+      description: "Read harness state (current phase, active wave, gates, backtrack) as JSON.",
       inputSchema: NO_ARGS
     },
     {
@@ -9048,11 +9108,11 @@ function toolDefinitions() {
         type: "object",
         properties: {
           phase: phaseProp,
-          paths: strArrProp("\uC2EC\uC0AC\uBC1B\uC744 \uC0B0\uCD9C\uBB3C \uACBD\uB85C(\uB8E8\uD2B8 \uAE30\uC900 \uC0C1\uB300\uACBD\uB85C). \uCD5C\uC18C 1\uAC1C \uD544\uC694."),
+          paths: strArrProp("Artifact paths to review, relative to the project root. At least one is required."),
           evidence: {
             type: "string",
             enum: [...EVIDENCE_GRADES],
-            description: "\uADFC\uAC70 \uB4F1\uAE09. \uAE30\uBCF8 claimed. \uCD9C\uD558 \uD2B8\uB799(P10~P12)\uC740 measured \uB9CC \uD1B5\uACFC\uD55C\uB2E4."
+            description: "Evidence grade. Defaults to claimed. The ship track (P10\u2013P12) passes on measured only."
           }
         },
         required: ["phase", "paths"]
@@ -9068,7 +9128,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_gate_status",
-      description: "\uD398\uC774\uC988\uBCC4 \uAC8C\uC774\uD2B8 \uB808\uCF54\uB4DC(\uC0C1\uD0DC\xB7\uD574\uC2DC\xB7\uADFC\uAC70 \uB4F1\uAE09\xB7\uC2B9\uC778 \uC2DC\uAC01)\uB97C JSON \uC73C\uB85C \uC870\uD68C\uD55C\uB2E4.",
+      description: "Read the per-phase gate records (status, hash, evidence grade, approval time) as JSON.",
       inputSchema: NO_ARGS
     },
     {
@@ -9077,55 +9137,55 @@ function toolDefinitions() {
       inputSchema: {
         type: "object",
         properties: {
-          milestone: { type: "string", description: "\uC18C\uC18D \uB9C8\uC77C\uC2A4\uD1A4 (\uC608: M2-\uACB0\uC81C)" },
-          goal: { type: "string", description: "\uC774 \uC6E8\uC774\uBE0C\uC758 \uBAA9\uD45C \uD55C \uC904" },
-          design_refs: strArrProp("\uAD6C\uD604 \uB300\uC0C1 \uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC ID (\uC608: F-12, API-23)"),
-          acceptance: strArrProp("\uC644\uB8CC \uAE30\uC900")
+          milestone: { type: "string", description: "Milestone this wave belongs to (e.g. M2-checkout)" },
+          goal: { type: "string", description: "One line stating what this wave finishes" },
+          design_refs: strArrProp("Design-ledger node ids this wave implements (e.g. F-12, API-23)"),
+          acceptance: strArrProp("Acceptance criteria")
         }
       }
     },
     {
       name: "harness_wave_activate",
-      description: "\uC6E8\uC774\uBE0C\uB97C \uD65C\uC131\uD654\uD55C\uB2E4. \uB3D9\uC2DC\uC5D0 \uD558\uB098\uB9CC \uD65C\uC131 \uAC00\uB2A5\uD558\uB2E4.",
+      description: "Activate a wave. Only one can be active at a time.",
       inputSchema: {
         type: "object",
-        properties: { id: { type: "string", description: "\uC6E8\uC774\uBE0C ID (\uC608: wave-012)" } },
+        properties: { id: { type: "string", description: "Wave id (e.g. wave-012)" } },
         required: ["id"]
       }
     },
     {
       name: "harness_wave_update",
-      description: "\uD65C\uC131 \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uC758 \uD134 \uB85C\uADF8\uC5D0 \uD55C \uC904 \uAE30\uB85D\uD55C\uB2E4(\uD55C \uC77C + \uB2E4\uC74C \uD560 \uC77C). \uBE48 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uB41C\uB2E4.",
+      description: "Append one line to the active wave's turn log (what you did + what is next). Empty text is refused.",
       inputSchema: {
         type: "object",
-        properties: { text: { type: "string", description: "\uD134 \uB85C\uADF8 \uB0B4\uC6A9" } },
+        properties: { text: { type: "string", description: "Turn log entry" } },
         required: ["text"]
       }
     },
     {
       name: "harness_wave_complete",
-      description: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uB97C \uC644\uB8CC \uCC98\uB9AC\uD55C\uB2E4. UX \uB178\uB4DC\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uC73C\uBA74 \uAC70\uBD80\uB41C\uB2E4.",
+      description: "Complete the active wave. A wave referencing UX nodes is refused without visual evidence.",
       inputSchema: NO_ARGS
     },
     {
       name: "harness_wave_list",
-      description: "\uBAA8\uB4E0 \uC6E8\uC774\uBE0C\uC758 frontmatter(ID\xB7\uB9C8\uC77C\uC2A4\uD1A4\xB7\uC124\uACC4 \uCC38\uC870\xB7\uC0C1\uD0DC\xB7\uC644\uB8CC \uAE30\uC900)\uB97C JSON \uC73C\uB85C \uC870\uD68C\uD55C\uB2E4.",
+      description: "Read every wave's frontmatter (id, milestone, design refs, status, acceptance) as JSON.",
       inputSchema: NO_ARGS
     },
     {
       name: "harness_node_upsert",
-      description: "\uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4. version \uC740 \uBCF4\uC874\uB418\uBA70 \uAC1C\uC815\uC740 harness_node_bump \uB85C \uD55C\uB2E4.",
+      description: "Create or update a design-ledger node. The version is preserved; revise with harness_node_bump.",
       inputSchema: {
         type: "object",
         properties: {
-          id: { type: "string", description: "\uB178\uB4DC ID (C-x/D-x/M-x/F-x/UX-x/API-x/SCH-x/DS-*/ADR-x)" },
-          title: { type: "string", description: "\uB178\uB4DC \uC81C\uBAA9" },
-          parent: { type: "string", description: "\uC0C1\uC704 \uB178\uB4DC ID" },
-          doc_anchor: { type: "string", description: "\uC815\uBCF8 \uC704\uCE58 (\uD30C\uC77C#\uD5E4\uB529)" },
+          id: { type: "string", description: "Node id (C-x/D-x/M-x/F-x/UX-x/API-x/SCH-x/DS-*/ADR-x)" },
+          title: { type: "string", description: "Node title" },
+          parent: { type: "string", description: "Parent node id" },
+          doc_anchor: { type: "string", description: "Where the canonical text lives (file#heading)" },
           status: {
             type: "string",
             enum: [...LEDGER_STATUSES],
-            description: "\uB178\uB4DC \uC0C1\uD0DC. \uBBF8\uC9C0\uC815\uC774\uBA74 \uAE30\uC874 \uAC12(\uC5C6\uC73C\uBA74 draft) \uC720\uC9C0."
+            description: "Node status. If omitted, the existing value is kept (draft when there is none)."
           }
         },
         required: ["id", "title"]
@@ -9136,7 +9196,7 @@ function toolDefinitions() {
       description: "Revise a design node (version++, stale) and propagate STALE to every wave that cites it, including completed ones, so they land in the cross-check queue.",
       inputSchema: {
         type: "object",
-        properties: { id: { type: "string", description: "\uAC1C\uC815\uD560 \uB178\uB4DC ID" } },
+        properties: { id: { type: "string", description: "Id of the node to revise" } },
         required: ["id"]
       }
     },
@@ -9145,18 +9205,18 @@ function toolDefinitions() {
       description: "Design\u2192wave\u2192code trace (\xA73-2). Joins the node with the waves that cite it in design_refs and the registered documents that link it via linkedNodes.",
       inputSchema: {
         type: "object",
-        properties: { node_id: { type: "string", description: "\uCD94\uC801\uD560 \uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC ID" } },
+        properties: { node_id: { type: "string", description: "Design-ledger node id to trace" } },
         required: ["node_id"]
       }
     },
     {
       name: "harness_report_rtm",
-      description: "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)\uB97C \uB9C8\uD06C\uB2E4\uC6B4\uC73C\uB85C \uB80C\uB354\uB9C1\uD55C\uB2E4.",
+      description: "Render the requirements traceability matrix (RTM) as markdown.",
       inputSchema: NO_ARGS
     },
     {
       name: "harness_report_hub",
-      description: "\uC0B0\uCD9C\uBB3C \uD5C8\uBE0C(\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC + \uC544\uD2F0\uD329\uD2B8 URL \uC0C9\uC778)\uB97C \uB9C8\uD06C\uB2E4\uC6B4\uC73C\uB85C \uB80C\uB354\uB9C1\uD55C\uB2E4.",
+      description: "Render the artifact hub (document registry + artifact URL index) as markdown.",
       inputSchema: NO_ARGS
     },
     {
@@ -9166,12 +9226,12 @@ function toolDefinitions() {
     },
     {
       name: "harness_doctor",
-      description: "\uC0C1\uD0DC \uC800\uC7A5\uC18C\uB97C \uC9C4\uB2E8\uD55C\uB2E4. repair \uB85C \uC774\uBCA4\uD2B8 \uC800\uB110 \uC7AC\uC0DD \uAE30\uBC18 \uBCF5\uAD6C\uB97C \uC2DC\uB3C4\uD55C\uB2E4.",
+      description: "Diagnose the state store. With repair, attempt recovery by replaying the event journal.",
       inputSchema: {
         type: "object",
         properties: {
-          repair: { type: "boolean", description: "\uC800\uB110 \uC7AC\uC0DD\uC73C\uB85C state.json \uBCF5\uAD6C \uC2DC\uB3C4" },
-          force: { type: "boolean", description: "\uC800\uB110\uC744 \uC2E0\uB8B0\uD560 \uC218 \uC5C6\uC5B4\uB3C4 \uBCF5\uAD6C \uAC15\uD589" }
+          repair: { type: "boolean", description: "Rebuild state.json by replaying the journal" },
+          force: { type: "boolean", description: "Repair even when the journal cannot be trusted" }
         }
       }
     }
@@ -9319,7 +9379,10 @@ Approve in the terminal with \`harness gate approve ${phase}\` \u2014 the final 
         }
       }
       const marked = affectedWaves.filter((w) => !failed.includes(w));
-      const head = `${node.id} v${node.version} \u2014 STALE \uC6E8\uC774\uBE0C: ${marked.join(", ") || "\uC5C6\uC74C"}`;
+      const head = `${node.id} v${node.version} \u2014 ${pick({
+        en: `STALE waves: ${marked.join(", ") || "none"}`,
+        ko: `STALE \uC6E8\uC774\uBE0C: ${marked.join(", ") || "\uC5C6\uC74C"}`
+      }, langFor(root))}`;
       const incomplete = [...unverifiable, ...failed];
       if (incomplete.length > 0) {
         return fail(`${head}

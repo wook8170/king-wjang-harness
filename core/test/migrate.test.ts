@@ -66,9 +66,14 @@ describe('migrationReport', () => {
   it('변경했다고 주장하지 않는다 — 안내 전용', () => {
     const home = tmpHome();
     fs.mkdirSync(path.join(home, '.claude/handoff-guard'), { recursive: true });
-    const report = migrationReport(detectLegacyTools(home));
-    expect(report).toContain('안내');
-    expect(report).not.toMatch(/해제했|삭제했|수정했|변경했|제거했/);
+    const ko = migrationReport(detectLegacyTools(home, 'ko'), 'ko');
+    expect(ko).toContain('안내');
+    expect(ko).not.toMatch(/해제했|삭제했|수정했|변경했|제거했/);
+    // 기본(en)도 같은 계약이어야 한다 — 안내일 뿐 아무것도 바꾸지 않았다고 말한다.
+    const en = migrationReport(detectLegacyTools(home));
+    expect(en).toMatch(/advice only/);
+    expect(en).not.toMatch(/[가-힣]/);
+    expect(en).not.toMatch(/\b(removed|deleted|edited|changed)\b/i);
   });
 
   it('발견이 없으면 없다고 말한다', () => {

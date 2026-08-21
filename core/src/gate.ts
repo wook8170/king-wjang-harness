@@ -22,6 +22,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
 import { tr } from './tr';
+import type { Msg } from './i18n';
 import { packetsDir } from './paths';
 import { sanitizeUntrusted } from './untrusted';
 import { readState, writeState } from './state';
@@ -231,7 +232,8 @@ export function recordGateFeedback(root: string, phase: Phase, raw: string): num
   fs.mkdirSync(packetsDir(root), { recursive: true });
   fs.appendFileSync(
     feedbackPath(root, phase),
-    `\n## ${ev.ts} — ${lines.length}건\n\n${lines.map(l => `- ${l}`).join('\n')}\n`,
+    `\n## ${ev.ts} — ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}건` })}\n\n`
+    + `${lines.map(l => `- ${l}`).join('\n')}\n`,
   );
   return lines.length;
 }
@@ -250,14 +252,31 @@ export interface GateVerdict {
  * 사유를 담은 ok=false 다(무효화 사유로 그대로 쓰인다).
  */
 export function verifyGate(root: string, phase: Phase): GateVerdict {
+  const t = (m: Msg): string => tr(root, m);
   const g = readState(root).gates[phase];
-  if (!g || g.status === 'pending') return { ok: false, reason: `게이트 ${phase} 기록이 없다 — 제출 전이다` };
-  if (g.status === 'invalidated') {
-    return { ok: false, reason: g.invalidatedReason ?? `게이트 ${phase} 가 무효화된 상태다` };
+  if (!g || g.status === 'pending') {
+    return { ok: false, reason: t({
+      en: `there is no record for gate ${phase} — it has not been submitted`,
+      ko: `게이트 ${phase} 기록이 없다 — 제출 전이다`,
+    }) };
   }
-  if (!g.artifactHash) return { ok: false, reason: `게이트 ${phase} 에 고정된 산출물 해시가 없다` };
+  if (g.status === 'invalidated') {
+    return { ok: false, reason: g.invalidatedReason ?? t({
+      en: `gate ${phase} is invalidated`, ko: `게이트 ${phase} 가 무효화된 상태다`,
+    }) };
+  }
+  if (!g.artifactHash) {
+    return { ok: false, reason: t({
+      en: `gate ${phase} has no pinned artifact hash`, ko: `게이트 ${phase} 에 고정된 산출물 해시가 없다`,
+    }) };
+  }
   const paths = recordedPaths(root, phase);
-  if (!paths) return { ok: false, reason: `게이트 ${phase} 의 제출 이력이 저널에 없다 — 재제출 필요` };
+  if (!paths) {
+    return { ok: false, reason: t({
+      en: `the submission history for gate ${phase} is not in the journal — resubmit`,
+      ko: `게이트 ${phase} 의 제출 이력이 저널에 없다 — 재제출 필요`,
+    }) };
+  }
   let hash: string;
   try {
     hash = computeArtifactHash(root, paths);
@@ -267,8 +286,12 @@ export function verifyGate(root: string, phase: Phase): GateVerdict {
   if (hash !== g.artifactHash) {
     return {
       ok: false,
-      reason: `산출물 해시 불일치 — 고정 ${g.artifactHash.slice(0, 12)} ≠ 현재 ${hash.slice(0, 12)} `
-        + `(대상: ${paths.join(', ')})`,
+      reason: t({
+        en: `artifact hash mismatch — pinned ${g.artifactHash.slice(0, 12)} ≠ current ${hash.slice(0, 12)} `
+          + `(paths: ${paths.join(', ')})`,
+        ko: `산출물 해시 불일치 — 고정 ${g.artifactHash.slice(0, 12)} ≠ 현재 ${hash.slice(0, 12)} `
+          + `(대상: ${paths.join(', ')})`,
+      }),
     };
   }
   return { ok: true };
@@ -286,7 +309,9 @@ export function invalidateStaleGates(root: string): Phase[] {
     if (!g || (g.status !== 'submitted' && g.status !== 'approved')) continue;
     const verdict = verifyGate(root, phase);
     if (verdict.ok) continue;
-    const reason = verdict.reason ?? '산출물 검증 실패';
+    const reason = verdict.reason ?? tr(root, {
+    en: 'artifact verification failed', ko: '산출물 검증 실패',
+  });
     // 순서 계약: 저널 먼저. 아래 writeState 는 이 루프가 끝난 뒤 한 번만 수행한다.
     appendEvent(root, 'gate-invalidated', { phase, prevStatus: g.status, reason });
     state.gates[phase] = { ...g, status: 'invalidated', invalidatedReason: reason };

@@ -1,25 +1,27 @@
-# generic — 스택을 모를 때의 바닥(floor) 프로파일 (스펙 §9).
+# generic — the floor profile for when the stack is unknown (spec §9).
 #
-# 코어는 "무엇을", 프로파일은 "어떻게". generic 은 그 "어떻게"를 최소한만 안다:
-# 어디가 소스인지에 대한 보수적 추정과, 어떤 명령이 배포인지에 대한 보수적 목록.
-# 명령 매핑(commands.yaml)은 비어 있다 — 스택을 모르면서 `npm test` 를 지어내는 것보다
-# "미정의"라고 답하는 편이 정직하고, 코어는 미정의를 사람에게 물어보는 신호로 쓴다.
+# The core knows "what", a profile knows "how". generic knows the bare minimum of that "how":
+# a conservative guess at where the source lives, and a conservative list of deploy commands.
+# The command mapping (commands.yaml) is empty — answering "undefined" is more honest than
+# inventing `npm test` for a stack we do not know, and the core treats undefined as a signal
+# to ask a human.
 #
-# 스펙 §12(정직 고지): 프로파일이 얇으면 §4-2 차단 매트릭스의 정밀도가 떨어진다.
-# 커스텀 스택이라면 이 파일을 본떠 `.harness/profile/` 에 프로젝트 로컬 프로파일을 만들어라.
+# Spec §12 (honest limitations): a thin profile makes the §4-2 block matrix less precise.
+# For a custom stack, copy this file into `.harness/profile/` as a project-local profile.
 name: generic
-description: 스택 미확정·번들 프로파일 밖 스택을 위한 최소 프로파일. 명령 매핑은 사용자가 채운다.
+description: Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.
 
-# 설계 트랙(P0~P6)에서 Write/Edit 를 물리 차단할 경로(§4-2). 관례적 소스 루트만 담는다.
+# Paths where Write/Edit is physically blocked on the design track (P0–P6, §4-2).
+# Conventional source roots only.
 source_globs:
   - src/**
   - lib/**
   - app/**
 
-# 설계 트랙·게이트 미승인 상태에서 차단할 배포 명령(§4-2).
-# core/src/config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 같은 목록을 유지한다 —
-# 두 곳이 갈라지면 "config 기본값으로는 막히는데 프로파일로는 안 막힌다"가 되어
-# 어느 쪽이 정본인지 아무도 모르게 된다.
+# Deploy commands blocked on the design track and while a gate is unapproved (§4-2).
+# Keep this list identical to DEFAULT_CONFIG.design_blocked_bash in core/src/config.ts —
+# if the two diverge you get "blocked by the config default but not by the profile",
+# and nobody can tell which one is authoritative.
 deploy_commands:
   - docker push
   - kubectl apply
@@ -27,7 +29,7 @@ deploy_commands:
   - netlify deploy
   - fly deploy
 
-# P4 승인 후 동결할 디자인 시스템 디렉토리(§7). 스택을 모르면 얼릴 자리도 모른다 —
-# 빈 목록 = 아무것도 얼지 않음. 프로젝트 로컬 프로파일에서 채워라.
-# 글롭이 아니라 디렉토리 접두사를 적는다(예: src/components/ui). 판정은 isFrozenPath 가 한다.
+# Design-system directories frozen after the P4 approval (§7). If the stack is unknown, so is
+# the place to freeze — an empty list means nothing freezes. Fill this in a project-local profile.
+# Write directory prefixes, not globs (e.g. src/components/ui); isFrozenPath does the matching.
 design_system_roots: []

@@ -1,10 +1,10 @@
-# nextjs-prisma — v1 동봉 실전 프로파일 (스펙 §9).
+# nextjs-prisma — the real-world profile bundled with v1 (spec §9).
 #
-# Next.js(App Router) + Prisma + Playwright. src/ 배치와 루트 배치(app/·components/)를
-# 둘 다 담는다 — 두 관례가 실제로 공존하고, 한쪽만 담으면 다른 배치의 프로젝트에서
-# §4-2 소스 쓰기 차단이 통째로 헛돈다.
+# Next.js (App Router) + Prisma + Playwright. It covers both the src/ layout and the
+# root layout (app/, components/) — both conventions genuinely coexist, and covering only
+# one leaves the §4-2 source-write block doing nothing on projects using the other.
 name: nextjs-prisma
-description: Next.js(App Router) + Prisma + Playwright 스택. src/ 배치와 루트 배치를 모두 커버한다.
+description: Next.js (App Router) + Prisma + Playwright stack. Covers both the src/ layout and the root layout.
 
 source_globs:
   - src/**
@@ -12,8 +12,8 @@ source_globs:
   - prisma/**
   - components/**
 
-# 배포 명령(§4-2). "그 명령의 부분문자열이면 배포"로 판정하므로 접미 플래그는 적지 않는다 —
-# `vercel deploy` 하나가 `vercel deploy --prod` 를 이미 잡는다.
+# Deploy commands (§4-2). Matching is "the command contains this substring", so do not write
+# trailing flags — `vercel deploy` already catches `vercel deploy --prod`.
 deploy_commands:
   - vercel deploy
   - vercel --prod
@@ -21,9 +21,9 @@ deploy_commands:
   - docker push
   - fly deploy
 
-# P4 승인 후 동결 대상(§7). shadcn/ui 관례(components/ui)를 두 배치 모두에서 잡는다.
-# **글롭이 아니라 디렉토리 접두사다** — 판정은 core/src/tokens.ts 의 isFrozenPath 하나가 하고
-# 그건 접두사 대조라, `/**` 를 붙이면 동결이 조용히 아무것도 안 얼린다.
+# Frozen after the P4 approval (§7). Catches the shadcn/ui convention (components/ui) in both layouts.
+# **These are directory prefixes, not globs** — the single matcher is isFrozenPath in
+# core/src/tokens.ts and it compares prefixes, so adding `/**` makes the freeze silently freeze nothing.
 design_system_roots:
   - src/components/ui
   - components/ui

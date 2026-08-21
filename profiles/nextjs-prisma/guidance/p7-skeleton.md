@@ -1,36 +1,39 @@
-# P7 SKELETON — nextjs-prisma 지침
+# P7 SKELETON — nextjs-prisma guidance
 
-목표 상태는 하나다: **"빈 껍데기가 배포를 통과한다."** 기능은 없고 파이프라인은 산다.
+There is one target state: **"an empty shell passes deployment."** No features, live pipeline.
 
-## 이 스택에서의 완료 조건
+## Completion conditions in this stack
 
-- `npm run build` 그린 (`commands.yaml: build`)
-- `npm test` 그린 — 테스트가 0건이면 안 된다. 스모크 1건이라도 실제로 돌아야
-  "통과"가 "실행된 적 없음"과 구별된다.
-- `npx playwright test` 그린 — UX 노드 → 시나리오 1:1 변환의 **껍데기**가 전부 존재.
-  각 시나리오는 화면이 뜨는지까지만 확인하고 `test.fixme` 로 남긴다. 파일이 없으면
-  P9에서 무엇이 빠졌는지 셀 수 없다.
-- 린트 룰팩(`rules/raw-values.yaml`)이 CI에 연결되어 실제로 레드를 낼 수 있다.
-- 마이그레이션이 빈 DB에서 처음부터 돌아간다 (`prisma migrate deploy` on clean).
+- `npm run build` green (`commands.yaml: build`)
+- `npm test` green — the test count must not be zero. Even one smoke test has to actually run, so
+  that "passed" is distinguishable from "never executed".
+- `npx playwright test` green — every **shell** of the 1:1 UX-node-to-scenario conversion exists.
+  Each scenario only checks that the screen renders, and stays marked `test.fixme`. Without the
+  files there is no way to count what is missing at P9.
+- The lint rule pack (`rules/raw-values.yaml`) is wired into CI and can actually go red.
+- Migrations run from scratch on an empty DB (`prisma migrate deploy` on clean).
 
-## 뼈대에 반드시 들어가는 것
+## What the skeleton must contain
 
 ```
-app/layout.tsx          # tokens.css 를 여기서 1회 import
-app/page.tsx            # 최소 렌더
-prisma/schema.prisma    # P5 계약 그대로
-e2e/                    # UX 노드별 시나리오 껍데기
-src/lib/db.ts           # PrismaClient 싱글턴 (dev HMR 재생성 방지)
+app/layout.tsx          # import tokens.css once, here
+app/page.tsx            # minimal render
+prisma/schema.prisma    # the P5 contract as-is
+e2e/                    # one scenario shell per UX node
+src/lib/db.ts           # PrismaClient singleton (prevents dev HMR re-creation)
 ```
 
-## 함정
+## Traps
 
-- **PrismaClient 를 모듈마다 new 하면** dev 서버 HMR 이 커넥션을 계속 늘려 곧 풀이 마른다.
-  전역 싱글턴 패턴을 뼈대 단계에서 박아라. 나중에 고치면 이미 20곳이 각자 만든 뒤다.
-- **Playwright 와 dev 서버의 경합** — `webServer` 설정으로 Playwright 가 직접 띄우게 하고,
-  포트를 `dev-server` 명령과 분리하라. 사람이 띄워둔 서버에 붙는 구성은 CI에서만 죽는다.
-- **환경변수 기본값 금지** — `DATABASE_URL` 이 없으면 빌드가 실패해야 한다. 조용한 기본값은
-  프로덕션에서 개발 DB 를 가리키는 사고의 표준 경로다.
-- **커밋되는 생성물** — `src/styles/tokens.css`·`src/lib/tokens.ts`·`tailwind.config.ts` 는
-  생성물이지만 커밋한다. `.gitignore` 에 넣으면 CI 의 "재생성 diff 없음" 검사가 죽는다.
-- **`prisma generate` 를 postinstall 에** 걸어라. 빠지면 클린 클론에서만 타입이 깨진다.
+- **new PrismaClient() per module** lets dev-server HMR keep adding connections until the pool dries
+  up. Nail the global singleton pattern in at the skeleton stage. Fixing it later means 20 places
+  have already rolled their own.
+- **Playwright racing the dev server** — let Playwright start it via the `webServer` config, and keep
+  its port separate from the `dev-server` command. A setup that attaches to a server a human left
+  running dies only in CI.
+- **No environment-variable defaults** — if `DATABASE_URL` is missing, the build must fail. A silent
+  default is the standard route to production pointing at the development database.
+- **Committed generated files** — `src/styles/tokens.css`, `src/lib/tokens.ts` and
+  `tailwind.config.ts` are generated but still committed. Putting them in `.gitignore` kills CI's
+  "regenerate, expect no diff" check.
+- **Put `prisma generate` in postinstall.** Leaving it out breaks types only on a clean clone.

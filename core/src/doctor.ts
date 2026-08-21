@@ -16,6 +16,7 @@ import {
 } from './paths';
 import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
 import { tr } from './tr';
+import type { Msg } from './i18n';
 import { readState, writeState, defaultState } from './state';
 import type { HarnessState } from './types';
 
@@ -81,6 +82,8 @@ const isPristine = (s: HarnessState): boolean => {
 export function runDoctor(
   root: string, opts: { repair?: boolean; force?: boolean } = {},
 ): DoctorReport {
+  // 진단 문자열은 사용자가 읽는 출력이다 — 줄마다 config 를 다시 읽지 않도록 한 번만 해석한다.
+  const t = (m: Msg): string => tr(root, m);
   const issues: string[] = [];
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -93,35 +96,51 @@ export function runDoctor(
   // 2. state 읽기
   let current: HarnessState | null = null;
   if (!fs.existsSync(statePath(root))) {
-    issues.push('state.json 이 없다 — 이벤트 재생으로 복구 필요');
+    issues.push(t({
+      en: 'state.json is missing — it must be rebuilt by replaying the journal',
+      ko: 'state.json 이 없다 — 이벤트 재생으로 복구 필요',
+    }));
   } else {
     try {
       const parsed = readState(root) as unknown;
-      if (typeof parsed !== 'object' || parsed === null) throw new Error('object 아님');
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object');
       current = parsed as HarnessState;
     } catch {
-      issues.push('state.json 손상 — 파싱 불가');
+      issues.push(t({ en: 'state.json is damaged — cannot parse', ko: 'state.json 손상 — 파싱 불가' }));
     }
   }
 
   // 3. 저널 건강 → warnings + 재생 신뢰도
   let trustworthy = true;
   if (!journalExists) {
-    warnings.push('events.jsonl 부재 — 재생할 증거가 없다');
+    warnings.push(t({
+      en: 'events.jsonl is missing — there is no evidence to replay',
+      ko: 'events.jsonl 부재 — 재생할 증거가 없다',
+    }));
     trustworthy = false;
   }
   if (corruptLines > 0) {
-    warnings.push(`events.jsonl ${corruptLines}줄 손상 — 재생 불완전`);
+    warnings.push(t({
+      en: `${corruptLines} line(s) of events.jsonl are corrupt — the replay is incomplete`,
+      ko: `events.jsonl ${corruptLines}줄 손상 — 재생 불완전`,
+    }));
     trustworthy = false;
   }
   const unknown = events.filter((e) => !KNOWN_EVENT_TYPES.has(e.type));
   if (unknown.length > 0) {
     const types = [...new Set(unknown.map((e) => e.type))].join(', ');
-    warnings.push(`미지 이벤트 타입 ${unknown.length}건(${types}) — 재생 결과 불신(버전 스큐 가능)`);
+    warnings.push(t({
+      en: `${unknown.length} event(s) of unknown type (${types}) — the replay result is untrustworthy `
+        + '(possible version skew)',
+      ko: `미지 이벤트 타입 ${unknown.length}건(${types}) — 재생 결과 불신(버전 스큐 가능)`,
+    }));
     trustworthy = false;
   }
   if (journalExists && events.length === 0 && current && !isPristine(current)) {
-    warnings.push('저널이 비어 있으나 state 는 진행 상태 — 절단 의심');
+    warnings.push(t({
+      en: 'the journal is empty but state shows progress — suspect truncation',
+      ko: '저널이 비어 있으나 state 는 진행 상태 — 절단 의심',
+    }));
     trustworthy = false;
   }
 
@@ -130,7 +149,12 @@ export function runDoctor(
     for (const field of COMPARED_FIELDS) {
       const a = JSON.stringify(current[field]);
       const b = JSON.stringify(replayed[field]);
-      if (a !== b) issues.push(`${field} 불일치: state=${a}, 이벤트 재생=${b}`);
+      if (a !== b) {
+        issues.push(t({
+          en: `${field} mismatch: state=${a}, journal replay=${b}`,
+          ko: `${field} 불일치: state=${a}, 이벤트 재생=${b}`,
+        }));
+      }
     }
   }
 
@@ -166,12 +190,17 @@ export function runDoctor(
 
   // 6. 고아 tmp 스윕 — 죽은 pid 것만이라 항상 안전하게 수행한다
   const swept = sweepOrphanTmp(root);
-  if (swept > 0) notes.push(`고아 임시파일 ${swept}개 정리`);
+  if (swept > 0) {
+    notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `고아 임시파일 ${swept}개 정리` }));
+  }
 
   // 7. 훅 에러 로그 — 침묵한 판정 실패는 여기서만 드러난다
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    warnings.push(`훅 판정 실패 ${hookErrors}건 기록됨 — 원인 확인 필요`);
+    warnings.push(t({
+      en: `${hookErrors} hook decision failure(s) recorded — find out why`,
+      ko: `훅 판정 실패 ${hookErrors}건 기록됨 — 원인 확인 필요`,
+    }));
   }
 
   // 8. repair — 고칠 발산이 있을 때만 움직인다. 저널이 손상이어도 발산이 없으면 할 일이 없다.
@@ -226,7 +255,10 @@ export function runDoctor(
     const log = path.join(runtimeDir(root), 'hook-errors.log');
     try {
       fs.renameSync(log, `${log}.prev`);
-      notes.push(`hook-errors.log ${hookErrors}건 → .prev 회전`);
+      notes.push(t({
+        en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
+        ko: `hook-errors.log ${hookErrors}건 → .prev 회전`,
+      }));
     } catch {
       // 회전 실패는 진단을 막지 않는다 — 경고가 남아 다음 실행에 다시 보인다
     }

@@ -68,7 +68,7 @@ const NO_ARGS = { type: 'object' as const, properties: {} };
 const phaseProp = {
   type: 'string',
   enum: [...PHASES],
-  description: '페이즈 ID (P0~P12)',
+  description: 'Phase id (P0–P12)',
 };
 
 const strArrProp = (description: string) => ({
@@ -78,12 +78,17 @@ const strArrProp = (description: string) => ({
 /**
  * 도구 목록. 이름은 전부 `harness_` 접두 snake_case 로 고정한다 — CLI 명령 경로
  * (`harness gate submit`)와 1:1 로 읽히게 해서 둘 중 무엇을 봐도 같은 표면임을 알게 한다.
+ *
+ * **i18n 예외: 설명문은 영어 고정이다.** 여기 문자열은 사람에게 보이는 UI 가 아니라
+ * 모델이 읽고 도구 선택·인자 구성에 쓰는 **프로토콜 표면**이다. 로케일마다 스키마가
+ * 달라지면 같은 버그가 언어별로 다르게 재현되고, 그때 무엇이 정본인지 비교할 근거가 사라진다.
+ * 사람이 읽는 결과 문자열은 코어가 내므로 그쪽은 `lang` 을 그대로 따른다.
  */
 export function toolDefinitions(): McpToolDef[] {
   return [
     {
       name: 'harness_status',
-      description: '하네스 상태(현재 페이즈·활성 웨이브·게이트·역행)를 JSON 으로 조회한다.',
+      description: 'Read harness state (current phase, active wave, gates, backtrack) as JSON.',
       inputSchema: NO_ARGS,
     },
     {
@@ -95,11 +100,11 @@ export function toolDefinitions(): McpToolDef[] {
         type: 'object',
         properties: {
           phase: phaseProp,
-          paths: strArrProp('심사받을 산출물 경로(루트 기준 상대경로). 최소 1개 필요.'),
+          paths: strArrProp('Artifact paths to review, relative to the project root. At least one is required.'),
           evidence: {
             type: 'string',
             enum: [...EVIDENCE_GRADES],
-            description: '근거 등급. 기본 claimed. 출하 트랙(P10~P12)은 measured 만 통과한다.',
+            description: 'Evidence grade. Defaults to claimed. The ship track (P10–P12) passes on measured only.',
           },
         },
         required: ['phase', 'paths'],
@@ -118,7 +123,7 @@ export function toolDefinitions(): McpToolDef[] {
     },
     {
       name: 'harness_gate_status',
-      description: '페이즈별 게이트 레코드(상태·해시·근거 등급·승인 시각)를 JSON 으로 조회한다.',
+      description: 'Read the per-phase gate records (status, hash, evidence grade, approval time) as JSON.',
       inputSchema: NO_ARGS,
     },
     {
@@ -129,55 +134,55 @@ export function toolDefinitions(): McpToolDef[] {
       inputSchema: {
         type: 'object',
         properties: {
-          milestone: { type: 'string', description: '소속 마일스톤 (예: M2-결제)' },
-          goal: { type: 'string', description: '이 웨이브의 목표 한 줄' },
-          design_refs: strArrProp('구현 대상 설계 원장 노드 ID (예: F-12, API-23)'),
-          acceptance: strArrProp('완료 기준'),
+          milestone: { type: 'string', description: 'Milestone this wave belongs to (e.g. M2-checkout)' },
+          goal: { type: 'string', description: 'One line stating what this wave finishes' },
+          design_refs: strArrProp('Design-ledger node ids this wave implements (e.g. F-12, API-23)'),
+          acceptance: strArrProp('Acceptance criteria'),
         },
       },
     },
     {
       name: 'harness_wave_activate',
-      description: '웨이브를 활성화한다. 동시에 하나만 활성 가능하다.',
+      description: 'Activate a wave. Only one can be active at a time.',
       inputSchema: {
         type: 'object',
-        properties: { id: { type: 'string', description: '웨이브 ID (예: wave-012)' } },
+        properties: { id: { type: 'string', description: 'Wave id (e.g. wave-012)' } },
         required: ['id'],
       },
     },
     {
       name: 'harness_wave_update',
-      description: '활성 웨이브 지시서의 턴 로그에 한 줄 기록한다(한 일 + 다음 할 일). 빈 내용은 거부된다.',
+      description: 'Append one line to the active wave\'s turn log (what you did + what is next). Empty text is refused.',
       inputSchema: {
         type: 'object',
-        properties: { text: { type: 'string', description: '턴 로그 내용' } },
+        properties: { text: { type: 'string', description: 'Turn log entry' } },
         required: ['text'],
       },
     },
     {
       name: 'harness_wave_complete',
-      description: '활성 웨이브를 완료 처리한다. UX 노드를 참조하는 웨이브는 시각 증적이 없으면 거부된다.',
+      description: 'Complete the active wave. A wave referencing UX nodes is refused without visual evidence.',
       inputSchema: NO_ARGS,
     },
     {
       name: 'harness_wave_list',
-      description: '모든 웨이브의 frontmatter(ID·마일스톤·설계 참조·상태·완료 기준)를 JSON 으로 조회한다.',
+      description: 'Read every wave\'s frontmatter (id, milestone, design refs, status, acceptance) as JSON.',
       inputSchema: NO_ARGS,
     },
     {
       name: 'harness_node_upsert',
-      description: '설계 원장 노드를 등록·수정한다. version 은 보존되며 개정은 harness_node_bump 로 한다.',
+      description: 'Create or update a design-ledger node. The version is preserved; revise with harness_node_bump.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: '노드 ID (C-x/D-x/M-x/F-x/UX-x/API-x/SCH-x/DS-*/ADR-x)' },
-          title: { type: 'string', description: '노드 제목' },
-          parent: { type: 'string', description: '상위 노드 ID' },
-          doc_anchor: { type: 'string', description: '정본 위치 (파일#헤딩)' },
+          id: { type: 'string', description: 'Node id (C-x/D-x/M-x/F-x/UX-x/API-x/SCH-x/DS-*/ADR-x)' },
+          title: { type: 'string', description: 'Node title' },
+          parent: { type: 'string', description: 'Parent node id' },
+          doc_anchor: { type: 'string', description: 'Where the canonical text lives (file#heading)' },
           status: {
             type: 'string',
             enum: [...LEDGER_STATUSES],
-            description: '노드 상태. 미지정이면 기존 값(없으면 draft) 유지.',
+            description: 'Node status. If omitted, the existing value is kept (draft when there is none).',
           },
         },
         required: ['id', 'title'],
@@ -190,7 +195,7 @@ export function toolDefinitions(): McpToolDef[] {
         + 'including completed ones, so they land in the cross-check queue.',
       inputSchema: {
         type: 'object',
-        properties: { id: { type: 'string', description: '개정할 노드 ID' } },
+        properties: { id: { type: 'string', description: 'Id of the node to revise' } },
         required: ['id'],
       },
     },
@@ -201,18 +206,18 @@ export function toolDefinitions(): McpToolDef[] {
         + 'and the registered documents that link it via linkedNodes.',
       inputSchema: {
         type: 'object',
-        properties: { node_id: { type: 'string', description: '추적할 설계 원장 노드 ID' } },
+        properties: { node_id: { type: 'string', description: 'Design-ledger node id to trace' } },
         required: ['node_id'],
       },
     },
     {
       name: 'harness_report_rtm',
-      description: '요구사항 추적 매트릭스(RTM)를 마크다운으로 렌더링한다.',
+      description: 'Render the requirements traceability matrix (RTM) as markdown.',
       inputSchema: NO_ARGS,
     },
     {
       name: 'harness_report_hub',
-      description: '산출물 허브(문서 레지스트리 + 아티팩트 URL 색인)를 마크다운으로 렌더링한다.',
+      description: 'Render the artifact hub (document registry + artifact URL index) as markdown.',
       inputSchema: NO_ARGS,
     },
     {
@@ -224,12 +229,12 @@ export function toolDefinitions(): McpToolDef[] {
     },
     {
       name: 'harness_doctor',
-      description: '상태 저장소를 진단한다. repair 로 이벤트 저널 재생 기반 복구를 시도한다.',
+      description: 'Diagnose the state store. With repair, attempt recovery by replaying the event journal.',
       inputSchema: {
         type: 'object',
         properties: {
-          repair: { type: 'boolean', description: '저널 재생으로 state.json 복구 시도' },
-          force: { type: 'boolean', description: '저널을 신뢰할 수 없어도 복구 강행' },
+          repair: { type: 'boolean', description: 'Rebuild state.json by replaying the journal' },
+          force: { type: 'boolean', description: 'Repair even when the journal cannot be trusted' },
         },
       },
     },
@@ -419,7 +424,10 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
         try { markStale(root, w); } catch { failed.push(w); }
       }
       const marked = affectedWaves.filter(w => !failed.includes(w));
-      const head = `${node.id} v${node.version} — STALE 웨이브: ${marked.join(', ') || '없음'}`;
+      const head = `${node.id} v${node.version} — ${pick({
+        en: `STALE waves: ${marked.join(', ') || 'none'}`,
+        ko: `STALE 웨이브: ${marked.join(', ') || '없음'}`,
+      }, langFor(root))}`;
       // 판정 못 한 웨이브와 마킹 못 한 웨이브는 둘 다 STALE 전파가 뚫린 것이다 — 성공으로 끝내지 않는다.
       const incomplete = [...unverifiable, ...failed];
       if (incomplete.length > 0) {
