@@ -8435,7 +8435,7 @@ var COMMANDS = [
     summary: M("Ship track \u2014 defect ledger, deployments, final verdict.", "\uCD9C\uD558 \uD2B8\uB799 \u2014 \uACB0\uD568 \uB300\uC7A5\xB7\uBC30\uD3EC \uAE30\uB85D\xB7\uCD5C\uC885 \uD310\uC815."),
     subs: [
       { name: "defect", args: "<add|update|list> ...", summary: M("Defect ledger. Findings without evidence are refused.", "\uACB0\uD568 \uB300\uC7A5. \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uAC70\uBD80\uB41C\uB2E4.") },
-      { name: "deploy", args: "--env <env> --version <v> [--evidence <e>]", summary: M("Record a deployment.", "\uBC30\uD3EC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
+      { name: "deploy", args: "--env <env> --version <v> --sha <commit> [--evidence <e>]", summary: M("Record a deployment.", "\uBC30\uD3EC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
       { name: "deployments", summary: M("Print deployment history as JSON.", "\uBC30\uD3EC \uC774\uB825\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
       { name: "verdict", summary: M("Final go/no-go. Never passes without measured evidence.", "\uCD5C\uC885 go/no-go. measured \uADFC\uAC70 \uC5C6\uC774\uB294 \uD1B5\uACFC\uD558\uC9C0 \uC54A\uB294\uB2E4.") },
       { name: "checklist", summary: M("Render the release checklist.", "\uB9B4\uB9AC\uC2A4 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
@@ -8527,12 +8527,42 @@ function unknownSub(group, sub, lang) {
 \`harness ${group} --help\` \uB85C \uC790\uC138\uD788 \uBCFC \uC218 \uC788\uB2E4.` : `Unknown ${group} subcommand: ${shown}${names ? ` \u2014 expected one of: ${names}` : ""}
 Run \`harness ${group} --help\` for details.`;
 }
+function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function nearestCommand(cmd) {
+  if (!cmd) return void 0;
+  const lower = cmd.toLowerCase();
+  const limit = Math.max(1, Math.min(3, Math.floor(lower.length / 3)));
+  let best;
+  for (const g of COMMANDS) {
+    const d = editDistance(lower, g.name.toLowerCase());
+    if (d <= limit && (best === void 0 || d < best.d)) best = { name: g.name, d };
+  }
+  return best?.name;
+}
 function unknownCommand(cmd, lang) {
   const names = COMMANDS.map((g) => g.name).join(" | ");
   const shown = cmd || (lang === "ko" ? "(\uC5C6\uC74C)" : "(none)");
-  return lang === "ko" ? `\uC54C \uC218 \uC5C6\uB294 \uBA85\uB839: ${shown}
+  const near = nearestCommand(cmd);
+  const hint = near === void 0 ? "" : lang === "ko" ? `
+\uD639\uC2DC \`harness ${near}\`?` : `
+Did you mean \`harness ${near}\`?`;
+  return lang === "ko" ? `\uC54C \uC218 \uC5C6\uB294 \uBA85\uB839: ${shown}${hint}
 \uAC00\uB2A5: ${names}
-\`harness --help\` \uB85C \uC804\uCCB4 \uC0AC\uC6A9\uBC95\uC744 \uBCFC \uC218 \uC788\uB2E4.` : `Unknown command: ${shown}
+\`harness --help\` \uB85C \uC804\uCCB4 \uC0AC\uC6A9\uBC95\uC744 \uBCFC \uC218 \uC788\uB2E4.` : `Unknown command: ${shown}${hint}
 Expected one of: ${names}
 Run \`harness --help\` for the full usage.`;
 }
@@ -13340,7 +13370,17 @@ function run(argv, root) {
       return 0;
     }
   }
+  const req = (v, usage) => {
+    if (v === void 0 || v === "" || v.startsWith("-")) {
+      throw new Error(L(`Missing argument \u2014 usage: ${usage}`, `\uC778\uC790\uAC00 \uC5C6\uB2E4 \u2014 \uC0AC\uC6A9\uBC95: ${usage}`));
+    }
+    return v;
+  };
   try {
+    const PRE_INIT_OK = /* @__PURE__ */ new Set(["init", "migrate", "--version", "hook"]);
+    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== void 0 && !isInitialized(root)) {
+      throw new Error(L("No .harness/ here \u2014 run `harness init` first.", ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C"));
+    }
     switch (cmd) {
       case "init":
         initHarness(root);
@@ -13353,7 +13393,6 @@ function run(argv, root) {
         ));
         return 0;
       case "status":
-        if (!isInitialized(root)) throw new Error(L("No .harness/ here \u2014 run `harness init` first.", ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C"));
         console.log(JSON.stringify(readState(root), null, 2));
         return 0;
       case "doctor": {
@@ -13379,8 +13418,8 @@ function run(argv, root) {
       }
       case "phase": {
         if (sub !== "set") throw new Error(L("Usage: harness phase set <P0..P12>", "\uC0AC\uC6A9\uBC95: harness phase set <P0..P12>"));
-        const phase = rest[0];
-        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
+        const phase = req(rest[0], `harness phase set <${PHASES[0]}..${PHASES[PHASES.length - 1]}>`);
+        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${phase} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${phase} (${PHASES.join(", ")})`));
         if (argv.includes("--force") && process.env.HARNESS_ALLOW_FORCE !== "1") {
           throw new Error(
             L(
@@ -13477,7 +13516,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const op = rest[0];
             if (op === "add") {
               const d = addDefect(root, {
-                id: flag(args, "id") ?? "",
+                id: flag(args, "id") ?? (rest[1] && !rest[1].startsWith("-") ? rest[1] : ""),
                 severity: flag(args, "severity") ?? "medium",
                 title: flag(args, "title") ?? "",
                 evidence: flag(args, "evidence") ?? ""
@@ -13486,7 +13525,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
               return 0;
             }
             if (op === "update") {
-              const d = updateDefect(root, rest[1], {
+              const d = updateDefect(root, flag(args, "id") ?? rest[1], {
                 status: flag(args, "status"),
                 deferReason: flag(args, "defer-reason"),
                 evidence: flag(args, "evidence")
@@ -13861,7 +13900,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           }
           case "show": {
             const rec = getAdr(root, rest[0]);
-            if (!rec) throw new Error(L(`No such ADR: ${rest[0]}`, `ADR \uC5C6\uC74C: ${rest[0]}`));
+            if (!rec) throw new Error(L(`No such ADR: ${req(rest[0], "harness adr show <ADR-x>")}`, `ADR \uC5C6\uC74C: ${req(rest[0], "harness adr show <ADR-x>")}`));
             console.log(renderAdrPacket(rec, lang));
             return 0;
           }
@@ -13907,17 +13946,17 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             return 0;
           }
           case "submit": {
-            const d = submitDoc(root, rest[0]);
+            const d = submitDoc(root, req(rest[0], "harness doc submit <DOC-x>"));
             console.log(`${d.id} v${d.version} submitted`);
             return 0;
           }
           case "approve": {
-            const d = approveDoc(root, rest[0]);
+            const d = approveDoc(root, req(rest[0], "harness doc approve <DOC-x>"));
             console.log(`${d.id} v${d.version} approved`);
             return 0;
           }
           case "revise": {
-            const d = reviseDoc(root, rest[0], flag(args, "path"));
+            const d = reviseDoc(root, req(rest[0], "harness doc revise <DOC-x> [--path <p>]"), flag(args, "path"));
             console.log(L(`${d.id} \u2192 v${d.version} (previous version superseded)`, `${d.id} \u2192 v${d.version} (\uC774\uC804 \uBC84\uC804 superseded)`));
             return 0;
           }
@@ -13961,10 +14000,12 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             console.log(meta.id);
             return 0;
           }
-          case "activate":
-            activateWave(root, rest[0]);
-            console.log(L(`Active: ${rest[0]}`, `\uD65C\uC131: ${rest[0]}`));
+          case "activate": {
+            const id = req(rest[0], "harness wave activate <wave-id>");
+            activateWave(root, id);
+            console.log(L(`Active: ${id}`, `\uD65C\uC131: ${id}`));
             return 0;
+          }
           case "update": {
             const text = (flag(rest, "text") ?? rest.join(" ")).trim();
             if (!text) throw new Error(L("The turn log entry is empty \u2014 write what you did and what is next", "\uD134 \uB85C\uADF8 \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uD55C \uC77C\uACFC \uB2E4\uC74C \uD560 \uC77C\uC744 \uC801\uC5B4\uB77C"));
@@ -13995,10 +14036,22 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             throw new Error(L(`Invalid status: ${statusFlag} (one of ${LEDGER_STATUSES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${LEDGER_STATUSES.join(", ")} \uC911 \uD558\uB098)`));
           }
           const prev = getNode(root, id);
+          const parentFlag = flag(args, "parent");
+          if (parentFlag !== void 0) {
+            if (parentFlag === id) {
+              throw new Error(L(`A node cannot be its own parent: ${id}`, `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${id}`));
+            }
+            if (!getNode(root, parentFlag)) {
+              throw new Error(L(
+                `Parent ${parentFlag} is not in the design ledger \u2014 register it first with \`harness node upsert --id ${parentFlag} --title "<title>"\``,
+                `\uBD80\uBAA8 ${parentFlag} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \`harness node upsert --id ${parentFlag} --title "<\uC81C\uBAA9>"\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+              ));
+            }
+          }
           const node = {
             id,
             title,
-            parent: flag(args, "parent") ?? prev?.parent,
+            parent: parentFlag ?? prev?.parent,
             doc_anchor: flag(args, "anchor") ?? prev?.doc_anchor,
             version: prev?.version ?? 1,
             // bump 이력 보존
@@ -14072,7 +14125,13 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           return 0;
         }
         if (!isPhase(sub)) throw new Error(L(`Invalid phase: ${sub}`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${sub}`));
-        const reason = flag(rest, "reason") ?? "(\uBBF8\uAE30\uC7AC)";
+        const reason = (flag(rest, "reason") ?? "").trim();
+        if (!reason) {
+          throw new Error(L(
+            'Backtracking needs a reason \u2014 usage: harness backtrack <phase> --reason "<why>". It is recorded in the journal so a later reader can reconstruct the decision.',
+            '\uC5ED\uD589\uC5D0\uB294 \uC0AC\uC720\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 \uC0AC\uC6A9\uBC95: harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>". \uC800\uB110\uC5D0 \uB0A8\uC544 \uB098\uC911\uC5D0 \uADF8 \uACB0\uC815\uC744 \uC7AC\uAD6C\uC131\uD558\uB294 \uADFC\uAC70\uAC00 \uB41C\uB2E4.'
+          ));
+        }
         appendEvent(root, "backtrack-started", { to: sub, reason });
         writeState(root, { ...readState(root), backtrack: { to: sub, reason } });
         console.log(L(`Backtrack started \u2192 ${sub}: ${reason}`, `\uC5ED\uD589 \uC2DC\uC791 \u2192 ${sub}: ${reason}`));

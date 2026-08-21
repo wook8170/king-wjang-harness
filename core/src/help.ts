@@ -158,7 +158,7 @@ export const COMMANDS: CommandGroup[] = [
     summary: M('Ship track — defect ledger, deployments, final verdict.', '출하 트랙 — 결함 대장·배포 기록·최종 판정.'),
     subs: [
       { name: 'defect', args: '<add|update|list> ...', summary: M('Defect ledger. Findings without evidence are refused.', '결함 대장. 근거 없는 지적은 거부된다.') },
-      { name: 'deploy', args: '--env <env> --version <v> [--evidence <e>]', summary: M('Record a deployment.', '배포를 기록한다.') },
+      { name: 'deploy', args: '--env <env> --version <v> --sha <commit> [--evidence <e>]', summary: M('Record a deployment.', '배포를 기록한다.') },
       { name: 'deployments', summary: M('Print deployment history as JSON.', '배포 이력을 JSON 으로 출력한다.') },
       { name: 'verdict', summary: M('Final go/no-go. Never passes without measured evidence.', '최종 go/no-go. measured 근거 없이는 통과하지 않는다.') },
       { name: 'checklist', summary: M('Render the release checklist.', '릴리스 체크리스트를 렌더링한다.') },
@@ -273,10 +273,50 @@ export function unknownSub(group: string, sub: string | undefined, lang: Lang): 
 }
 
 /** 최상위 미지 명령. 가능한 명령군을 함께 준다 — 막다른 골목을 만들지 않는다. */
+/**
+ * 편집 거리(삽입·삭제·치환). 오타 제안에만 쓰므로 전체 행렬 대신 두 줄만 들고 간다.
+ * 명령 이름은 짧고 개수도 20 남짓이라 이 이상의 최적화는 값이 없다.
+ */
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * [UX-86] 오타에 **가까운 이름을 제안**한다. 전체 목록만 던지면 `stauts` 를 친 사람이
+ * 20줄에서 `status` 를 눈으로 찾아야 한다 — 목록은 이미 있으므로, 없는 것은 「가장 가까운 것」이다.
+ * 거리 임계는 이름 길이의 1/3(최소 1, 최대 3) — 넘기면 제안하지 않는다. **틀린 제안은
+ * 제안 없음보다 나쁘다**(사람이 그것을 정답으로 믿고 다시 친다).
+ */
+export function nearestCommand(cmd: string): string | undefined {
+  if (!cmd) return undefined;
+  const lower = cmd.toLowerCase();
+  const limit = Math.max(1, Math.min(3, Math.floor(lower.length / 3)));
+  let best: { name: string; d: number } | undefined;
+  for (const g of COMMANDS) {
+    const d = editDistance(lower, g.name.toLowerCase());
+    if (d <= limit && (best === undefined || d < best.d)) best = { name: g.name, d };
+  }
+  return best?.name;
+}
+
 export function unknownCommand(cmd: string, lang: Lang): string {
   const names = COMMANDS.map(g => g.name).join(' | ');
   const shown = cmd || (lang === 'ko' ? '(없음)' : '(none)');
+  const near = nearestCommand(cmd);
+  const hint = near === undefined ? '' : (lang === 'ko' ? `\n혹시 \`harness ${near}\`?` : `\nDid you mean \`harness ${near}\`?`);
   return lang === 'ko'
-    ? `알 수 없는 명령: ${shown}\n가능: ${names}\n\`harness --help\` 로 전체 사용법을 볼 수 있다.`
-    : `Unknown command: ${shown}\nExpected one of: ${names}\nRun \`harness --help\` for the full usage.`;
+    ? `알 수 없는 명령: ${shown}${hint}\n가능: ${names}\n\`harness --help\` 로 전체 사용법을 볼 수 있다.`
+    : `Unknown command: ${shown}${hint}\nExpected one of: ${names}\nRun \`harness --help\` for the full usage.`;
 }

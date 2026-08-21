@@ -152,7 +152,31 @@ export function run(argv: string[], root: string): number {
     }
   }
 
+  /**
+   * [USE-94] 필수 인자 누락을 **값이 흘러들기 전에** 잡는다. 예전에는 `undefined` 가 그대로
+   * 오류문에 박혀(「No such ADR: undefined」) 사람이 「내가 등록을 안 했나」로 오진했다 —
+   * 진짜 원인은 인자를 안 준 것이다. 원인과 다른 곳을 가리키는 오류문은 없느니만 못하다.
+   */
+  const req = (v: string | undefined, usage: string): string => {
+    if (v === undefined || v === '' || v.startsWith('-')) {
+      throw new Error(L(`Missing argument — usage: ${usage}`, `인자가 없다 — 사용법: ${usage}`));
+    }
+    return v;
+  };
+
   try {
+    // [USE-93] **미초기화 가드는 한 곳에 둔다.** 예전에는 `status` 만 안내하고 나머지는
+    // 내부 tmp 경로가 박힌 raw ENOENT 를 뱉었다 — 사람이 「무엇을 잘못했나」 대신 「이 경로가
+    // 왜 여기 있나」를 묻게 된다. 명령마다 가드를 복제하면 새 명령이 생길 때마다 빠진다
+    // (SEC-50 이 정확히 그 사고였다: Write 만 막고 Bash 는 비어 있었다).
+    //
+    // **아는 명령에만 건다.** 미지 명령은 UX-24 계약대로 「알 수 없는 명령 + 명령군 목록」이
+    // 먼저다 — 오타를 친 사람에게 init 을 시키면 원인과 다른 곳을 가리킨다. 그리고 이 가드는
+    // try **안**에 있어야 exit 1 + 안내가 되지, 밖이면 그대로 던져 스택이 노출된다.
+    const PRE_INIT_OK = new Set(['init', 'migrate', '--version', 'hook']);
+    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== undefined && !isInitialized(root)) {
+      throw new Error(L('No .harness/ here — run `harness init` first.', '.harness/ 가 없다 — `harness init` 을 먼저 실행하라'));
+    }
     switch (cmd) {
       case 'init':
         initHarness(root);
@@ -176,9 +200,8 @@ export function run(argv: string[], root: string): number {
         return 0;
 
       case 'status':
-        // 미초기화(state.json 부재)면 raw ENOENT 대신 init 안내. 부재만 변환하고
-        // state.json 손상 등 다른 실패는 readState 가 원문 그대로 던지게 둔다.
-        if (!isInitialized(root)) throw new Error(L('No .harness/ here — run `harness init` first.', '.harness/ 가 없다 — `harness init` 을 먼저 실행하라'));
+        // 미초기화 안내는 위 공통 가드가 한다. 여기서는 state.json 손상 등 다른 실패를
+        // readState 가 원문 그대로 던지게 둔다.
         console.log(JSON.stringify(readState(root), null, 2));
         return 0;
 
@@ -220,8 +243,8 @@ export function run(argv: string[], root: string): number {
 
       case 'phase': {
         if (sub !== 'set') throw new Error(L('Usage: harness phase set <P0..P12>', '사용법: harness phase set <P0..P12>'));
-        const phase = rest[0];
-        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+        const phase = req(rest[0], `harness phase set <${PHASES[0]}..${PHASES[PHASES.length - 1]}>`);
+        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${phase} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${phase} (${PHASES.join(', ')})`));
         // 페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 발생한다(§2 흐름 규칙).
         // setPhaseViaGate 가 직전 페이즈 게이트 승인 여부를 검사하고 거부 사유를 던진다.
         // --force 는 게이트 검사를 건너뛰는 탈출구다(부트스트랩·복구용, 이벤트에 흔적을 남긴다).
@@ -337,8 +360,10 @@ export function run(argv: string[], root: string): number {
           case 'defect': {
             const op = rest[0];
             if (op === 'add') {
+              // [USE-92] `add` 는 `--id`, `update` 는 위치인자만 받아 **같은 명령군 안에서
+              // 형태가 갈렸다.** API-30·API-80 과 같은 처방으로 양쪽 다 받는다.
               const d = addDefect(root, {
-                id: flag(args, 'id') ?? '',
+                id: flag(args, 'id') ?? (rest[1] && !rest[1].startsWith('-') ? rest[1] : ''),
                 severity: (flag(args, 'severity') ?? 'medium') as DefectRecord['severity'],
                 title: flag(args, 'title') ?? '',
                 evidence: flag(args, 'evidence') ?? '',
@@ -347,7 +372,7 @@ export function run(argv: string[], root: string): number {
               return 0;
             }
             if (op === 'update') {
-              const d = updateDefect(root, rest[1], {
+              const d = updateDefect(root, flag(args, 'id') ?? rest[1], {
                 status: flag(args, 'status') as DefectRecord['status'] | undefined,
                 deferReason: flag(args, 'defer-reason'),
                 evidence: flag(args, 'evidence'),
@@ -712,7 +737,7 @@ export function run(argv: string[], root: string): number {
           }
           case 'show': {
             const rec = getAdr(root, rest[0]);
-            if (!rec) throw new Error(L(`No such ADR: ${rest[0]}`, `ADR 없음: ${rest[0]}`));
+            if (!rec) throw new Error(L(`No such ADR: ${req(rest[0], 'harness adr show <ADR-x>')}`, `ADR 없음: ${req(rest[0], 'harness adr show <ADR-x>')}`));
             console.log(renderAdrPacket(rec, lang));
             return 0;
           }
@@ -757,9 +782,9 @@ export function run(argv: string[], root: string): number {
             console.log(`${d.id} → ${d.artifactUrl}`);
             return 0;
           }
-          case 'submit': { const d = submitDoc(root, rest[0]); console.log(`${d.id} v${d.version} submitted`); return 0; }
-          case 'approve': { const d = approveDoc(root, rest[0]); console.log(`${d.id} v${d.version} approved`); return 0; }
-          case 'revise': { const d = reviseDoc(root, rest[0], flag(args, 'path')); console.log(L(`${d.id} → v${d.version} (previous version superseded)`, `${d.id} → v${d.version} (이전 버전 superseded)`)); return 0; }
+          case 'submit': { const d = submitDoc(root, req(rest[0], 'harness doc submit <DOC-x>')); console.log(`${d.id} v${d.version} submitted`); return 0; }
+          case 'approve': { const d = approveDoc(root, req(rest[0], 'harness doc approve <DOC-x>')); console.log(`${d.id} v${d.version} approved`); return 0; }
+          case 'revise': { const d = reviseDoc(root, req(rest[0], 'harness doc revise <DOC-x> [--path <p>]'), flag(args, 'path')); console.log(L(`${d.id} → v${d.version} (previous version superseded)`, `${d.id} → v${d.version} (이전 버전 superseded)`)); return 0; }
           case 'stale': { const s = staleDocs(root); console.log(s.length ? s.map(d => `${d.id} v${d.version}`).join('\n') : L('No approved documents have drifted', '변조된 승인 문서 없음')); return 0; }
           case 'list': console.log(JSON.stringify(loadRegistry(root), null, 2)); return 0;
           default: throw new Error(unknownSub('doc', sub, lang));
@@ -803,7 +828,7 @@ export function run(argv: string[], root: string): number {
             console.log(meta.id);
             return 0;
           }
-          case 'activate': activateWave(root, rest[0]); console.log(L(`Active: ${rest[0]}`, `활성: ${rest[0]}`)); return 0;
+          case 'activate': { const id = req(rest[0], 'harness wave activate <wave-id>'); activateWave(root, id); console.log(L(`Active: ${id}`, `활성: ${id}`)); return 0; }
           case 'update': {
             // 빈 로그는 지시서를 오염시키기만 하고 정산 증거가 되지 못한다 — stop 가드가
             // 내용 없는 `- [ts]` 한 줄로 풀리는 것도 막는다.
@@ -835,9 +860,26 @@ export function run(argv: string[], root: string): number {
             throw new Error(L(`Invalid status: ${statusFlag} (one of ${LEDGER_STATUSES.join(', ')})`, `유효하지 않은 status: ${statusFlag} (${LEDGER_STATUSES.join(', ')} 중 하나)`));
           }
           const prev = getNode(root, id);
+          // [USE-96] `--parent` 도 원장에 있어야 한다 — `wave create --refs` 는 검증하는데
+          // 여기만 무검증이라 댕글링 부모가 조용히 생겼다. 부모 없는 사슬은 RTM 의 뼈대를
+          // 끊고, 끊긴 것은 「왜 이게 있나」에 답하지 못한다. 자기 자신을 부모로 두는 것도 막는다.
+          const parentFlag = flag(args, 'parent');
+          if (parentFlag !== undefined) {
+            if (parentFlag === id) {
+              throw new Error(L(`A node cannot be its own parent: ${id}`, `자기 자신을 부모로 둘 수 없다: ${id}`));
+            }
+            if (!getNode(root, parentFlag)) {
+              throw new Error(L(
+                `Parent ${parentFlag} is not in the design ledger — register it first with `
+                + `\`harness node upsert --id ${parentFlag} --title "<title>"\``,
+                `부모 ${parentFlag} 가 설계 원장에 없다 — `
+                + `\`harness node upsert --id ${parentFlag} --title "<제목>"\` 로 먼저 등록하라`,
+              ));
+            }
+          }
           const node: LedgerNode = {
             id, title,
-            parent: flag(args, 'parent') ?? prev?.parent,
+            parent: parentFlag ?? prev?.parent,
             doc_anchor: flag(args, 'anchor') ?? prev?.doc_anchor,
             version: prev?.version ?? 1,                       // bump 이력 보존
             status: (statusFlag as LedgerNode['status']) ?? prev?.status ?? 'draft',
@@ -915,7 +957,18 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
         if (!isPhase(sub)) throw new Error(L(`Invalid phase: ${sub}`, `유효하지 않은 페이즈: ${sub}`));
-        const reason = flag(rest, 'reason') ?? '(미기재)';
+        // [USE-90] 사유는 **필수다.** 예전에는 빠지면 `(미기재)` 를 넣고 exit 0 으로 기록했다 —
+        // 침묵 성공이자, 영문 기본 출력에 한국어가 박히는 경로였다. 역행은 승인된 설계로
+        // 되돌아가는 결정이라 「왜」가 없으면 나중에 아무도 그 결정을 재구성할 수 없다.
+        const reason = (flag(rest, 'reason') ?? '').trim();
+        if (!reason) {
+          throw new Error(L(
+            'Backtracking needs a reason — usage: harness backtrack <phase> --reason "<why>". '
+            + 'It is recorded in the journal so a later reader can reconstruct the decision.',
+            '역행에는 사유가 필요하다 — 사용법: harness backtrack <페이즈> --reason "<사유>". '
+            + '저널에 남아 나중에 그 결정을 재구성하는 근거가 된다.',
+          ));
+        }
         appendEvent(root, 'backtrack-started', { to: sub, reason }); // 순서 계약
         writeState(root, { ...readState(root), backtrack: { to: sub, reason } });
         console.log(L(`Backtrack started → ${sub}: ${reason}`, `역행 시작 → ${sub}: ${reason}`));

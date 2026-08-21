@@ -6,6 +6,12 @@
 # pass silently as "a command that never ran did not fail".
 #
 # How to fill it in: copy this file to `.harness/profile/commands.yaml` and set the values.
+#
+# Enforcement consequence (be precise about this): the design-track block on build commands is
+# driven by THIS mapping. With `build: ''` the harness blocks deploy-ish commands (a built-in list
+# of 22 lives in the core and cannot be switched off) but NOT `npm run build`, `make`, or `tsc`.
+# That is deliberate — inventing a build command for a stack we do not know is worse than not
+# blocking one. Fill `build` in and the block starts applying to it.
 test: ''
 build: ''
 deploy: ''
