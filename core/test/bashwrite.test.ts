@@ -220,3 +220,36 @@ describe('bashwrite — pathLikeMentions (변형 명령 안전망 재료)', () =
     expect(pathLikeMentions('cp src/a.ts src/a.ts').filter(t => t === 'src/a.ts')).toHaveLength(1);
   });
 });
+
+/**
+ * 「막힌 모델이 자연히 가는 다음 경로」에는 **가져와서 쓰는 것**도 있다.
+ * `curl -o src/app.ts <url>` 은 리다이렉트도 아니고 알려진 쓰기 명령도 아니었지만
+ * 결과는 소스 파일 생성이다 — 설계 트랙에서 참조 구현을 받아오는 것은 아주 흔한 발상이다.
+ * `xargs` 는 진짜 명령을 한 겹 감싸서 같은 일을 한다.
+ */
+describe('bashwrite — 받아쓰기·간접 실행', () => {
+  it('curl -o 의 대상', () => {
+    expect(scanBashWrites('curl -o src/app.ts https://x/y').targets).toContain('src/app.ts');
+  });
+  it('curl --output 의 대상', () => {
+    expect(scanBashWrites('curl --output src/app.ts https://x/y').targets).toContain('src/app.ts');
+  });
+  it('curl 은 -O(대문자, 원격 이름 사용)면 대상이 인자가 아니다', () => {
+    // `curl -O <url>` 는 URL 의 파일명으로 **현재 디렉토리**에 쓴다 — 인자를 대상으로 삼으면 오탐이다.
+    expect(scanBashWrites('curl -O https://x/y.ts').targets).not.toContain('https://x/y.ts');
+  });
+  it('wget -O 의 대상', () => {
+    expect(scanBashWrites('wget -O src/app.ts https://x/y').targets).toContain('src/app.ts');
+  });
+  it('xargs 로 감싼 cp 의 대상', () => {
+    expect(scanBashWrites('echo /tmp/x | xargs -I{} cp {} src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('prettier --write / eslint --fix 의 대상', () => {
+    expect(scanBashWrites('prettier --write src/app.ts').targets).toContain('src/app.ts');
+    expect(scanBashWrites('eslint --fix src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('쓰기 플래그 없는 포맷터·린터는 대상이 없다 (조회는 막지 않는다)', () => {
+    expect(scanBashWrites('prettier --check src/app.ts').targets).toEqual([]);
+    expect(scanBashWrites('eslint src/app.ts').targets).toEqual([]);
+  });
+});

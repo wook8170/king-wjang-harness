@@ -198,3 +198,66 @@ $ (복구) → npx vitest run core/test/i18n-en-default.test.ts
   → 31종 전건 기대대로. **(d) 의도적 허용 5종이 그대로 allow** 인 것이 중요하다 —
      과차단하면 사람이 하네스를 꺼버리고 그러면 방어가 0이 된다.
   → 회귀 테스트: core/test/bashwrite.test.ts (noclobber 3건 + pathLikeMentions 5건)
+
+
+## 8. [SEC-67] 받아쓰기·간접 실행 — 재감정 채점 중 추가 발견
+
+§7 을 통과한 뒤 「내용을 만들어 쓰는」 변형을 더 넣어 봤더니 **6건이 더 통과하고 있었다.**
+그중 `curl -o src/app.ts <url>` 은 「참조 구현을 소스로 받아온다」는, 막힌 모델이 아주 자연히
+가는 길이다 — 리다이렉트도 아니고 알려진 쓰기 명령도 아니라 **판정 자체가 일어나지 않았다.**
+
+### 수정 전
+  [deny 기대]
+    ❌ allow  node -e writeFileSync
+    ❌ allow  python pathlib
+    ✅ deny   perl open >
+    ✅ deny   awk > file
+    ✅ deny   dd of=
+    ✅ deny   install -m
+    ❌ allow  curl -o
+    ❌ allow  curl --output
+    ❌ allow  wget -O
+    ❌ allow  xargs 로 감싼 cp
+    ❌ allow  prettier --write
+    ❌ allow  eslint --fix
+    ❌ allow  curl -o 코어파일
+  [allow 기대 — 과차단 방지]
+    ✅ allow  prettier --check (조회)
+    ✅ allow  eslint (조회)
+    ✅ allow  curl -O 원격이름
+    ✅ allow  curl 조회 후 파이프
+    ✅ allow  git checkout 복원
+    ✅ allow  루트 밖 다운로드
+
+  → 불일치 9 건
+
+### 수정 후 (HEAD)
+  [deny 기대]
+    ✅ deny   node -e writeFileSync
+    ✅ deny   python pathlib
+    ✅ deny   perl open >
+    ✅ deny   awk > file
+    ✅ deny   dd of=
+    ✅ deny   install -m
+    ✅ deny   curl -o
+    ✅ deny   curl --output
+    ✅ deny   wget -O
+    ✅ deny   xargs 로 감싼 cp
+    ✅ deny   prettier --write
+    ✅ deny   eslint --fix
+    ✅ deny   curl -o 코어파일
+  [allow 기대 — 과차단 방지]
+    ✅ allow  prettier --check (조회)
+    ✅ allow  eslint (조회)
+    ✅ allow  curl -O 원격이름
+    ✅ allow  curl 조회 후 파이프
+    ✅ allow  git checkout 복원
+    ✅ allow  루트 밖 다운로드
+
+  → 불일치 0 건
+
+  → `git checkout -- src/x.ts` 는 **의도적으로 allow** 다: 복원이지 구현이 아니고,
+     막으면 하네스 도입 전 소스가 있는 프로젝트에서 정상 복구가 불가능해진다.
+  → `curl -O` (대문자, 원격 파일명 사용)는 인자가 대상이 아니라 대상으로 잡으면 URL 이
+     경로로 오인된다 — 소문자 `-o`/`--output` 만 본다.
+  → 회귀 테스트: core/test/bashwrite.test.ts (받아쓰기·간접 실행 7건)

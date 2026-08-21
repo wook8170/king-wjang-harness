@@ -98,10 +98,10 @@
     <p class="headline">게이트 G9 통과 — 폴백 p95 최악 101ms &lt; 150ms (여유 33%)</p>
     <p>state.json 부재 시 저널 10만 건을 재생하는 열화 경로가 2개 독립 창 × 정순·역순 전 계열에서 게이트 안에 들어왔다. 대장 <code>PERF-26</code> 을 <b>fixed → verified</b> 로 올렸다 — 39행 중 비-verified 잔여는 사유 있는 deferred 1건(DEP-32)뿐.</p>
   </div>
-  <div class="verdict hold">
-    <div class="verdict-label">종합 판정</div>
-    <p class="headline">GO 승격은 보류 — 라운드 3 본편(i18n 정정) 반영 후 재집계</p>
-    <p>피어 세션이 라운드 2의 USE-59 「생성 문서 i18n 완료」 verified 가 부분 스윕에 근거한 <b>과다 주장</b>이었음을 발견, 잔여 한국어 표면 8곳을 정정 중이다(Iron Rule 7 — 감사도 틀린다). 판정·게이트 전건 집계는 본편이 대장에 실린 뒤 한다.</p>
+  <div class="verdict">
+    <div class="verdict-label">종합 판정 (라운드 3 본편 반영 후 확정)</div>
+    <p class="headline">출하 가능(GO) — 대상 b53eb7a · 대장 46행 · 게이트 13/13</p>
+    <p>이 분편 작성 시점에는 보류였다 — 피어 세션이 라운드 2의 USE-59 「생성 문서 i18n 완료」 verified 가 부분 스윕에 근거한 <b>과다 주장</b>이었음을 발견해 정정 중이었기 때문(Iron Rule 7). 본편이 정정 5행 + 우회 결함 2건(SEC-65·66)을 닫고 대장에 실은 뒤, 판정 문법 정정(조건 0건 = 조건부 아님)을 거쳐 <b>출하 가능</b>으로 확정됐다. 정본 리포트는 기존 URL 로 재게시됨. 남은 것은 전부 판정 밖 — 사용자 출시 결정(main 병합·리모트·CI)과 출하 후 백로그다.</p>
   </div>
 
   <h2><span class="tag">01</span>실측 수치</h2>

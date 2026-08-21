@@ -89,6 +89,24 @@ function redirectTargets(segment: string): string[] {
   return out;
 }
 
+/**
+ * `xargs` 인자에서 **감싸인 명령**을 뽑는다. xargs 자신의 플래그(와 그 값)를 건너뛴 첫 토큰부터가
+ * 실제 명령이다. 값을 받는 플래그를 목록으로 두는 이유: `-I {}` 처럼 값이 분리돼 오면
+ * 그 값을 명령으로 오인해 엉뚱한 것을 판정하게 된다.
+ */
+function innerCommandOf(args: string[]): string[] {
+  const takesValue = new Set(['-I', '-i', '-L', '-n', '-P', '-s', '-d', '-E', '--replace', '--max-args',
+    '--max-procs', '--delimiter', '--max-chars', '--arg-file', '-a']);
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (!isFlag(a)) break;
+    if (takesValue.has(a) && i + 1 < args.length && !isFlag(args[i + 1])) i += 2;
+    else i += 1;
+  }
+  return args.slice(i);
+}
+
 export function scanBashWrites(cmd: string): BashWriteScan {
   const targets: string[] = [];
   let mutating = false;
@@ -133,6 +151,30 @@ export function scanBashWrites(cmd: string): BashWriteScan {
       case 'dd':
         for (const a of args) if (a.startsWith('of=')) targets.push(a.slice(3));
         break;
+      case 'curl':
+      case 'wget': {
+        // **받아쓰기**도 쓰기다 — 「참조 구현을 소스로 받아온다」는 막힌 모델이 아주 자연히 가는 길이다.
+        // 소문자 `-o`/`--output`(curl)·`-O`/`--output-document`(wget)은 **다음 인자가 대상**이다.
+        // curl 의 대문자 `-O` 는 원격 파일명을 그대로 쓰는 플래그라 인자가 대상이 아니다 —
+        // 그걸 대상으로 잡으면 URL 이 경로로 잡혀 오탐이 된다.
+        const named = name === 'curl' ? ['-o', '--output'] : ['-O', '--output-document', '--output-file'];
+        for (let i = 0; i < args.length - 1; i++) {
+          if (named.includes(args[i]) && looksLikePath(args[i + 1])) targets.push(args[i + 1]);
+        }
+        break;
+      }
+      case 'prettier':
+      case 'eslint':
+        // 제자리 수정 플래그가 있을 때만 쓰기다(sed -i 와 같은 규칙). `--check`·무플래그 조회는 통과.
+        if (args.some(a => a === '--write' || a === '--fix')) targets.push(...paths);
+        break;
+      case 'xargs': {
+        // xargs 는 진짜 명령을 한 겹 감싼다. 감싼 명령을 그대로 다시 판정하지 않으면
+        // `xargs -I{} cp {} src/app.ts` 한 줄로 cp 규칙이 통째로 무의미해진다.
+        const inner = innerCommandOf(args);
+        if (inner.length > 0) targets.push(...scanBashWrites(inner.join(' ')).targets);
+        break;
+      }
       default:
         break;
     }
@@ -142,11 +184,6 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   return { targets: [...new Set(targets.filter(Boolean))], mutating };
 }
 
-/**
- * 대상 추출이 실패해도 코어 파일을 지키는 안전망 (2).
- * `python -c "open('.harness/events.jsonl','a')..."` 처럼 구문을 못 읽는 경우를 덮는다.
- * 호출측이 `mutating` 과 AND 로 묶어 쓰므로 순수 조회는 걸리지 않는다.
- */
 /**
  * 명령 원문에 등장한 **경로처럼 생긴 토큰**을 전부 뽑는다(따옴표 안쪽 포함).
  *
@@ -175,6 +212,11 @@ export function pathLikeMentions(cmd: string): string[] {
   return out;
 }
 
+/**
+ * 대상 추출이 실패해도 코어 파일을 지키는 안전망 (2).
+ * `python -c "open('.harness/events.jsonl','a')..."` 처럼 구문을 못 읽는 경우를 덮는다.
+ * 호출측이 `mutating` 과 AND 로 묶어 쓰므로 순수 조회는 걸리지 않는다.
+ */
 export function mentionsPath(cmd: string, needles: readonly string[]): string | undefined {
   return needles.find(n => cmd.includes(n));
 }

@@ -8511,6 +8511,33 @@ function redirectTargets(segment) {
   }
   return out;
 }
+function innerCommandOf(args) {
+  const takesValue = /* @__PURE__ */ new Set([
+    "-I",
+    "-i",
+    "-L",
+    "-n",
+    "-P",
+    "-s",
+    "-d",
+    "-E",
+    "--replace",
+    "--max-args",
+    "--max-procs",
+    "--delimiter",
+    "--max-chars",
+    "--arg-file",
+    "-a"
+  ]);
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (!isFlag(a)) break;
+    if (takesValue.has(a) && i + 1 < args.length && !isFlag(args[i + 1])) i += 2;
+    else i += 1;
+  }
+  return args.slice(i);
+}
 function scanBashWrites(cmd) {
   const targets = [];
   let mutating = false;
@@ -8547,6 +8574,23 @@ function scanBashWrites(cmd) {
       case "dd":
         for (const a of args) if (a.startsWith("of=")) targets.push(a.slice(3));
         break;
+      case "curl":
+      case "wget": {
+        const named = name === "curl" ? ["-o", "--output"] : ["-O", "--output-document", "--output-file"];
+        for (let i = 0; i < args.length - 1; i++) {
+          if (named.includes(args[i]) && looksLikePath(args[i + 1])) targets.push(args[i + 1]);
+        }
+        break;
+      }
+      case "prettier":
+      case "eslint":
+        if (args.some((a) => a === "--write" || a === "--fix")) targets.push(...paths);
+        break;
+      case "xargs": {
+        const inner = innerCommandOf(args);
+        if (inner.length > 0) targets.push(...scanBashWrites(inner.join(" ")).targets);
+        break;
+      }
       default:
         break;
     }
