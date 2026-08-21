@@ -1,9 +1,12 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 (라운드 3-PERF 분편) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1) — 판정 재집계는 라운드 3 본편(i18n 정정) 반영 후
+**갱신** 2026-08-21 (라운드 3 완료) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1)
 
 라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
 라운드 2(생성 문서 i18n + CLI 플래그 정합성) — 상세는 `fixes-round2.md`, 닫은 증거는 `evidence/round2-verify.log`.
+라운드 3 — PERF 분편은 `fixes-round3-perf.md`(피어 세션), 본편은 `fixes-round3.md` / `evidence/round3-verify.log`.
+**라운드 3 본편은 라운드 2의 USE-59 결론을 정정한다** — 「산출물 한국어 0」은 부분 스윕에 근거한
+과다 주장이었고, 잔여는 [I18N-62] 로 이관해 닫았다(Iron Rule 7: 자기 보고를 의심한다).
 
 ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(커밋 `bbbb9b6`, 198 tests)의
 1~19 번대와 겹치지 않게 하기 위해서다. 그 대장은 **대상 커밋이 다르므로 이 감사에서 승계하지 않았다**
@@ -31,7 +34,7 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | DET-53 | — | 09 | `replayState` 가 비결정적이었다 — 같은 저널을 두 번 재생하면 `updatedAt` 이 달랐다(전체 스위트에서만 재현되던 플레이키) | verified | measured | `core/src/events.ts:63` | `fixes-round1.md` · 3회 반복 동일 |
 | OPS-55 | HIGH | 11 | 하네스가 쓰는 이벤트 타입 18종이 미등록 → doctor 가 저널을 불신해 **`doctor --repair` 가 복구를 거부**(정상 사용만으로 잠김) | verified | measured | `core/src/events.ts:15` | `fixes-round1.md` · `evidence/round1-verify.log` OPS-55 절 repaired:true |
 | LOGIC-56 | HIGH | 08 | `gate-invalidated` 미폴드 — 산출물이 바뀌어 무효가 된 게이트를 `doctor --repair` 가 승인으로 되살렸다 | verified | measured | `core/src/events.ts:78` | `fixes-round1.md` · `core/test/bashwrite.test.ts:159` |
-| SEC-33 | — | 06 | 🔴 **MCP 경로로는** 게이트 승인 불가 — 3종 우회 시도 후에도 `submitted` 불변. **단 저널 위조 경로는 열려 있다 → [SEC-49]** | verified | measured | `core/src/mcp.ts:294` | `evidence/e2e.log` G6 절 10건 PASS |
+| SEC-33 | — | 06 | 🔴 **MCP 경로로는** 게이트 승인 불가 — 3종 우회 시도 후에도 `submitted` 불변. **단 저널 위조 경로는 열려 있다 → [SEC-49]** | verified | measured | `core/src/mcp.ts:296` | `evidence/e2e.log` G6 절 10건 PASS |
 | SEC-34 | — | 06 | 셸 인젝션 없음(인자가 셸을 경유하지 않음) · 심링크 우회 deny · 프로토타입 오염 입력에 무사 | verified | measured | `core/src/hook.ts:385` | `evidence/contract2.log` · `evidence/e2e.log` |
 | SEC-35 | — | 06 | 이력 비밀 0 — 71 커밋 전수 스캔 | verified | measured | `docs/release-readiness/2026-08-21/evidence/secrets.log` | gitleaks 8.30.1 `no leaks found` |
 | LOGIC-36 | — | 08 | 훅 무해·비간섭 — 미초기화 4 이벤트 0바이트·exit 0, 깨진/빈/미지/null/9000자/유니코드 입력 전부 exit 0 | verified | measured | `core/src/hook.ts:162` | `evidence/e2e.log` 12건 PASS |
@@ -49,4 +52,9 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | DEP-48 | — | 07 | 프로덕션 도달 취약점 0 — 런타임 의존은 `yaml` 하나 | verified | measured | `docs/release-readiness/2026-08-21/evidence/gates.log` | `npm audit --omit=dev` → `found 0 vulnerabilities` |
 | API-57 | HIGH | 02 | `wave create --acceptance` 가 조용히 무시된다 — `--help` 가 광고하는데 파서는 `--accept` 만 읽어, 도움말대로 치면 수용 기준이 빈 채로 웨이브가 생기고 검증자 브리프가 「판정 불가」를 낸다 | verified | measured | `core/src/cli.ts:755` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 수정 전 `[]` → 후 `['login returns 200']`, 회귀 테스트 `core/test/cli.test.ts:42` |
 | API-58 | MED | 02 | `design baseline <UX-x> --png <file>` 가 성립 불가 — 파서가 위치 인자만 읽어 `--png` 문자열 자체를 경로로 삼는다(도움말대로 친 호출이 exit 1) | verified | measured | `core/src/cli.ts:533` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 수정 전 exit 1 → 후 exit 0, 회귀 테스트 `core/test/cli.test.ts:59` |
-| USE-59 | HIGH | 04 | 생성 문서 5종(리뷰 패킷·RTM·허브 / 결함 대장·릴리스 체크리스트 / 웨이브 브리프·소환문 / Playwright 사양·비교 패킷 / 정본 HTML)이 한국어 전용 — 마켓플레이스 배포 시 첫 산출물이 읽히지 않는다 | verified | measured | `core/src/report.ts:103` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 영문 기본에서 CLI stdout·`.harness/` 산출물·생성 토큰·사양 전부 한국어 0, ko 회귀 유지 |
+| USE-59 | HIGH | 04 | 생성 문서 5종(리뷰 패킷·RTM·허브 / 결함 대장·릴리스 체크리스트 / 웨이브 브리프·소환문 / Playwright 사양·비교 패킷 / 정본 HTML)이 한국어 전용 — 마켓플레이스 배포 시 첫 산출물이 읽히지 않는다 **⚠ 라운드 2의 verified 는 30개 명령 부분 스윕에 근거한 과다 주장이었다 → 잔여는 [I18N-62] 로 이관** | verified | measured | `core/src/report.ts:103` | `fixes-round2.md` · `evidence/round2-verify.log` — **5종 자체는 실측 확인. 다만 「산출물 한국어 0」 결론은 [I18N-62] 로 대체한다** |
+| SPEC-60 | HIGH | 06 | 스펙 §12 가 명시한 「init 시 allowlist 무력화 경고 고지」 미구현 — 사용자가 `harness gate approve` 를 permission allowlist 에 넣으면 §4-3 「승인의 최종 클릭은 사람」이 통째로 무력화되는데 아무도 말해주지 않았다 | verified | measured | `core/src/cli.ts:165` | `fixes-round3.md` · `evidence/round3-verify.log` — init 이 stderr 로 고지, 건별 테스트 |
+| SPEC-61 | HIGH | 01 | 스펙 §10 token-guard 흡수 미완 — 티어(90/95/99)를 코어가 계산만 하고 **세션에 전달하는 경로가 없었다**(수동 `harness usage` 뿐). 95% 에서 세션이 갈리면 새 세션은 임계 근처인 줄 모른 채 크게 벌인다 | verified | measured | `core/src/hook.ts:228` | `fixes-round3.md` · `evidence/round3-verify.log` — SessionStart 가 현재 티어 주입, 테스트 3건 |
+| LOGIC-63 | HIGH | 08 | 턴 로그 파싱 앵커가 **언어에 의존** — `hook.ts` 가 `'## 턴 로그'` 문자열로 찾는데 지시서 본문은 생성 시점 `lang` 을 따라간다. 영문 프로젝트에서 발췌가 **조용히 빔**(이어받기가 가장 중요한 순간에 무음 실패). `lang` 전환 시 과거 파일도 전부 안 읽힘. **라운드 2가 만든 회귀** | verified | measured | `core/src/hook.ts:59` | `fixes-round3.md` · `evidence/round3-verify.log` — 두 언어 매칭 정규식, 건별 테스트 2건(수정 전 레드 실증) |
+| I18N-62 | HIGH | 04 | 라운드 2의 「산출물 한국어 0」이 과다 주장 — 잔여 표면 8모듈(adr 렌더 패킷·doctor 진단 전량·gate verifyGate 사유·wave 예외 3·usage 티어 지침·migrate 안내 전문·profile 진단 전량·hook 발췌 펜스)과 번들 `profiles/` 전량(profile/commands yaml·guidance 3종·raw-values 룰팩) | verified | measured | `core/test/i18n-en-default.test.ts:140` | `fixes-round3.md` · `evidence/round3-verify.log` — 전량 처리 + **회귀 가드 자동화**(6절, 오염 주입으로 무는 것 실증) |
+| OPS-64 | MED | 11 | 「한국어 0」을 사람이 매번 손으로 재는 구조 자체가 결함 — 라운드 2의 과다 주장이 그 산물이다. 측정 범위가 코드에 없으면 새 명령·새 오류 경로가 사정권 밖으로 조용히 빠진다 | verified | measured | `core/test/i18n-en-default.test.ts:45` | `fixes-round3.md` — help 레지스트리 순회라 **새 명령이 자동 편입**, 고장 상태 주입 절 포함 |

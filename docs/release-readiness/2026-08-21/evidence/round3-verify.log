@@ -1,0 +1,113 @@
+# 라운드 3 본편 재측정 — 스펙 갭 2건 · i18n 전 표면 · 회귀 가드
+일시(로컬): 2026-08-21 18:39:44 KST
+대상 커밋: 900cc5d (feature/core-engine-v0)
+직전 커밋: 6a29ed4
+
+## 1. 게이트 — G1 테스트 / G2 타입 / G3 빌드
+$ npm run check
+> tsc --noEmit
+
+$ npx vitest run  (회차 1)
+ Test Files  28 passed (28)
+      Tests  640 passed (640)
+$ npx vitest run  (회차 2)
+ Test Files  28 passed (28)
+      Tests  640 passed (640)
+$ npx vitest run  (회차 3)
+ Test Files  28 passed (28)
+      Tests  640 passed (640)
+$ npm run build
+CJS core/dist/mcp.js 344.54 KB
+CJS ⚡️ Build success in 24ms
+
+## 2. [SPEC-60] init 이 allowlist 무력화를 고지하는가 (스펙 §12)
+### 수정 전 (HEAD~1)
+$ harness init   (stdout+stderr 전량)
+.harness/ initialised — run `harness --help` to see the command map.
+  → allowlist 고지 없음
+
+### 수정 후 (HEAD)
+$ harness init   (stdout+stderr 전량)
+.harness/ initialised — run `harness --help` to see the command map.
+NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human — allowlisting it lets an agent open gates on its own.
+
+$ harness init 2>/dev/null   # stdout 계약이 깨지지 않는지 (고지는 stderr)
+.harness/ initialised — run `harness --help` to see the command map.
+
+## 3. [SPEC-61] 사용량 티어 지침이 세션에 전달되는가 (스펙 §10)
+$ harness usage tier --percent 96   # 티어를 settle-every-turn 으로 올린다
+  "inject": true
+}
+[harness] usage at 95% — update the instruction sheet (handoff) at the end of every turn. The settle throttle is off.
+
+### 수정 전 (HEAD~1) — SessionStart 주입
+  → 티어 문구 없음 (코어가 계산만 하고 아무도 전달하지 않는다)
+
+### 수정 후 (HEAD) — SessionStart 주입
+INSTRUCTION(2): [harness] usage at 95% — update the instruction sheet (handoff) at the end of every turn. The settle throttle is off.
+
+$ 티어가 normal 일 때는 넣지 않는가 (노이즈 금지) — 새 샌드박스, 티어 기록 없음
+  샌드박스: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/6ad77aea-e19e-4c7b-840f-a5e3f4ca4d65/scratchpad/n3.SGmw
+  주입 컨텍스트 줄 수: 4
+  그중 티어 문구 줄 수: 0
+  → 0 이면 상승 없는 세션에 티어 노이즈를 넣지 않는다는 뜻
+
+## 4. [LOGIC-63] 턴 로그 앵커가 언어에 의존한다 (라운드 2가 만든 회귀)
+재현: 영문 기본에서 지시서 본문은 `## Turn log` 로 생성되는데 훅은 `'## 턴 로그'` 를 찾는다.
+     → 발췌가 조용히 빈다. 예외도 경고도 없다.
+
+### 수정 전 (HEAD~1)
+  지시서 헤딩: ## Goal
+## Turn log
+  턴 로그 발췌: **없음 (무음 실패)**
+
+### 수정 후 (HEAD)
+  지시서 헤딩: ## Turn log
+  턴 로그 발췌: **있음**
+  → 회귀 테스트: core/test/hook-session-start.test.ts (두 언어 각 1건, 수정 전 영문 케이스 레드 실증)
+
+## 5. [I18N-62] 전 표면 재측정 — 라운드 2의 「한국어 0」이 무엇을 빠뜨렸나
+
+⚠ **측정 도구 정정.** 처음에 shell `grep -c '[가-힣]'` 로 쟀는데 순수 영문 줄을 한국어로
+   세는 오탐이 나왔다(migrate 8줄 → 실제 0줄). 같은 입력을 Python `re` 로 재니 0이었다.
+   **아래 수치는 전부 Python 정규식 기준이다.** 라운드 2 로그의 grep 기반 수치는 과대계상
+   방향이라 「0」 보고는 그대로 유효하지만(오탐은 0을 만들지 못한다), 0이 아닌 값은 믿지 마라.
+
+  [수정 전 · HEAD~1]
+    adr propose: 한국어 줄 0
+    doctor: 한국어 줄 0
+    migrate: 한국어 줄 7
+    profile show: 한국어 줄 1
+    usage tier 96: 한국어 줄 1
+    wave activate(없는 id): 한국어 줄 1
+    gate approve(미제출): 한국어 줄 0
+    phase set P7(미승인): 한국어 줄 0
+    design html(토큰없음): 한국어 줄 0
+
+  [수정 후 · HEAD]
+    adr propose: 한국어 줄 0
+    doctor: 한국어 줄 0
+    migrate: 한국어 줄 0
+    profile show: 한국어 줄 0
+    usage tier 96: 한국어 줄 0
+    wave activate(없는 id): 한국어 줄 0
+    gate approve(미제출): 한국어 줄 0
+    phase set P7(미승인): 한국어 줄 0
+    design html(토큰없음): 한국어 줄 0
+
+## 6. [OPS-64] 회귀 가드가 실제로 무는가
+가드가 통과한다는 사실만으로는 아무것도 증명되지 않는다 — **일부러 깨뜨려 레드를 확인**한다.
+
+$ (doctor.ts 의 영문 문자열 하나를 한국어로 오염) → npx vitest run core/test/i18n-en-default.test.ts
+     × i18n — 기본 언어(en) 출력에 한국어가 없다 > 일부러 만든 고장 상태의 진단·복구 메시지 9ms
+        Tests  1 failed | 5 passed (6)
+
+$ (복구) → npx vitest run core/test/i18n-en-default.test.ts
+        Tests  6 passed (6)
+
+  → 오탐 없이 정확히 그 결함에만 레드가 난다.
+
+  ⚠ **첫 버전은 물지 않았다.** 정상 실행이 오류 경로를 지나지 않아 그 문자열이 렌더되지
+     않았기 때문이다. 그래서 「일부러 만든 고장 상태」 절(state 부재·저널 손상·미지 이벤트·
+     프로파일 불량·없는 대상 12종)을 추가했다. **런타임 테스트는 실행한 경로만 잰다** —
+     이것이 라운드 2 과다 주장과 같은 뿌리다.
