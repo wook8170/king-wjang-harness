@@ -40,11 +40,27 @@ export type HookEvent = 'session-start' | 'pre-tool' | 'post-tool' | 'stop';
 const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
 /**
- * harness 명령을 **명령 위치에서만** 식별한다 — 줄 처음, `;`/`&`/`|` 다음, 서브셸 `(` 다음.
+ * harness 명령을 **명령 위치에서만** 식별한다 — 줄 처음, `;`/`&`/`|`/**개행** 다음,
+ * 서브셸 `(`·명령치환 `$(`·백틱 다음, 그리고 **접두 명령**(`env`·`sudo`·`nohup`·`time`·
+ * `command`·`exec`·`nice`·`xargs`·`doas`)과 인라인 env 대입(`FOO=1`) 뒤.
  * `# harness 로 정산` 같은 주석이나 `git commit -m "harness"` 의 인자를 자기호출로
  * 오판하면, 진짜 작업 턴이 활동 집계에서 빠져 stop 가드가 조용히 뚫린다.
  */
-const HARNESS_CMD_RE = /(^|[;&|]\s*|\(\s*)(\S*\/)?harness(\s|$)/;
+const HARNESS_CMD_RE =
+  /(^|[;&|\n`]\s*|\$\(\s*|\(\s*)((?:env|sudo|nohup|time|command|exec|nice|xargs|doas)\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(\S*\/)?harness(\s|$)/;
+
+/**
+ * `phase set --force` 자기해제 **탐지 전용** 패턴. `HARNESS_CMD_RE` 와 **일부러 분리**했다.
+ *
+ * 그 정규식은 stop 가드의 자기호출 제외에도 쓰인다 — 거기서 넓히면 `git commit -m "harness"`
+ * 같은 턴이 자기호출로 오판돼 **활동 집계에서 빠지고 정산 강제가 조용히 풀린다**. 즉 두 용도는
+ * 틀리는 방향이 반대다: 탐지는 넓게 틀려야 안전하고(과차단은 사용자가 문구를 바꾸면 된다),
+ * 자기호출 제외는 좁게 틀려야 안전하다.
+ *
+ * 그래서 여기서는 인용부호·서브셸 안(`bash -c "harness … --force"`)까지 본다.
+ * 실제 차단은 이 탐지 + CLI 의 `HARNESS_ALLOW_FORCE` env 게이트 **두 겹**이다.
+ */
+const FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 
 /** 하네스가 스스로만 고쳐야 하는 파일 — 손편집하면 저널과 상태가 어긋나 전부 거짓이 된다. */
 const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/design/ledger.yaml'];
@@ -595,7 +611,7 @@ function preTool(
     // 한 줄로 풀린다(감정서 「구멍 1」이 이름만 바뀐 것). env 를 명령에 인라인으로 붙여
     // 우회하는 것도 같이 막는다: 인라인으로 켤 수 있으면 그건 잠금이 아니다.
     if (/HARNESS_ALLOW_FORCE/.test(cmd)
-        || (HARNESS_CMD_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(\s|$)/.test(cmd))) {
+        || (FORCE_ESCAPE_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd))) {
       return deny(L(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
         + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '

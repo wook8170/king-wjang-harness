@@ -219,3 +219,53 @@ describe('pre-tool: 설계 트랙 빌드·배포 명령 (스펙 §4-2 1행)', ()
     }
   });
 });
+
+/**
+ * 자기호출 인식 정규식(`HARNESS_CMD_RE`)이 **개행과 흔한 접두 명령을 안 봤다.**
+ * `cd /tmp\nharness phase set P7 --force` 는 훅을 그냥 통과했다.
+ *
+ * 실제 피해는 방어 심층 덕에 막혔다 — CLI 의 `HARNESS_ALLOW_FORCE` 게이트가 2차로 거부한다.
+ * 그래도 고치는 이유: **두 겹이 다 살아 있어야 방어 심층이다.** 한 겹이 이미 뚫려 있으면
+ * 다른 한 겹에 실수가 생기는 순간 그대로 열린다. 그리고 같은 정규식을 쓰는 새 잠금
+ * (`doctor --accept-policy` 같은)은 2차 방어선이 없을 수 있다.
+ *
+ * 같은 이유로 stop 가드의 자기호출 제외도 이 정규식을 쓴다 — 개행 한 줄로 턴 전체가
+ * 활동 집계에서 빠지면 정산 강제가 조용히 풀린다.
+ */
+describe('pre-tool: 자기호출 인식이 개행·접두 명령에 뚫리지 않는다', () => {
+  const bashDenied = (root: string, command: string): boolean => {
+    const out = handleHook(root, 'pre-tool', { tool_name: 'Bash', tool_input: { command } } as any) as any;
+    return out?.hookSpecificOutput?.permissionDecision === 'deny';
+  };
+
+  const FORCE = 'harness phase set P7 --force';
+  for (const [label, cmd] of [
+    ['평문', FORCE],
+    ['개행 접두', `cd /tmp\n${FORCE}`],
+    ['선행 개행', `\n${FORCE}`],
+    ['env 접두', `env FOO=1 ${FORCE}`],
+    ['sudo 접두', `sudo ${FORCE}`],
+    ['nohup 접두', `nohup ${FORCE}`],
+    ['time 접두', `time ${FORCE}`],
+    ['백틱 안', `echo \`${FORCE}\``],
+    ['$() 안', `echo $(${FORCE})`],
+    ['bash -c 래퍼', `bash -c "${FORCE}"`],
+    ['절대경로 + 개행', `cd /tmp\n/abs/bin/${FORCE}`],
+  ] as const) {
+    it(`${label} 형태를 막는다`, () => {
+      expect(bashDenied(setup('P0'), cmd)).toBe(true);
+    });
+  }
+
+  it('과차단 금지 — harness 를 언급만 하는 명령은 통과한다', () => {
+    const root = setup('P0');
+    for (const c of [
+      'git commit -m "harness 도입"',
+      'cat README.md | grep harness',
+      'echo "phase set --force 는 쓰지 마라" >> notes.md',
+      'ls harness-notes/',
+    ]) {
+      expect(bashDenied(root, c), c).toBe(false);
+    }
+  });
+});
