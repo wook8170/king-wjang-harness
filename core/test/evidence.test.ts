@@ -65,8 +65,8 @@ describe('evidence — UX 노드 → Playwright 시나리오 1:1 변환', () => 
   });
 
   it('specFileNameFor: UX- 가 아닌 id·경로 문자는 거절', () => {
-    expect(() => specFileNameFor('F-1')).toThrow(/UX-/);
-    expect(() => specFileNameFor('UX-../../etc/passwd')).toThrow(/UX-7/);
+    expect(() => specFileNameFor('F-1')).toThrow(/UX node id/);
+    expect(() => specFileNameFor('UX-../../etc/passwd')).toThrow(/UX node id/);
   });
 
   it('generatePlaywrightSpec: 결정적이며 캡처 규율(headless · 2x)이 코드에 박혀 있다', () => {
@@ -148,7 +148,7 @@ describe('evidence — 증적 검증', () => {
   });
 
   it('잘못된 웨이브 id 는 경로 탈출 전에 막는다', () => {
-    expect(() => validateEvidence(setup(), '../../etc')).toThrow(/웨이브 id/);
+    expect(() => validateEvidence(setup(), '../../etc')).toThrow(/Invalid wave id/);
   });
 });
 

@@ -30,6 +30,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evidenceDir } from './paths';
+import { tr } from './tr';
 import { readState } from './state';
 import { getNode } from './ledger';
 import { readWave } from './wave';
@@ -110,8 +111,9 @@ const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 function requireUxId(id: unknown): string {
   if (typeof id !== 'string' || !/^UX-[A-Za-z0-9._-]+$/.test(id)) {
     throw new Error(
-      `시각 증적은 UX 노드에만 붙는다: ${String(id)} 는 쓸 수 있는 UX 노드 id 가 아니다. ` +
-      '`UX-7` 처럼 UX- 로 시작하고 영숫자·. _ - 만 쓰는 id 여야 한다(파일명이 되므로 경로 문자 불가).',
+      // i18n 예외: 순수 검증기라 root 가 없다(tokens.ts 상단 주석과 같은 판단). 영어 고정.
+      `Visual evidence attaches to UX nodes only: ${String(id)} is not a usable UX node id. It must `
+      + 'start with UX- and use only alphanumerics, . _ - (it becomes a filename, so no path characters).',
     );
   }
   return id;
@@ -121,8 +123,9 @@ function requireUxId(id: unknown): string {
 function requireWaveId(id: unknown): string {
   if (typeof id !== 'string' || !/^[A-Za-z0-9._-]+$/.test(id) || id === '.' || id === '..') {
     throw new Error(
-      `웨이브 id 가 올바르지 않다: ${String(id)} — \`wave-001\` 처럼 영숫자·. _ - 만 쓰는 ` +
-      '식별자여야 한다(증적 디렉토리 경로가 되므로 경로 문자 불가).',
+      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
+      `Invalid wave id: ${String(id)} — it must be an identifier using only alphanumerics, . _ - `
+      + '(like `wave-001`); it becomes an evidence directory path, so no path characters.',
     );
   }
   return id;
@@ -235,8 +238,12 @@ function resolveWaveId(root: string, given?: string): string {
   }
   if (!active) {
     throw new Error(
-      '캡처를 떨어뜨릴 웨이브를 알 수 없다 — 활성 웨이브가 없다. ' +
-      '`harness wave activate <id>` 로 활성화하거나 waveId 를 직접 지정하라.',
+      tr(root, {
+        en: 'Cannot tell which wave the captures belong to — there is no active wave. Activate one with '
+          + '`harness wave activate <id>`, or pass waveId explicitly.',
+        ko: '캡처를 떨어뜨릴 웨이브를 알 수 없다 — 활성 웨이브가 없다. '
+          + '`harness wave activate <id>` 로 활성화하거나 waveId 를 직접 지정하라.',
+      }),
     );
   }
   return requireWaveId(active);

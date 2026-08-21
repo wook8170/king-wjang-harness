@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+// 이 스위트는 **기본값 자체**가 대상이라 스위트 전역의 HARNESS_LANG=ko(core/test/setup.ts)를
+// 해제하고 본다. 언어 해석 규칙은 help-trace-feedback.test.ts 가 따로 검증한다.
+let prevLang: string | undefined;
+beforeEach(() => { prevLang = process.env.HARNESS_LANG; delete process.env.HARNESS_LANG; });
+afterEach(() => { if (prevLang === undefined) delete process.env.HARNESS_LANG; else process.env.HARNESS_LANG = prevLang; });
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

@@ -58,11 +58,59 @@ export function readEvents(root: string): HarnessEvent[] {
   return readJournal(root).events;
 }
 
+/**
+ * 재생 상태를 실제로 바꾸는 이벤트 타입. 아래 replayState 의 switch 와 **같은 집합**이어야
+ * 한다 — 갈리면 빠른 경로가 조용히 이벤트를 흘린다. 새 case 를 추가하면 여기도 추가하라.
+ */
+export const REPLAY_TYPES: ReadonlySet<string> = new Set([
+  'phase-set', 'wave-activated', 'wave-completed', 'wave-stale',
+  'gate-submitted', 'gate-approved', 'backtrack-started', 'backtrack-cleared',
+]);
+
+/** 줄에서 타입만 싸게 뽑는다 — JSON.parse 없이. 못 뽑으면 undefined. */
+const TYPE_RE = /"type"\s*:\s*"([a-z-]+)"/;
+
+/**
+ * PERF-26: 훅의 **열화 경로**(state.json 부재·손상)용 빠른 재생.
+ *
+ * 저널 10만 건에서 pre-tool p95 가 169ms 로 게이트(150ms)를 넘었다. 원인은 전 줄 JSON.parse 다 —
+ * 그런데 상태를 바꾸는 타입은 8개뿐이고, 긴 프로젝트의 저널은 턴 로그·노드 등록이 대부분이다.
+ * 그래서 **타입을 문자열로 먼저 훑고 해당 타입만 파싱**한다.
+ *
+ * 정확도 절충(의도적): 타입 추출에 성공했지만 뒷부분이 깨진 비대상 줄은 손상으로 세지 않는다.
+ * 이 경로의 목적은 «판정을 계속하는 것»이고, 저널 무결의 권위는 전 줄을 파싱하는
+ * `readJournal`(= `doctor`)에 있다. 열화 고지 자체는 그대로 뜬다.
+ */
+export function readJournalForReplay(root: string): Journal {
+  if (!fs.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  const events: HarnessEvent[] = [];
+  let corruptLines = 0;
+  for (const line of fs.readFileSync(eventsPath(root), 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    const t = TYPE_RE.exec(line)?.[1];
+    if (t && !REPLAY_TYPES.has(t)) continue;          // 상태 무변이 — 파싱할 이유가 없다
+    let parsed: unknown;
+    try { parsed = JSON.parse(line); } catch { corruptLines++; continue; }
+    if (typeof parsed !== 'object' || parsed === null || typeof (parsed as any).type !== 'string') {
+      corruptLines++; continue;
+    }
+    events.push(parsed as HarnessEvent);
+  }
+  return { events, corruptLines };
+}
+
 /** 이벤트가 진실. 이 함수가 doctor 복구의 근거다. */
 export function replayState(events: HarnessEvent[]): HarnessState {
   const s = defaultState();
+  // 재생은 **결정적**이어야 한다(축⑨). defaultState 는 `updatedAt` 에 호출 시각을 찍는데,
+  // 그러면 같은 저널을 두 번 재생한 결과가 밀리초 단위로 달라진다.
+  // 「마지막 이벤트의 ts」로도 부족하다 — 빠른 경로(readJournalForReplay)는 상태 무변이
+  // 이벤트를 아예 걷어내므로 «마지막 이벤트»가 두 경로에서 다르다. **상태를 실제로 바꾼
+  // 마지막 이벤트**의 ts 여야 두 경로가 일치한다. (이 함정을 테스트가 잡았다.)
+  let lastAppliedTs = '';
   for (const ev of events) {
     const d = ev.data as Record<string, any>;
+    if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
       case 'phase-set': if (isPhase(d.phase)) s.phase = d.phase; break;
       case 'wave-activated':
@@ -101,5 +149,6 @@ export function replayState(events: HarnessEvent[]): HarnessState {
       default: break; // 전방 호환: 미래 이벤트는 무시
     }
   }
+  if (lastAppliedTs) s.updatedAt = lastAppliedTs;
   return s;
 }

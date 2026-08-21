@@ -1,0 +1,48 @@
+=== G11 CLI 계약 ===
+'--help'     exit=1  알 수 없는 명령: --help
+'-h'         exit=1  알 수 없는 명령: -h
+'help'       exit=1  알 수 없는 명령: help
+''           exit=1  알 수 없는 명령: (없음)
+'nosuchcmd'  exit=1  알 수 없는 명령: nosuchcmd
+'--version'  exit=0  king-wjang-harness core v0
+--- 명령군별 하위명령 누락 ---
+gate       exit=1  알 수 없는 gate 하위 명령: undefined
+ship       exit=1  알 수 없는 ship 하위 명령: undefined (defect|deploy|deployment
+usage      exit=1  알 수 없는 usage 하위 명령: undefined (tier|status)
+migrate    exit=0  기존 자작 훅 4건 감지 — 아래는 안내이며 하네스는 
+loop       exit=1  알 수 없는 loop 하위 명령: undefined (next|attempt|brief|criti
+evidence   exit=1  알 수 없는 evidence 하위 명령: undefined (spec|check|packet)
+profile    exit=1  알 수 없는 profile 하위 명령: undefined (show|cmd)
+design     exit=1  알 수 없는 design 하위 명령: undefined (link|sync|inventory|ba
+tokens     exit=1  알 수 없는 tokens 하위 명령: undefined (gen|lint|swap)
+report     exit=1  알 수 없는 report 하위 명령: undefined (packet|rtm|hub)
+adr        exit=1  알 수 없는 adr 하위 명령: undefined
+doc        exit=1  알 수 없는 doc 하위 명령: undefined
+wave       exit=1  알 수 없는 wave 하위 명령: undefined
+node       exit=1  알 수 없는 node 하위 명령: undefined
+phase      exit=1  사용법: harness phase set <P0..P12>
+backtrack  exit=1  유효하지 않은 페이즈: undefined
+--- 필수 인자 누락 시 침묵 성공 여부 ---
+'node upsert'      exit=1  알 수 없는 명령: node upsert
+'gate submit'      exit=1  알 수 없는 명령: gate submit
+'wave create'      exit=1  알 수 없는 명령: wave create
+'wave activate'    exit=1  알 수 없는 명령: wave activate
+'adr propose'      exit=1  알 수 없는 명령: adr propose
+'doc upsert'       exit=1  알 수 없는 명령: doc upsert
+'ship defect add'  exit=1  알 수 없는 명령: ship defect add
+
+=== ③ 출력 표면 ===
+NO_COLOR 영향: 동일(ANSI 미사용)
+ANSI 이스케이프 포함 여부: 0
+비TTY stdout JSON 파싱: OK
+파이프 조기종료(EPIPE) 내성: exit=0
+
+=== G13 패키징: manifest ↔ 파일 ===
+mcp server 존재: true
+hooks 이벤트: SessionStart,PreToolUse,PostToolUse,Stop
+skills: 11 agents: 5
+plugin.json version: 0.0.1 / package.json: 0.0.1
+--- .gitignore 가 dist 를 빼는가(클론 설치 파손 원인) ---
+dist 제외 없음(OK)
+core/dist/cli.js
+core/dist/mcp.js

@@ -1,5 +1,65 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — ★ 출하 검증 완료 (11축) · **판정 NO-GO** · 차단 결함 2건
+
+**정본.** `/verifying-production-readiness` 를 대상 `e860460` 에 대해 11축 전부 수행.
+산출: `docs/release-readiness/2026-08-21/` (00-summary · ledger 33행 · 축파일 11 · 99-final ·
+evidence 8종). **lint 통과**(R1–R7, open BLOCKER 2). 아티팩트:
+https://claude.ai/code/artifact/c6e6ed5c-baf3-4a2a-9779-e5b16592e0d8
+
+### 🔴 출하 차단 2건 — 뿌리는 하나: **훅이 Bash 표면에서 파일 쓰기를 안 본다**
+- **[SEC-50]** 설계 트랙 소스 쓰기 금지가 Bash 로 무력화. `Write`→`src/app.ts` 는 deny 인데
+  `echo "x" > src/app.ts`·heredoc·`touch` 는 **허용**. deny 메시지가 모델을 그 경로로 민다.
+- **[SEC-49]** `echo '{"ts":"…","type":"phase-set","data":{"phase":"P7"}}' >> .harness/events.jsonl`
+  + `harness doctor --repair` → **phase P7 로 위조**, 설계 트랙 해제. `gate-approved` 를 같은 방식으로
+  넣으면 **사람 승인 없이 게이트가 approved** 가 된다. mcp.ts 가 코드 불변식까지 써서 지킨
+  §4-3 안전 속성이 Bash 두 줄로 우회된다.
+- 위치: `core/src/hook.ts:395` (Bash 분기가 `design_blocked_bash` 배포 명령만 본다).
+- **완화 방향**(리포트 06 절): Bash 명령 문자열에서 쓰기 대상 추출 → `.harness/` 코어 파일과
+  설계 트랙 소스 경로가 등장하면 deny. 완전 파싱은 불가하나 **모델이 자연히 가는 경로**는 닫힌다.
+
+### 그 밖 open (HIGH 5 · MED 5 · LOW 2)
+- **[OPS-20]** 게이트 승인 후 `doctor` 가 **영구히** `gates 불일치`·exit 1 — 승인 시각을
+  `gate.ts:134` 와 `events.ts:25` 가 따로 찍는다. 상시 오탐이 SEC-49 위조를 숨긴다.
+- **[LOGIC-21]** `doctor --repair` 가 게이트 `evidence`·`submittedAt` 삭제 — 저널엔 있는데
+  재생 리듀서(`events.ts:74`)가 안 쓴다.
+- **[FEAT-22]** `harness trace` 미구현(스펙·`agents/wave-verifier.md:31` 이 호출) ·
+  **[FEAT-23]** `harness gate feedback` 미구현(**공개 README 4개 언어가 광고**).
+- **[UX-24]** `--help`·`-h`·`help`·무인자 전부 exit 1 — 사용법 출력이 아예 없다.
+- **[SEC-51]** 코어 파일 보호가 Write/Edit 표면만 · **[SHIP-52]** `phase set --force` 자기해제
+  경로가 Bash 로 열려 있음 · **[SEC-25]** 게이트 산출물 경로가 루트 밖이어도 승인됨 ·
+  **[PERF-26]** 폴백 경로 10만건 p95 169ms · **[API-27/29/30]**·**[SEC-28]**·**[SHIP-31]**.
+
+### 통과한 것 (재확인 불필요 — 대장 verified 16행)
+584 tests ×3 동일 · tsc 0 · **빌드 바이트 재현** · 맨 클론 설치 · **롤백 리허설 실제 성공** ·
+gitleaks 71커밋 0 · 프로덕션 취약점 0 · 훅 무해/비간섭 전건 · **MCP 경로 게이트 승인 불가** ·
+CLI 출력 계약 · 패키징 누락 0 · 침묵 catch 5/5 문서화.
+
+### 다음 즉시 할 일
+1. **SEC-49·SEC-50 수정** — `hook.ts` Bash 분기에 쓰기 대상 검사 추가 + 건별 회귀 테스트.
+   수정 후 `evidence/final.log` 의 재현 시퀀스가 **deny 로 뒤집히는지 재측정**(Iron Rule 4).
+2. 새 라운드 파일 `docs/release-readiness/2026-08-21/fixes-round1.md` 에 기록.
+   **기존 축 파일·ledger 행은 상태만 갱신**(open→fixing→fixed→verified), 라운드 파일은 새로 만든다.
+3. 재진입 첫 명령: `bash /Users/wjang/.claude/skills/verifying-production-readiness/bin/ledger-lint.sh docs/release-readiness/2026-08-21/`
+   (**반드시 리포 루트에서** — 경로 인용이 루트 상대다).
+
+### ⚠ 사용자 결정 대기
+- **LICENSE 없음** — 공개 마켓플레이스 배포인데 라이선스가 없으면 "모든 권리 유보"다.
+- **CLI·훅 출력 한국어 전용** — README 만 4개 언어. 글로벌 배포면 i18n 이 선결.
+- **CI 없음** · GitHub 리모트 없음 · **push 금지 유지** · main 병합 보류.
+- **`--force` 를 남길지** — 정당한 탈출구지만 접근 제한이 없다(SHIP-52).
+
+### 시스템 지식 (이번 웨이브)
+- **zsh 는 무인용 파라미터 확장을 단어 분리하지 않는다.** `./bin/harness $c` 로 "gate approve" 를
+  넘기면 한 덩어리로 들어가 「미구현 명령 48건」이라는 **가짜 결함**이 나온다. 결과가 너무
+  극적이면 도구부터 의심하라.
+- `ledger-lint.sh`·`report-html.py` 는 **리포 루트에서** 실행해야 `파일:줄` 인용이 해석된다.
+- 이전 감정서 `docs/appraisal/2026-08-21-plugin-appraisal.html` 는 `bbbb9b6`(198 tests) 기준이라
+  「게이트 미구현」·「한국어 전용 README」·「67MB 배포」가 전부 낡았다. 대조표는 00-summary 에 있다.
+- 파일 하나 = `docs/release-readiness/readiness.md`(구, `bbbb9b6`)는 **승계하지 않았다.**
+  새 대장 ID 는 20번부터라 충돌 없다.
+
+
 ## 2026-08-21 — ★ 로드맵 §13.2~§13.8 완주 (13/13, 커밋 8개, 584 tests green)
 
 **정본.** 사용자 지시(/ultragoal)대로 **로드맵 남은 전부를 구현 완료**. 테스트 **198 → 584 green**, tsc0.

@@ -282,6 +282,6 @@ describe('design — 인터랙티브 HTML 정본', () => {
   });
 
   it('토큰 파일이 없으면 기본값을 지어내지 않고 실패한다', () => {
-    expect(() => generateSourceOfTruthHtml(setup())).toThrow(/토큰 파일이 없다/);
+    expect(() => generateSourceOfTruthHtml(setup())).toThrow(/No token file/);
   });
 });

@@ -2,6 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { wavesDir, wavePath, evidenceDir } from './paths';
+import { tr, langFor } from './tr';
+import { pick, DEFAULT_LANG, type Lang } from './i18n';
 import { readState, writeState } from './state';
 import { appendEvent, readEvents } from './events';
 import { noteTurnLogged } from './runtime';
@@ -12,12 +14,13 @@ import type { WaveMeta } from './types';
  * 캐스트 대신 필드별로 정규화한다. id 필드는 참고용일 뿐, 실제 파일 식별은 항상
  * 호출측이 쥔 파일명(id 파라미터) 기준이다 (writeWave 참조).
  */
-export function parseWave(txt: string): { meta: WaveMeta; body: string } {
+/** lang 은 호출측(readWave)이 root 에서 해석해 넘긴다 — 순수 파서가 파일을 읽지 않게. */
+export function parseWave(txt: string, lang: Lang = DEFAULT_LANG): { meta: WaveMeta; body: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
-  if (!m) throw new Error('웨이브 파일 형식 오류: frontmatter가 없다');
+  if (!m) throw new Error(pick({ en: 'Malformed wave file: no frontmatter', ko: '웨이브 파일 형식 오류: frontmatter가 없다' }, lang));
   let raw: unknown;
   try { raw = YAML.parse(m[1]); } catch { raw = null; }
-  if (typeof raw !== 'object' || raw === null) throw new Error('웨이브 파일 형식 오류: frontmatter를 해석할 수 없다');
+  if (typeof raw !== 'object' || raw === null) throw new Error(pick({ en: 'Malformed wave file: frontmatter could not be parsed', ko: '웨이브 파일 형식 오류: frontmatter를 해석할 수 없다' }, lang));
   const r = raw as Record<string, unknown>;
   const asArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.map(String) : typeof v === 'string' && v ? [v] : [];
@@ -37,7 +40,7 @@ export function serializeWave(meta: WaveMeta, body: string): string {
 }
 
 export function readWave(root: string, id: string): { meta: WaveMeta; body: string } {
-  return parseWave(fs.readFileSync(wavePath(root, id), 'utf8'));
+  return parseWave(fs.readFileSync(wavePath(root, id), 'utf8'), langFor(root));
 }
 
 /** 깨진 웨이브 파일은 스킵한다 (bumpNode의 손상 방어와 동일 관용) — 목록 조회가 죽으면 안 된다. */
@@ -46,7 +49,7 @@ export function listWaves(root: string): WaveMeta[] {
   const out: WaveMeta[] = [];
   for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
     try {
-      out.push(parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8')).meta);
+      out.push(parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8'), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -122,7 +125,7 @@ export function createWave(
   // 두 프로세스가 같은 순간에 같은 번호를 발급받은 TOCTOU 상황의 안전망 —
   // 남의 웨이브 지시서를 조용히 덮는 것보다 생성을 거부하는 쪽이 안전하다.
   if (fs.existsSync(wavePath(root, id))) {
-    throw new Error(`${id} 파일이 이미 존재한다 — 동시 생성 의심으로 웨이브 생성을 중단한다`);
+    throw new Error(tr(root, { en: `${id} already exists — aborting wave creation (concurrent creation suspected)`, ko: `${id} 파일이 이미 존재한다 — 동시 생성 의심으로 웨이브 생성을 중단한다` }));
   }
   // 잔존 증적 가드: 새 웨이브가 남의 스크린샷을 물려받은 채 시작하면 UX 게이트가 무의미해진다.
   // 브랜치 전환으로 저널이 되감겨 번호가 재발급된 경우가 실제 경로다(nextWaveId 주석 참조).
@@ -148,7 +151,7 @@ export function createWave(
 export function activateWave(root: string, id: string): void {
   const state = readState(root);
   if (state.activeWave && state.activeWave !== id) {
-    throw new Error(`이미 활성 웨이브가 있다: ${state.activeWave}. 먼저 complete 하라.`);
+    throw new Error(tr(root, { en: `A wave is already active: ${state.activeWave}. Complete it first (\`harness wave complete\`).`, ko: `이미 활성 웨이브가 있다: ${state.activeWave}. 먼저 complete 하라.` }));
   }
   let meta: WaveMeta, body: string;
   try {
@@ -162,7 +165,7 @@ export function activateWave(root: string, id: string): void {
       + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
     );
   }
-  if (meta.status === 'done') throw new Error(`${id} 는 이미 done 이다`);
+  if (meta.status === 'done') throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} 는 이미 done 이다` }));
   meta.status = 'active';
   writeWave(root, id, meta, body);
   appendEvent(root, 'wave-activated', { id }); // 순서 계약: appendEvent가 writeState보다 먼저
@@ -191,7 +194,7 @@ function readActiveWave(root: string, id: string): { meta: WaveMeta; body: strin
 
 export function logTurn(root: string, text: string): void {
   const state = readState(root);
-  if (!state.activeWave) throw new Error('활성 웨이브가 없다');
+  if (!state.activeWave) throw new Error(tr(root, { en: 'No active wave — activate one with `harness wave activate <wave-id>`', ko: '활성 웨이브가 없다 — `harness wave activate <wave-id>` 로 활성화하라' }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   const entry = `- [${new Date().toISOString()}] ${text}`;
@@ -202,7 +205,7 @@ export function logTurn(root: string, text: string): void {
 
 export function completeWave(root: string): void {
   const state = readState(root);
-  if (!state.activeWave) throw new Error('활성 웨이브가 없다');
+  if (!state.activeWave) throw new Error(tr(root, { en: 'No active wave — activate one with `harness wave activate <wave-id>`', ko: '활성 웨이브가 없다 — `harness wave activate <wave-id>` 로 활성화하라' }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some(r => r.startsWith('UX-'))) {

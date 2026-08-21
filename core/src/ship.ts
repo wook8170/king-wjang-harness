@@ -44,6 +44,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { harnessDir, evidenceDir, wavesDir } from './paths';
+import { tr } from './tr';
 import { appendEvent } from './events';
 import { hasMeasuredEvidence } from './evidence';
 import { renderRtm } from './report';
@@ -113,27 +114,29 @@ function writeAtomic(target: string, content: string): void {
  * `{ [key]: [...] }` 형태의 기록 파일을 읽는다. **깨진 파일은 빈 목록이 아니라 예외다** —
  * 출하 판정의 입력에서 손상을 관용하면 손상이 곧 통과가 된다(계약 4).
  */
-function readRecords<T>(file: string, key: string, to: (v: unknown) => T | null): T[] {
+function readRecords<T>(root: string, file: string, key: string, to: (v: unknown) => T | null): T[] {
   if (!fs.existsSync(file)) return [];
   let doc: unknown;
   try {
     doc = YAML.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
-    throw new Error(`${file} 을 해석할 수 없다: ${(e as Error).message} — git 이력에서 복원하라`);
+    throw new Error(tr(root, { en: `Cannot parse ${file}: ${(e as Error).message} — restore it from git history`, ko: `${file} 을 해석할 수 없다: ${(e as Error).message} — git 이력에서 복원하라` }));
   }
   if (doc === null || doc === undefined) return [];
   const list = (doc as Record<string, unknown>)[key];
   if (list === undefined || list === null) return [];
   if (!Array.isArray(list)) {
-    throw new Error(`${file} 의 ${key} 가 목록이 아니다 — 파일이 손상됐다. git 이력에서 복원하라`);
+    throw new Error(tr(root, { en: `${key} in ${file} is not a list — the file is damaged. Restore it from git history`, ko: `${file} 의 ${key} 가 목록이 아니다 — 파일이 손상됐다. git 이력에서 복원하라` }));
   }
   return list.map((entry, i) => {
     const rec = to(entry);
     if (!rec) {
-      throw new Error(
-        `${file} 의 ${key}[${i}] 를 해석할 수 없다 — 형태 불량 항목을 조용히 버리면 ` +
-        '차단 결함 한 줄이 사라진 채 출하 판정이 통과한다. 항목을 고치거나 git 이력에서 복원하라',
-      );
+      throw new Error(tr(root, {
+        en: `Cannot parse ${key}[${i}] in ${file} — silently dropping a malformed entry would let the `
+          + 'ship verdict pass with a blocker line missing. Fix the entry, or restore from git history',
+        ko: `${file} 의 ${key}[${i}] 를 해석할 수 없다 — 형태 불량 항목을 조용히 버리면 `
+          + '차단 결함 한 줄이 사라진 채 출하 판정이 통과한다. 항목을 고치거나 git 이력에서 복원하라',
+      }));
     }
     return rec;
   });
@@ -162,7 +165,7 @@ function toDefect(v: unknown): DefectRecord | null {
 }
 
 export function listDefects(root: string): DefectRecord[] {
-  return readRecords(defectsPath(root), 'defects', toDefect);
+  return readRecords(root, defectsPath(root), 'defects', toDefect);
 }
 
 /** yaml(정본) 을 쓰고 readiness.md(사본) 를 다시 찍는다. 순서: 정본 먼저. */
@@ -172,11 +175,15 @@ function saveDefects(root: string, defects: DefectRecord[]): void {
 }
 
 /** `deferred` 에는 사유가 **반드시** 있어야 한다 — 조용한 유예가 블로커를 실어 보낸다. */
-function assertDeferReason(rec: DefectRecord): void {
+function assertDeferReason(root: string, rec: DefectRecord): void {
   if (rec.status === 'deferred' && !rec.deferReason) {
     throw new Error(
-      `deferred 로 두려면 사유가 필요하다: ${rec.id} — 사유 없는 유예는 유예가 아니라 은폐다. ` +
-      `\`harness ship defect update ${rec.id} --status deferred --defer-reason "<왜 지금 안 고쳐도 되는가>"\``,
+      tr(root, {
+        en: `Deferring needs a reason: ${rec.id} — a deferral without one is concealment, not deferral. `
+          + `\`harness ship defect update ${rec.id} --status deferred --defer-reason "<why it can wait>"\``,
+        ko: `deferred 로 두려면 사유가 필요하다: ${rec.id} — 사유 없는 유예는 유예가 아니라 은폐다. `
+          + `\`harness ship defect update ${rec.id} --status deferred --defer-reason "<왜 지금 안 고쳐도 되는가>"\``,
+      }),
     );
   }
 }
@@ -194,31 +201,39 @@ export interface AddDefectInput {
 
 export function addDefect(root: string, input: AddDefectInput): DefectRecord {
   const id = String(input.id ?? '').trim();
-  if (!id) throw new Error('결함 id 가 비어 있다 — `SEC-01` 처럼 대장에서 부를 이름을 붙여라');
+  if (!id) throw new Error(tr(root, { en: 'The defect id is empty — give it a name the ledger can call it by, like `SEC-01`', ko: '결함 id 가 비어 있다 — `SEC-01` 처럼 대장에서 부를 이름을 붙여라' }));
   if (!isSeverity(input.severity)) {
     throw new Error(
-      `유효하지 않은 심각도: ${String(input.severity)} (${DEFECT_SEVERITIES.join(', ')} 중 하나)`,
+      tr(root, { en: `Invalid severity: ${String(input.severity)} (one of ${DEFECT_SEVERITIES.join(', ')})`, ko: `유효하지 않은 심각도: ${String(input.severity)} (${DEFECT_SEVERITIES.join(', ')} 중 하나)` }),
     );
   }
   const status = input.status ?? 'open';
   if (!isStatus(status)) {
-    throw new Error(`유효하지 않은 결함 상태: ${String(status)} (${DEFECT_STATUSES.join(', ')} 중 하나)`);
+    throw new Error(tr(root, { en: `Invalid defect status: ${String(status)} (one of ${DEFECT_STATUSES.join(', ')})`, ko: `유효하지 않은 결함 상태: ${String(status)} (${DEFECT_STATUSES.join(', ')} 중 하나)` }));
   }
   const title = String(input.title ?? '').trim();
-  if (!title) throw new Error(`결함 ${id} 의 한 줄 요약이 비어 있다 — 무엇이 잘못됐는지 한 줄로 적어라`);
+  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary — say what is wrong in one line`, ko: `결함 ${id} 의 한 줄 요약이 비어 있다 — 무엇이 잘못됐는지 한 줄로 적어라` }));
   const evidence = String(input.evidence ?? '').trim();
   if (!evidence) {
     throw new Error(
-      `결함 ${id} 에 근거가 없다 — 근거 없는 지적은 발견이 아니라 인상이다. ` +
-      '`파일:줄`(`src/auth.ts:88`) 또는 재현 명령·증적 경로를 달아라',
+      tr(root, {
+        en: `Defect ${id} has no evidence — a finding without evidence is an impression, not a finding. `
+          + 'Attach `file:line` (`src/auth.ts:88`), a repro command, or an evidence path',
+        ko: `결함 ${id} 에 근거가 없다 — 근거 없는 지적은 발견이 아니라 인상이다. `
+          + '`파일:줄`(`src/auth.ts:88`) 또는 재현 명령·증적 경로를 달아라',
+      }),
     );
   }
 
   const defects = listDefects(root);
   if (defects.some(d => d.id === id)) {
     throw new Error(
-      `이미 대장에 있는 결함 id 다: ${id} — 같은 id 두 줄은 추적을 무너뜨린다. ` +
-      `고칠 내용이면 \`harness ship defect update ${id}\` 를 쓰고, 다른 결함이면 다른 id 를 붙여라`,
+      tr(root, {
+        en: `That defect id is already in the ledger: ${id} — two rows with the same id break tracing. `
+          + `To change it use \`harness ship defect update ${id}\`; if it is a different defect, give it a different id`,
+        ko: `이미 대장에 있는 결함 id 다: ${id} — 같은 id 두 줄은 추적을 무너뜨린다. `
+          + `고칠 내용이면 \`harness ship defect update ${id}\` 를 쓰고, 다른 결함이면 다른 id 를 붙여라`,
+      }),
     );
   }
 
@@ -226,7 +241,7 @@ export function addDefect(root: string, input: AddDefectInput): DefectRecord {
     id, severity: input.severity, title, evidence, status,
     ...(input.deferReason?.trim() ? { deferReason: input.deferReason.trim() } : {}),
   };
-  assertDeferReason(rec);
+  assertDeferReason(root, rec);
 
   appendEvent(root, 'defect-added', {
     id: rec.id, severity: rec.severity, status: rec.status, evidence: rec.evidence,
@@ -255,21 +270,25 @@ export function updateDefect(root: string, id: string, patch: UpdateDefectInput)
   const i = defects.findIndex(d => d.id === id);
   if (i < 0) {
     throw new Error(
-      `대장에 없는 결함 id 다: ${id} — \`harness ship defect list\` 로 id 를 확인하거나 ` +
-      `\`harness ship defect add\` 로 먼저 등록하라`,
+      tr(root, {
+        en: `No such defect id in the ledger: ${id} — check ids with \`harness ship defect list\`, `
+          + `or register it first with \`harness ship defect add\``,
+        ko: `대장에 없는 결함 id 다: ${id} — \`harness ship defect list\` 로 id 를 확인하거나 `
+          + `\`harness ship defect add\` 로 먼저 등록하라`,
+      }),
     );
   }
   if (patch.severity !== undefined && !isSeverity(patch.severity)) {
-    throw new Error(`유효하지 않은 심각도: ${String(patch.severity)} (${DEFECT_SEVERITIES.join(', ')} 중 하나)`);
+    throw new Error(tr(root, { en: `Invalid severity: ${String(patch.severity)} (one of ${DEFECT_SEVERITIES.join(', ')})`, ko: `유효하지 않은 심각도: ${String(patch.severity)} (${DEFECT_SEVERITIES.join(', ')} 중 하나)` }));
   }
   if (patch.status !== undefined && !isStatus(patch.status)) {
-    throw new Error(`유효하지 않은 결함 상태: ${String(patch.status)} (${DEFECT_STATUSES.join(', ')} 중 하나)`);
+    throw new Error(tr(root, { en: `Invalid defect status: ${String(patch.status)} (one of ${DEFECT_STATUSES.join(', ')})`, ko: `유효하지 않은 결함 상태: ${String(patch.status)} (${DEFECT_STATUSES.join(', ')} 중 하나)` }));
   }
   if (patch.evidence !== undefined && !patch.evidence.trim()) {
-    throw new Error(`결함 ${id} 의 근거를 비울 수 없다 — 근거를 지우면 대장 한 줄이 인상으로 내려앉는다`);
+    throw new Error(tr(root, { en: `Cannot clear the evidence on defect ${id} — without it the row demotes to an impression`, ko: `결함 ${id} 의 근거를 비울 수 없다 — 근거를 지우면 대장 한 줄이 인상으로 내려앉는다` }));
   }
   if (patch.title !== undefined && !patch.title.trim()) {
-    throw new Error(`결함 ${id} 의 한 줄 요약을 비울 수 없다`);
+    throw new Error(tr(root, { en: `Cannot clear the one-line summary of defect ${id}`, ko: `결함 ${id} 의 한 줄 요약을 비울 수 없다` }));
   }
 
   const prev = defects[i];
@@ -284,7 +303,7 @@ export function updateDefect(root: string, id: string, patch: UpdateDefectInput)
   };
   delete next.deferReason;
   if (status === 'deferred' && deferReason) next.deferReason = deferReason;
-  assertDeferReason(next);
+  assertDeferReason(root, next);
 
   appendEvent(root, 'defect-updated', {
     id: next.id, from: prev.status, to: next.status, severity: next.severity,
@@ -368,7 +387,7 @@ function toDeployment(v: unknown): DeploymentRecord | null {
 }
 
 export function listDeployments(root: string): DeploymentRecord[] {
-  return readRecords(deploymentsPath(root), 'deployments', toDeployment);
+  return readRecords(root, deploymentsPath(root), 'deployments', toDeployment);
 }
 
 export interface RecordDeploymentInput {
@@ -390,20 +409,32 @@ export function recordDeployment(root: string, input: RecordDeploymentInput): De
   const environment = String(input.environment ?? '').trim();
   if (!version) {
     throw new Error(
-      '배포 버전이 비어 있다 — `v1.2.0` 처럼 릴리스 노트가 가리킬 이름이 필요하다 '
-      + '(`harness ship deploy --version <버전> --sha <커밋> --env <환경>`)',
+      tr(root, {
+        en: 'The deployment version is empty — release notes need a name to point at, like `v1.2.0` '
+          + '(`harness ship deploy --version <v> --sha <commit> --env <env>`)',
+        ko: '배포 버전이 비어 있다 — `v1.2.0` 처럼 릴리스 노트가 가리킬 이름이 필요하다 '
+          + '(`harness ship deploy --version <버전> --sha <커밋> --env <환경>`)',
+      }),
     );
   }
   if (!commitSha) {
     throw new Error(
-      `배포 ${version} 의 커밋 SHA 가 비어 있다 — SHA 없는 배포 기록으로는 "이 요구사항이 어느 배포에 `
-      + '실렸나"를 역추적할 수 없다(§3-7). `git rev-parse HEAD` 값을 `--sha` 로 넘겨라',
+      tr(root, {
+        en: `Deployment ${version} has no commit SHA — without it you cannot trace back "which release `
+          + 'carried this requirement" (§3-7). Pass `git rev-parse HEAD` as `--sha`',
+        ko: `배포 ${version} 의 커밋 SHA 가 비어 있다 — SHA 없는 배포 기록으로는 "이 요구사항이 어느 배포에 `
+          + '실렸나"를 역추적할 수 없다(§3-7). `git rev-parse HEAD` 값을 `--sha` 로 넘겨라',
+      }),
     );
   }
   if (!environment) {
     throw new Error(
-      `배포 ${version} 의 환경이 비어 있다 — \`production\`·\`staging\` 처럼 어디로 나갔는지 `
-      + '`--env` 로 밝혀라. 환경 없는 배포 기록은 스모크 증적이 어느 환경 것인지 말하지 못한다',
+      tr(root, {
+        en: `Deployment ${version} has no environment — say where it went with \`--env\` `
+          + '(`production`, `staging`, …). Without it, smoke evidence cannot say which environment it came from',
+        ko: `배포 ${version} 의 환경이 비어 있다 — \`production\`·\`staging\` 처럼 어디로 나갔는지 `
+          + '`--env` 로 밝혀라. 환경 없는 배포 기록은 스모크 증적이 어느 환경 것인지 말하지 못한다',
+      }),
     );
   }
   const evidence = (input.evidence ?? []).map(e => String(e).trim()).filter(Boolean);

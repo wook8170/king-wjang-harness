@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { ledgerPath, wavesDir } from './paths';
+import { tr } from './tr';
 import { parseWave } from './wave';
 import type { LedgerNode, WaveMeta } from './types';
 
@@ -49,7 +50,7 @@ export function bumpNode(
 ): { node: LedgerNode; affectedWaves: string[]; unverifiable: string[] } {
   const nodes = loadLedger(root);
   const node = nodes.find(n => n.id === id);
-  if (!node) throw new Error(`노드 ${id} 가 원장에 없다`);
+  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `노드 ${id} 가 원장에 없다` }));
   node.version += 1;
   node.status = 'stale';
   saveLedger(root, nodes);

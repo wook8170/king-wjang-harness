@@ -21,6 +21,8 @@ const capture = () => {
 describe('UX-24: 진입점이 존재한다', () => {
   it('--help·-h·help·무인자가 전부 exit 0 으로 사용법을 낸다', () => {
     const root = tmp();
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
     for (const argv of [[], ['--help'], ['-h'], ['help']]) {
       const c = capture();
       const code = run(argv, root);
@@ -28,6 +30,7 @@ describe('UX-24: 진입점이 존재한다', () => {
       expect(code, `argv=${JSON.stringify(argv)}`).toBe(0);
       expect(c.text()).toContain('Usage: harness');
     }
+    process.env.HARNESS_LANG = prev;
   });
 
   it('사용법이 13개 이상의 명령군을 **전부** 나열한다', () => {
@@ -38,9 +41,12 @@ describe('UX-24: 진입점이 존재한다', () => {
 
   it('명령군별 --help 가 하위명령을 낸다', () => {
     const root = tmp();
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
     const c = capture();
     expect(run(['gate', '--help'], root)).toBe(0);
     c.restore();
+    process.env.HARNESS_LANG = prev;
     expect(c.text()).toContain('submit');
     expect(c.text()).toContain('approve');
   });
@@ -72,7 +78,10 @@ describe('API-27: 하위명령 안내가 모든 군에서 동일하다', () => {
 
 describe('i18n: 기본은 영어, lang: ko 로 전환', () => {
   it('기본 config 의 lang 은 en', () => {
-    expect(loadConfig(tmp()).lang).toBe('en');
+    // 스위트 전역은 ko 로 고정돼 있다(core/test/setup.ts) — 기본값 자체를 보려면 해제한다.
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
+    try { expect(loadConfig(tmp()).lang).toBe('en'); } finally { process.env.HARNESS_LANG = prev; }
   });
 
   it('config 의 lang: ko 가 출력을 바꾼다', () => {
@@ -124,7 +133,7 @@ describe('FEAT-22: harness trace', () => {
     run(['trace'], root);
     c.restore();
     expect(c.text()).toContain('harness trace <node-id>');
-    expect(c.text()).not.toContain('Unknown command');
+    expect(c.text()).not.toContain('알 수 없는 명령');
   });
 });
 
@@ -151,7 +160,7 @@ describe('FEAT-23: harness gate feedback', () => {
     c.out.length = 0;
     run(['gate', 'feedback', 'P0'], root);
     c.restore();
-    expect(c.text()).toContain('No review feedback collected');
+    expect(c.text()).toContain('수집된 리뷰 피드백이 없다');
   });
 
   it('빈 피드백은 거부된다 — 빈 것은 개정 근거가 아니다', () => {

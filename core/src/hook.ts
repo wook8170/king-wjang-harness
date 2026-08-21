@@ -15,11 +15,12 @@ import * as path from 'node:path';
 import { readState } from './state';
 import { loadConfig } from './config';
 import { readWave } from './wave';
-import { readJournal, replayState } from './events';
+import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath } from './bashwrite';
+import { pick, type Lang } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, isDeployCommand } from './profile';
@@ -96,7 +97,7 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       // state.json 은 파생 캐시다 — 없거나(삭제) 깨졌다고(파싱·형태 불량) 판정을 포기하지 않고
       // 진실(저널)로 재구성한다. 인메모리 전용: 여기서 쓰지 않는다. 복구 쓰기는
       // `harness doctor --repair` 의 책임.
-      const journal = readJournal(root);
+      const journal = readJournalForReplay(root);
       state = replayState(journal.events);
       degraded = { corruptLines: journal.corruptLines };
     }
@@ -109,7 +110,7 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       case 'post-tool':
         return postTool(root, input);
       case 'stop':
-        return stopGuard(root, state, input);
+        return stopGuard(root, state, input, config.lang);
       default:
         return null;
     }
@@ -140,11 +141,16 @@ function logHookError(root: string, event: HookEvent, err: unknown): void {
   }
 }
 
-function degradedNote(d: Degraded): string {
-  const base = '⚠ state.json 손상 감지 — 저널 재생으로 동작 중. `harness doctor --repair` 실행을 권장한다.';
-  return d.corruptLines > 0
-    ? `${base}\n⚠ 저널 ${d.corruptLines}줄 손상 — 재생 결과 불신, 판정이 실제와 다를 수 있다.`
-    : base;
+function degradedNote(d: Degraded, lang: Lang): string {
+  const base = pick({
+    en: '⚠ state.json is damaged — running from journal replay. Run `harness doctor --repair`.',
+    ko: '⚠ state.json 손상 감지 — 저널 재생으로 동작 중. `harness doctor --repair` 실행을 권장한다.',
+  }, lang);
+  if (d.corruptLines === 0) return base;
+  const more = lang === 'ko'
+    ? `⚠ 저널 ${d.corruptLines}줄 손상 — 재생 결과 불신, 판정이 실제와 다를 수 있다.`
+    : `⚠ ${d.corruptLines} journal line(s) corrupt — replay is untrustworthy; decisions may not match reality.`;
+  return `${base}\n${more}`;
 }
 
 /**
@@ -167,63 +173,88 @@ function sessionStart(
   // 함께 풀린다. source 를 모르면(미지의 값·결측) 지우지 않는 쪽이 안전하다.
   if (input.source === 'startup' || input.source === 'clear') clearActivity(root);
 
+  const lang = config.lang;
+  const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
+  const none = L('none', '없음');
   const lines: string[] = [
-    `[king-wjang-harness] 페이즈: ${state.phase} | 활성 웨이브: ${state.activeWave ?? '없음'}`,
+    L(
+      `[king-wjang-harness] phase: ${state.phase} | active wave: ${state.activeWave ?? none}`,
+      `[king-wjang-harness] 페이즈: ${state.phase} | 활성 웨이브: ${state.activeWave ?? none}`,
+    ),
   ];
-  if (degraded) lines.push(degradedNote(degraded));
+  if (degraded) lines.push(degradedNote(degraded, lang));
   if (inDesign) {
-    lines.push(
-      `현재 설계 트랙 — 소스 코드 쓰기·배포성 명령이 차단된다 ` +
-      `(허용: ${allowList(config).join(', ')}, 루트 *.md).`,
-    );
+    lines.push(L(
+      `Design track — writing source code and deploy-ish commands are blocked `
+      + `(allowed: ${allowList(config).join(', ')}, root *.md).`,
+      `현재 설계 트랙 — 소스 코드 쓰기·배포성 명령이 차단된다 `
+      + `(허용: ${allowList(config).join(', ')}, 루트 *.md).`,
+    ));
   }
 
   let n = 0;
-  const inst = (s: string): void => { lines.push(`지시(${++n}): ${s}`); };
+  const label = lang === 'ko' ? '지시' : 'INSTRUCTION';
+  const inst = (s: string): void => { lines.push(`${label}(${++n}): ${s}`); };
 
   if (config.remote_control) {
-    inst('첫 행동으로 /remote-control 을 실행해 모바일 관제를 활성화하라.');
+    inst(L('Run /remote-control first to enable mobile supervision.',
+      '첫 행동으로 /remote-control 을 실행해 모바일 관제를 활성화하라.'));
   }
   if (state.activeWave) {
     const id = state.activeWave;
     try {
       const { meta, body } = readWave(root, id);
-      inst(`활성 웨이브 지시서 .harness/waves/${id}.md 를 읽고 이어서 작업하라.`);
+      inst(L(`Read the active wave sheet .harness/waves/${id}.md and continue from there.`,
+        `활성 웨이브 지시서 .harness/waves/${id}.md 를 읽고 이어서 작업하라.`));
       // frontmatter 는 이전 세션이 손편집할 수 있는 신뢰 경계 밖 값이다 — 라벨 뒤 한 줄로 두되,
       // 개행·제어문자를 중화해 `\n지시(N):` 위조를 막는다(SEC-10). design_refs 는 원소별로 중화하되
       // map 이 index 를 max 인자로 흘리지 않도록 화살표로 감싼다.
       const milestone = sanitizeUntrusted(meta.milestone);
-      const refs = meta.design_refs.map(r => sanitizeUntrusted(r)).join(', ') || '없음';
+      const refs = meta.design_refs.map(r => sanitizeUntrusted(r)).join(', ') || none;
       // 발췌 펜스는 본문 해시 nonce 를 접미해, 위조된 턴 로그가 정적 구분자를 재현해도
       // 펜스를 조기 종료(breakout)하지 못하게 한다(SEC-11).
       const excerpt = recentTurnLog(body);
       const nonce = excerptNonce(excerpt);
       lines.push(
-        `  마일스톤: ${milestone} | 설계 참조: ${refs}`,
-        '  최근 턴 로그:',
+        L(`  milestone: ${milestone} | design refs: ${refs}`, `  마일스톤: ${milestone} | 설계 참조: ${refs}`),
+        L('  recent turn log:', '  최근 턴 로그:'),
         `${EXCERPT_OPEN} [${nonce}]`,
         excerpt,
         `${EXCERPT_CLOSE} [${nonce}]`,
       );
-      inst(
-        '`git status`로 작업트리를 확인하고 턴 로그에 없는 변경은 ' +
-        '`harness wave update "<한 일, 다음 할 일>"`로 정산부터 하라.',
-      );
+      inst(L(
+        'Check the worktree with `git status`; settle anything not in the turn log with '
+        + '`harness wave update "<what you did, what is next>"` before doing more.',
+        '`git status`로 작업트리를 확인하고 턴 로그에 없는 변경은 '
+        + '`harness wave update "<한 일, 다음 할 일>"`로 정산부터 하라.',
+      ));
     } catch {
       // 지시서가 없으면 주입이 죽는 게 아니라 정산을 지시한다 — 상태와 산출물의 불일치는
       // 감출수록 위험하다.
-      lines.push(
-        `⚠ 활성 웨이브 ${id} 지시서가 손상되었거나 유실됐다 — \`harness doctor\`로 상태를 ` +
-        '점검하고 작업트리 diff와 대조해 로그를 정산하라.',
-      );
+      lines.push(L(
+        `⚠ The sheet for active wave ${id} is missing or damaged — run \`harness doctor\`, `
+        + 'compare against the worktree diff, and settle the log.',
+        `⚠ 활성 웨이브 ${id} 지시서가 손상되었거나 유실됐다 — \`harness doctor\`로 상태를 `
+        + '점검하고 작업트리 diff와 대조해 로그를 정산하라.',
+      ));
     }
   } else {
-    lines.push('활성 웨이브 없음 — harness status 로 상태를 확인하고 다음 단계를 진행하라.');
+    // 온보딩(상품성): 활성 웨이브가 없다 = 대개 «막 설치했다» 이다. 여기서 다음 한 걸음을
+    // 주지 않으면 「설치 → 침묵 → ???」의 골짜기가 그대로 남는다.
+    lines.push(L(
+      'No active wave. Next: `harness status` to see where you are, `harness --help` for the '
+      + 'command map. In the design track, write your design docs then `harness gate submit <P>`.',
+      '활성 웨이브 없음. 다음: `harness status` 로 현재 위치를, `harness --help` 로 명령 지도를 '
+      + '보라. 설계 트랙이면 설계 문서를 쓰고 `harness gate submit <P>` 로 심사에 올려라.',
+    ));
   }
   if (state.backtrack) {
     // to 는 검증된 Phase 열거형(신뢰)이지만 reason 은 자유 텍스트라 중화한다(SEC-10).
-    lines.push(`⚠ 역행 진행 중 → ${state.backtrack.to} (사유: ${sanitizeUntrusted(state.backtrack.reason)})`);
+    lines.push(L(
+      `⚠ Backtrack in progress → ${state.backtrack.to} (reason: ${sanitizeUntrusted(state.backtrack.reason)})`,
+      `⚠ 역행 진행 중 → ${state.backtrack.to} (사유: ${sanitizeUntrusted(state.backtrack.reason)})`,
+    ));
   }
   return {
     hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: lines.join('\n') },
@@ -238,15 +269,17 @@ function sessionStart(
 function recentTurnLog(body: string): string {
   const i = body.indexOf(TURN_LOG_HEADING);
   const log = i >= 0 ? body.slice(i + TURN_LOG_HEADING.length).trim() : '';
-  if (!log) return '(없음)';
+  if (!log) return '(none)';
   return log.split('\n').slice(-5).map(l => sanitizeUntrusted(l)).join('\n');
 }
 
 // ---- pre-tool ----
 
-function deny(reason: string, degraded: Degraded | null): object {
+function deny(reason: string, degraded: Degraded | null, lang: Lang = 'en'): object {
   const tag = degraded
-    ? ` [state 손상 — harness doctor --repair 권장${degraded.corruptLines > 0 ? `; 저널 ${degraded.corruptLines}줄 손상` : ''}]`
+    ? (lang === 'ko'
+      ? ` [state 손상 — harness doctor --repair 권장${degraded.corruptLines > 0 ? `; 저널 ${degraded.corruptLines}줄 손상` : ''}]`
+      : ` [state damaged — run harness doctor --repair${degraded.corruptLines > 0 ? `; ${degraded.corruptLines} journal line(s) corrupt` : ''}]`)
     : '';
   return {
     hookSpecificOutput: {
@@ -320,6 +353,8 @@ function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
 ): object | null {
+  const lang = config.lang;
+  const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const raw = rawPath.trim();
   if (!raw) return null;
   const rel = relPath(root, raw);
@@ -328,9 +363,13 @@ function judgeWritePath(
   const core = [rel, realRel].find(r => CORE_FILES.includes(r));
   if (core) {
     return deny(
-      `${core} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`
-      + (fromBash ? ' (셸 리다이렉트·tee·sed -i 등도 같은 규칙이다)' : ''),
-      degraded,
+      L(
+        `${core} can only be changed by harness commands — editing it by hand desynchronises the `
+        + 'journal from the state.' + (fromBash ? ' (shell redirects, tee, sed -i follow the same rule)' : ''),
+        `${core} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`
+        + (fromBash ? ' (셸 리다이렉트·tee·sed -i 등도 같은 규칙이다)' : ''),
+      ),
+      degraded, lang,
     );
   }
 
@@ -345,13 +384,22 @@ function judgeWritePath(
   if (outside) {
     // Bash 의 루트 밖 쓰기는 이 프로젝트의 소스가 아니다 — 위 주석의 근거로 통과시킨다.
     if (fromBash) return null;
-    return deny(`프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${sanitizeUntrusted(raw)}`, degraded);
+    return deny(L(
+      `Paths outside the project root cannot be written in the design track: ${sanitizeUntrusted(raw)}`,
+      `프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${sanitizeUntrusted(raw)}`,
+    ), degraded, lang);
   }
   return deny(
-    `설계 트랙(${state.phase})에서는 소스 코드를 쓸 수 없다 (P6 설계 승인 전 구현 금지). `
-    + `허용: ${allowList(config).join(', ')}, 루트 *.md. 설계 산출물을 먼저 완성하라.`
-    + (fromBash ? ` (셸 쓰기 대상: ${sanitizeUntrusted(raw)})` : ''),
-    degraded,
+    L(
+      `Source code cannot be written in the design track (${state.phase}) — no implementation `
+      + `before the P6 design approval. Allowed: ${allowList(config).join(', ')}, root *.md. `
+      + 'Finish the design artifacts first.'
+      + (fromBash ? ` (shell write target: ${sanitizeUntrusted(raw)})` : ''),
+      `설계 트랙(${state.phase})에서는 소스 코드를 쓸 수 없다 (P6 설계 승인 전 구현 금지). `
+      + `허용: ${allowList(config).join(', ')}, 루트 *.md. 설계 산출물을 먼저 완성하라.`
+      + (fromBash ? ` (셸 쓰기 대상: ${sanitizeUntrusted(raw)})` : ''),
+    ),
+    degraded, lang,
   );
 }
 
@@ -359,6 +407,8 @@ function preTool(
   root: string, state: HarnessState, config: HarnessConfig, input: HookInput,
   degraded: Degraded | null,
 ): object | null {
+  const lang = config.lang;
+  const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const tool = input.tool_name ?? '';
   const isWrite = WRITE_TOOLS.includes(tool);
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
@@ -383,7 +433,8 @@ function preTool(
   // 함께 본다. Bash 리다이렉트도 아래에서 **같은 함수**로 보낸다.
   if (isWrite) {
     if (inDesign && !raw.trim()) {
-      return deny('도구 입력에 파일 경로가 없다 — 차단(안전 기본값).', degraded);
+      return deny(L('No file path in the tool input — blocked (safe default).',
+        '도구 입력에 파일 경로가 없다 — 차단(안전 기본값).'), degraded, lang);
     }
     const verdict = judgeWritePath(root, state, config, raw, degraded, false);
     if (verdict) return verdict;
@@ -407,11 +458,12 @@ function preTool(
     if (scan.mutating) {
       const named = mentionsPath(cmd, CORE_FILES);
       if (named) {
-        return deny(
+        return deny(L(
+          `This command looks like it changes ${named} through the shell — core files can only be `
+          + 'changed by harness commands. To read them, use `harness status` / `harness gate status`.',
           `${named} 을(를) 셸로 변경하려는 명령으로 보인다 — 코어 파일은 harness 명령으로만 `
           + '바꿀 수 있다. 조회만 하려면 `harness status`·`harness gate status` 를 쓰라.',
-          degraded,
-        );
+        ), degraded, lang);
       }
     }
 
@@ -421,25 +473,30 @@ function preTool(
     // 우회하는 것도 같이 막는다: 인라인으로 켤 수 있으면 그건 잠금이 아니다.
     if (/HARNESS_ALLOW_FORCE/.test(cmd)
         || (HARNESS_CMD_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(\s|$)/.test(cmd))) {
-      return deny(
+      return deny(L(
+        '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
+        + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '
+        + 'or recovery genuinely needs it, **the user must run it themselves** in their terminal: '
+        + '`HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.',
         '`phase set --force` 는 게이트 검사를 건너뛰므로 에이전트가 실행할 수 없다 — '
         + '페이즈 전환은 `harness gate submit <P>` → 사람 승인 `harness gate approve <P>` 로만 한다. '
         + '부트스트랩·복구가 정말 필요하면 **사용자가 직접 터미널에서** '
         + '`HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` 를 실행해야 한다.',
-        degraded,
-      );
+      ), degraded, lang);
     }
 
     if (inDesign) {
       const hit = config.design_blocked_bash.find(b => cmd.includes(b));
-      if (hit) return deny(`설계 트랙에서는 배포성 명령(${hit})을 실행할 수 없다.`, degraded);
+      if (hit) return deny(L(`Deploy-ish commands (${hit}) cannot run in the design track.`,
+        `설계 트랙에서는 배포성 명령(${hit})을 실행할 수 없다.`), degraded, lang);
       // 배포 명령의 정의는 프로파일도 제공한다(§4-2) — config 목록은 코어 기본값이고,
       // 스택별 실제 배포 명령은 프로파일이 안다. 프로파일 해석 실패는 판정을 포기할 이유가
       // 아니므로(무해 불변식) 조용히 config 판정만 남긴다.
       try {
         const profile = loadProfile(root);
         if (isDeployCommand(profile, cmd)) {
-          return deny(`설계 트랙에서는 배포성 명령을 실행할 수 없다 (프로파일 ${profile.name}).`, degraded);
+          return deny(L(`Deploy-ish commands cannot run in the design track (profile ${profile.name}).`,
+            `설계 트랙에서는 배포성 명령을 실행할 수 없다 (프로파일 ${profile.name}).`), degraded, lang);
         }
       } catch { /* 프로파일 없음·손상 → config 판정으로 충분 */ }
     }
@@ -454,35 +511,44 @@ function preTool(
       const hit = [rel, realRel].some(r => r !== '' && isFrozenPath(root, r, { frozenRoots: frozen }));
       // 토큰 파일 자체는 동결 대상이 아니다 — 톤을 바꾸는 정당한 단일 지점이다.
       if (hit && !isTokenFile(root, rel)) {
-        return deny(
+        return deny(L(
+          `This is a frozen design-system path (${frozen.join(', ')}) — adding or changing a `
+          + 'component is a ledger revision. Go back officially with '
+          + '`harness backtrack P4 --reason "<why>"` first.',
           `동결된 디자인 시스템 경로다(${frozen.join(', ')}) — 컴포넌트 신설·수정은 원장 개정이다. `
           + '`harness backtrack P4 --reason "<사유>"` 로 공식 역행한 뒤 수정하라.',
-          degraded,
-        );
+        ), degraded, lang);
       }
     }
     if (config.block_raw_values && !isTokenFile(root, rel)) {
       const content = String(input.tool_input?.content ?? input.tool_input?.new_string ?? '');
       const hits = findRawValues(content);
       if (hits.length > 0) {
-        const shown = hits.slice(0, 3).map(h => `${h.line}행 ${h.value}(${h.kind})`).join(', ');
-        return deny(
+        const unit = lang === 'ko' ? '행' : 'line ';
+        const shown = hits.slice(0, 3).map(h => (lang === 'ko'
+          ? `${h.line}행 ${h.value}(${h.kind})`
+          : `${unit}${h.line} ${h.value}(${h.kind})`)).join(', ');
+        return deny(L(
+          `Raw value literals do not belong in feature code — ${shown}`
+          + `${hits.length > 3 ? ` and ${hits.length - 3} more` : ''}. Reference a semantic token `
+          + '(text.primary is fine, blue.500 is not). The palette→semantic mapping is the token '
+          + "file's business.",
           `raw 값 리터럴은 기능 코드에 쓸 수 없다 — ${shown}${hits.length > 3 ? ` 외 ${hits.length - 3}건` : ''}. `
           + '시맨틱 토큰을 참조하라(text.primary 는 되고 blue.500 은 안 된다). '
           + '팔레트→시맨틱 매핑은 토큰 파일 내부 사정이다.',
-          degraded,
-        );
+        ), degraded, lang);
       }
     }
   }
 
   if (!inDesign && isWrite) {
     if ((rel.startsWith('.harness/design/') || realRel.startsWith('.harness/design/')) && !state.backtrack) {
-      return deny(
-        '구축·출하 트랙에서 설계 문서를 직접 수정할 수 없다. ' +
-        '설계 변경이 필요하면 `harness backtrack <페이즈> --reason "<사유>"` 로 공식 역행하라.',
-        degraded,
-      );
+      return deny(L(
+        'Design documents cannot be edited directly in the build/ship track. If the design must '
+        + 'change, go back officially: `harness backtrack <phase> --reason "<why>"`.',
+        '구축·출하 트랙에서 설계 문서를 직접 수정할 수 없다. '
+        + '설계 변경이 필요하면 `harness backtrack <페이즈> --reason "<사유>"` 로 공식 역행하라.',
+      ), degraded, lang);
     }
   }
   return null;
@@ -504,7 +570,7 @@ function postTool(root: string, input: HookInput): null {
 
 // ---- stop (Task 10에서 테스트 주도로 완성) ----
 
-function stopGuard(root: string, state: HarnessState, input: HookInput): object | null {
+function stopGuard(root: string, state: HarnessState, input: HookInput, lang: Lang): object | null {
   if (input.stop_hook_active) return null; // 턴당 1회만 차단 (루프 가드)
   if (!state.activeWave) return null;
   const rt = readRuntime(root);
@@ -513,10 +579,15 @@ function stopGuard(root: string, state: HarnessState, input: HookInput): object 
   if (!rt.lastTurnAt || rt.lastTurnAt < rt.lastActivityAt) {
     return {
       decision: 'block',
-      reason:
-        `활성 웨이브 ${state.activeWave} 의 턴 로그가 마지막 작업 이후 갱신되지 않았다. ` +
-        `\`harness wave update "<한 일, 다음 할 일>"\` 로 지시서를 갱신한 뒤 종료하라. ` +
-        `(정말 로그가 불필요한 사소한 턴이었다면 그 사유를 한 줄 보고하고 종료해도 된다)`,
+      reason: pick({
+        en: `The turn log for active wave ${state.activeWave} has not been updated since the last `
+          + 'work. Settle it with `harness wave update "<what you did, what is next>"` before '
+          + 'stopping. (If this really was a trivial turn that needs no log, say why in one line '
+          + 'and stop.)',
+        ko: `활성 웨이브 ${state.activeWave} 의 턴 로그가 마지막 작업 이후 갱신되지 않았다. `
+          + '`harness wave update "<한 일, 다음 할 일>"` 로 지시서를 갱신한 뒤 종료하라. '
+          + '(정말 로그가 불필요한 사소한 턴이었다면 그 사유를 한 줄 보고하고 종료해도 된다)',
+      }, lang),
     };
   }
   return null;

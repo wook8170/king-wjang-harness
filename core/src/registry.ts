@@ -38,6 +38,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as YAML from 'yaml';
 import { registryPath } from './paths';
+import { tr } from './tr';
 import { appendEvent } from './events';
 import { isDocStatus, isPhase } from './types';
 import type { DocNode, Phase } from './types';
@@ -143,8 +144,12 @@ export function computeDocHash(root: string, doc: DocNode): string {
     buf = fs.readFileSync(abs);
   } catch {
     throw new Error(
-      `문서 ${doc.id} 의 파일을 읽을 수 없다: ${doc.path} (${abs}) — ` +
-      '파일을 만들거나 레지스트리의 path 를 고친 뒤 다시 시도하라',
+      tr(root, {
+        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) — create the file, or fix `
+          + 'the registry path, then try again',
+        ko: `문서 ${doc.id} 의 파일을 읽을 수 없다: ${doc.path} (${abs}) — `
+          + '파일을 만들거나 레지스트리의 path 를 고친 뒤 다시 시도하라',
+      }),
     );
   }
   return crypto.createHash('sha256').update(buf).digest('hex');
@@ -152,7 +157,7 @@ export function computeDocHash(root: string, doc: DocNode): string {
 
 function require_(root: string, id: string): DocNode {
   const doc = getDoc(root, id);
-  if (!doc) throw new Error(`문서 ${id} 가 레지스트리에 없다`);
+  if (!doc) throw new Error(tr(root, { en: `Document ${id} is not in the registry`, ko: `문서 ${id} 가 레지스트리에 없다` }));
   return doc;
 }
 
@@ -164,14 +169,22 @@ export function submitDoc(root: string, id: string): DocNode {
   const doc = require_(root, id);
   if (doc.status !== 'draft') {
     throw new Error(
-      `문서 ${id} 는 draft 가 아니다(현재 ${doc.status}) — 제출본을 고치려면 ` +
-      'harness doc revise 로 새 버전을 만든 뒤 제출하라',
+      tr(root, {
+        en: `Document ${id} is not a draft (currently ${doc.status}) — to change a submitted document, `
+          + 'make a new version with `harness doc revise`, then submit it',
+        ko: `문서 ${id} 는 draft 가 아니다(현재 ${doc.status}) — 제출본을 고치려면 `
+          + 'harness doc revise 로 새 버전을 만든 뒤 제출하라',
+      }),
     );
   }
   if (!doc.artifactUrl) {
     throw new Error(
-      `문서 ${id} 에 아티팩트 URL 이 없다 — 로컬에만 있는 문서로는 게이트에 올릴 수 없다(요구 16). ` +
-      'claude.ai 아티팩트로 먼저 발행하고 setDocArtifactUrl 로 URL 을 등록하라',
+      tr(root, {
+        en: `Document ${id} has no artifact URL — a document that only exists locally cannot go to a `
+          + 'gate (req 16). Publish it as a claude.ai artifact first and register the URL',
+        ko: `문서 ${id} 에 아티팩트 URL 이 없다 — 로컬에만 있는 문서로는 게이트에 올릴 수 없다(요구 16). `
+          + 'claude.ai 아티팩트로 먼저 발행하고 setDocArtifactUrl 로 URL 을 등록하라',
+      }),
     );
   }
   const hash = computeDocHash(root, doc); // 파일이 없으면 여기서 실패 — 상태는 draft 유지
@@ -187,16 +200,20 @@ export function submitDoc(root: string, id: string): DocNode {
 export function approveDoc(root: string, id: string): DocNode {
   const doc = require_(root, id);
   if (doc.status !== 'submitted') {
-    throw new Error(`문서 ${id} 는 submitted 가 아니다(현재 ${doc.status}) — 먼저 제출하라`);
+    throw new Error(tr(root, { en: `Document ${id} is not submitted (currently ${doc.status}) — submit it first`, ko: `문서 ${id} 는 submitted 가 아니다(현재 ${doc.status}) — 먼저 제출하라` }));
   }
   if (!doc.hash) {
-    throw new Error(`문서 ${id} 에 고정된 해시가 없다 — 레지스트리가 손상됐다. 다시 제출하라`);
+    throw new Error(tr(root, { en: `Document ${id} has no pinned hash — the registry is damaged. Submit again`, ko: `문서 ${id} 에 고정된 해시가 없다 — 레지스트리가 손상됐다. 다시 제출하라` }));
   }
   const current = computeDocHash(root, doc);
   if (current !== doc.hash) {
     throw new Error(
-      `문서 ${id} 의 해시가 제출 시점과 다르다 — 제출 후 ${doc.path} 내용이 바뀌었다. ` +
-      'harness doc revise 로 새 버전을 만들어 다시 제출하라',
+      tr(root, {
+        en: `Document ${id} no longer matches its submitted hash — ${doc.path} changed after submission. `
+          + 'Make a new version with `harness doc revise` and submit again',
+        ko: `문서 ${id} 의 해시가 제출 시점과 다르다 — 제출 후 ${doc.path} 내용이 바뀌었다. `
+          + 'harness doc revise 로 새 버전을 만들어 다시 제출하라',
+      }),
     );
   }
   const next: DocNode = { ...doc, status: 'approved' };
@@ -246,10 +263,10 @@ export function setDocArtifactUrl(root: string, id: string, url: string): DocNod
   try {
     parsed = new URL(url.trim());
   } catch {
-    throw new Error(`아티팩트 URL 이 https URL 이 아니다: "${url}" — claude.ai 아티팩트 주소를 그대로 넣어라`);
+    throw new Error(tr(root, { en: `The artifact URL is not an https URL: "${url}" — paste the claude.ai artifact address as-is`, ko: `아티팩트 URL 이 https URL 이 아니다: "${url}" — claude.ai 아티팩트 주소를 그대로 넣어라` }));
   }
   if (parsed.protocol !== 'https:' || !parsed.hostname) {
-    throw new Error(`아티팩트 URL 은 https 여야 한다: "${url}" — claude.ai 아티팩트 주소를 그대로 넣어라`);
+    throw new Error(tr(root, { en: `The artifact URL must be https: "${url}" — paste the claude.ai artifact address as-is`, ko: `아티팩트 URL 은 https 여야 한다: "${url}" — claude.ai 아티팩트 주소를 그대로 넣어라` }));
   }
   const next: DocNode = { ...doc, artifactUrl: parsed.toString() };
   appendEvent(root, 'doc-artifact-url-set', {

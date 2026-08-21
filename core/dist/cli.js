@@ -7368,7 +7368,7 @@ var fs21 = __toESM(require("fs"));
 var path19 = __toESM(require("path"));
 
 // core/src/state.ts
-var fs = __toESM(require("fs"));
+var fs2 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 
 // core/src/paths.ts
@@ -7386,6 +7386,71 @@ var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
 
+// core/src/config.ts
+var fs = __toESM(require("fs"));
+var YAML = __toESM(require_dist());
+
+// core/src/i18n.ts
+var LANGS = ["en", "ko"];
+var isLang = (v) => LANGS.includes(v);
+function pick(m, lang) {
+  return lang === "ko" && m.ko ? m.ko : m.en;
+}
+var DEFAULT_LANG = "en";
+
+// core/src/config.ts
+var DEFAULT_CONFIG = {
+  lang: DEFAULT_LANG,
+  profile: "generic",
+  remote_control: true,
+  terse: false,
+  design_allowed_prefixes: [".harness/", "docs/"],
+  design_blocked_bash: ["docker push", "kubectl apply", "vercel deploy", "netlify deploy", "fly deploy"],
+  design_system_frozen_roots: [],
+  block_raw_values: false
+};
+var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
+var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
+function loadConfig(root) {
+  const p = configPath(root);
+  let raw = {};
+  if (fs.existsSync(p)) {
+    try {
+      raw = YAML.parse(fs.readFileSync(p, "utf8")) ?? {};
+    } catch {
+      raw = {};
+    }
+  }
+  return {
+    // 환경변수가 config 를 이긴다 — 일회성 전환을 프로젝트 설정 수정 없이 하게.
+    lang: isLang(process.env.HARNESS_LANG) ? process.env.HARNESS_LANG : isLang(raw.lang) ? raw.lang : DEFAULT_CONFIG.lang,
+    profile: typeof raw.profile === "string" ? raw.profile : DEFAULT_CONFIG.profile,
+    remote_control: asBool(raw.remote_control, DEFAULT_CONFIG.remote_control),
+    terse: asBool(raw.terse, DEFAULT_CONFIG.terse),
+    design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
+    design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
+    design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
+    block_raw_values: raw.block_raw_values === true
+  };
+}
+
+// core/src/tr.ts
+var cache = /* @__PURE__ */ new Map();
+function langFor(root) {
+  const hit = cache.get(root);
+  if (hit) return hit;
+  let lang = DEFAULT_LANG;
+  try {
+    lang = loadConfig(root).lang;
+  } catch {
+  }
+  cache.set(root, lang);
+  return lang;
+}
+function tr(root, m) {
+  return pick(m, langFor(root));
+}
+
 // core/src/state.ts
 function defaultState() {
   return {
@@ -7398,39 +7463,39 @@ function defaultState() {
   };
 }
 function isInitialized(root) {
-  return fs.existsSync(statePath(root));
+  return fs2.existsSync(statePath(root));
 }
 function readState(root) {
-  return JSON.parse(fs.readFileSync(statePath(root), "utf8"));
+  return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
 }
 function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs.renameSync(tmp, target);
+  fs2.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+  fs2.renameSync(tmp, target);
 }
 function initHarness(root) {
-  if (fs.existsSync(harnessDir(root))) throw new Error(`.harness/ \uAC00 \uC774\uBBF8 \uCD08\uAE30\uD654\uB418\uC5B4 \uC788\uB2E4: ${harnessDir(root)}`);
+  if (fs2.existsSync(harnessDir(root))) throw new Error(tr(root, { en: `.harness/ is already initialised: ${harnessDir(root)}`, ko: `.harness/ \uAC00 \uC774\uBBF8 \uCD08\uAE30\uD654\uB418\uC5B4 \uC788\uB2E4: ${harnessDir(root)}` }));
   for (const d of [harnessDir(root), designDir(root), wavesDir(root), runtimeDir(root)]) {
-    fs.mkdirSync(d, { recursive: true });
+    fs2.mkdirSync(d, { recursive: true });
   }
-  fs.writeFileSync(path2.join(runtimeDir(root), ".gitignore"), "*\n!.gitignore\n");
-  fs.writeFileSync(ledgerPath(root), "nodes: []\n");
-  fs.writeFileSync(configPath(root), [
+  fs2.writeFileSync(path2.join(runtimeDir(root), ".gitignore"), "*\n!.gitignore\n");
+  fs2.writeFileSync(ledgerPath(root), "nodes: []\n");
+  fs2.writeFileSync(configPath(root), [
     "profile: generic",
     "remote_control: true",
     "terse: false",
     ""
   ].join("\n"));
-  fs.writeFileSync(eventsPath(root), "");
+  fs2.writeFileSync(eventsPath(root), "");
   const tmp = `${statePath(root)}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + "\n");
-  fs.renameSync(tmp, statePath(root));
+  fs2.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + "\n");
+  fs2.renameSync(tmp, statePath(root));
 }
 
 // core/src/events.ts
-var fs2 = __toESM(require("fs"));
+var fs3 = __toESM(require("fs"));
 
 // core/src/types.ts
 var PHASES = [
@@ -7477,14 +7542,14 @@ var KNOWN_EVENT_TYPES = /* @__PURE__ */ new Set([
 ]);
 function appendEvent(root, type, data) {
   const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs2.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  fs3.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
   return ev;
 }
 function readJournal(root) {
-  if (!fs2.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events = [];
   let corruptLines = 0;
-  for (const line of fs2.readFileSync(eventsPath(root), "utf8").split("\n")) {
+  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
     if (!line.trim()) continue;
     let parsed;
     try {
@@ -7509,10 +7574,46 @@ function readJournal(root) {
 function readEvents(root) {
   return readJournal(root).events;
 }
+var REPLAY_TYPES = /* @__PURE__ */ new Set([
+  "phase-set",
+  "wave-activated",
+  "wave-completed",
+  "wave-stale",
+  "gate-submitted",
+  "gate-approved",
+  "backtrack-started",
+  "backtrack-cleared"
+]);
+var TYPE_RE = /"type"\s*:\s*"([a-z-]+)"/;
+function readJournalForReplay(root) {
+  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  const events = [];
+  let corruptLines = 0;
+  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const t = TYPE_RE.exec(line)?.[1];
+    if (t && !REPLAY_TYPES.has(t)) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      corruptLines++;
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null || typeof parsed.type !== "string") {
+      corruptLines++;
+      continue;
+    }
+    events.push(parsed);
+  }
+  return { events, corruptLines };
+}
 function replayState(events) {
   const s = defaultState();
+  let lastAppliedTs = "";
   for (const ev of events) {
     const d = ev.data;
+    if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
       case "phase-set":
         if (isPhase(d.phase)) s.phase = d.phase;
@@ -7557,53 +7658,54 @@ function replayState(events) {
         break;
     }
   }
+  if (lastAppliedTs) s.updatedAt = lastAppliedTs;
   return s;
 }
 
 // core/src/wave.ts
-var fs4 = __toESM(require("fs"));
+var fs5 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
-var YAML = __toESM(require_dist());
+var YAML2 = __toESM(require_dist());
 
 // core/src/runtime.ts
-var fs3 = __toESM(require("fs"));
+var fs4 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var f = (root, name) => path3.join(runtimeDir(root), name);
 function noteActivity(root) {
-  fs3.mkdirSync(runtimeDir(root), { recursive: true });
-  fs3.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
+  fs4.mkdirSync(runtimeDir(root), { recursive: true });
+  fs4.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function noteTurnLogged(root) {
-  fs3.mkdirSync(runtimeDir(root), { recursive: true });
-  fs3.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs4.mkdirSync(runtimeDir(root), { recursive: true });
+  fs4.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function clearActivity(root) {
   try {
     const p = f(root, "last-activity");
-    if (fs3.existsSync(p)) fs3.rmSync(p);
+    if (fs4.existsSync(p)) fs4.rmSync(p);
   } catch {
   }
 }
 function readRuntime(root) {
   const read = (name) => {
-    if (!fs3.existsSync(f(root, name))) return void 0;
-    const v = fs3.readFileSync(f(root, name), "utf8").trim();
+    if (!fs4.existsSync(f(root, name))) return void 0;
+    const v = fs4.readFileSync(f(root, name), "utf8").trim();
     return v || void 0;
   };
   return { lastActivityAt: read("last-activity"), lastTurnAt: read("last-turn") };
 }
 
 // core/src/wave.ts
-function parseWave(txt) {
+function parseWave(txt, lang = DEFAULT_LANG) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
-  if (!m) throw new Error("\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4");
+  if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML.parse(m[1]);
+    raw = YAML2.parse(m[1]);
   } catch {
     raw = null;
   }
-  if (typeof raw !== "object" || raw === null) throw new Error("\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4");
+  if (typeof raw !== "object" || raw === null) throw new Error(pick({ en: "Malformed wave file: frontmatter could not be parsed", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4" }, lang));
   const r = raw;
   const asArr = (v) => Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : [];
   const statuses = ["pending", "active", "done", "stale"];
@@ -7618,19 +7720,19 @@ function parseWave(txt) {
 }
 function serializeWave(meta, body) {
   return `---
-${YAML.stringify(meta).trimEnd()}
+${YAML2.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs4.readFileSync(wavePath(root, id), "utf8"));
+  return parseWave(fs5.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs4.existsSync(wavesDir(root))) return [];
+  if (!fs5.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs4.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs5.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     try {
-      out.push(parseWave(fs4.readFileSync(path4.join(wavesDir(root), f2), "utf8")).meta);
+      out.push(parseWave(fs5.readFileSync(path4.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -7640,22 +7742,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs4.writeFileSync(tmp, serializeWave(meta, body));
-  fs4.renameSync(tmp, target);
+  fs5.writeFileSync(tmp, serializeWave(meta, body));
+  fs5.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs4.existsSync(dir)) return [];
-  return fs4.readdirSync(dir).filter((f2) => {
+  if (!fs5.existsSync(dir)) return [];
+  return fs5.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs4.statSync(path4.join(dir, f2));
+    const st = fs5.statSync(path4.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs4.existsSync(wavesDir(root))) {
-    for (const f2 of fs4.readdirSync(wavesDir(root))) {
+  if (fs5.existsSync(wavesDir(root))) {
+    for (const f2 of fs5.readdirSync(wavesDir(root))) {
       const m = /^wave-(\d+)\.md$/.exec(f2);
       if (m) nums.push(parseInt(m[1], 10));
     }
@@ -7671,8 +7773,8 @@ function nextWaveId(root) {
 }
 function createWave(root, opts) {
   const id = nextWaveId(root);
-  if (fs4.existsSync(wavePath(root, id))) {
-    throw new Error(`${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4`);
+  if (fs5.existsSync(wavePath(root, id))) {
+    throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
   if (inherited.length > 0) {
@@ -7698,7 +7800,7 @@ function createWave(root, opts) {
 function activateWave(root, id) {
   const state = readState(root);
   if (state.activeWave && state.activeWave !== id) {
-    throw new Error(`\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.`);
+    throw new Error(tr(root, { en: `A wave is already active: ${state.activeWave}. Complete it first (\`harness wave complete\`).`, ko: `\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.` }));
   }
   let meta, body;
   try {
@@ -7709,7 +7811,7 @@ function activateWave(root, id) {
       `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
     );
   }
-  if (meta.status === "done") throw new Error(`${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4`);
+  if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
   meta.status = "active";
   writeWave(root, id, meta, body);
   appendEvent(root, "wave-activated", { id });
@@ -7727,7 +7829,7 @@ function readActiveWave(root, id) {
 }
 function logTurn(root, text) {
   const state = readState(root);
-  if (!state.activeWave) throw new Error("\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${text}`;
@@ -7737,7 +7839,7 @@ function logTurn(root, text) {
 }
 function completeWave(root) {
   const state = readState(root);
-  if (!state.activeWave) throw new Error("\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some((r) => r.startsWith("UX-"))) {
@@ -7764,20 +7866,20 @@ function markStale(root, id) {
 }
 
 // core/src/ledger.ts
-var fs5 = __toESM(require("fs"));
+var fs6 = __toESM(require("fs"));
 var path5 = __toESM(require("path"));
-var YAML2 = __toESM(require_dist());
+var YAML3 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs5.existsSync(ledgerPath(root))) return [];
-  const doc = YAML2.parse(fs5.readFileSync(ledgerPath(root), "utf8"));
+  if (!fs6.existsSync(ledgerPath(root))) return [];
+  const doc = YAML3.parse(fs6.readFileSync(ledgerPath(root), "utf8"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs5.writeFileSync(tmp, YAML2.stringify({ nodes }));
-  fs5.renameSync(tmp, target);
+  fs6.writeFileSync(tmp, YAML3.stringify({ nodes }));
+  fs6.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -7792,18 +7894,18 @@ function upsertNode(root, node) {
 function bumpNode(root, id) {
   const nodes = loadLedger(root);
   const node = nodes.find((n) => n.id === id);
-  if (!node) throw new Error(`\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4`);
+  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
   node.version += 1;
   node.status = "stale";
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs5.existsSync(wavesDir(root))) {
-    for (const f2 of fs5.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  if (fs6.existsSync(wavesDir(root))) {
+    for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs5.readFileSync(path5.join(wavesDir(root), f2), "utf8");
+        txt = fs6.readFileSync(path5.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -7824,7 +7926,7 @@ function bumpNode(root, id) {
 }
 
 // core/src/doctor.ts
-var fs6 = __toESM(require("fs"));
+var fs7 = __toESM(require("fs"));
 var path6 = __toESM(require("path"));
 var COMPARED_FIELDS = ["phase", "activeWave", "gates", "backtrack"];
 var TMP_RE = /\.tmp-(\d+)$/;
@@ -7842,7 +7944,7 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs6.readdirSync(dir);
+      names = fs7.readdirSync(dir);
     } catch {
       continue;
     }
@@ -7851,8 +7953,8 @@ function sweepOrphanTmp(root) {
       if (!m || pidAlive(Number(m[1]))) continue;
       const p = path6.join(dir, name);
       try {
-        if (!fs6.statSync(p).isFile()) continue;
-        fs6.rmSync(p);
+        if (!fs7.statSync(p).isFile()) continue;
+        fs7.rmSync(p);
         swept++;
       } catch {
       }
@@ -7862,8 +7964,8 @@ function sweepOrphanTmp(root) {
 }
 function countHookErrors(root) {
   const p = path6.join(runtimeDir(root), "hook-errors.log");
-  if (!fs6.existsSync(p)) return 0;
-  return fs6.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  if (!fs7.existsSync(p)) return 0;
+  return fs7.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -7873,11 +7975,11 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  const journalExists = fs6.existsSync(eventsPath(root));
+  const journalExists = fs7.existsSync(eventsPath(root));
   const { events, corruptLines } = readJournal(root);
   const replayed = replayState(events);
   let current = null;
-  if (!fs6.existsSync(statePath(root))) {
+  if (!fs7.existsSync(statePath(root))) {
     issues.push("state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694");
   } else {
     try {
@@ -7915,9 +8017,12 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs6.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs7.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
-      `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
+      tr(root, {
+        en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
+        ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
+      })
     );
   }
   const swept = sweepOrphanTmp(root);
@@ -7932,11 +8037,14 @@ function runDoctor(root, opts = {}) {
     if (!trustworthy && !opts.force) {
       refused = true;
       warnings.push(
-        "state \uBC1C\uC0B0\uC774 \uC788\uC73C\uB098 \uC800\uB110\uC744 \uC2E0\uB8B0\uD560 \uC218 \uC5C6\uC5B4 \uBCF5\uAD6C \uAC70\uBD80 \u2014 \uC800\uB110 \uC190\uC0C1 \uC6D0\uC778\uC744 \uBA3C\uC800 \uD655\uC778\uD558\uB77C. \uADF8\uB798\uB3C4 \uBCF5\uAD6C\uD558\uB824\uBA74 --force"
+        tr(root, {
+          en: "State has diverged but the journal cannot be trusted, so repair is refused \u2014 find out why the journal is damaged first. To repair anyway, use --force",
+          ko: "state \uBC1C\uC0B0\uC774 \uC788\uC73C\uB098 \uC800\uB110\uC744 \uC2E0\uB8B0\uD560 \uC218 \uC5C6\uC5B4 \uBCF5\uAD6C \uAC70\uBD80 \u2014 \uC800\uB110 \uC190\uC0C1 \uC6D0\uC778\uC744 \uBA3C\uC800 \uD655\uC778\uD558\uB77C. \uADF8\uB798\uB3C4 \uBCF5\uAD6C\uD558\uB824\uBA74 --force"
+        })
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs6.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs7.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -7958,60 +8066,12 @@ function runDoctor(root, opts = {}) {
   if (opts.repair && !refused && hookErrors > 0) {
     const log = path6.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs6.renameSync(log, `${log}.prev`);
+      fs7.renameSync(log, `${log}.prev`);
       notes.push(`hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`);
     } catch {
     }
   }
   return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
-}
-
-// core/src/config.ts
-var fs7 = __toESM(require("fs"));
-var YAML3 = __toESM(require_dist());
-
-// core/src/i18n.ts
-var LANGS = ["en", "ko"];
-var isLang = (v) => LANGS.includes(v);
-function pick(m, lang) {
-  return lang === "ko" && m.ko ? m.ko : m.en;
-}
-var DEFAULT_LANG = "en";
-
-// core/src/config.ts
-var DEFAULT_CONFIG = {
-  lang: DEFAULT_LANG,
-  profile: "generic",
-  remote_control: true,
-  terse: false,
-  design_allowed_prefixes: [".harness/", "docs/"],
-  design_blocked_bash: ["docker push", "kubectl apply", "vercel deploy", "netlify deploy", "fly deploy"],
-  design_system_frozen_roots: [],
-  block_raw_values: false
-};
-var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
-var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
-function loadConfig(root) {
-  const p = configPath(root);
-  let raw = {};
-  if (fs7.existsSync(p)) {
-    try {
-      raw = YAML3.parse(fs7.readFileSync(p, "utf8")) ?? {};
-    } catch {
-      raw = {};
-    }
-  }
-  return {
-    // 환경변수가 config 를 이긴다 — 일회성 전환을 프로젝트 설정 수정 없이 하게.
-    lang: isLang(process.env.HARNESS_LANG) ? process.env.HARNESS_LANG : isLang(raw.lang) ? raw.lang : DEFAULT_CONFIG.lang,
-    profile: typeof raw.profile === "string" ? raw.profile : DEFAULT_CONFIG.profile,
-    remote_control: asBool(raw.remote_control, DEFAULT_CONFIG.remote_control),
-    terse: asBool(raw.terse, DEFAULT_CONFIG.terse),
-    design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
-    design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
-    design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
-    block_raw_values: raw.block_raw_values === true
-  };
 }
 
 // core/src/help.ts
@@ -8424,13 +8484,13 @@ function rawAt(doc, tokenPath, mode) {
 function resolve(doc, tokenPath, mode, seen = []) {
   if (seen.includes(tokenPath)) {
     throw new Error(
-      `\uD1A0\uD070 \uBCC4\uCE6D\uC774 \uC21C\uD658\uD55C\uB2E4: ${[...seen, tokenPath].join(" \u2192 ")}. \uBCC4\uCE6D \uC0AC\uC2AC \uC911 \uD55C \uACF3\uC744 \uC2E4\uC81C \uAC12\uC73C\uB85C \uB04A\uC5B4\uB77C (${tokensPath("<root>")}).`
+      `Token aliases form a cycle: ${[...seen, tokenPath].join(" \u2192 ")}. Break the chain somewhere with a real value (${tokensPath("<root>")}).`
     );
   }
   const raw = rawAt(doc, tokenPath, mode);
   if (raw === void 0) {
     const from = seen.length ? ` (${seen[seen.length - 1]} \uC5D0\uC11C \uCC38\uC870)` : "";
-    throw new Error(`\uD1A0\uD070 ${tokenPath} \uC774(\uAC00) \uBB38\uC11C\uC5D0 \uC5C6\uB2E4${from}. \uC624\uD0C0\uC774\uAC70\uB098 \uC0AD\uC81C\uB41C \uD1A0\uD070\uC774\uB2E4.`);
+    throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
   }
   const next = aliasTarget(raw);
   return next === null ? raw : resolve(doc, next, mode, [...seen, tokenPath]);
@@ -8454,53 +8514,53 @@ var cssVar = (tokenPath) => `--${tokenPath.replace(/[^A-Za-z0-9]+/g, "-").toLowe
 var isStrMap = (v) => typeof v === "object" && v !== null && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
 function checkGroups(v, groups, label) {
   if (typeof v !== "object" || v === null || Array.isArray(v)) {
-    throw new Error(`\uD1A0\uD070 \uBB38\uC11C\uC758 ${label} \uC740(\uB294) \uAC1D\uCCB4\uC5EC\uC57C \uD55C\uB2E4.`);
+    throw new Error(`${label} in the token document must be an object.`);
   }
   const unknownKeys = Object.keys(v).filter((k) => !groups.includes(k));
   if (unknownKeys.length) {
     throw new Error(
-      `\uD1A0\uD070 \uBB38\uC11C ${label} \uC5D0 \uC54C \uC218 \uC5C6\uB294 \uD558\uC704 \uADF8\uB8F9: ${unknownKeys.join(", ")}. \uD5C8\uC6A9: ${groups.join(", ")}. \uC0C8 \uADF8\uB8F9\uC774 \uD544\uC694\uD558\uBA74 \uC2A4\uD0A4\uB9C8 \uAC1C\uC815(=\uC124\uACC4 \uAC1C\uC815)\uC774\uC9C0 \uC870\uC6A9\uD55C \uCD94\uAC00\uAC00 \uC544\uB2C8\uB2E4.`
+      `Unknown subgroup in token document ${label}: ${unknownKeys.join(", ")}. Allowed: ${groups.join(", ")}. A new group is a schema revision (= a design revision), not a silent addition.`
     );
   }
   for (const g of groups) {
     if (!isStrMap(v[g] ?? {})) {
-      throw new Error(`\uD1A0\uD070 \uBB38\uC11C ${label}.${g} \uC758 \uAC12\uC740 \uC804\uBD80 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD55C\uB2E4.`);
+      throw new Error(`Every value under ${label}.${g} must be a string.`);
     }
   }
 }
 function validateTokens(input) {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new Error("\uD1A0\uD070 \uBB38\uC11C\uAC00 \uAC1D\uCCB4\uAC00 \uC544\uB2C8\uB2E4. design-tokens.json \uC740 \uCD5C\uC0C1\uC704\uAC00 \uAC1D\uCCB4\uC5EC\uC57C \uD55C\uB2E4.");
+    throw new Error("The token document is not an object. design-tokens.json must have an object at the top level.");
   }
   const o = input;
   const unknownTop = Object.keys(o).filter((k) => !TOP_LEVEL_KEYS.includes(k));
   if (unknownTop.length) {
     throw new Error(
-      `\uD1A0\uD070 \uBB38\uC11C\uC5D0 \uC54C \uC218 \uC5C6\uB294 \uCD5C\uC0C1\uC704 \uCE74\uD14C\uACE0\uB9AC: ${unknownTop.join(", ")}. \uD5C8\uC6A9: ${TOP_LEVEL_KEYS.filter((k) => k !== "schemaVersion").join(", ")}. \uD314\uB808\uD2B8\uB97C \uB530\uB85C \uB450\uB824 \uD588\uB2E4\uBA74 \uADF8\uAC74 \uD1A0\uD070 \uD30C\uC77C \uB0B4\uBD80 \uC0AC\uC815\uC774 \uC544\uB2C8\uB77C \uC0C8 \uACC4\uCE35\uC774\uB2E4 \u2014 \uC2A4\uD399 \xA77 \uC8FC\uC785 \uCCA0\uCE59 2.`
+      `Unknown top-level category in the token document: ${unknownTop.join(", ")}. Allowed: ${TOP_LEVEL_KEYS.filter((k) => k !== "schemaVersion").join(", ")}. If you were adding a separate palette, that is a new layer, not the token file's internal business \u2014 spec \xA77 rule 2.`
     );
   }
   if (o.schemaVersion !== 1) {
-    throw new Error(`\uD1A0\uD070 \uBB38\uC11C schemaVersion \uC774 ${String(o.schemaVersion)} \uC774\uB2E4. \uC9C0\uC6D0 \uBC84\uC804\uC740 1.`);
+    throw new Error(`Token document schemaVersion is ${String(o.schemaVersion)}. Supported version: 1.`);
   }
   if (typeof o.color !== "object" || o.color === null || Array.isArray(o.color)) {
-    throw new Error("\uD1A0\uD070 \uBB38\uC11C\uC758 color \uB294 \uAC1D\uCCB4\uC5EC\uC57C \uD55C\uB2E4.");
+    throw new Error("`color` in the token document must be an object.");
   }
   for (const [name, tok] of Object.entries(o.color)) {
     const t = tok;
     if (typeof t !== "object" || t === null || typeof t.light !== "string") {
-      throw new Error(`\uC0C9 \uD1A0\uD070 color.${name} \uC5D0 light \uAC12(\uBB38\uC790\uC5F4)\uC774 \uC5C6\uB2E4.`);
+      throw new Error(`Colour token color.${name} has no light value (string).`);
     }
     if (t.dark !== void 0 && typeof t.dark !== "string") {
-      throw new Error(`\uC0C9 \uD1A0\uD070 color.${name} \uC758 dark \uAC12\uC774 \uBB38\uC790\uC5F4\uC774 \uC544\uB2C8\uB2E4.`);
+      throw new Error(`The dark value of colour token color.${name} is not a string.`);
     }
     const extra = Object.keys(t).filter((k) => k !== "light" && k !== "dark");
     if (extra.length) {
-      throw new Error(`\uC0C9 \uD1A0\uD070 color.${name} \uC5D0 \uC54C \uC218 \uC5C6\uB294 \uBAA8\uB4DC: ${extra.join(", ")}. \uD5C8\uC6A9: light, dark.`);
+      throw new Error(`Unknown mode on colour token color.${name}: ${extra.join(", ")}. Allowed: light, dark.`);
     }
   }
   for (const cat of FLAT_CATEGORIES) {
     if (!isStrMap(o[cat] ?? {})) {
-      throw new Error(`\uD1A0\uD070 \uBB38\uC11C ${cat} \uC758 \uAC12\uC740 \uC804\uBD80 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD55C\uB2E4.`);
+      throw new Error(`Every value under ${cat} must be a string.`);
     }
   }
   checkGroups(o.type ?? {}, TYPE_GROUPS, "type");
@@ -8516,14 +8576,14 @@ function loadTokens(root) {
   const p = tokensPath(root);
   if (!fs8.existsSync(p)) {
     throw new Error(
-      `\uD1A0\uD070 \uD30C\uC77C\uC774 \uC5C6\uB2E4: ${p}. \uB514\uC790\uC778 \uD1A0\uD070\uC740 \uB2E8\uC77C \uC6D0\uCC9C\uC774\uB77C \uCF54\uC5B4\uAC00 \uAE30\uBCF8\uAC12\uC744 \uC9C0\uC5B4\uB0B4\uC9C0 \uC54A\uB294\uB2E4 \u2014 P4 \uC815\uBCF8 HTML \uC758 CSS \uBCC0\uC218 \uBE14\uB85D\uC744 design-tokens.json \uC73C\uB85C \uB0B4\uB824\uBC1B\uC544 \uB450\uC5B4\uB77C(\uC2A4\uD399 \xA77).`
+      `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent defaults \u2014 export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec \xA77).`
     );
   }
   let parsed;
   try {
     parsed = JSON.parse(fs8.readFileSync(p, "utf8"));
   } catch (e) {
-    throw new Error(`\uD1A0\uD070 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${p} \u2014 ${e.message}`);
+    throw new Error(`Cannot read the token file: ${p} \u2014 ${e.message}`);
   }
   return validateTokens(parsed);
 }
@@ -8746,7 +8806,7 @@ function assertSwapIsMeaningful(before, after, minColorRatio = SWAP_DRILL_MIN_CO
   const changed = diffTokens(before, after);
   if (changed.length === 0) {
     throw new Error(
-      "\uC2A4\uC651 \uB4DC\uB9B4\uC774 \uACF5\uD5C8\uD558\uB2E4: \uBC14\uB010 \uD1A0\uD070\uC774 \uD558\uB098\uB3C4 \uC5C6\uB2E4. \uBB34\uBCC0\uACBD \uD14C\uB9C8\uB85C\uB294 \uD558\uB4DC\uCF54\uB529 \uD654\uBA74\uACFC \uC815\uC0C1 \uD654\uBA74\uC744 \uAD6C\uBCC4\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uB300\uCCB4 \uD314\uB808\uD2B8\uB97C \uC2E4\uC81C\uB85C \uB123\uC5B4\uB77C."
+      "The swap drill is empty: not a single token changed. A no-op theme cannot tell a hard-coded screen apart from a correct one \u2014 supply a real alternative palette."
     );
   }
   const colorPaths = [...flatDeclared(before).keys()].filter((k) => k.startsWith("color."));
@@ -8754,7 +8814,7 @@ function assertSwapIsMeaningful(before, after, minColorRatio = SWAP_DRILL_MIN_CO
   const need = Math.ceil(colorPaths.length * minColorRatio);
   if (changedColors < need) {
     throw new Error(
-      `\uC2A4\uC651 \uB4DC\uB9B4\uC774 \uACF5\uD5C8\uD558\uB2E4: \uC0C9 \uD1A0\uD070 ${colorPaths.length}\uAC1C \uC911 ${changedColors}\uAC1C\uB9CC \uBC14\uB00C\uC5C8\uB2E4(\uCD5C\uC18C ${need}\uAC1C). \uD314\uB808\uD2B8\uB97C \uD1B5\uC9F8\uB85C \uAC08\uC544\uB07C\uC6CC\uC57C \uC548 \uBC14\uB010 \uD654\uBA74\uC774 \uD558\uB4DC\uCF54\uB529 \uC99D\uAC70\uAC00 \uB41C\uB2E4(\uC2A4\uD399 \xA77).`
+      `The swap drill is too shallow: only ${changedColors} of ${colorPaths.length} colour tokens changed (need at least ${need}). The palette must be replaced wholesale so that whatever does not change becomes evidence of hard-coding (spec \xA77).`
     );
   }
   return changed;
@@ -8985,7 +9045,7 @@ function handleHook(root, event, input) {
       if (!isHarnessStateShape(parsed)) throw new Error("state.json \uD615\uD0DC \uC190\uC0C1: HarnessState \uD615\uD0DC \uC544\uB2D8");
       state = parsed;
     } catch {
-      const journal = readJournal(root);
+      const journal = readJournalForReplay(root);
       state = replayState(journal.events);
       degraded = { corruptLines: journal.corruptLines };
     }
@@ -8998,7 +9058,7 @@ function handleHook(root, event, input) {
       case "post-tool":
         return postTool(root, input);
       case "stop":
-        return stopGuard(root, state, input);
+        return stopGuard(root, state, input, config.lang);
       default:
         return null;
     }
@@ -9019,62 +9079,89 @@ function logHookError(root, event, err) {
   } catch {
   }
 }
-function degradedNote(d) {
-  const base = "\u26A0 state.json \uC190\uC0C1 \uAC10\uC9C0 \u2014 \uC800\uB110 \uC7AC\uC0DD\uC73C\uB85C \uB3D9\uC791 \uC911. `harness doctor --repair` \uC2E4\uD589\uC744 \uAD8C\uC7A5\uD55C\uB2E4.";
-  return d.corruptLines > 0 ? `${base}
-\u26A0 \uC800\uB110 ${d.corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uACB0\uACFC \uBD88\uC2E0, \uD310\uC815\uC774 \uC2E4\uC81C\uC640 \uB2E4\uB97C \uC218 \uC788\uB2E4.` : base;
+function degradedNote(d, lang) {
+  const base = pick({
+    en: "\u26A0 state.json is damaged \u2014 running from journal replay. Run `harness doctor --repair`.",
+    ko: "\u26A0 state.json \uC190\uC0C1 \uAC10\uC9C0 \u2014 \uC800\uB110 \uC7AC\uC0DD\uC73C\uB85C \uB3D9\uC791 \uC911. `harness doctor --repair` \uC2E4\uD589\uC744 \uAD8C\uC7A5\uD55C\uB2E4."
+  }, lang);
+  if (d.corruptLines === 0) return base;
+  const more = lang === "ko" ? `\u26A0 \uC800\uB110 ${d.corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uACB0\uACFC \uBD88\uC2E0, \uD310\uC815\uC774 \uC2E4\uC81C\uC640 \uB2E4\uB97C \uC218 \uC788\uB2E4.` : `\u26A0 ${d.corruptLines} journal line(s) corrupt \u2014 replay is untrustworthy; decisions may not match reality.`;
+  return `${base}
+${more}`;
 }
 function allowList(config) {
   return [".harness/", ...config.design_allowed_prefixes.filter((p) => p !== ".harness/")];
 }
 function sessionStart(root, state, config, degraded, input) {
   if (input.source === "startup" || input.source === "clear") clearActivity(root);
+  const lang = config.lang;
+  const L = (en, ko) => pick({ en, ko }, lang);
   const inDesign = DESIGN_PHASES.includes(state.phase);
+  const none = L("none", "\uC5C6\uC74C");
   const lines = [
-    `[king-wjang-harness] \uD398\uC774\uC988: ${state.phase} | \uD65C\uC131 \uC6E8\uC774\uBE0C: ${state.activeWave ?? "\uC5C6\uC74C"}`
+    L(
+      `[king-wjang-harness] phase: ${state.phase} | active wave: ${state.activeWave ?? none}`,
+      `[king-wjang-harness] \uD398\uC774\uC988: ${state.phase} | \uD65C\uC131 \uC6E8\uC774\uBE0C: ${state.activeWave ?? none}`
+    )
   ];
-  if (degraded) lines.push(degradedNote(degraded));
+  if (degraded) lines.push(degradedNote(degraded, lang));
   if (inDesign) {
-    lines.push(
+    lines.push(L(
+      `Design track \u2014 writing source code and deploy-ish commands are blocked (allowed: ${allowList(config).join(", ")}, root *.md).`,
       `\uD604\uC7AC \uC124\uACC4 \uD2B8\uB799 \u2014 \uC18C\uC2A4 \uCF54\uB4DC \uC4F0\uAE30\xB7\uBC30\uD3EC\uC131 \uBA85\uB839\uC774 \uCC28\uB2E8\uB41C\uB2E4 (\uD5C8\uC6A9: ${allowList(config).join(", ")}, \uB8E8\uD2B8 *.md).`
-    );
+    ));
   }
   let n = 0;
+  const label = lang === "ko" ? "\uC9C0\uC2DC" : "INSTRUCTION";
   const inst = (s) => {
-    lines.push(`\uC9C0\uC2DC(${++n}): ${s}`);
+    lines.push(`${label}(${++n}): ${s}`);
   };
   if (config.remote_control) {
-    inst("\uCCAB \uD589\uB3D9\uC73C\uB85C /remote-control \uC744 \uC2E4\uD589\uD574 \uBAA8\uBC14\uC77C \uAD00\uC81C\uB97C \uD65C\uC131\uD654\uD558\uB77C.");
+    inst(L(
+      "Run /remote-control first to enable mobile supervision.",
+      "\uCCAB \uD589\uB3D9\uC73C\uB85C /remote-control \uC744 \uC2E4\uD589\uD574 \uBAA8\uBC14\uC77C \uAD00\uC81C\uB97C \uD65C\uC131\uD654\uD558\uB77C."
+    ));
   }
   if (state.activeWave) {
     const id = state.activeWave;
     try {
       const { meta, body } = readWave(root, id);
-      inst(`\uD65C\uC131 \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C .harness/waves/${id}.md \uB97C \uC77D\uACE0 \uC774\uC5B4\uC11C \uC791\uC5C5\uD558\uB77C.`);
+      inst(L(
+        `Read the active wave sheet .harness/waves/${id}.md and continue from there.`,
+        `\uD65C\uC131 \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C .harness/waves/${id}.md \uB97C \uC77D\uACE0 \uC774\uC5B4\uC11C \uC791\uC5C5\uD558\uB77C.`
+      ));
       const milestone = sanitizeUntrusted(meta.milestone);
-      const refs = meta.design_refs.map((r) => sanitizeUntrusted(r)).join(", ") || "\uC5C6\uC74C";
+      const refs = meta.design_refs.map((r) => sanitizeUntrusted(r)).join(", ") || none;
       const excerpt = recentTurnLog(body);
       const nonce = excerptNonce(excerpt);
       lines.push(
-        `  \uB9C8\uC77C\uC2A4\uD1A4: ${milestone} | \uC124\uACC4 \uCC38\uC870: ${refs}`,
-        "  \uCD5C\uADFC \uD134 \uB85C\uADF8:",
+        L(`  milestone: ${milestone} | design refs: ${refs}`, `  \uB9C8\uC77C\uC2A4\uD1A4: ${milestone} | \uC124\uACC4 \uCC38\uC870: ${refs}`),
+        L("  recent turn log:", "  \uCD5C\uADFC \uD134 \uB85C\uADF8:"),
         `${EXCERPT_OPEN} [${nonce}]`,
         excerpt,
         `${EXCERPT_CLOSE} [${nonce}]`
       );
-      inst(
+      inst(L(
+        'Check the worktree with `git status`; settle anything not in the turn log with `harness wave update "<what you did, what is next>"` before doing more.',
         '`git status`\uB85C \uC791\uC5C5\uD2B8\uB9AC\uB97C \uD655\uC778\uD558\uACE0 \uD134 \uB85C\uADF8\uC5D0 \uC5C6\uB294 \uBCC0\uACBD\uC740 `harness wave update "<\uD55C \uC77C, \uB2E4\uC74C \uD560 \uC77C>"`\uB85C \uC815\uC0B0\uBD80\uD130 \uD558\uB77C.'
-      );
+      ));
     } catch {
-      lines.push(
+      lines.push(L(
+        `\u26A0 The sheet for active wave ${id} is missing or damaged \u2014 run \`harness doctor\`, compare against the worktree diff, and settle the log.`,
         `\u26A0 \uD65C\uC131 \uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC190\uC0C1\uB418\uC5C8\uAC70\uB098 \uC720\uC2E4\uB410\uB2E4 \u2014 \`harness doctor\`\uB85C \uC0C1\uD0DC\uB97C \uC810\uAC80\uD558\uACE0 \uC791\uC5C5\uD2B8\uB9AC diff\uC640 \uB300\uC870\uD574 \uB85C\uADF8\uB97C \uC815\uC0B0\uD558\uB77C.`
-      );
+      ));
     }
   } else {
-    lines.push("\uD65C\uC131 \uC6E8\uC774\uBE0C \uC5C6\uC74C \u2014 harness status \uB85C \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uACE0 \uB2E4\uC74C \uB2E8\uACC4\uB97C \uC9C4\uD589\uD558\uB77C.");
+    lines.push(L(
+      "No active wave. Next: `harness status` to see where you are, `harness --help` for the command map. In the design track, write your design docs then `harness gate submit <P>`.",
+      "\uD65C\uC131 \uC6E8\uC774\uBE0C \uC5C6\uC74C. \uB2E4\uC74C: `harness status` \uB85C \uD604\uC7AC \uC704\uCE58\uB97C, `harness --help` \uB85C \uBA85\uB839 \uC9C0\uB3C4\uB97C \uBCF4\uB77C. \uC124\uACC4 \uD2B8\uB799\uC774\uBA74 \uC124\uACC4 \uBB38\uC11C\uB97C \uC4F0\uACE0 `harness gate submit <P>` \uB85C \uC2EC\uC0AC\uC5D0 \uC62C\uB824\uB77C."
+    ));
   }
   if (state.backtrack) {
-    lines.push(`\u26A0 \uC5ED\uD589 \uC9C4\uD589 \uC911 \u2192 ${state.backtrack.to} (\uC0AC\uC720: ${sanitizeUntrusted(state.backtrack.reason)})`);
+    lines.push(L(
+      `\u26A0 Backtrack in progress \u2192 ${state.backtrack.to} (reason: ${sanitizeUntrusted(state.backtrack.reason)})`,
+      `\u26A0 \uC5ED\uD589 \uC9C4\uD589 \uC911 \u2192 ${state.backtrack.to} (\uC0AC\uC720: ${sanitizeUntrusted(state.backtrack.reason)})`
+    ));
   }
   return {
     hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") }
@@ -9083,11 +9170,11 @@ function sessionStart(root, state, config, degraded, input) {
 function recentTurnLog(body) {
   const i = body.indexOf(TURN_LOG_HEADING);
   const log = i >= 0 ? body.slice(i + TURN_LOG_HEADING.length).trim() : "";
-  if (!log) return "(\uC5C6\uC74C)";
+  if (!log) return "(none)";
   return log.split("\n").slice(-5).map((l) => sanitizeUntrusted(l)).join("\n");
 }
-function deny(reason, degraded) {
-  const tag = degraded ? ` [state \uC190\uC0C1 \u2014 harness doctor --repair \uAD8C\uC7A5${degraded.corruptLines > 0 ? `; \uC800\uB110 ${degraded.corruptLines}\uC904 \uC190\uC0C1` : ""}]` : "";
+function deny(reason, degraded, lang = "en") {
+  const tag = degraded ? lang === "ko" ? ` [state \uC190\uC0C1 \u2014 harness doctor --repair \uAD8C\uC7A5${degraded.corruptLines > 0 ? `; \uC800\uB110 ${degraded.corruptLines}\uC904 \uC190\uC0C1` : ""}]` : ` [state damaged \u2014 run harness doctor --repair${degraded.corruptLines > 0 ? `; ${degraded.corruptLines} journal line(s) corrupt` : ""}]` : "";
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -9115,6 +9202,8 @@ function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path9.sep}`) || path9.isAbsolute(rel);
 }
 function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
+  const lang = config.lang;
+  const L = (en, ko) => pick({ en, ko }, lang);
   const raw = rawPath.trim();
   if (!raw) return null;
   const rel = relPath(root, raw);
@@ -9122,8 +9211,12 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
   const core = [rel, realRel].find((r) => CORE_FILES.includes(r));
   if (core) {
     return deny(
-      `${core} \uC740(\uB294) harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBCC0\uACBD\uD560 \uC218 \uC788\uB2E4 \u2014 \uC9C1\uC811 \uD3B8\uC9D1\uD558\uBA74 \uC800\uB110\uACFC \uC0C1\uD0DC\uAC00 \uC5B4\uAE0B\uB09C\uB2E4.` + (fromBash ? " (\uC178 \uB9AC\uB2E4\uC774\uB809\uD2B8\xB7tee\xB7sed -i \uB4F1\uB3C4 \uAC19\uC740 \uADDC\uCE59\uC774\uB2E4)" : ""),
-      degraded
+      L(
+        `${core} can only be changed by harness commands \u2014 editing it by hand desynchronises the journal from the state.` + (fromBash ? " (shell redirects, tee, sed -i follow the same rule)" : ""),
+        `${core} \uC740(\uB294) harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBCC0\uACBD\uD560 \uC218 \uC788\uB2E4 \u2014 \uC9C1\uC811 \uD3B8\uC9D1\uD558\uBA74 \uC800\uB110\uACFC \uC0C1\uD0DC\uAC00 \uC5B4\uAE0B\uB09C\uB2E4.` + (fromBash ? " (\uC178 \uB9AC\uB2E4\uC774\uB809\uD2B8\xB7tee\xB7sed -i \uB4F1\uB3C4 \uAC19\uC740 \uADDC\uCE59\uC774\uB2E4)" : "")
+      ),
+      degraded,
+      lang
     );
   }
   if (!DESIGN_PHASES.includes(state.phase)) return null;
@@ -9134,14 +9227,23 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
   const outside = isOutsideRoot(rel) && isOutsideRoot(realRel);
   if (outside) {
     if (fromBash) return null;
-    return deny(`\uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C\uB294 \uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C \uC4F8 \uC218 \uC5C6\uB2E4: ${sanitizeUntrusted(raw)}`, degraded);
+    return deny(L(
+      `Paths outside the project root cannot be written in the design track: ${sanitizeUntrusted(raw)}`,
+      `\uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C\uB294 \uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C \uC4F8 \uC218 \uC5C6\uB2E4: ${sanitizeUntrusted(raw)}`
+    ), degraded, lang);
   }
   return deny(
-    `\uC124\uACC4 \uD2B8\uB799(${state.phase})\uC5D0\uC11C\uB294 \uC18C\uC2A4 \uCF54\uB4DC\uB97C \uC4F8 \uC218 \uC5C6\uB2E4 (P6 \uC124\uACC4 \uC2B9\uC778 \uC804 \uAD6C\uD604 \uAE08\uC9C0). \uD5C8\uC6A9: ${allowList(config).join(", ")}, \uB8E8\uD2B8 *.md. \uC124\uACC4 \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC644\uC131\uD558\uB77C.` + (fromBash ? ` (\uC178 \uC4F0\uAE30 \uB300\uC0C1: ${sanitizeUntrusted(raw)})` : ""),
-    degraded
+    L(
+      `Source code cannot be written in the design track (${state.phase}) \u2014 no implementation before the P6 design approval. Allowed: ${allowList(config).join(", ")}, root *.md. Finish the design artifacts first.` + (fromBash ? ` (shell write target: ${sanitizeUntrusted(raw)})` : ""),
+      `\uC124\uACC4 \uD2B8\uB799(${state.phase})\uC5D0\uC11C\uB294 \uC18C\uC2A4 \uCF54\uB4DC\uB97C \uC4F8 \uC218 \uC5C6\uB2E4 (P6 \uC124\uACC4 \uC2B9\uC778 \uC804 \uAD6C\uD604 \uAE08\uC9C0). \uD5C8\uC6A9: ${allowList(config).join(", ")}, \uB8E8\uD2B8 *.md. \uC124\uACC4 \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC644\uC131\uD558\uB77C.` + (fromBash ? ` (\uC178 \uC4F0\uAE30 \uB300\uC0C1: ${sanitizeUntrusted(raw)})` : "")
+    ),
+    degraded,
+    lang
   );
 }
 function preTool(root, state, config, input, degraded) {
+  const lang = config.lang;
+  const L = (en, ko) => pick({ en, ko }, lang);
   const tool = input.tool_name ?? "";
   const isWrite = WRITE_TOOLS.includes(tool);
   const inDesign = DESIGN_PHASES.includes(state.phase);
@@ -9150,7 +9252,10 @@ function preTool(root, state, config, input, degraded) {
   const realRel = raw ? realRelPath(root, raw) : "";
   if (isWrite) {
     if (inDesign && !raw.trim()) {
-      return deny("\uB3C4\uAD6C \uC785\uB825\uC5D0 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC5C6\uB2E4 \u2014 \uCC28\uB2E8(\uC548\uC804 \uAE30\uBCF8\uAC12).", degraded);
+      return deny(L(
+        "No file path in the tool input \u2014 blocked (safe default).",
+        "\uB3C4\uAD6C \uC785\uB825\uC5D0 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC5C6\uB2E4 \u2014 \uCC28\uB2E8(\uC548\uC804 \uAE30\uBCF8\uAC12)."
+      ), degraded, lang);
     }
     const verdict = judgeWritePath(root, state, config, raw, degraded, false);
     if (verdict) return verdict;
@@ -9165,25 +9270,31 @@ function preTool(root, state, config, input, degraded) {
     if (scan.mutating) {
       const named = mentionsPath(cmd, CORE_FILES);
       if (named) {
-        return deny(
-          `${named} \uC744(\uB97C) \uC178\uB85C \uBCC0\uACBD\uD558\uB824\uB294 \uBA85\uB839\uC73C\uB85C \uBCF4\uC778\uB2E4 \u2014 \uCF54\uC5B4 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uB2E4. \uC870\uD68C\uB9CC \uD558\uB824\uBA74 \`harness status\`\xB7\`harness gate status\` \uB97C \uC4F0\uB77C.`,
-          degraded
-        );
+        return deny(L(
+          `This command looks like it changes ${named} through the shell \u2014 core files can only be changed by harness commands. To read them, use \`harness status\` / \`harness gate status\`.`,
+          `${named} \uC744(\uB97C) \uC178\uB85C \uBCC0\uACBD\uD558\uB824\uB294 \uBA85\uB839\uC73C\uB85C \uBCF4\uC778\uB2E4 \u2014 \uCF54\uC5B4 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uB2E4. \uC870\uD68C\uB9CC \uD558\uB824\uBA74 \`harness status\`\xB7\`harness gate status\` \uB97C \uC4F0\uB77C.`
+        ), degraded, lang);
       }
     }
     if (/HARNESS_ALLOW_FORCE/.test(cmd) || HARNESS_CMD_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(\s|$)/.test(cmd)) {
-      return deny(
-        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4.",
-        degraded
-      );
+      return deny(L(
+        "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.",
+        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
+      ), degraded, lang);
     }
     if (inDesign) {
       const hit = config.design_blocked_bash.find((b) => cmd.includes(b));
-      if (hit) return deny(`\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839(${hit})\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4.`, degraded);
+      if (hit) return deny(L(
+        `Deploy-ish commands (${hit}) cannot run in the design track.`,
+        `\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839(${hit})\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4.`
+      ), degraded, lang);
       try {
         const profile = loadProfile(root);
         if (isDeployCommand(profile, cmd)) {
-          return deny(`\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}).`, degraded);
+          return deny(L(
+            `Deploy-ish commands cannot run in the design track (profile ${profile.name}).`,
+            `\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}).`
+          ), degraded, lang);
         }
       } catch {
       }
@@ -9194,30 +9305,31 @@ function preTool(root, state, config, input, degraded) {
     if (frozen.length > 0 && !state.backtrack) {
       const hit = [rel, realRel].some((r) => r !== "" && isFrozenPath(root, r, { frozenRoots: frozen }));
       if (hit && !isTokenFile(root, rel)) {
-        return deny(
-          `\uB3D9\uACB0\uB41C \uB514\uC790\uC778 \uC2DC\uC2A4\uD15C \uACBD\uB85C\uB2E4(${frozen.join(", ")}) \u2014 \uCEF4\uD3EC\uB10C\uD2B8 \uC2E0\uC124\xB7\uC218\uC815\uC740 \uC6D0\uC7A5 \uAC1C\uC815\uC774\uB2E4. \`harness backtrack P4 --reason "<\uC0AC\uC720>"\` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD55C \uB4A4 \uC218\uC815\uD558\uB77C.`,
-          degraded
-        );
+        return deny(L(
+          `This is a frozen design-system path (${frozen.join(", ")}) \u2014 adding or changing a component is a ledger revision. Go back officially with \`harness backtrack P4 --reason "<why>"\` first.`,
+          `\uB3D9\uACB0\uB41C \uB514\uC790\uC778 \uC2DC\uC2A4\uD15C \uACBD\uB85C\uB2E4(${frozen.join(", ")}) \u2014 \uCEF4\uD3EC\uB10C\uD2B8 \uC2E0\uC124\xB7\uC218\uC815\uC740 \uC6D0\uC7A5 \uAC1C\uC815\uC774\uB2E4. \`harness backtrack P4 --reason "<\uC0AC\uC720>"\` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD55C \uB4A4 \uC218\uC815\uD558\uB77C.`
+        ), degraded, lang);
       }
     }
     if (config.block_raw_values && !isTokenFile(root, rel)) {
       const content = String(input.tool_input?.content ?? input.tool_input?.new_string ?? "");
       const hits = findRawValues(content);
       if (hits.length > 0) {
-        const shown = hits.slice(0, 3).map((h) => `${h.line}\uD589 ${h.value}(${h.kind})`).join(", ");
-        return deny(
-          `raw \uAC12 \uB9AC\uD130\uB7F4\uC740 \uAE30\uB2A5 \uCF54\uB4DC\uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 ${shown}${hits.length > 3 ? ` \uC678 ${hits.length - 3}\uAC74` : ""}. \uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC744 \uCC38\uC870\uD558\uB77C(text.primary \uB294 \uB418\uACE0 blue.500 \uC740 \uC548 \uB41C\uB2E4). \uD314\uB808\uD2B8\u2192\uC2DC\uB9E8\uD2F1 \uB9E4\uD551\uC740 \uD1A0\uD070 \uD30C\uC77C \uB0B4\uBD80 \uC0AC\uC815\uC774\uB2E4.`,
-          degraded
-        );
+        const unit = lang === "ko" ? "\uD589" : "line ";
+        const shown = hits.slice(0, 3).map((h) => lang === "ko" ? `${h.line}\uD589 ${h.value}(${h.kind})` : `${unit}${h.line} ${h.value}(${h.kind})`).join(", ");
+        return deny(L(
+          `Raw value literals do not belong in feature code \u2014 ${shown}${hits.length > 3 ? ` and ${hits.length - 3} more` : ""}. Reference a semantic token (text.primary is fine, blue.500 is not). The palette\u2192semantic mapping is the token file's business.`,
+          `raw \uAC12 \uB9AC\uD130\uB7F4\uC740 \uAE30\uB2A5 \uCF54\uB4DC\uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 ${shown}${hits.length > 3 ? ` \uC678 ${hits.length - 3}\uAC74` : ""}. \uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC744 \uCC38\uC870\uD558\uB77C(text.primary \uB294 \uB418\uACE0 blue.500 \uC740 \uC548 \uB41C\uB2E4). \uD314\uB808\uD2B8\u2192\uC2DC\uB9E8\uD2F1 \uB9E4\uD551\uC740 \uD1A0\uD070 \uD30C\uC77C \uB0B4\uBD80 \uC0AC\uC815\uC774\uB2E4.`
+        ), degraded, lang);
       }
     }
   }
   if (!inDesign && isWrite) {
     if ((rel.startsWith(".harness/design/") || realRel.startsWith(".harness/design/")) && !state.backtrack) {
-      return deny(
-        '\uAD6C\uCD95\xB7\uCD9C\uD558 \uD2B8\uB799\uC5D0\uC11C \uC124\uACC4 \uBB38\uC11C\uB97C \uC9C1\uC811 \uC218\uC815\uD560 \uC218 \uC5C6\uB2E4. \uC124\uACC4 \uBCC0\uACBD\uC774 \uD544\uC694\uD558\uBA74 `harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>"` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD558\uB77C.',
-        degraded
-      );
+      return deny(L(
+        'Design documents cannot be edited directly in the build/ship track. If the design must change, go back officially: `harness backtrack <phase> --reason "<why>"`.',
+        '\uAD6C\uCD95\xB7\uCD9C\uD558 \uD2B8\uB799\uC5D0\uC11C \uC124\uACC4 \uBB38\uC11C\uB97C \uC9C1\uC811 \uC218\uC815\uD560 \uC218 \uC5C6\uB2E4. \uC124\uACC4 \uBCC0\uACBD\uC774 \uD544\uC694\uD558\uBA74 `harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>"` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD558\uB77C.'
+      ), degraded, lang);
     }
   }
   return null;
@@ -9229,7 +9341,7 @@ function postTool(root, input) {
   if (WRITE_TOOLS.includes(tool) || tool === "Bash" && !selfCall) noteActivity(root);
   return null;
 }
-function stopGuard(root, state, input) {
+function stopGuard(root, state, input, lang) {
   if (input.stop_hook_active) return null;
   if (!state.activeWave) return null;
   const rt = readRuntime(root);
@@ -9237,7 +9349,10 @@ function stopGuard(root, state, input) {
   if (!rt.lastTurnAt || rt.lastTurnAt < rt.lastActivityAt) {
     return {
       decision: "block",
-      reason: `\uD65C\uC131 \uC6E8\uC774\uBE0C ${state.activeWave} \uC758 \uD134 \uB85C\uADF8\uAC00 \uB9C8\uC9C0\uB9C9 \uC791\uC5C5 \uC774\uD6C4 \uAC31\uC2E0\uB418\uC9C0 \uC54A\uC558\uB2E4. \`harness wave update "<\uD55C \uC77C, \uB2E4\uC74C \uD560 \uC77C>"\` \uB85C \uC9C0\uC2DC\uC11C\uB97C \uAC31\uC2E0\uD55C \uB4A4 \uC885\uB8CC\uD558\uB77C. (\uC815\uB9D0 \uB85C\uADF8\uAC00 \uBD88\uD544\uC694\uD55C \uC0AC\uC18C\uD55C \uD134\uC774\uC5C8\uB2E4\uBA74 \uADF8 \uC0AC\uC720\uB97C \uD55C \uC904 \uBCF4\uACE0\uD558\uACE0 \uC885\uB8CC\uD574\uB3C4 \uB41C\uB2E4)`
+      reason: pick({
+        en: `The turn log for active wave ${state.activeWave} has not been updated since the last work. Settle it with \`harness wave update "<what you did, what is next>"\` before stopping. (If this really was a trivial turn that needs no log, say why in one line and stop.)`,
+        ko: `\uD65C\uC131 \uC6E8\uC774\uBE0C ${state.activeWave} \uC758 \uD134 \uB85C\uADF8\uAC00 \uB9C8\uC9C0\uB9C9 \uC791\uC5C5 \uC774\uD6C4 \uAC31\uC2E0\uB418\uC9C0 \uC54A\uC558\uB2E4. \`harness wave update "<\uD55C \uC77C, \uB2E4\uC74C \uD560 \uC77C>"\` \uB85C \uC9C0\uC2DC\uC11C\uB97C \uAC31\uC2E0\uD55C \uB4A4 \uC885\uB8CC\uD558\uB77C. (\uC815\uB9D0 \uB85C\uADF8\uAC00 \uBD88\uD544\uC694\uD55C \uC0AC\uC18C\uD55C \uD134\uC774\uC5C8\uB2E4\uBA74 \uADF8 \uC0AC\uC720\uB97C \uD55C \uC904 \uBCF4\uACE0\uD558\uACE0 \uC885\uB8CC\uD574\uB3C4 \uB41C\uB2E4)`
+      }, lang)
     };
   }
   return null;
@@ -9265,7 +9380,10 @@ function assertInsideRoot(root, paths) {
   });
   if (outside.length > 0) {
     throw new Error(
-      `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      tr(root, {
+        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      })
     );
   }
 }
@@ -9277,7 +9395,10 @@ function computeArtifactHash(root, relPaths) {
       content = fs11.readFileSync(path10.resolve(root, rel));
     } catch {
       throw new Error(
-        `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+        tr(root, {
+          en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
+          ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+        })
       );
     }
     h.update(`${rel}\0${content.length}\0`);
@@ -9301,12 +9422,18 @@ function submitGate(root, phase, opts) {
   const paths = normalizePaths(opts.paths);
   if (paths.length === 0) {
     throw new Error(
-      `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      tr(root, {
+        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      })
     );
   }
   if (!isEvidenceGrade(opts.evidence)) {
     throw new Error(
-      `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      tr(root, {
+        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
+        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      })
     );
   }
   assertInsideRoot(root, paths);
@@ -9328,24 +9455,36 @@ function approveGate(root, phase) {
   const current = state.gates[phase];
   if (!current || current.status !== "submitted") {
     throw new Error(
-      `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uC2B9\uC778\uD560 \uC218 \uC788\uB294 \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${current?.status ?? "pending"}) \u2014 \`harness gate submit ${phase}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`
+      tr(root, {
+        en: `Gate ${phase} is not in an approvable state (currently: ${current?.status ?? "pending"}) \u2014 submit artifacts first with \`harness gate submit ${phase}\``,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uC2B9\uC778\uD560 \uC218 \uC788\uB294 \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${current?.status ?? "pending"}) \u2014 \`harness gate submit ${phase}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`
+      })
     );
   }
   if (SHIP_PHASES.includes(phase) && current.evidence !== "measured") {
     throw new Error(
-      `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${current.evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+      tr(root, {
+        en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${current.evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
+        ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${current.evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+      })
     );
   }
   const paths = recordedPaths(root, phase);
   if (!paths) {
     throw new Error(
-      `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase}\` \uB85C \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+      tr(root, {
+        en: `No submission history for gate ${phase} in the journal \u2014 submit again with \`harness gate submit ${phase}\``,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase}\` \uB85C \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+      })
     );
   }
   const artifactHash = computeArtifactHash(root, paths);
   if (artifactHash !== current.artifactHash) {
     throw new Error(
-      `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC0B0\uCD9C\uBB3C\uC774 \uC81C\uCD9C \uC774\uD6C4 \uBCC0\uACBD\uB410\uB2E4 \u2014 \uC2EC\uC0AC\uD55C \uB0B4\uC6A9\uACFC \uC2B9\uC778\uD560 \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4. \`harness gate submit ${phase}\` \uB85C \uC7AC\uC81C\uCD9C\uD55C \uB4A4 \uC2B9\uC778\uD558\uB77C`
+      tr(root, {
+        en: `Artifacts for gate ${phase} changed after submission \u2014 what was reviewed is not what would be approved. Resubmit with \`harness gate submit ${phase}\`, then approve`,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC0B0\uCD9C\uBB3C\uC774 \uC81C\uCD9C \uC774\uD6C4 \uBCC0\uACBD\uB410\uB2E4 \u2014 \uC2EC\uC0AC\uD55C \uB0B4\uC6A9\uACFC \uC2B9\uC778\uD560 \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4. \`harness gate submit ${phase}\` \uB85C \uC7AC\uC81C\uCD9C\uD55C \uB4A4 \uC2B9\uC778\uD558\uB77C`
+      })
     );
   }
   const ev = appendEvent(root, "gate-approved", { phase, artifactHash, evidence: current.evidence, paths });
@@ -9360,7 +9499,10 @@ function recordGateFeedback(root, phase, raw) {
   const lines = raw.split("\n").map((l) => sanitizeUntrusted(l)).filter((l) => l.trim());
   if (lines.length === 0) {
     throw new Error(
-      `\uC218\uC9D1\uD560 \uD53C\uB4DC\uBC31\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uD30C\uC77C>\` \uC758 \uD30C\uC77C\uC5D0 \uB9AC\uBDF0 \uCF54\uBA58\uD2B8\uB97C \uB2F4\uC544\uB77C. \uBE48 \uD53C\uB4DC\uBC31\uC740 \uAC1C\uC815 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      tr(root, {
+        en: `Nothing to collect \u2014 put the review comments in the file you pass to \`harness gate feedback ${phase} --from <file>\`. Empty feedback is not revision grounds`,
+        ko: `\uC218\uC9D1\uD560 \uD53C\uB4DC\uBC31\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uD30C\uC77C>\` \uC758 \uD30C\uC77C\uC5D0 \uB9AC\uBDF0 \uCF54\uBA58\uD2B8\uB97C \uB2F4\uC544\uB77C. \uBE48 \uD53C\uB4DC\uBC31\uC740 \uAC1C\uC815 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      })
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
@@ -9429,7 +9571,10 @@ function canEnterPhase(root, phase) {
   if (g?.status === "approved") return { ok: true };
   return {
     ok: false,
-    reason: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
+    reason: tr(root, {
+      en: `Cannot move to ${phase} \u2014 the gate for the previous phase ${prev} is not approved (currently: ${g?.status ?? "pending"}). Approve the artifacts: \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72)`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
+    })
   };
 }
 function setPhaseViaGate(root, phase) {
@@ -9519,26 +9664,35 @@ function computeDocHash(root, doc) {
     buf = fs12.readFileSync(abs);
   } catch {
     throw new Error(
-      `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      tr(root, {
+        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
+        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      })
     );
   }
   return crypto2.createHash("sha256").update(buf).digest("hex");
 }
 function require_(root, id) {
   const doc = getDoc(root, id);
-  if (!doc) throw new Error(`\uBB38\uC11C ${id} \uAC00 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC5C6\uB2E4`);
+  if (!doc) throw new Error(tr(root, { en: `Document ${id} is not in the registry`, ko: `\uBB38\uC11C ${id} \uAC00 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC5C6\uB2E4` }));
   return doc;
 }
 function submitDoc(root, id) {
   const doc = require_(root, id);
   if (doc.status !== "draft") {
     throw new Error(
-      `\uBB38\uC11C ${id} \uB294 draft \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uC81C\uCD9C\uBCF8\uC744 \uACE0\uCE58\uB824\uBA74 harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E0 \uB4A4 \uC81C\uCD9C\uD558\uB77C`
+      tr(root, {
+        en: `Document ${id} is not a draft (currently ${doc.status}) \u2014 to change a submitted document, make a new version with \`harness doc revise\`, then submit it`,
+        ko: `\uBB38\uC11C ${id} \uB294 draft \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uC81C\uCD9C\uBCF8\uC744 \uACE0\uCE58\uB824\uBA74 harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E0 \uB4A4 \uC81C\uCD9C\uD558\uB77C`
+      })
     );
   }
   if (!doc.artifactUrl) {
     throw new Error(
-      `\uBB38\uC11C ${id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 \uB85C\uCEEC\uC5D0\uB9CC \uC788\uB294 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16). claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBA3C\uC800 \uBC1C\uD589\uD558\uACE0 setDocArtifactUrl \uB85C URL \uC744 \uB4F1\uB85D\uD558\uB77C`
+      tr(root, {
+        en: `Document ${id} has no artifact URL \u2014 a document that only exists locally cannot go to a gate (req 16). Publish it as a claude.ai artifact first and register the URL`,
+        ko: `\uBB38\uC11C ${id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 \uB85C\uCEEC\uC5D0\uB9CC \uC788\uB294 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16). claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBA3C\uC800 \uBC1C\uD589\uD558\uACE0 setDocArtifactUrl \uB85C URL \uC744 \uB4F1\uB85D\uD558\uB77C`
+      })
     );
   }
   const hash = computeDocHash(root, doc);
@@ -9556,15 +9710,18 @@ function submitDoc(root, id) {
 function approveDoc(root, id) {
   const doc = require_(root, id);
   if (doc.status !== "submitted") {
-    throw new Error(`\uBB38\uC11C ${id} \uB294 submitted \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`);
+    throw new Error(tr(root, { en: `Document ${id} is not submitted (currently ${doc.status}) \u2014 submit it first`, ko: `\uBB38\uC11C ${id} \uB294 submitted \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${doc.status}) \u2014 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C` }));
   }
   if (!doc.hash) {
-    throw new Error(`\uBB38\uC11C ${id} \uC5D0 \uACE0\uC815\uB41C \uD574\uC2DC\uAC00 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uAC00 \uC190\uC0C1\uB410\uB2E4. \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`);
+    throw new Error(tr(root, { en: `Document ${id} has no pinned hash \u2014 the registry is damaged. Submit again`, ko: `\uBB38\uC11C ${id} \uC5D0 \uACE0\uC815\uB41C \uD574\uC2DC\uAC00 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uAC00 \uC190\uC0C1\uB410\uB2E4. \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C` }));
   }
   const current = computeDocHash(root, doc);
   if (current !== doc.hash) {
     throw new Error(
-      `\uBB38\uC11C ${id} \uC758 \uD574\uC2DC\uAC00 \uC81C\uCD9C \uC2DC\uC810\uACFC \uB2E4\uB974\uB2E4 \u2014 \uC81C\uCD9C \uD6C4 ${doc.path} \uB0B4\uC6A9\uC774 \uBC14\uB00C\uC5C8\uB2E4. harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E4\uC5B4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+      tr(root, {
+        en: `Document ${id} no longer matches its submitted hash \u2014 ${doc.path} changed after submission. Make a new version with \`harness doc revise\` and submit again`,
+        ko: `\uBB38\uC11C ${id} \uC758 \uD574\uC2DC\uAC00 \uC81C\uCD9C \uC2DC\uC810\uACFC \uB2E4\uB974\uB2E4 \u2014 \uC81C\uCD9C \uD6C4 ${doc.path} \uB0B4\uC6A9\uC774 \uBC14\uB00C\uC5C8\uB2E4. harness doc revise \uB85C \uC0C8 \uBC84\uC804\uC744 \uB9CC\uB4E4\uC5B4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+      })
     );
   }
   const next = { ...doc, status: "approved" };
@@ -9610,10 +9767,10 @@ function setDocArtifactUrl(root, id, url) {
   try {
     parsed = new URL(url.trim());
   } catch {
-    throw new Error(`\uC544\uD2F0\uD329\uD2B8 URL \uC774 https URL \uC774 \uC544\uB2C8\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C`);
+    throw new Error(tr(root, { en: `The artifact URL is not an https URL: "${url}" \u2014 paste the claude.ai artifact address as-is`, ko: `\uC544\uD2F0\uD329\uD2B8 URL \uC774 https URL \uC774 \uC544\uB2C8\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C` }));
   }
   if (parsed.protocol !== "https:" || !parsed.hostname) {
-    throw new Error(`\uC544\uD2F0\uD329\uD2B8 URL \uC740 https \uC5EC\uC57C \uD55C\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C`);
+    throw new Error(tr(root, { en: `The artifact URL must be https: "${url}" \u2014 paste the claude.ai artifact address as-is`, ko: `\uC544\uD2F0\uD329\uD2B8 URL \uC740 https \uC5EC\uC57C \uD55C\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C` }));
   }
   const next = { ...doc, artifactUrl: parsed.toString() };
   appendEvent(root, "doc-artifact-url-set", {
@@ -10000,7 +10157,7 @@ function getAdr(root, id) {
   const p = adrPath(root, id);
   if (!fs14.existsSync(p)) return void 0;
   const parsed = toAdrRecord(YAML6.parse(fs14.readFileSync(p, "utf8")));
-  if (!parsed) throw new Error(`ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+  if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} \u2014 restore it from git history`, ko: `ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   return parsed;
 }
 function listAdrs(root) {
@@ -10019,22 +10176,25 @@ function listAdrs(root) {
   }
   return out;
 }
-function assertOptions(options, recommended) {
+function assertOptions(root, options, recommended) {
   if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
     throw new Error(
-      `ADR \uC120\uD0DD\uC9C0\uB294 ${MIN_OPTIONS}~${MAX_OPTIONS}\uAC1C\uC5EC\uC57C \uD55C\uB2E4(\uD604\uC7AC ${options.length}\uAC1C) \u2014 \uC120\uD0DD\uC9C0 \uD558\uB098\uC9DC\uB9AC \uACB0\uC815\uC740 \uACB0\uC815\uC774 \uC544\uB2C8\uB77C \uD1B5\uBCF4\uB2E4. \uBE44\uAD50 \uAC00\uB2A5\uD55C \uB300\uC548\uC744 \uD2B8\uB808\uC774\uB4DC\uC624\uD504\uC640 \uD568\uAED8 \uC81C\uC2DC\uD558\uB77C.`
+      tr(root, {
+        en: `An ADR needs ${MIN_OPTIONS}\u2013${MAX_OPTIONS} options (currently ${options.length}) \u2014 a one-option decision is an announcement, not a decision. Offer comparable alternatives with trade-offs.`,
+        ko: `ADR \uC120\uD0DD\uC9C0\uB294 ${MIN_OPTIONS}~${MAX_OPTIONS}\uAC1C\uC5EC\uC57C \uD55C\uB2E4(\uD604\uC7AC ${options.length}\uAC1C) \u2014 \uC120\uD0DD\uC9C0 \uD558\uB098\uC9DC\uB9AC \uACB0\uC815\uC740 \uACB0\uC815\uC774 \uC544\uB2C8\uB77C \uD1B5\uBCF4\uB2E4. \uBE44\uAD50 \uAC00\uB2A5\uD55C \uB300\uC548\uC744 \uD2B8\uB808\uC774\uB4DC\uC624\uD504\uC640 \uD568\uAED8 \uC81C\uC2DC\uD558\uB77C.`
+      })
     );
   }
   if (recommended !== void 0 && !options.some((o) => o.id === recommended)) {
     throw new Error(
-      `\uCD94\uCC9C\uC548 "${recommended}" \uC774 \uC120\uD0DD\uC9C0\uC5D0 \uC5C6\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4(${options.map((o) => o.id).join(", ")})`
+      tr(root, { en: `The recommendation "${recommended}" is not among the options \u2014 it must be one of (${options.map((o) => o.id).join(", ")})`, ko: `\uCD94\uCC9C\uC548 "${recommended}" \uC774 \uC120\uD0DD\uC9C0\uC5D0 \uC5C6\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4(${options.map((o) => o.id).join(", ")})` })
     );
   }
 }
 function requireAdr(root, id) {
   const rec = getAdr(root, id);
   if (!rec) {
-    throw new Error(`ADR ${id} \uAE30\uB85D\uC774 \uC5C6\uB2E4 (${adrPath(root, id)}) \u2014 \uBA3C\uC800 \uC81C\uC548(propose)\uD558\uB77C`);
+    throw new Error(tr(root, { en: `No ADR record ${id} (${adrPath(root, id)}) \u2014 propose it first`, ko: `ADR ${id} \uAE30\uB85D\uC774 \uC5C6\uB2E4 (${adrPath(root, id)}) \u2014 \uBA3C\uC800 \uC81C\uC548(propose)\uD558\uB77C` }));
   }
   return rec;
 }
@@ -10080,14 +10240,17 @@ function referencingWaves(root, id) {
 }
 function proposeAdr(root, input) {
   if (!input.id.startsWith("ADR-")) {
-    throw new Error(`ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)`);
+    throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (\xA73-2 ledger id convention)`, ko: `ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)` }));
   }
   if (fs14.existsSync(adrPath(root, input.id))) {
     throw new Error(
-      `ADR ${input.id} \uAC00 \uC774\uBBF8 \uC788\uB2E4 \u2014 \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F0\uC9C0 \uB9C8\uB77C. \uBC14\uAFB8\uB824\uBA74 reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815\uD558\uB77C(version++ + STALE \uC804\uD30C).`
+      tr(root, {
+        en: `ADR ${input.id} already exists \u2014 do not overwrite a decision. To change it, revise formally with reviseAdr (version++ and STALE propagation).`,
+        ko: `ADR ${input.id} \uAC00 \uC774\uBBF8 \uC788\uB2E4 \u2014 \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F0\uC9C0 \uB9C8\uB77C. \uBC14\uAFB8\uB824\uBA74 reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815\uD558\uB77C(version++ + STALE \uC804\uD30C).`
+      })
     );
   }
-  assertOptions(input.options, input.recommended);
+  assertOptions(root, input.options, input.recommended);
   const rec = {
     id: input.id,
     phase: input.phase,
@@ -10113,14 +10276,20 @@ function decideAdr(root, id, input) {
   const prev = requireAdr(root, id);
   if (prev.status !== "proposed") {
     throw new Error(
-      `ADR ${id} \uB294 proposed \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${prev.status}) \u2014 \uAE30\uB85D\uB41C \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC5C6\uB2E4. reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815(version++ + STALE \uC804\uD30C)\uD55C \uB4A4 \uB2E4\uC2DC \uCC44\uD0DD\uD558\uB77C.`
+      tr(root, {
+        en: `ADR ${id} is not proposed (currently ${prev.status}) \u2014 a recorded decision cannot be overwritten. Revise it formally (version++ and STALE propagation), then decide again.`,
+        ko: `ADR ${id} \uB294 proposed \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${prev.status}) \u2014 \uAE30\uB85D\uB41C \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC5C6\uB2E4. reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815(version++ + STALE \uC804\uD30C)\uD55C \uB4A4 \uB2E4\uC2DC \uCC44\uD0DD\uD558\uB77C.`
+      })
     );
   }
   const chosenRaw = input.chosen.trim();
-  if (!chosenRaw) throw new Error(`ADR ${id} \uCC44\uD0DD \uAC12\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uB610\uB294 \uC790\uC720 \uC815\uC758 \uAC12\uC744 \uB123\uC5B4\uB77C`);
+  if (!chosenRaw) throw new Error(tr(root, { en: `The chosen value for ADR ${id} is empty \u2014 give an option id or a free-form value`, ko: `ADR ${id} \uCC44\uD0DD \uAC12\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uB610\uB294 \uC790\uC720 \uC815\uC758 \uAC12\uC744 \uB123\uC5B4\uB77C` }));
   if (!input.rationale.trim()) {
     throw new Error(
-      `ADR ${id} \uCC44\uD0DD \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uACB0\uC815 \uAE30\uB85D\uC740 \uBC18\uB144 \uB4A4 \uC77D\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uC544\uBB34 \uC815\uBCF4\uB3C4 \uC8FC\uC9C0 \uC54A\uB294\uB2E4. \uC65C \uC774 \uC548\uC744 \uACE8\uB790\uB294\uC9C0 \uD55C \uC904\uC774\uB77C\uB3C4 \uB0A8\uACA8\uB77C.`
+      tr(root, {
+        en: `ADR ${id} has no rationale \u2014 a decision log without one tells the reader nothing six months later. Leave at least one line on why this option won.`,
+        ko: `ADR ${id} \uCC44\uD0DD \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uACB0\uC815 \uAE30\uB85D\uC740 \uBC18\uB144 \uB4A4 \uC77D\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uC544\uBB34 \uC815\uBCF4\uB3C4 \uC8FC\uC9C0 \uC54A\uB294\uB2E4. \uC65C \uC774 \uC548\uC744 \uACE8\uB790\uB294\uC9C0 \uD55C \uC904\uC774\uB77C\uB3C4 \uB0A8\uACA8\uB77C.`
+      })
     );
   }
   const known = prev.options.some((o) => o.id === chosenRaw);
@@ -10139,7 +10308,10 @@ function decideAdr(root, id, input) {
   }
   if (missing.length > 0) {
     throw new Error(
-      `ADR ${id} \uC758 \uAE30\uAC01 \uC0AC\uC720\uAC00 \uBE60\uC9C4 \uC120\uD0DD\uC9C0: ${missing.join(", ")} \u2014 \uAE30\uAC01 \uC0AC\uC720 \uC5C6\uB294 \uACB0\uC815 \uB85C\uADF8\uB294 "\uC65C \uC800\uAC74 \uC548 \uD588\uB098"\uC5D0 \uB2F5\uD558\uC9C0 \uBABB\uD55C\uB2E4. \uCC44\uD0DD\uD558\uC9C0 \uC54A\uC740 \uBAA8\uB4E0 \uC120\uD0DD\uC9C0\uC5D0 \uC0AC\uC720\uB97C \uB2EC\uC544\uB77C.`
+      tr(root, {
+        en: `Options in ADR ${id} with no rejection reason: ${missing.join(", ")} \u2014 a decision log without them cannot answer "why not that one". Give a reason for every option you did not take.`,
+        ko: `ADR ${id} \uC758 \uAE30\uAC01 \uC0AC\uC720\uAC00 \uBE60\uC9C4 \uC120\uD0DD\uC9C0: ${missing.join(", ")} \u2014 \uAE30\uAC01 \uC0AC\uC720 \uC5C6\uB294 \uACB0\uC815 \uB85C\uADF8\uB294 "\uC65C \uC800\uAC74 \uC548 \uD588\uB098"\uC5D0 \uB2F5\uD558\uC9C0 \uBABB\uD55C\uB2E4. \uCC44\uD0DD\uD558\uC9C0 \uC54A\uC740 \uBAA8\uB4E0 \uC120\uD0DD\uC9C0\uC5D0 \uC0AC\uC720\uB97C \uB2EC\uC544\uB77C.`
+      })
     );
   }
   const rec = {
@@ -10166,7 +10338,7 @@ function reviseAdr(root, id, input) {
   const prev = requireAdr(root, id);
   const options = input.options ?? prev.options;
   const recommended = input.options ? input.recommended : input.recommended ?? prev.recommended;
-  assertOptions(options, recommended);
+  assertOptions(root, options, recommended);
   const { affected, unverifiable } = referencingWaves(root, id);
   const rec = {
     id: prev.id,
@@ -10252,15 +10424,18 @@ function saveDoc(root, doc) {
   fs15.writeFileSync(tmp, YAML7.stringify(doc));
   fs15.renameSync(tmp, target);
 }
-function requireUxId(id) {
+function requireUxId(root, id) {
   if (typeof id !== "string" || !/^UX-\S/.test(id)) {
     throw new Error(
-      `\uCE94\uBC84\uC2A4 \uC544\uD2B8\uBCF4\uB4DC\uB294 UX \uB178\uB4DC\uC5D0\uB9CC \uBD99\uB294\uB2E4: ${String(id)} \uB294 UX- \uB85C \uC2DC\uC791\uD558\uB294 \uB178\uB4DC id \uAC00 \uC544\uB2C8\uB2E4. \uC544\uD2B8\uBCF4\uB4DC 1\uC7A5 = UX \uB178\uB4DC 1\uAC1C(\uBA85\uBA85 \uAD00\uB840 "UX-7 \uACB0\uC81C \uD654\uBA74")\uAC00 \uCD94\uC801\uC131\uC758 \uCC99\uCD94\uB2E4(\uC2A4\uD399 \xA78).`
+      tr(root, {
+        en: `Canvas artboards attach to UX nodes only: ${String(id)} is not a node id starting with UX-. One artboard = one UX node (naming convention "UX-7 Checkout") is the spine of traceability (spec \xA78).`,
+        ko: `\uCE94\uBC84\uC2A4 \uC544\uD2B8\uBCF4\uB4DC\uB294 UX \uB178\uB4DC\uC5D0\uB9CC \uBD99\uB294\uB2E4: ${String(id)} \uB294 UX- \uB85C \uC2DC\uC791\uD558\uB294 \uB178\uB4DC id \uAC00 \uC544\uB2C8\uB2E4. \uC544\uD2B8\uBCF4\uB4DC 1\uC7A5 = UX \uB178\uB4DC 1\uAC1C(\uBA85\uBA85 \uAD00\uB840 "UX-7 \uACB0\uC81C \uD654\uBA74")\uAC00 \uCD94\uC801\uC131\uC758 \uCC99\uCD94\uB2E4(\uC2A4\uD399 \xA78).`
+      })
     );
   }
   return id;
 }
-function requireHttps(url) {
+function requireHttps(root, url) {
   let parsed = null;
   try {
     parsed = new URL(String(url));
@@ -10269,7 +10444,10 @@ function requireHttps(url) {
   }
   if (!parsed || parsed.protocol !== "https:") {
     throw new Error(
-      `\uCE94\uBC84\uC2A4 URL \uC774 https \uAC00 \uC544\uB2C8\uB2E4: ${String(url)}. \uC544\uD2B8\uBCF4\uB4DC \uC8FC\uC18C\uB294 https URL \uC774\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uC6D0\uC7A5\uC5D0 \uB0A8\uB294 \uC8FC\uC18C\uB294 \uB098\uC911\uC5D0 \uB0A8\uC774 \uC5F4\uC5B4 \uBCFC \uC815\uBCF8 \uB9C1\uD06C\uB2E4.`
+      tr(root, {
+        en: `The canvas URL is not https: ${String(url)}. An artboard address must be an https URL \u2014 what lands in the ledger is the canonical link someone else will open later.`,
+        ko: `\uCE94\uBC84\uC2A4 URL \uC774 https \uAC00 \uC544\uB2C8\uB2E4: ${String(url)}. \uC544\uD2B8\uBCF4\uB4DC \uC8FC\uC18C\uB294 https URL \uC774\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uC6D0\uC7A5\uC5D0 \uB0A8\uB294 \uC8FC\uC18C\uB294 \uB098\uC911\uC5D0 \uB0A8\uC774 \uC5F4\uC5B4 \uBCFC \uC815\uBCF8 \uB9C1\uD06C\uB2E4.`
+      })
     );
   }
   return String(url);
@@ -10278,20 +10456,26 @@ function requireNode(root, id) {
   const node = getNode(root, id);
   if (!node) {
     throw new Error(
-      `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBD99\uC77C \uACF3 \uC5C6\uB294 \uCE94\uBC84\uC2A4 \uB9C1\uD06C\uB294 sync \uAC00 \uC601\uC6D0\uD788 \uC2E4\uD328\uD55C\uB2E4. \`harness node upsert\` \uB85C UX \uB178\uB4DC\uB97C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C.`
+      tr(root, {
+        en: `Node ${id} is not in the ledger \u2014 a canvas link with nothing to attach to makes sync fail forever. Register the UX node first with \`harness node upsert\`.`,
+        ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBD99\uC77C \uACF3 \uC5C6\uB294 \uCE94\uBC84\uC2A4 \uB9C1\uD06C\uB294 sync \uAC00 \uC601\uC6D0\uD788 \uC2E4\uD328\uD55C\uB2E4. \`harness node upsert\` \uB85C UX \uB178\uB4DC\uB97C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C.`
+      })
     );
   }
   return node;
 }
 var sha256 = (s) => crypto3.createHash("sha256").update(s, "utf8").digest("hex");
 function linkCanvas(root, opts) {
-  const uxNodeId = requireUxId(opts?.uxNodeId);
+  const uxNodeId = requireUxId(root, opts?.uxNodeId);
   requireNode(root, uxNodeId);
-  const url = requireHttps(opts?.url);
+  const url = requireHttps(root, opts?.url);
   const artboard = typeof opts?.artboard === "string" ? opts.artboard.trim() : "";
   if (!artboard) {
     throw new Error(
-      `${uxNodeId} \uC758 \uC544\uD2B8\uBCF4\uB4DC \uC774\uB984\uC774 \uBE44\uC5C8\uB2E4 \u2014 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uC5B4\uB290 \uD310\uC774 \uC774 \uB178\uB4DC\uC778\uC9C0 \uC0AC\uB78C\uC774 \uCC3E\uC744 \uC218 \uC5C6\uB2E4. \uBA85\uBA85 \uAD00\uB840\uB294 "UX-7 \uACB0\uC81C \uD654\uBA74" \uCC98\uB7FC \uB178\uB4DC id \uB85C \uC2DC\uC791\uD558\uB294 \uC774\uB984\uC774\uB2E4(\uC2A4\uD399 \xA78).`
+      tr(root, {
+        en: `${uxNodeId} has an empty artboard name \u2014 nobody can tell which board on the canvas is this node. The convention is a name starting with the node id, like "UX-7 Checkout" (spec \xA78).`,
+        ko: `${uxNodeId} \uC758 \uC544\uD2B8\uBCF4\uB4DC \uC774\uB984\uC774 \uBE44\uC5C8\uB2E4 \u2014 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uC5B4\uB290 \uD310\uC774 \uC774 \uB178\uB4DC\uC778\uC9C0 \uC0AC\uB78C\uC774 \uCC3E\uC744 \uC218 \uC5C6\uB2E4. \uBA85\uBA85 \uAD00\uB840\uB294 "UX-7 \uACB0\uC81C \uD654\uBA74" \uCC98\uB7FC \uB178\uB4DC id \uB85C \uC2DC\uC791\uD558\uB294 \uC774\uB984\uC774\uB2E4(\uC2A4\uD399 \xA78).`
+      })
     );
   }
   const doc = loadDoc(root);
@@ -10306,17 +10490,23 @@ function listCanvasLinks(root) {
   return loadDoc(root).links;
 }
 function syncCanvas(root, uxNodeId, fetchedContent) {
-  requireUxId(uxNodeId);
+  requireUxId(root, uxNodeId);
   if (typeof fetchedContent !== "string") {
     throw new Error(
-      "\uCE94\uBC84\uC2A4 \uBCF8\uBB38\uC774 \uBB38\uC790\uC5F4\uC774 \uC544\uB2C8\uB2E4 \u2014 \uCF54\uC5B4\uB294 \uB124\uD2B8\uC6CC\uD06C\uB97C \uD0C0\uC9C0 \uC54A\uB294\uB2E4. \uC5D0\uC774\uC804\uD2B8\uAC00 WebFetch \uB85C \uBC1B\uC544\uC628 \uBCF8\uBB38\uC744 \uADF8\uB300\uB85C \uB118\uACA8\uB77C(\uC2A4\uD399 \xA71\xB7\xA78)."
+      tr(root, {
+        en: "The canvas body is not a string \u2014 the core never touches the network. Hand over the body an agent fetched with WebFetch (spec \xA71, \xA78).",
+        ko: "\uCE94\uBC84\uC2A4 \uBCF8\uBB38\uC774 \uBB38\uC790\uC5F4\uC774 \uC544\uB2C8\uB2E4 \u2014 \uCF54\uC5B4\uB294 \uB124\uD2B8\uC6CC\uD06C\uB97C \uD0C0\uC9C0 \uC54A\uB294\uB2E4. \uC5D0\uC774\uC804\uD2B8\uAC00 WebFetch \uB85C \uBC1B\uC544\uC628 \uBCF8\uBB38\uC744 \uADF8\uB300\uB85C \uB118\uACA8\uB77C(\uC2A4\uD399 \xA71\xB7\xA78)."
+      })
     );
   }
   const doc = loadDoc(root);
   const i = doc.links.findIndex((l) => l?.uxNodeId === uxNodeId);
   if (i < 0) {
     throw new Error(
-      `${uxNodeId} \uC5D0 \uC5F0\uACB0\uB41C \uCE94\uBC84\uC2A4\uAC00 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \`harness design link\` \uB85C \uC544\uD2B8\uBCF4\uB4DC URL \uC744 \uB4F1\uB85D\uD558\uB77C(\uC2A4\uD399 \xA78).`
+      tr(root, {
+        en: `No canvas is linked to ${uxNodeId} \u2014 register the artboard URL first with \`harness design link\` (spec \xA78).`,
+        ko: `${uxNodeId} \uC5D0 \uC5F0\uACB0\uB41C \uCE94\uBC84\uC2A4\uAC00 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \`harness design link\` \uB85C \uC544\uD2B8\uBCF4\uB4DC URL \uC744 \uB4F1\uB85D\uD558\uB77C(\uC2A4\uD399 \xA78).`
+      })
     );
   }
   const link = doc.links[i];
@@ -10389,9 +10579,9 @@ function relFromRoot2(root, abs) {
   return rel.split(path14.sep).join("/");
 }
 function recordBaseline(root, uxNodeId, pngPath) {
-  requireUxId(uxNodeId);
+  requireUxId(root, uxNodeId);
   if (typeof pngPath !== "string" || !pngPath.trim()) {
-    throw new Error(`${uxNodeId} \uC758 \uAE30\uC900 \uC774\uBBF8\uC9C0 \uACBD\uB85C\uAC00 \uBE44\uC5C8\uB2E4 \u2014 \uC544\uD2B8\uBCF4\uB4DC 2x PNG \uACBD\uB85C\uB97C \uB118\uACA8\uB77C.`);
+    throw new Error(tr(root, { en: `The baseline image path for ${uxNodeId} is empty \u2014 pass the path to a 2x PNG export of the artboard.`, ko: `${uxNodeId} \uC758 \uAE30\uC900 \uC774\uBBF8\uC9C0 \uACBD\uB85C\uAC00 \uBE44\uC5C8\uB2E4 \u2014 \uC544\uD2B8\uBCF4\uB4DC 2x PNG \uACBD\uB85C\uB97C \uB118\uACA8\uB77C.` }));
   }
   const abs = path14.isAbsolute(pngPath) ? pngPath : path14.join(root, pngPath);
   let st;
@@ -10399,13 +10589,19 @@ function recordBaseline(root, uxNodeId, pngPath) {
     st = fs15.statSync(abs);
   } catch {
     throw new Error(
-      `\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uC5C6\uB2E4: ${abs} \u2014 \uC544\uD2B8\uBCF4\uB4DC\uB97C 2x \uB85C \uB0B4\uBCF4\uB0B8 \uB4A4 \uADF8 \uACBD\uB85C\uB97C \uB118\uACA8\uB77C(\uC2A4\uD399 \xA78).`
+      tr(root, {
+        en: `No baseline image at ${abs} \u2014 export the artboard at 2x and pass that path (spec \xA78).`,
+        ko: `\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uC5C6\uB2E4: ${abs} \u2014 \uC544\uD2B8\uBCF4\uB4DC\uB97C 2x \uB85C \uB0B4\uBCF4\uB0B8 \uB4A4 \uADF8 \uACBD\uB85C\uB97C \uB118\uACA8\uB77C(\uC2A4\uD399 \xA78).`
+      })
     );
   }
-  if (!st.isFile()) throw new Error(`\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4: ${abs}`);
+  if (!st.isFile()) throw new Error(tr(root, { en: `The baseline image is not a file: ${abs}`, ko: `\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4: ${abs}` }));
   if (st.size === 0) {
     throw new Error(
-      `\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uBE44\uC5B4 \uC788\uB2E4(0\uBC14\uC774\uD2B8): ${abs} \u2014 \uBE48 \uAE30\uC900\uC120\uC740 P9 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uC544\uD2B8\uBCF4\uB4DC\uB97C 2x \uB85C \uB2E4\uC2DC \uB0B4\uBCF4\uB0B4\uB77C.`
+      tr(root, {
+        en: `The baseline image is empty (0 bytes): ${abs} \u2014 an empty baseline does not fail the P9 visual comparison, it silently passes it. Export the artboard at 2x again.`,
+        ko: `\uAE30\uC900 \uC774\uBBF8\uC9C0\uAC00 \uBE44\uC5B4 \uC788\uB2E4(0\uBC14\uC774\uD2B8): ${abs} \u2014 \uBE48 \uAE30\uC900\uC120\uC740 P9 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uC544\uD2B8\uBCF4\uB4DC\uB97C 2x \uB85C \uB2E4\uC2DC \uB0B4\uBCF4\uB0B4\uB77C.`
+      })
     );
   }
   const stored = relFromRoot2(root, abs) ?? abs;
@@ -10585,7 +10781,8 @@ var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 function requireUxId2(id) {
   if (typeof id !== "string" || !/^UX-[A-Za-z0-9._-]+$/.test(id)) {
     throw new Error(
-      `\uC2DC\uAC01 \uC99D\uC801\uC740 UX \uB178\uB4DC\uC5D0\uB9CC \uBD99\uB294\uB2E4: ${String(id)} \uB294 \uC4F8 \uC218 \uC788\uB294 UX \uB178\uB4DC id \uAC00 \uC544\uB2C8\uB2E4. \`UX-7\` \uCC98\uB7FC UX- \uB85C \uC2DC\uC791\uD558\uACE0 \uC601\uC22B\uC790\xB7. _ - \uB9CC \uC4F0\uB294 id \uC5EC\uC57C \uD55C\uB2E4(\uD30C\uC77C\uBA85\uC774 \uB418\uBBC0\uB85C \uACBD\uB85C \uBB38\uC790 \uBD88\uAC00).`
+      // i18n 예외: 순수 검증기라 root 가 없다(tokens.ts 상단 주석과 같은 판단). 영어 고정.
+      `Visual evidence attaches to UX nodes only: ${String(id)} is not a usable UX node id. It must start with UX- and use only alphanumerics, . _ - (it becomes a filename, so no path characters).`
     );
   }
   return id;
@@ -10593,7 +10790,8 @@ function requireUxId2(id) {
 function requireWaveId(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
     throw new Error(
-      `\uC6E8\uC774\uBE0C id \uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4: ${String(id)} \u2014 \`wave-001\` \uCC98\uB7FC \uC601\uC22B\uC790\xB7. _ - \uB9CC \uC4F0\uB294 \uC2DD\uBCC4\uC790\uC5EC\uC57C \uD55C\uB2E4(\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uACBD\uB85C\uAC00 \uB418\uBBC0\uB85C \uACBD\uB85C \uBB38\uC790 \uBD88\uAC00).`
+      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
+      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
     );
   }
   return id;
@@ -10675,7 +10873,10 @@ function resolveWaveId(root, given) {
   }
   if (!active) {
     throw new Error(
-      "\uCEA1\uCC98\uB97C \uB5A8\uC5B4\uB728\uB9B4 \uC6E8\uC774\uBE0C\uB97C \uC54C \uC218 \uC5C6\uB2E4 \u2014 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4. `harness wave activate <id>` \uB85C \uD65C\uC131\uD654\uD558\uAC70\uB098 waveId \uB97C \uC9C1\uC811 \uC9C0\uC815\uD558\uB77C."
+      tr(root, {
+        en: "Cannot tell which wave the captures belong to \u2014 there is no active wave. Activate one with `harness wave activate <id>`, or pass waveId explicitly.",
+        ko: "\uCEA1\uCC98\uB97C \uB5A8\uC5B4\uB728\uB9B4 \uC6E8\uC774\uBE0C\uB97C \uC54C \uC218 \uC5C6\uB2E4 \u2014 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4. `harness wave activate <id>` \uB85C \uD65C\uC131\uD654\uD558\uAC70\uB098 waveId \uB97C \uC9C1\uC811 \uC9C0\uC815\uD558\uB77C."
+      })
     );
   }
   return requireWaveId(active);
@@ -11025,11 +11226,14 @@ function attemptCount(root, waveId) {
 }
 function recordAttempt(root, waveId, outcome, detail) {
   if (outcome !== "pass" && outcome !== "fail") {
-    throw new Error(`\uAC80\uC99D \uACB0\uACFC\uB294 pass \uB610\uB294 fail \uC774\uC5B4\uC57C \uD55C\uB2E4: ${String(outcome)}`);
+    throw new Error(tr(root, { en: `The verification outcome must be pass or fail: ${String(outcome)}`, ko: `\uAC80\uC99D \uACB0\uACFC\uB294 pass \uB610\uB294 fail \uC774\uC5B4\uC57C \uD55C\uB2E4: ${String(outcome)}` }));
   }
   if (!fs17.existsSync(wavePath(root, waveId))) {
     throw new Error(
-      `\uC6E8\uC774\uBE0C ${waveId} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, waveId)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
+      tr(root, {
+        en: `No instruction sheet for wave ${waveId} (${wavePath(root, waveId)}) \u2014 check the id, or list them with \`harness wave list\``,
+        ko: `\uC6E8\uC774\uBE0C ${waveId} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, waveId)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
+      })
     );
   }
   const data = { id: waveId, outcome };
@@ -11065,11 +11269,14 @@ function pendingCritical(root) {
 function raiseCritical(root, opts) {
   if (!isCriticalReason(opts.reason)) {
     throw new Error(
-      `\uC54C \uC218 \uC5C6\uB294 \uC18C\uD658 \uC0AC\uC720: ${String(opts.reason)} \u2014 ${CRITICAL_REASONS.join(" | ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4`
+      tr(root, {
+        en: `Unknown escalation reason: ${String(opts.reason)} \u2014 one of ${CRITICAL_REASONS.join(" | ")}`,
+        ko: `\uC54C \uC218 \uC5C6\uB294 \uC18C\uD658 \uC0AC\uC720: ${String(opts.reason)} \u2014 ${CRITICAL_REASONS.join(" | ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4`
+      })
     );
   }
   if (!opts.detail || !opts.detail.trim()) {
-    throw new Error("\uC18C\uD658 \uC124\uBA85(detail)\uC774 \uBE44\uC5C8\uB2E4 \u2014 \uC0AC\uC6A9\uC790\uAC00 \uBB34\uC5C7\uC744 \uD310\uB2E8\uD574\uC57C \uD558\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C");
+    throw new Error(tr(root, { en: "The escalation detail is empty \u2014 say in one line what the user has to decide", ko: "\uC18C\uD658 \uC124\uBA85(detail)\uC774 \uBE44\uC5C8\uB2E4 \u2014 \uC0AC\uC6A9\uC790\uAC00 \uBB34\uC5C7\uC744 \uD310\uB2E8\uD574\uC57C \uD558\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C" }));
   }
   const data = { reason: opts.reason, detail: opts.detail };
   if (opts.waveId) data.id = opts.waveId;
@@ -11408,26 +11615,27 @@ function writeAtomic(target, content) {
   fs20.writeFileSync(tmp, content);
   fs20.renameSync(tmp, target);
 }
-function readRecords(file, key, to) {
+function readRecords(root, file, key, to) {
   if (!fs20.existsSync(file)) return [];
   let doc;
   try {
     doc = YAML8.parse(fs20.readFileSync(file, "utf8"));
   } catch (e) {
-    throw new Error(`${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+    throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
   if (doc === null || doc === void 0) return [];
   const list = doc[key];
   if (list === void 0 || list === null) return [];
   if (!Array.isArray(list)) {
-    throw new Error(`${file} \uC758 ${key} \uAC00 \uBAA9\uB85D\uC774 \uC544\uB2C8\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC190\uC0C1\uB410\uB2E4. git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+    throw new Error(tr(root, { en: `${key} in ${file} is not a list \u2014 the file is damaged. Restore it from git history`, ko: `${file} \uC758 ${key} \uAC00 \uBAA9\uB85D\uC774 \uC544\uB2C8\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC190\uC0C1\uB410\uB2E4. git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
   return list.map((entry, i) => {
     const rec = to(entry);
     if (!rec) {
-      throw new Error(
-        `${file} \uC758 ${key}[${i}] \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD615\uD0DC \uBD88\uB7C9 \uD56D\uBAA9\uC744 \uC870\uC6A9\uD788 \uBC84\uB9AC\uBA74 \uCC28\uB2E8 \uACB0\uD568 \uD55C \uC904\uC774 \uC0AC\uB77C\uC9C4 \uCC44 \uCD9C\uD558 \uD310\uC815\uC774 \uD1B5\uACFC\uD55C\uB2E4. \uD56D\uBAA9\uC744 \uACE0\uCE58\uAC70\uB098 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`
-      );
+      throw new Error(tr(root, {
+        en: `Cannot parse ${key}[${i}] in ${file} \u2014 silently dropping a malformed entry would let the ship verdict pass with a blocker line missing. Fix the entry, or restore from git history`,
+        ko: `${file} \uC758 ${key}[${i}] \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD615\uD0DC \uBD88\uB7C9 \uD56D\uBAA9\uC744 \uC870\uC6A9\uD788 \uBC84\uB9AC\uBA74 \uCC28\uB2E8 \uACB0\uD568 \uD55C \uC904\uC774 \uC0AC\uB77C\uC9C4 \uCC44 \uCD9C\uD558 \uD310\uC815\uC774 \uD1B5\uACFC\uD55C\uB2E4. \uD56D\uBAA9\uC744 \uACE0\uCE58\uAC70\uB098 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`
+      }));
     }
     return rec;
   });
@@ -11451,43 +11659,52 @@ function toDefect(v) {
   return rec;
 }
 function listDefects(root) {
-  return readRecords(defectsPath(root), "defects", toDefect);
+  return readRecords(root, defectsPath(root), "defects", toDefect);
 }
 function saveDefects(root, defects) {
   writeAtomic(defectsPath(root), YAML8.stringify({ defects }));
   writeAtomic(readinessPath(root), renderLedger(defects));
 }
-function assertDeferReason(rec) {
+function assertDeferReason(root, rec) {
   if (rec.status === "deferred" && !rec.deferReason) {
     throw new Error(
-      `deferred \uB85C \uB450\uB824\uBA74 \uC0AC\uC720\uAC00 \uD544\uC694\uD558\uB2E4: ${rec.id} \u2014 \uC0AC\uC720 \uC5C6\uB294 \uC720\uC608\uB294 \uC720\uC608\uAC00 \uC544\uB2C8\uB77C \uC740\uD3D0\uB2E4. \`harness ship defect update ${rec.id} --status deferred --defer-reason "<\uC65C \uC9C0\uAE08 \uC548 \uACE0\uCCD0\uB3C4 \uB418\uB294\uAC00>"\``
+      tr(root, {
+        en: `Deferring needs a reason: ${rec.id} \u2014 a deferral without one is concealment, not deferral. \`harness ship defect update ${rec.id} --status deferred --defer-reason "<why it can wait>"\``,
+        ko: `deferred \uB85C \uB450\uB824\uBA74 \uC0AC\uC720\uAC00 \uD544\uC694\uD558\uB2E4: ${rec.id} \u2014 \uC0AC\uC720 \uC5C6\uB294 \uC720\uC608\uB294 \uC720\uC608\uAC00 \uC544\uB2C8\uB77C \uC740\uD3D0\uB2E4. \`harness ship defect update ${rec.id} --status deferred --defer-reason "<\uC65C \uC9C0\uAE08 \uC548 \uACE0\uCCD0\uB3C4 \uB418\uB294\uAC00>"\``
+      })
     );
   }
 }
 function addDefect(root, input) {
   const id = String(input.id ?? "").trim();
-  if (!id) throw new Error("\uACB0\uD568 id \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `SEC-01` \uCC98\uB7FC \uB300\uC7A5\uC5D0\uC11C \uBD80\uB97C \uC774\uB984\uC744 \uBD99\uC5EC\uB77C");
+  if (!id) throw new Error(tr(root, { en: "The defect id is empty \u2014 give it a name the ledger can call it by, like `SEC-01`", ko: "\uACB0\uD568 id \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `SEC-01` \uCC98\uB7FC \uB300\uC7A5\uC5D0\uC11C \uBD80\uB97C \uC774\uB984\uC744 \uBD99\uC5EC\uB77C" }));
   if (!isSeverity(input.severity)) {
     throw new Error(
-      `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(input.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)`
+      tr(root, { en: `Invalid severity: ${String(input.severity)} (one of ${DEFECT_SEVERITIES.join(", ")})`, ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(input.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)` })
     );
   }
   const status = input.status ?? "open";
   if (!isStatus(status)) {
-    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+    throw new Error(tr(root, { en: `Invalid defect status: ${String(status)} (one of ${DEFECT_STATUSES.join(", ")})`, ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)` }));
   }
   const title = String(input.title ?? "").trim();
-  if (!title) throw new Error(`\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uBB34\uC5C7\uC774 \uC798\uBABB\uB410\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C`);
+  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary \u2014 say what is wrong in one line`, ko: `\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uBB34\uC5C7\uC774 \uC798\uBABB\uB410\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C` }));
   const evidence = String(input.evidence ?? "").trim();
   if (!evidence) {
     throw new Error(
-      `\uACB0\uD568 ${id} \uC5D0 \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uBC1C\uACAC\uC774 \uC544\uB2C8\uB77C \uC778\uC0C1\uC774\uB2E4. \`\uD30C\uC77C:\uC904\`(\`src/auth.ts:88\`) \uB610\uB294 \uC7AC\uD604 \uBA85\uB839\xB7\uC99D\uC801 \uACBD\uB85C\uB97C \uB2EC\uC544\uB77C`
+      tr(root, {
+        en: `Defect ${id} has no evidence \u2014 a finding without evidence is an impression, not a finding. Attach \`file:line\` (\`src/auth.ts:88\`), a repro command, or an evidence path`,
+        ko: `\uACB0\uD568 ${id} \uC5D0 \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uBC1C\uACAC\uC774 \uC544\uB2C8\uB77C \uC778\uC0C1\uC774\uB2E4. \`\uD30C\uC77C:\uC904\`(\`src/auth.ts:88\`) \uB610\uB294 \uC7AC\uD604 \uBA85\uB839\xB7\uC99D\uC801 \uACBD\uB85C\uB97C \uB2EC\uC544\uB77C`
+      })
     );
   }
   const defects = listDefects(root);
   if (defects.some((d) => d.id === id)) {
     throw new Error(
-      `\uC774\uBBF8 \uB300\uC7A5\uC5D0 \uC788\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \uAC19\uC740 id \uB450 \uC904\uC740 \uCD94\uC801\uC744 \uBB34\uB108\uB728\uB9B0\uB2E4. \uACE0\uCE60 \uB0B4\uC6A9\uC774\uBA74 \`harness ship defect update ${id}\` \uB97C \uC4F0\uACE0, \uB2E4\uB978 \uACB0\uD568\uC774\uBA74 \uB2E4\uB978 id \uB97C \uBD99\uC5EC\uB77C`
+      tr(root, {
+        en: `That defect id is already in the ledger: ${id} \u2014 two rows with the same id break tracing. To change it use \`harness ship defect update ${id}\`; if it is a different defect, give it a different id`,
+        ko: `\uC774\uBBF8 \uB300\uC7A5\uC5D0 \uC788\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \uAC19\uC740 id \uB450 \uC904\uC740 \uCD94\uC801\uC744 \uBB34\uB108\uB728\uB9B0\uB2E4. \uACE0\uCE60 \uB0B4\uC6A9\uC774\uBA74 \`harness ship defect update ${id}\` \uB97C \uC4F0\uACE0, \uB2E4\uB978 \uACB0\uD568\uC774\uBA74 \uB2E4\uB978 id \uB97C \uBD99\uC5EC\uB77C`
+      })
     );
   }
   const rec = {
@@ -11498,7 +11715,7 @@ function addDefect(root, input) {
     status,
     ...input.deferReason?.trim() ? { deferReason: input.deferReason.trim() } : {}
   };
-  assertDeferReason(rec);
+  assertDeferReason(root, rec);
   appendEvent(root, "defect-added", {
     id: rec.id,
     severity: rec.severity,
@@ -11513,20 +11730,23 @@ function updateDefect(root, id, patch) {
   const i = defects.findIndex((d) => d.id === id);
   if (i < 0) {
     throw new Error(
-      `\uB300\uC7A5\uC5D0 \uC5C6\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \`harness ship defect list\` \uB85C id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness ship defect add\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+      tr(root, {
+        en: `No such defect id in the ledger: ${id} \u2014 check ids with \`harness ship defect list\`, or register it first with \`harness ship defect add\``,
+        ko: `\uB300\uC7A5\uC5D0 \uC5C6\uB294 \uACB0\uD568 id \uB2E4: ${id} \u2014 \`harness ship defect list\` \uB85C id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness ship defect add\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+      })
     );
   }
   if (patch.severity !== void 0 && !isSeverity(patch.severity)) {
-    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(patch.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)`);
+    throw new Error(tr(root, { en: `Invalid severity: ${String(patch.severity)} (one of ${DEFECT_SEVERITIES.join(", ")})`, ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC2EC\uAC01\uB3C4: ${String(patch.severity)} (${DEFECT_SEVERITIES.join(", ")} \uC911 \uD558\uB098)` }));
   }
   if (patch.status !== void 0 && !isStatus(patch.status)) {
-    throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(patch.status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+    throw new Error(tr(root, { en: `Invalid defect status: ${String(patch.status)} (one of ${DEFECT_STATUSES.join(", ")})`, ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(patch.status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)` }));
   }
   if (patch.evidence !== void 0 && !patch.evidence.trim()) {
-    throw new Error(`\uACB0\uD568 ${id} \uC758 \uADFC\uAC70\uB97C \uBE44\uC6B8 \uC218 \uC5C6\uB2E4 \u2014 \uADFC\uAC70\uB97C \uC9C0\uC6B0\uBA74 \uB300\uC7A5 \uD55C \uC904\uC774 \uC778\uC0C1\uC73C\uB85C \uB0B4\uB824\uC549\uB294\uB2E4`);
+    throw new Error(tr(root, { en: `Cannot clear the evidence on defect ${id} \u2014 without it the row demotes to an impression`, ko: `\uACB0\uD568 ${id} \uC758 \uADFC\uAC70\uB97C \uBE44\uC6B8 \uC218 \uC5C6\uB2E4 \u2014 \uADFC\uAC70\uB97C \uC9C0\uC6B0\uBA74 \uB300\uC7A5 \uD55C \uC904\uC774 \uC778\uC0C1\uC73C\uB85C \uB0B4\uB824\uC549\uB294\uB2E4` }));
   }
   if (patch.title !== void 0 && !patch.title.trim()) {
-    throw new Error(`\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC744 \uBE44\uC6B8 \uC218 \uC5C6\uB2E4`);
+    throw new Error(tr(root, { en: `Cannot clear the one-line summary of defect ${id}`, ko: `\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC744 \uBE44\uC6B8 \uC218 \uC5C6\uB2E4` }));
   }
   const prev = defects[i];
   const status = patch.status ?? prev.status;
@@ -11540,7 +11760,7 @@ function updateDefect(root, id, patch) {
   };
   delete next.deferReason;
   if (status === "deferred" && deferReason) next.deferReason = deferReason;
-  assertDeferReason(next);
+  assertDeferReason(root, next);
   appendEvent(root, "defect-updated", {
     id: next.id,
     from: prev.status,
@@ -11610,7 +11830,7 @@ function toDeployment(v) {
   };
 }
 function listDeployments(root) {
-  return readRecords(deploymentsPath(root), "deployments", toDeployment);
+  return readRecords(root, deploymentsPath(root), "deployments", toDeployment);
 }
 function recordDeployment(root, input) {
   const version = String(input.version ?? "").trim();
@@ -11618,17 +11838,26 @@ function recordDeployment(root, input) {
   const environment = String(input.environment ?? "").trim();
   if (!version) {
     throw new Error(
-      "\uBC30\uD3EC \uBC84\uC804\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `v1.2.0` \uCC98\uB7FC \uB9B4\uB9AC\uC2A4 \uB178\uD2B8\uAC00 \uAC00\uB9AC\uD0AC \uC774\uB984\uC774 \uD544\uC694\uD558\uB2E4 (`harness ship deploy --version <\uBC84\uC804> --sha <\uCEE4\uBC0B> --env <\uD658\uACBD>`)"
+      tr(root, {
+        en: "The deployment version is empty \u2014 release notes need a name to point at, like `v1.2.0` (`harness ship deploy --version <v> --sha <commit> --env <env>`)",
+        ko: "\uBC30\uD3EC \uBC84\uC804\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 `v1.2.0` \uCC98\uB7FC \uB9B4\uB9AC\uC2A4 \uB178\uD2B8\uAC00 \uAC00\uB9AC\uD0AC \uC774\uB984\uC774 \uD544\uC694\uD558\uB2E4 (`harness ship deploy --version <\uBC84\uC804> --sha <\uCEE4\uBC0B> --env <\uD658\uACBD>`)"
+      })
     );
   }
   if (!commitSha) {
     throw new Error(
-      `\uBC30\uD3EC ${version} \uC758 \uCEE4\uBC0B SHA \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 SHA \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC73C\uB85C\uB294 "\uC774 \uC694\uAD6C\uC0AC\uD56D\uC774 \uC5B4\uB290 \uBC30\uD3EC\uC5D0 \uC2E4\uB838\uB098"\uB97C \uC5ED\uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4(\xA73-7). \`git rev-parse HEAD\` \uAC12\uC744 \`--sha\` \uB85C \uB118\uACA8\uB77C`
+      tr(root, {
+        en: `Deployment ${version} has no commit SHA \u2014 without it you cannot trace back "which release carried this requirement" (\xA73-7). Pass \`git rev-parse HEAD\` as \`--sha\``,
+        ko: `\uBC30\uD3EC ${version} \uC758 \uCEE4\uBC0B SHA \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 SHA \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC73C\uB85C\uB294 "\uC774 \uC694\uAD6C\uC0AC\uD56D\uC774 \uC5B4\uB290 \uBC30\uD3EC\uC5D0 \uC2E4\uB838\uB098"\uB97C \uC5ED\uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4(\xA73-7). \`git rev-parse HEAD\` \uAC12\uC744 \`--sha\` \uB85C \uB118\uACA8\uB77C`
+      })
     );
   }
   if (!environment) {
     throw new Error(
-      `\uBC30\uD3EC ${version} \uC758 \uD658\uACBD\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`production\`\xB7\`staging\` \uCC98\uB7FC \uC5B4\uB514\uB85C \uB098\uAC14\uB294\uC9C0 \`--env\` \uB85C \uBC1D\uD600\uB77C. \uD658\uACBD \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC740 \uC2A4\uBAA8\uD06C \uC99D\uC801\uC774 \uC5B4\uB290 \uD658\uACBD \uAC83\uC778\uC9C0 \uB9D0\uD558\uC9C0 \uBABB\uD55C\uB2E4`
+      tr(root, {
+        en: `Deployment ${version} has no environment \u2014 say where it went with \`--env\` (\`production\`, \`staging\`, \u2026). Without it, smoke evidence cannot say which environment it came from`,
+        ko: `\uBC30\uD3EC ${version} \uC758 \uD658\uACBD\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`production\`\xB7\`staging\` \uCC98\uB7FC \uC5B4\uB514\uB85C \uB098\uAC14\uB294\uC9C0 \`--env\` \uB85C \uBC1D\uD600\uB77C. \uD658\uACBD \uC5C6\uB294 \uBC30\uD3EC \uAE30\uB85D\uC740 \uC2A4\uBAA8\uD06C \uC99D\uC801\uC774 \uC5B4\uB290 \uD658\uACBD \uAC83\uC778\uC9C0 \uB9D0\uD558\uC9C0 \uBABB\uD55C\uB2E4`
+      })
     );
   }
   const evidence = (input.evidence ?? []).map((e) => String(e).trim()).filter(Boolean);
@@ -11839,6 +12068,7 @@ function run(argv, root) {
     return 0;
   }
   const lang = loadConfig(root).lang;
+  const L = (en, ko) => pick({ en, ko }, lang);
   if (cmd === void 0 || cmd === "" || cmd === "--help" || cmd === "-h" || cmd === "help") {
     console.log(renderHelp(lang));
     return 0;
@@ -11855,38 +12085,41 @@ function run(argv, root) {
       case "init":
         initHarness(root);
         appendEvent(root, "init", {});
-        console.log(".harness/ \uCD08\uAE30\uD654 \uC644\uB8CC");
+        console.log(L(".harness/ initialised \u2014 run `harness --help` to see the command map.", ".harness/ \uCD08\uAE30\uD654 \uC644\uB8CC \u2014 `harness --help` \uB85C \uBA85\uB839 \uC9C0\uB3C4\uB97C \uBCFC \uC218 \uC788\uB2E4."));
         return 0;
       case "status":
-        if (!isInitialized(root)) throw new Error(".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C");
+        if (!isInitialized(root)) throw new Error(L("No .harness/ here \u2014 run `harness init` first.", ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C"));
         console.log(JSON.stringify(readState(root), null, 2));
         return 0;
       case "doctor": {
         const r = runDoctor(root, { repair: argv.includes("--repair"), force: argv.includes("--force") });
         console.log(JSON.stringify(r, null, 2));
         if (r.refused) {
-          console.error("\uBCF5\uAD6C \uAC70\uBD80\uB428 \u2014 \uC800\uB110 \uC2E0\uB8B0 \uBD88\uAC00. \uC6D0\uC778 \uD655\uC778 \uD6C4 --force \uB85C \uAC15\uC81C\uD560 \uC218 \uC788\uB2E4.");
+          console.error(L("Repair refused \u2014 the journal cannot be trusted. Find out why, then force with --force.", "\uBCF5\uAD6C \uAC70\uBD80\uB428 \u2014 \uC800\uB110 \uC2E0\uB8B0 \uBD88\uAC00. \uC6D0\uC778 \uD655\uC778 \uD6C4 --force \uB85C \uAC15\uC81C\uD560 \uC218 \uC788\uB2E4."));
           return 1;
         }
         return r.ok || r.repaired ? 0 : 1;
       }
       case "phase": {
-        if (sub !== "set") throw new Error("\uC0AC\uC6A9\uBC95: harness phase set <P0..P12>");
+        if (sub !== "set") throw new Error(L("Usage: harness phase set <P0..P12>", "\uC0AC\uC6A9\uBC95: harness phase set <P0..P12>"));
         const phase = rest[0];
-        if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
         if (argv.includes("--force") && process.env.HARNESS_ALLOW_FORCE !== "1") {
           throw new Error(
-            `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` \uB85C \uC2E4\uD589\uD558\uB77C.`
+            L(
+              `\`--force\` skips the gate check and is locked by default \u2014 it stops the design-track enforcement from being undone in one line. The normal path is \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. If bootstrap or recovery genuinely needs it, run \`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` yourself.`,
+              `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` \uB85C \uC2E4\uD589\uD558\uB77C.`
+            )
           );
         }
         if (argv.includes("--force")) {
           appendEvent(root, "phase-set", { phase, forced: true });
           writeState(root, { ...readState(root), phase });
-          console.log(`\uD398\uC774\uC988 \u2192 ${phase} (--force: \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uC5C8\uB2E4)`);
+          console.log(L(`Phase \u2192 ${phase} (--force: gate check skipped)`, `\uD398\uC774\uC988 \u2192 ${phase} (--force: \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uC5C8\uB2E4)`));
           return 0;
         }
         setPhaseViaGate(root, phase);
-        console.log(`\uD398\uC774\uC988 \u2192 ${phase}`);
+        console.log(L(`Phase \u2192 ${phase}`, `\uD398\uC774\uC988 \u2192 ${phase}`));
         return 0;
       }
       case "gate": {
@@ -11894,10 +12127,10 @@ function run(argv, root) {
         switch (sub) {
           case "submit": {
             const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
             const evidence = flag(args, "evidence") ?? "claimed";
             if (!isEvidenceGrade(evidence)) {
-              throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${evidence} (claimed, code, measured \uC911 \uD558\uB098)`);
+              throw new Error(L(`Invalid evidence grade: ${evidence} (one of claimed, code, measured)`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${evidence} (claimed, code, measured \uC911 \uD558\uB098)`));
             }
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
             let packet = "";
@@ -11906,32 +12139,36 @@ function run(argv, root) {
               packet = path19.join(packetsDir(root), `${phase}.md`);
               fs21.writeFileSync(packet, buildReviewPacket(root, phase));
             } catch (e) {
-              console.error(`\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`);
+              console.error(L(`Review packet generation failed (the submission still stands) \u2014 ${String(e)}`, `\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`));
               packet = "";
             }
             console.log(
-              `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
+              L(
+                `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}` + (packet ? `
+Review packet: ${path19.relative(root, packet)}` : ""),
+                `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
 \uB9AC\uBDF0 \uD328\uD0B7: ${path19.relative(root, packet)}` : "")
+              )
             );
             return 0;
           }
           case "approve": {
             const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
             const r = approveGate(root, phase);
-            console.log(`${phase} \uC2B9\uC778\uB428 \u2014 ${r.approvedAt} \xB7 \uADFC\uAC70 ${r.evidence}`);
+            console.log(L(`${phase} approved \u2014 ${r.approvedAt} \xB7 evidence ${r.evidence}`, `${phase} \uC2B9\uC778\uB428 \u2014 ${r.approvedAt} \xB7 \uADFC\uAC70 ${r.evidence}`));
             return 0;
           }
           case "verify": {
             const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
             const v = verifyGate(root, phase);
             console.log(JSON.stringify(v, null, 2));
             return v.ok ? 0 : 1;
           }
           case "sweep": {
             const flipped = invalidateStaleGates(root);
-            console.log(flipped.length ? `\uBB34\uD6A8\uD654: ${flipped.join(", ")}` : "\uBB34\uD6A8\uD654 \uB300\uC0C1 \uC5C6\uC74C");
+            console.log(flipped.length ? L(`Invalidated: ${flipped.join(", ")}`, `\uBB34\uD6A8\uD654: ${flipped.join(", ")}`) : L("Nothing to invalidate", "\uBB34\uD6A8\uD654 \uB300\uC0C1 \uC5C6\uC74C"));
             return 0;
           }
           case "status":
@@ -11939,7 +12176,7 @@ function run(argv, root) {
             return 0;
           case "feedback": {
             const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
             const from = flag(rest, "from");
             if (!from) {
               const existing = readGateFeedback(root, phase).trim();
@@ -11984,7 +12221,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
               console.log(renderDefectLedger(root));
               return 0;
             }
-            throw new Error("\uC0AC\uC6A9\uBC95: harness ship defect <add|update|list> ...");
+            throw new Error(L("Usage: harness ship defect <add|update|list> ...", "\uC0AC\uC6A9\uBC95: harness ship defect <add|update|list> ..."));
           }
           case "deploy": {
             const d = recordDeployment(root, {
@@ -11994,7 +12231,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
               // 배포 증적은 여럿일 수 있다(스모크·카나리·E2E) — 쉼표 구분으로 받는다.
               evidence: csv(flag(args, "evidence"))
             });
-            console.log(`\uBC30\uD3EC \uAE30\uB85D: ${d.version} @ ${d.environment} (${d.commitSha.slice(0, 12)})`);
+            console.log(L(`Deployment recorded: ${d.version} @ ${d.environment} (${d.commitSha.slice(0, 12)})`, `\uBC30\uD3EC \uAE30\uB85D: ${d.version} @ ${d.environment} (${d.commitSha.slice(0, 12)})`));
             return 0;
           }
           case "deployments":
@@ -12002,7 +12239,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             return 0;
           case "verdict": {
             const v = shipVerdict(root);
-            console.log(v.ok ? "\uCD9C\uD558 \uAC00\uB2A5(GO)" : "\uCD9C\uD558 \uBD88\uAC00(NO-GO)");
+            console.log(v.ok ? L("GO", "\uCD9C\uD558 \uAC00\uB2A5(GO)") : L("NO-GO", "\uCD9C\uD558 \uBD88\uAC00(NO-GO)"));
             if (v.reasons.length > 0) console.log(v.reasons.map((r) => `  - ${r}`).join("\n"));
             return v.ok ? 0 : 1;
           }
@@ -12017,7 +12254,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
         const args = [sub, ...rest];
         if (sub === "tier") {
           const pct = Number(flag(args, "percent"));
-          if (!Number.isFinite(pct)) throw new Error("\uC0AC\uC6A9\uBC95: harness usage tier --percent <0-100>");
+          if (!Number.isFinite(pct)) throw new Error(L("Usage: harness usage tier --percent <0-100>", "\uC0AC\uC6A9\uBC95: harness usage tier --percent <0-100>"));
           const tier = tierFor(pct);
           const prev = lastTier(root);
           const inject = shouldInject(prev, tier);
@@ -12037,7 +12274,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
         const tools = detectLegacyTools(home);
         console.log(migrationReport(tools));
         if (legacyHarnessGitignore(root)) {
-          console.log("\n\u26A0 \uAD6C `.harness/.runtime/.gitignore` \uD615\uC2DD(`*` \uB2E8\uB3C5) \uAC10\uC9C0 \u2014 \uC790\uAE30 \uC790\uC2E0\uB3C4 \uBB34\uC2DC\uB41C\uB2E4.");
+          console.log(L("\n\u26A0 Old `.harness/.runtime/.gitignore` form (bare `*`) detected \u2014 it ignores itself too.", "\n\u26A0 \uAD6C `.harness/.runtime/.gitignore` \uD615\uC2DD(`*` \uB2E8\uB3C5) \uAC10\uC9C0 \u2014 \uC790\uAE30 \uC790\uC2E0\uB3C4 \uBB34\uC2DC\uB41C\uB2E4."));
         }
         return 0;
       }
@@ -12053,11 +12290,11 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const waveId = rest[0];
             const outcome = flag(args, "outcome");
             if (!waveId || outcome !== "pass" && outcome !== "fail") {
-              throw new Error("\uC0AC\uC6A9\uBC95: harness loop attempt <wave-id> --outcome <pass|fail> [--detail <\uB0B4\uC6A9>]");
+              throw new Error(L("Usage: harness loop attempt <wave-id> --outcome <pass|fail> [--detail <text>]", "\uC0AC\uC6A9\uBC95: harness loop attempt <wave-id> --outcome <pass|fail> [--detail <\uB0B4\uC6A9>]"));
             }
             recordAttempt(root, waveId, outcome, flag(args, "detail"));
             const c = outcome === "fail" ? checkThreshold(root, waveId, Number(flag(args, "limit")) || void 0) : null;
-            console.log(`${waveId} ${outcome} \xB7 \uC5F0\uC18D \uC2E4\uD328 ${attemptCount(root, waveId)}\uD68C`);
+            console.log(L(`${waveId} ${outcome} \xB7 ${attemptCount(root, waveId)} consecutive failure(s)`, `${waveId} ${outcome} \xB7 \uC5F0\uC18D \uC2E4\uD328 ${attemptCount(root, waveId)}\uD68C`));
             if (c) {
               console.error(summonMessage(c));
               return 2;
@@ -12066,7 +12303,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
           }
           case "brief": {
             const waveId = rest[0] || readState(root).activeWave;
-            if (!waveId) throw new Error("\uC0AC\uC6A9\uBC95: harness loop brief <wave-id> [--for <executor|verifier>]");
+            if (!waveId) throw new Error(L("Usage: harness loop brief <wave-id> [--for <executor|verifier>]", "\uC0AC\uC6A9\uBC95: harness loop brief <wave-id> [--for <executor|verifier>]"));
             const forWho = flag(args, "for") ?? "executor";
             console.log(forWho === "verifier" ? buildVerifierBrief(root, waveId) : buildExecutorBrief(root, waveId));
             return 0;
@@ -12074,25 +12311,25 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
           case "critical": {
             if (rest[0] === "clear") {
               clearCritical(root, rest[1]);
-              console.log("\uC18C\uD658 \uD574\uC81C");
+              console.log(L("Escalation cleared", "\uC18C\uD658 \uD574\uC81C"));
               return 0;
             }
             if (rest[0] === "raise") {
               const reason = flag(args, "reason");
               const valid = ["repeated-failure", "backtrack-needed", "external-blocker", "acceptance-unclear"];
               if (!reason || !valid.includes(reason)) {
-                throw new Error(`\uC0AC\uC6A9\uBC95: harness loop critical raise --reason <${valid.join("|")}> [--wave <id>] [--detail <\uB0B4\uC6A9>]`);
+                throw new Error(L(`Usage: harness loop critical raise --reason <${valid.join("|")}> [--wave <id>] [--detail <text>]`, `\uC0AC\uC6A9\uBC95: harness loop critical raise --reason <${valid.join("|")}> [--wave <id>] [--detail <\uB0B4\uC6A9>]`));
               }
               raiseCritical(root, {
                 waveId: flag(args, "wave"),
                 reason,
                 detail: flag(args, "detail") ?? ""
               });
-              console.log("\uC18C\uD658 \uBC1C\uB3D9");
+              console.log(L("Escalation raised", "\uC18C\uD658 \uBC1C\uB3D9"));
               return 2;
             }
             const c = pendingCritical(root);
-            console.log(c ? summonMessage(c) : "\uB300\uAE30 \uC911\uC778 \uC18C\uD658 \uC5C6\uC74C");
+            console.log(c ? summonMessage(c) : L("No pending escalation", "\uB300\uAE30 \uC911\uC778 \uC18C\uD658 \uC5C6\uC74C"));
             return c ? 2 : 0;
           }
           default:
@@ -12104,7 +12341,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
         switch (sub) {
           case "spec": {
             const uxNodeId = rest[0];
-            if (!uxNodeId) throw new Error("\uC0AC\uC6A9\uBC95: harness evidence spec <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]");
+            if (!uxNodeId) throw new Error(L("Usage: harness evidence spec <UX-x> [--wave <wave-id>] [--out <path>]", "\uC0AC\uC6A9\uBC95: harness evidence spec <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]"));
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
             fs21.mkdirSync(path19.dirname(path19.resolve(root, out)), { recursive: true });
@@ -12114,7 +12351,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
           }
           case "check": {
             const waveId = rest[0] || readState(root).activeWave;
-            if (!waveId) throw new Error("\uC0AC\uC6A9\uBC95: harness evidence check <wave-id> (\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4)");
+            if (!waveId) throw new Error(L("Usage: harness evidence check <wave-id> (there is no active wave)", "\uC0AC\uC6A9\uBC95: harness evidence check <wave-id> (\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4)"));
             const r = validateEvidence(root, waveId);
             console.log(JSON.stringify(r, null, 2));
             return r.ok ? 0 : 1;
@@ -12122,7 +12359,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
           case "packet": {
             const uxNodeId = flag(args, "ux");
             const waveId = flag(args, "wave") ?? readState(root).activeWave ?? "";
-            if (!uxNodeId || !waveId) throw new Error("\uC0AC\uC6A9\uBC95: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]");
+            if (!uxNodeId || !waveId) throw new Error(L("Usage: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <path>]", "\uC0AC\uC6A9\uBC95: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]"));
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, "out");
             if (out) {
@@ -12142,8 +12379,9 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const { profile, problems } = inspectProfile(root, flag(args, "name"));
             console.log(JSON.stringify(profile, null, 2));
             if (problems.length > 0) {
-              console.error(`\uD504\uB85C\uD30C\uC77C \uD574\uC11D \uBB38\uC81C:
-${problems.map((p) => `  - ${p}`).join("\n")}`);
+              console.error(L(`Profile problems:
+${problems.map((p) => `  - ${p}`).join("\n")}`, `\uD504\uB85C\uD30C\uC77C \uD574\uC11D \uBB38\uC81C:
+${problems.map((p) => `  - ${p}`).join("\n")}`));
               return 1;
             }
             return 0;
@@ -12151,7 +12389,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           case "cmd": {
             const p = loadProfile(root, flag(args, "name"));
             const c = commandFor(p, rest[0]);
-            if (!c) throw new Error(`\uD504\uB85C\uD30C\uC77C ${p.name} \uC5D0 '${rest[0]}' \uBA85\uB839\uC774 \uC5C6\uB2E4 \u2014 commands.yaml \uC744 \uCC44\uC6CC\uB77C`);
+            if (!c) throw new Error(L(`Profile ${p.name} has no '${rest[0]}' command \u2014 fill it in commands.yaml`, `\uD504\uB85C\uD30C\uC77C ${p.name} \uC5D0 '${rest[0]}' \uBA85\uB839\uC774 \uC5C6\uB2E4 \u2014 commands.yaml \uC744 \uCC44\uC6CC\uB77C`));
             console.log(c);
             return 0;
           }
@@ -12165,7 +12403,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           case "link": {
             const uxNodeId = flag(args, "ux");
             const url = flag(args, "url");
-            if (!uxNodeId || !url) throw new Error("\uC0AC\uC6A9\uBC95: harness design link --ux <UX-x> --url <\uCE94\uBC84\uC2A4 URL> [--artboard <\uC774\uB984>]");
+            if (!uxNodeId || !url) throw new Error(L("Usage: harness design link --ux <UX-x> --url <canvas-url> [--artboard <name>]", "\uC0AC\uC6A9\uBC95: harness design link --ux <UX-x> --url <\uCE94\uBC84\uC2A4 URL> [--artboard <\uC774\uB984>]"));
             linkCanvas(root, { uxNodeId, url, artboard: flag(args, "artboard") ?? uxNodeId });
             console.log(`${uxNodeId} \u2194 ${url}`);
             return 0;
@@ -12175,29 +12413,35 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const from = flag(args, "from");
             if (!uxNodeId || !from) {
               throw new Error(
-                "\uC0AC\uC6A9\uBC95: harness design sync <UX-x> --from <\uAC00\uC838\uC628 \uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>\n(\uCF54\uC5B4\uB294 \uB124\uD2B8\uC6CC\uD06C\uB97C \uC4F0\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uCE94\uBC84\uC2A4\uB294 \uC5D0\uC774\uC804\uD2B8\uAC00 WebFetch \uB85C \uBC1B\uC544 \uD30C\uC77C\uB85C \uB118\uAE34\uB2E4)"
+                L(
+                  "Usage: harness design sync <UX-x> --from <fetched-canvas-content-file>\n(the core never touches the network \u2014 an agent fetches the canvas and hands it over as a file)",
+                  "\uC0AC\uC6A9\uBC95: harness design sync <UX-x> --from <\uAC00\uC838\uC628 \uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>\n(\uCF54\uC5B4\uB294 \uB124\uD2B8\uC6CC\uD06C\uB97C \uC4F0\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uCE94\uBC84\uC2A4\uB294 \uC5D0\uC774\uC804\uD2B8\uAC00 WebFetch \uB85C \uBC1B\uC544 \uD30C\uC77C\uB85C \uB118\uAE34\uB2E4)"
+                )
               );
             }
             const content = fs21.readFileSync(path19.resolve(root, from), "utf8");
             const r = syncCanvas(root, uxNodeId, content);
             console.log(
-              r.changed ? `${uxNodeId} \uCE94\uBC84\uC2A4 \uBCC0\uACBD \uAC10\uC9C0 \u2192 v${r.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${r.affectedWaves.join(", ") || "\uC5C6\uC74C"}` : `${uxNodeId} \uBCC0\uACBD \uC5C6\uC74C (\uD574\uC2DC \uB3D9\uC77C)`
+              r.changed ? L(
+                `${uxNodeId} canvas change detected \u2192 v${r.version} \xB7 STALE waves: ${r.affectedWaves.join(", ") || "none"}`,
+                `${uxNodeId} \uCE94\uBC84\uC2A4 \uBCC0\uACBD \uAC10\uC9C0 \u2192 v${r.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${r.affectedWaves.join(", ") || "\uC5C6\uC74C"}`
+              ) : L(`${uxNodeId} unchanged (same hash)`, `${uxNodeId} \uBCC0\uACBD \uC5C6\uC74C (\uD574\uC2DC \uB3D9\uC77C)`)
             );
             if (r.unverifiable.length > 0) {
-              console.error(`STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00 \uC6E8\uC774\uBE0C: ${r.unverifiable.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`);
+              console.error(L(`Incomplete STALE propagation \u2014 unverifiable waves: ${r.unverifiable.join(", ")} \u2014 check manually`, `STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00 \uC6E8\uC774\uBE0C: ${r.unverifiable.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`));
               return 1;
             }
             return 0;
           }
           case "inventory": {
             const from = flag(args, "from");
-            if (!from) throw new Error("\uC0AC\uC6A9\uBC95: harness design inventory --from <\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>");
+            if (!from) throw new Error(L("Usage: harness design inventory --from <canvas-content-file>", "\uC0AC\uC6A9\uBC95: harness design inventory --from <\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>"));
             console.log(JSON.stringify(extractInventory(fs21.readFileSync(path19.resolve(root, from), "utf8")), null, 2));
             return 0;
           }
           case "baseline": {
             recordBaseline(root, rest[0], rest[1] ?? "");
-            console.log(`${rest[0]} \uAE30\uC900 \uC774\uBBF8\uC9C0 \uB4F1\uB85D: ${rest[1]}`);
+            console.log(L(`Baseline recorded for ${rest[0]}: ${rest[1]}`, `${rest[0]} \uAE30\uC900 \uC774\uBBF8\uC9C0 \uB4F1\uB85D: ${rest[1]}`));
             return 0;
           }
           case "html": {
@@ -12236,7 +12480,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           }
           case "lint": {
             const files = rest.filter((f2) => !f2.startsWith("--"));
-            if (files.length === 0) throw new Error("\uC0AC\uC6A9\uBC95: harness tokens lint <\uD30C\uC77C...>");
+            if (files.length === 0) throw new Error(L("Usage: harness tokens lint <files...>", "\uC0AC\uC6A9\uBC95: harness tokens lint <\uD30C\uC77C...>"));
             let total = 0;
             for (const f2 of files) {
               if (isTokenFile(root, f2)) continue;
@@ -12247,16 +12491,16 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
                 continue;
               }
               for (const h of findRawValues(src)) {
-                console.log(`${f2}:${h.line}:${h.column} ${h.kind} raw \uAC12 ${h.value}`);
+                console.log(L(`${f2}:${h.line}:${h.column} ${h.kind} raw value ${h.value}`, `${f2}:${h.line}:${h.column} ${h.kind} raw \uAC12 ${h.value}`));
                 total++;
               }
             }
-            console.log(total === 0 ? "raw \uAC12 \uC5C6\uC74C" : `raw \uAC12 ${total}\uAC74 \u2014 \uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC744 \uCC38\uC870\uD558\uB77C`);
+            console.log(total === 0 ? L("No raw values", "raw \uAC12 \uC5C6\uC74C") : L(`${total} raw value(s) \u2014 reference semantic tokens instead`, `raw \uAC12 ${total}\uAC74 \u2014 \uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC744 \uCC38\uC870\uD558\uB77C`));
             return total === 0 ? 0 : 1;
           }
           case "swap": {
             const overridePath = flag(args, "with");
-            if (!overridePath) throw new Error("\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]");
+            if (!overridePath) throw new Error(L("Usage: harness tokens swap --with <override-theme.json> [--out <path>]", "\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]"));
             const doc = loadTokens(root);
             const overrides = JSON.parse(fs21.readFileSync(path19.resolve(root, overridePath), "utf8"));
             const swapped = swapTokens(doc, overrides);
@@ -12264,7 +12508,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
             if (out) fs21.writeFileSync(path19.resolve(root, out), generateCss(swapped));
-            console.log(`\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74${out ? ` \xB7 CSS \u2192 ${out}` : ""}`);
+            console.log(L(`Swap is meaningful \u2014 ${changed.length} token(s) changed${out ? ` \xB7 CSS \u2192 ${out}` : ""}`, `\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74${out ? ` \xB7 CSS \u2192 ${out}` : ""}`));
             return 0;
           }
           default:
@@ -12275,7 +12519,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
         switch (sub) {
           case "packet": {
             const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`);
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${rest[0]} (${PHASES.join(", ")})`));
             console.log(buildReviewPacket(root, phase));
             return 0;
           }
@@ -12296,11 +12540,11 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const id = flag(args, "id");
             const phase = flag(args, "phase");
             const question = flag(args, "question");
-            if (!id || !question) throw new Error("\uC0AC\uC6A9\uBC95: harness adr propose --id <ADR-x> --phase <P0..P12> --question <\uC9C8\uBB38> --option <id:\uC81C\uBAA9> ...");
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`);
+            if (!id || !question) throw new Error(L("Usage: harness adr propose --id <ADR-x> --phase <P0..P12> --question <q> --option <id:title> ...", "\uC0AC\uC6A9\uBC95: harness adr propose --id <ADR-x> --phase <P0..P12> --question <\uC9C8\uBB38> --option <id:\uC81C\uBAA9> ..."));
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${String(phase)} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`));
             const options = args.map((a, i) => a === "--option" ? args[i + 1] : void 0).filter((v) => typeof v === "string" && v.length > 0).map((v) => {
               const at = v.indexOf(":");
-              if (at <= 0) throw new Error(`--option \uD615\uC2DD\uC740 <id>:<\uC81C\uBAA9> \uC774\uB2E4: ${v}`);
+              if (at <= 0) throw new Error(L(`--option must be <id>:<title>: ${v}`, `--option \uD615\uC2DD\uC740 <id>:<\uC81C\uBAA9> \uC774\uB2E4: ${v}`));
               return { id: v.slice(0, at), title: v.slice(at + 1), pros: [], cons: [] };
             });
             const rec = proposeAdr(root, { id, phase, question, options, recommended: flag(args, "recommend") });
@@ -12312,14 +12556,14 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const chosen = flag(args, "choose");
             const rationale = flag(args, "rationale");
             if (!id || !chosen || !rationale) {
-              throw new Error("\uC0AC\uC6A9\uBC95: harness adr decide <ADR-x> --choose <\uC120\uD0DD\uC9C0id|\uC790\uC720\uAC12> --rationale <\uADFC\uAC70> --reject <id>:<\uC0AC\uC720> ...");
+              throw new Error(L("Usage: harness adr decide <ADR-x> --choose <option-id|free text> --rationale <why> --reject <id>:<why> ...", "\uC0AC\uC6A9\uBC95: harness adr decide <ADR-x> --choose <\uC120\uD0DD\uC9C0id|\uC790\uC720\uAC12> --rationale <\uADFC\uAC70> --reject <id>:<\uC0AC\uC720> ..."));
             }
             const rejectedReasons = {};
             args.forEach((a, i) => {
               if (a !== "--reject") return;
               const v = args[i + 1] ?? "";
               const at = v.indexOf(":");
-              if (at <= 0) throw new Error(`--reject \uD615\uC2DD\uC740 <\uC120\uD0DD\uC9C0id>:<\uAE30\uAC01 \uC0AC\uC720> \uC774\uB2E4: ${v}`);
+              if (at <= 0) throw new Error(L(`--reject must be <option-id>:<why rejected>: ${v}`, `--reject \uD615\uC2DD\uC740 <\uC120\uD0DD\uC9C0id>:<\uAE30\uAC01 \uC0AC\uC720> \uC774\uB2E4: ${v}`));
               rejectedReasons[v.slice(0, at)] = v.slice(at + 1);
             });
             const rec = decideAdr(root, id, { chosen, rationale, rejectedReasons });
@@ -12330,16 +12574,16 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const { record, affectedWaves, unverifiable } = reviseAdr(root, rest[0], {
               question: flag(args, "question")
             });
-            console.log(`${record.id} \u2192 v${record.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${affectedWaves.join(", ") || "\uC5C6\uC74C"}`);
+            console.log(L(`${record.id} \u2192 v${record.version} \xB7 STALE waves: ${affectedWaves.join(", ") || "none"}`, `${record.id} \u2192 v${record.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${affectedWaves.join(", ") || "\uC5C6\uC74C"}`));
             if (unverifiable.length > 0) {
-              console.error(`STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00 \uC6E8\uC774\uBE0C: ${unverifiable.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`);
+              console.error(L(`Incomplete STALE propagation \u2014 unverifiable waves: ${unverifiable.join(", ")} \u2014 check manually`, `STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00 \uC6E8\uC774\uBE0C: ${unverifiable.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`));
               return 1;
             }
             return 0;
           }
           case "show": {
             const rec = getAdr(root, rest[0]);
-            if (!rec) throw new Error(`ADR \uC5C6\uC74C: ${rest[0]}`);
+            if (!rec) throw new Error(L(`No such ADR: ${rest[0]}`, `ADR \uC5C6\uC74C: ${rest[0]}`));
             console.log(renderAdrPacket(rec));
             return 0;
           }
@@ -12357,12 +12601,12 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const id = flag(args, "id");
             const docPath = flag(args, "path");
             const phase = flag(args, "phase");
-            if (!id || !docPath) throw new Error("\uC0AC\uC6A9\uBC95: harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase <P0..P12>");
-            if (!isPhase(phase)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`);
+            if (!id || !docPath) throw new Error(L("Usage: harness doc upsert --id <DOC-x> --path <path> --phase <P0..P12>", "\uC0AC\uC6A9\uBC95: harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase <P0..P12>"));
+            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${String(phase)} (one of ${PHASES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(phase)} (${PHASES.join(", ")})`));
             const prev = getDoc(root, id);
             const statusFlag = flag(args, "status");
             if (statusFlag !== void 0 && !isDocStatus(statusFlag)) {
-              throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${DOC_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+              throw new Error(L(`Invalid status: ${statusFlag} (one of ${DOC_STATUSES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${DOC_STATUSES.join(", ")} \uC911 \uD558\uB098)`));
             }
             const node = {
               id,
@@ -12396,12 +12640,12 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           }
           case "revise": {
             const d = reviseDoc(root, rest[0], flag(args, "path"));
-            console.log(`${d.id} \u2192 v${d.version} (\uC774\uC804 \uBC84\uC804 superseded)`);
+            console.log(L(`${d.id} \u2192 v${d.version} (previous version superseded)`, `${d.id} \u2192 v${d.version} (\uC774\uC804 \uBC84\uC804 superseded)`));
             return 0;
           }
           case "stale": {
             const s = staleDocs(root);
-            console.log(s.length ? s.map((d) => `${d.id} v${d.version}`).join("\n") : "\uBCC0\uC870\uB41C \uC2B9\uC778 \uBB38\uC11C \uC5C6\uC74C");
+            console.log(s.length ? s.map((d) => `${d.id} v${d.version}`).join("\n") : L("No approved documents have drifted", "\uBCC0\uC870\uB41C \uC2B9\uC778 \uBB38\uC11C \uC5C6\uC74C"));
             return 0;
           }
           case "list":
@@ -12419,7 +12663,10 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             const missing = refs.filter((id) => !getNode(root, id));
             if (missing.length > 0) {
               throw new Error(
-                `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+                L(
+                  `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first with \`harness node upsert --id <id> --title <title>\``,
+                  `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+                )
               );
             }
             const goal = (flag(args, "goal") ?? "").trim();
@@ -12437,18 +12684,18 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
           }
           case "activate":
             activateWave(root, rest[0]);
-            console.log(`\uD65C\uC131: ${rest[0]}`);
+            console.log(L(`Active: ${rest[0]}`, `\uD65C\uC131: ${rest[0]}`));
             return 0;
           case "update": {
             const text = rest.join(" ").trim();
-            if (!text) throw new Error("\uD134 \uB85C\uADF8 \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uD55C \uC77C\uACFC \uB2E4\uC74C \uD560 \uC77C\uC744 \uC801\uC5B4\uB77C");
+            if (!text) throw new Error(L("The turn log entry is empty \u2014 write what you did and what is next", "\uD134 \uB85C\uADF8 \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uD55C \uC77C\uACFC \uB2E4\uC74C \uD560 \uC77C\uC744 \uC801\uC5B4\uB77C"));
             logTurn(root, text);
-            console.log("\uD134 \uB85C\uADF8 \uAE30\uB85D");
+            console.log(L("Turn log recorded", "\uD134 \uB85C\uADF8 \uAE30\uB85D"));
             return 0;
           }
           case "complete":
             completeWave(root);
-            console.log("\uC6E8\uC774\uBE0C \uC644\uB8CC");
+            console.log(L("Wave completed", "\uC6E8\uC774\uBE0C \uC644\uB8CC"));
             return 0;
           case "list":
             console.log(JSON.stringify(listWaves(root), null, 2));
@@ -12462,11 +12709,11 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
         if (sub === "upsert") {
           const id = flag(args, "id");
           const title = flag(args, "title");
-          if (!id || !title) throw new Error("\uC0AC\uC6A9\uBC95: harness node upsert --id <id> --title <\uC81C\uBAA9>");
+          if (!id || !title) throw new Error(L("Usage: harness node upsert --id <id> --title <title>", "\uC0AC\uC6A9\uBC95: harness node upsert --id <id> --title <\uC81C\uBAA9>"));
           const statusFlag = flag(args, "status");
           const LEDGER_STATUSES = ["draft", "approved", "stale"];
           if (statusFlag !== void 0 && !LEDGER_STATUSES.includes(statusFlag)) {
-            throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${LEDGER_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+            throw new Error(L(`Invalid status: ${statusFlag} (one of ${LEDGER_STATUSES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${LEDGER_STATUSES.join(", ")} \uC911 \uD558\uB098)`));
           }
           const prev = getNode(root, id);
           const node = {
@@ -12505,16 +12752,22 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
             }
           }
           const marked = affectedWaves.filter((w) => !failed.includes(w));
-          console.log(`${node.id} v${node.version} \u2014 STALE \uC6E8\uC774\uBE0C: ${marked.join(", ") || "\uC5C6\uC74C"}`);
+          console.log(L(`${node.id} v${node.version} \u2014 STALE waves: ${marked.join(", ") || "none"}`, `${node.id} v${node.version} \u2014 STALE \uC6E8\uC774\uBE0C: ${marked.join(", ") || "\uC5C6\uC74C"}`));
           if (activeBefore && marked.includes(activeBefore)) {
             console.error(
-              `\uD65C\uC131 \uC6E8\uC774\uBE0C ${activeBefore} \uAC00 STALE \uC815\uC0B0\uB418\uC5B4 \uC774 \uC138\uC158\uC758 \uD134 \uB85C\uADF8 \uAC00\uB4DC\uAC00 \uD574\uC81C\uB410\uB2E4 \u2014 \uBBF8\uC815\uC0B0 \uC791\uC5C5\uC774 \uC788\uC73C\uBA74 \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uB9CC\uB4E4\uC5B4 \uAE30\uB85D\uD558\uB77C.`
+              L(
+                `Active wave ${activeBefore} was settled as STALE, so this session's turn-log guard is off \u2014 if you have unsettled work, create a new wave and record it.`,
+                `\uD65C\uC131 \uC6E8\uC774\uBE0C ${activeBefore} \uAC00 STALE \uC815\uC0B0\uB418\uC5B4 \uC774 \uC138\uC158\uC758 \uD134 \uB85C\uADF8 \uAC00\uB4DC\uAC00 \uD574\uC81C\uB410\uB2E4 \u2014 \uBBF8\uC815\uC0B0 \uC791\uC5C5\uC774 \uC788\uC73C\uBA74 \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uB9CC\uB4E4\uC5B4 \uAE30\uB85D\uD558\uB77C.`
+              )
             );
           }
           const incomplete = [...unverifiable, ...failed];
           if (incomplete.length > 0) {
             console.error(
-              `STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00/\uC2E4\uD328 \uC6E8\uC774\uBE0C: ${incomplete.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`
+              L(
+                `Incomplete STALE propagation \u2014 unverifiable/failed waves: ${incomplete.join(", ")} \u2014 check manually`,
+                `STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00/\uC2E4\uD328 \uC6E8\uC774\uBE0C: ${incomplete.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`
+              )
             );
             return 1;
           }
@@ -12536,14 +12789,14 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`);
         if (sub === "clear") {
           appendEvent(root, "backtrack-cleared", {});
           writeState(root, { ...readState(root), backtrack: null });
-          console.log("\uC5ED\uD589 \uC885\uB8CC");
+          console.log(L("Backtrack ended", "\uC5ED\uD589 \uC885\uB8CC"));
           return 0;
         }
-        if (!isPhase(sub)) throw new Error(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${sub}`);
+        if (!isPhase(sub)) throw new Error(L(`Invalid phase: ${sub}`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${sub}`));
         const reason = flag(rest, "reason") ?? "(\uBBF8\uAE30\uC7AC)";
         appendEvent(root, "backtrack-started", { to: sub, reason });
         writeState(root, { ...readState(root), backtrack: { to: sub, reason } });
-        console.log(`\uC5ED\uD589 \uC2DC\uC791 \u2192 ${sub}: ${reason}`);
+        console.log(L(`Backtrack started \u2192 ${sub}: ${reason}`, `\uC5ED\uD589 \uC2DC\uC791 \u2192 ${sub}: ${reason}`));
         return 0;
       }
       case "--version":

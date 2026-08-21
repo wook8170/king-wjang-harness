@@ -4,6 +4,7 @@ import {
   harnessDir, statePath, wavesDir, designDir, ledgerPath, configPath, runtimeDir, eventsPath,
 } from './paths';
 import type { HarnessState } from './types';
+import { tr } from './tr';
 
 export function defaultState(): HarnessState {
   return {
@@ -36,7 +37,7 @@ export function initHarness(root: string): void {
   // 디렉토리 기준 가드: state.json만 사라진 상태에서 재실행하면 events.jsonl(진실의 원천)·
   // config.yaml이 덮여 전멸한다. 훅 비간섭 게이트도 이 디렉토리 기준을 쓴다(hook.ts, LOGIC-11) —
   // 같은 개념에 두 정의를 두지 않는다. isInitialized(state.json 존재)는 status·복구 판정용으로 남는다.
-  if (fs.existsSync(harnessDir(root))) throw new Error(`.harness/ 가 이미 초기화되어 있다: ${harnessDir(root)}`);
+  if (fs.existsSync(harnessDir(root))) throw new Error(tr(root, { en: `.harness/ is already initialised: ${harnessDir(root)}`, ko: `.harness/ 가 이미 초기화되어 있다: ${harnessDir(root)}` }));
   for (const d of [harnessDir(root), designDir(root), wavesDir(root), runtimeDir(root)]) {
     fs.mkdirSync(d, { recursive: true });
   }

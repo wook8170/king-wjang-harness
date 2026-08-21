@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import * as os from 'node:os';
+import * as fs from 'node:fs';
 import { initHarness } from '../src/state';
-import { appendEvent, readEvents, readJournal, replayState, KNOWN_EVENT_TYPES } from '../src/events';
+import { describe, it, expect } from 'vitest';
+import { appendEvent, readEvents, readJournal, replayState, KNOWN_EVENT_TYPES, readJournalForReplay } from '../src/events';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -125,5 +125,51 @@ describe('events', () => {
   it('KNOWN_EVENT_TYPES에 주요 이벤트 타입이 포함된다', () => {
     expect(KNOWN_EVENT_TYPES.has('phase-set')).toBe(true);
     expect(KNOWN_EVENT_TYPES.has('gate-approved')).toBe(true);
+  });
+});
+
+describe('PERF-26: 빠른 재생이 전체 재생과 같은 상태를 낸다', () => {
+  /**
+   * REPLAY_TYPES 가 replayState 의 switch 와 갈리면 열화 경로가 조용히 이벤트를 흘린다.
+   * 알려진 전 타입을 하나씩 담은 저널로 **두 경로의 결과가 같은지** 비교해 드리프트를 잡는다.
+   */
+  it('알려진 전 이벤트 타입에서 두 경로의 재생 결과가 동일하다', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-fast-'));
+    initHarness(root);
+    const sample: Record<string, Record<string, unknown>> = {
+      'init': {},
+      'phase-set': { phase: 'P7' },
+      'wave-created': { id: 'wave-001' },
+      'wave-activated': { id: 'wave-001' },
+      'wave-turn-logged': { id: 'wave-001', text: 'x' },
+      'wave-completed': { id: 'wave-001' },
+      'wave-stale': { id: 'wave-001' },
+      'node-upserted': { id: 'F-1' },
+      'node-bumped': { id: 'F-1', version: 2 },
+      'gate-submitted': { phase: 'P0', artifactHash: 'abc', evidence: 'measured' },
+      'gate-approved': { phase: 'P0', artifactHash: 'abc', evidence: 'measured' },
+      'gate-feedback': { phase: 'P0', count: 2 },
+      'backtrack-started': { to: 'P3', reason: 'r' },
+      'backtrack-cleared': {},
+      'doctor-repaired': {},
+    };
+    for (const t of KNOWN_EVENT_TYPES) {
+      appendEvent(root, t, sample[t] ?? {});
+    }
+    // 미지 타입도 섞는다 — 전방 호환 계약이 두 경로에서 같아야 한다.
+    appendEvent(root, 'future-event-type', { x: 1 });
+    expect(replayState(readJournalForReplay(root).events))
+      .toEqual(replayState(readJournal(root).events));
+  });
+
+  it('상태 무변이 대량 이벤트에서 파싱을 건너뛴다 (열화 경로 비용)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-fast2-'));
+    initHarness(root);
+    for (let i = 0; i < 200; i++) appendEvent(root, 'wave-turn-logged', { id: 'w', n: i });
+    appendEvent(root, 'phase-set', { phase: 'P9' });
+    const fast = readJournalForReplay(root);
+    // 상태를 바꾸는 이벤트만 남는다 — turn log 200건은 객체로 만들어지지도 않는다.
+    expect(fast.events.length).toBeLessThan(10);
+    expect(replayState(fast.events).phase).toBe('P9');
   });
 });

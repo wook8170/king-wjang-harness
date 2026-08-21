@@ -48,6 +48,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { designDir, wavesDir } from './paths';
+import { tr } from './tr';
 import { appendEvent } from './events';
 import { getNode, upsertNode } from './ledger';
 import { parseWave, markStale } from './wave';
@@ -139,7 +140,7 @@ export function getAdr(root: string, id: string): AdrRecord | undefined {
   if (!fs.existsSync(p)) return undefined;
   // 파싱 손상은 조용히 삼키지 않는다(원장 loadLedger 와 같은 태도) — 호출측에서 시끄럽게.
   const parsed = toAdrRecord(YAML.parse(fs.readFileSync(p, 'utf8')));
-  if (!parsed) throw new Error(`ADR 기록 ${id} 의 본문이 손상됐다: ${p} — git 이력에서 복원하라`);
+  if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} — restore it from git history`, ko: `ADR 기록 ${id} 의 본문이 손상됐다: ${p} — git 이력에서 복원하라` }));
   return parsed;
 }
 
@@ -167,16 +168,20 @@ export function listAdrs(root: string): AdrRecord[] {
  * 선택지 2~4 강제(§5). 이 가드가 "결정"이 고무도장이 되는 걸 막는다 — 선택지 1개짜리
  * 결정은 결정이 아니라 통보고, 5개 이상은 트레이드오프를 비교한 흔적이 아니라 나열이다.
  */
-function assertOptions(options: AdrOption[], recommended?: string): void {
+function assertOptions(root: string, options: AdrOption[], recommended?: string): void {
   if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
     throw new Error(
-      `ADR 선택지는 ${MIN_OPTIONS}~${MAX_OPTIONS}개여야 한다(현재 ${options.length}개) — ` +
-      '선택지 하나짜리 결정은 결정이 아니라 통보다. 비교 가능한 대안을 트레이드오프와 함께 제시하라.',
+      tr(root, {
+        en: `An ADR needs ${MIN_OPTIONS}–${MAX_OPTIONS} options (currently ${options.length}) — a `
+          + 'one-option decision is an announcement, not a decision. Offer comparable alternatives with trade-offs.',
+        ko: `ADR 선택지는 ${MIN_OPTIONS}~${MAX_OPTIONS}개여야 한다(현재 ${options.length}개) — `
+          + '선택지 하나짜리 결정은 결정이 아니라 통보다. 비교 가능한 대안을 트레이드오프와 함께 제시하라.',
+      }),
     );
   }
   if (recommended !== undefined && !options.some(o => o.id === recommended)) {
     throw new Error(
-      `추천안 "${recommended}" 이 선택지에 없다 — 선택지 id 중 하나여야 한다(${options.map(o => o.id).join(', ')})`,
+      tr(root, { en: `The recommendation "${recommended}" is not among the options — it must be one of (${options.map(o => o.id).join(', ')})`, ko: `추천안 "${recommended}" 이 선택지에 없다 — 선택지 id 중 하나여야 한다(${options.map(o => o.id).join(', ')})` }),
     );
   }
 }
@@ -184,7 +189,7 @@ function assertOptions(options: AdrOption[], recommended?: string): void {
 function requireAdr(root: string, id: string): AdrRecord {
   const rec = getAdr(root, id);
   if (!rec) {
-    throw new Error(`ADR ${id} 기록이 없다 (${adrPath(root, id)}) — 먼저 제안(propose)하라`);
+    throw new Error(tr(root, { en: `No ADR record ${id} (${adrPath(root, id)}) — propose it first`, ko: `ADR ${id} 기록이 없다 (${adrPath(root, id)}) — 먼저 제안(propose)하라` }));
   }
   return rec;
 }
@@ -253,15 +258,19 @@ export interface ProposeAdrInput {
 /** 추천 패킷 제안 — status `proposed`. 사이드카 본문 + 원장 색인을 함께 만든다. */
 export function proposeAdr(root: string, input: ProposeAdrInput): AdrRecord {
   if (!input.id.startsWith('ADR-')) {
-    throw new Error(`ADR 노드 id 는 "ADR-" 로 시작해야 한다: "${input.id}" (§3-2 원장 ID 규약)`);
+    throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (§3-2 ledger id convention)`, ko: `ADR 노드 id 는 "ADR-" 로 시작해야 한다: "${input.id}" (§3-2 원장 ID 규약)` }));
   }
   if (fs.existsSync(adrPath(root, input.id))) {
     throw new Error(
-      `ADR ${input.id} 가 이미 있다 — 결정을 덮어쓰지 마라. 바꾸려면 reviseAdr 로 정식 개정하라` +
-      '(version++ + STALE 전파).',
+      tr(root, {
+        en: `ADR ${input.id} already exists — do not overwrite a decision. To change it, revise formally `
+          + 'with reviseAdr (version++ and STALE propagation).',
+        ko: `ADR ${input.id} 가 이미 있다 — 결정을 덮어쓰지 마라. 바꾸려면 reviseAdr 로 정식 개정하라`
+          + '(version++ + STALE 전파).',
+      }),
     );
   }
-  assertOptions(input.options, input.recommended);
+  assertOptions(root, input.options, input.recommended);
 
   const rec: AdrRecord = {
     id: input.id,
@@ -300,16 +309,24 @@ export function decideAdr(root: string, id: string, input: DecideAdrInput): AdrR
   const prev = requireAdr(root, id);
   if (prev.status !== 'proposed') {
     throw new Error(
-      `ADR ${id} 는 proposed 가 아니다(현재 ${prev.status}) — 기록된 결정을 덮어쓸 수 없다. ` +
-      'reviseAdr 로 정식 개정(version++ + STALE 전파)한 뒤 다시 채택하라.',
+      tr(root, {
+        en: `ADR ${id} is not proposed (currently ${prev.status}) — a recorded decision cannot be `
+          + 'overwritten. Revise it formally (version++ and STALE propagation), then decide again.',
+        ko: `ADR ${id} 는 proposed 가 아니다(현재 ${prev.status}) — 기록된 결정을 덮어쓸 수 없다. `
+          + 'reviseAdr 로 정식 개정(version++ + STALE 전파)한 뒤 다시 채택하라.',
+      }),
     );
   }
   const chosenRaw = input.chosen.trim();
-  if (!chosenRaw) throw new Error(`ADR ${id} 채택 값이 비어 있다 — 선택지 id 또는 자유 정의 값을 넣어라`);
+  if (!chosenRaw) throw new Error(tr(root, { en: `The chosen value for ADR ${id} is empty — give an option id or a free-form value`, ko: `ADR ${id} 채택 값이 비어 있다 — 선택지 id 또는 자유 정의 값을 넣어라` }));
   if (!input.rationale.trim()) {
     throw new Error(
-      `ADR ${id} 채택 근거가 없다 — 근거 없는 결정 기록은 반년 뒤 읽는 사람에게 아무 정보도 주지 않는다. ` +
-      '왜 이 안을 골랐는지 한 줄이라도 남겨라.',
+      tr(root, {
+        en: `ADR ${id} has no rationale — a decision log without one tells the reader nothing six months `
+          + 'later. Leave at least one line on why this option won.',
+        ko: `ADR ${id} 채택 근거가 없다 — 근거 없는 결정 기록은 반년 뒤 읽는 사람에게 아무 정보도 주지 않는다. `
+          + '왜 이 안을 골랐는지 한 줄이라도 남겨라.',
+      }),
     );
   }
 
@@ -330,8 +347,12 @@ export function decideAdr(root: string, id: string, input: DecideAdrInput): AdrR
   }
   if (missing.length > 0) {
     throw new Error(
-      `ADR ${id} 의 기각 사유가 빠진 선택지: ${missing.join(', ')} — 기각 사유 없는 결정 로그는 ` +
-      '"왜 저건 안 했나"에 답하지 못한다. 채택하지 않은 모든 선택지에 사유를 달아라.',
+      tr(root, {
+        en: `Options in ADR ${id} with no rejection reason: ${missing.join(', ')} — a decision log without `
+          + 'them cannot answer "why not that one". Give a reason for every option you did not take.',
+        ko: `ADR ${id} 의 기각 사유가 빠진 선택지: ${missing.join(', ')} — 기각 사유 없는 결정 로그는 `
+          + '"왜 저건 안 했나"에 답하지 못한다. 채택하지 않은 모든 선택지에 사유를 달아라.',
+      }),
     );
   }
 
@@ -377,7 +398,7 @@ export function reviseAdr(root: string, id: string, input: ReviseAdrInput): Revi
   const prev = requireAdr(root, id);
   const options = input.options ?? prev.options;
   const recommended = input.options ? input.recommended : (input.recommended ?? prev.recommended);
-  assertOptions(options, recommended);
+  assertOptions(root, options, recommended);
 
   // 스캔은 읽기 전용 — 그래야 결과를 실은 이벤트를 모든 쓰기보다 먼저 남길 수 있다.
   const { affected, unverifiable } = referencingWaves(root, id);

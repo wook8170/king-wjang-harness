@@ -104,7 +104,7 @@ describe('mcp: gate approve 안전 장치 (§4-3)', () => {
     const r = callTool(root, 'harness_gate_approve', { phase: 'P0' });
     expect(r.ok).toBe(false);
     expect(r.content).toMatch(/harness gate approve P0/);
-    expect(r.content).toMatch(/권한/);
+    expect(r.content).toMatch(/permission dialog/);
     // 핵심: 상태가 승인으로 넘어가지 않았다
     expect(readState(root).gates.P0?.status).toBe('submitted');
   });

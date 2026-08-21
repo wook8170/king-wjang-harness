@@ -31,6 +31,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as YAML from 'yaml';
 import { designDir } from './paths';
+import { tr } from './tr';
 import { appendEvent } from './events';
 import { getNode, bumpNode } from './ledger';
 import { markStale } from './wave';
@@ -107,23 +108,31 @@ function saveDoc(root: string, doc: CanvasDoc): void {
 // 검증
 // ─────────────────────────────────────────────────────────────────────────────
 
-function requireUxId(id: unknown): string {
+function requireUxId(root: string, id: unknown): string {
   if (typeof id !== 'string' || !/^UX-\S/.test(id)) {
     throw new Error(
-      `캔버스 아트보드는 UX 노드에만 붙는다: ${String(id)} 는 UX- 로 시작하는 노드 id 가 아니다. ` +
-      '아트보드 1장 = UX 노드 1개(명명 관례 "UX-7 결제 화면")가 추적성의 척추다(스펙 §8).',
+      tr(root, {
+        en: `Canvas artboards attach to UX nodes only: ${String(id)} is not a node id starting with UX-. `
+          + 'One artboard = one UX node (naming convention "UX-7 Checkout") is the spine of traceability (spec §8).',
+        ko: `캔버스 아트보드는 UX 노드에만 붙는다: ${String(id)} 는 UX- 로 시작하는 노드 id 가 아니다. `
+          + '아트보드 1장 = UX 노드 1개(명명 관례 "UX-7 결제 화면")가 추적성의 척추다(스펙 §8).',
+      }),
     );
   }
   return id;
 }
 
-function requireHttps(url: unknown): string {
+function requireHttps(root: string, url: unknown): string {
   let parsed: URL | null = null;
   try { parsed = new URL(String(url)); } catch { parsed = null; }
   if (!parsed || parsed.protocol !== 'https:') {
     throw new Error(
-      `캔버스 URL 이 https 가 아니다: ${String(url)}. 아트보드 주소는 https URL 이어야 한다 — ` +
-      '원장에 남는 주소는 나중에 남이 열어 볼 정본 링크다.',
+      tr(root, {
+        en: `The canvas URL is not https: ${String(url)}. An artboard address must be an https URL — `
+          + 'what lands in the ledger is the canonical link someone else will open later.',
+        ko: `캔버스 URL 이 https 가 아니다: ${String(url)}. 아트보드 주소는 https URL 이어야 한다 — `
+          + '원장에 남는 주소는 나중에 남이 열어 볼 정본 링크다.',
+      }),
     );
   }
   return String(url);
@@ -133,8 +142,12 @@ function requireNode(root: string, id: string) {
   const node = getNode(root, id);
   if (!node) {
     throw new Error(
-      `노드 ${id} 가 원장에 없다 — 붙일 곳 없는 캔버스 링크는 sync 가 영원히 실패한다. ` +
-      '`harness node upsert` 로 UX 노드를 먼저 등록하라.',
+      tr(root, {
+        en: `Node ${id} is not in the ledger — a canvas link with nothing to attach to makes sync fail `
+          + 'forever. Register the UX node first with `harness node upsert`.',
+        ko: `노드 ${id} 가 원장에 없다 — 붙일 곳 없는 캔버스 링크는 sync 가 영원히 실패한다. `
+          + '`harness node upsert` 로 UX 노드를 먼저 등록하라.',
+      }),
     );
   }
   return node;
@@ -149,14 +162,18 @@ const sha256 = (s: string) => crypto.createHash('sha256').update(s, 'utf8').dige
 export function linkCanvas(
   root: string, opts: { uxNodeId: string; url: string; artboard: string },
 ): void {
-  const uxNodeId = requireUxId(opts?.uxNodeId);
+  const uxNodeId = requireUxId(root, opts?.uxNodeId);
   requireNode(root, uxNodeId);
-  const url = requireHttps(opts?.url);
+  const url = requireHttps(root, opts?.url);
   const artboard = typeof opts?.artboard === 'string' ? opts.artboard.trim() : '';
   if (!artboard) {
     throw new Error(
-      `${uxNodeId} 의 아트보드 이름이 비었다 — 캔버스에서 어느 판이 이 노드인지 사람이 찾을 수 없다. ` +
-      '명명 관례는 "UX-7 결제 화면" 처럼 노드 id 로 시작하는 이름이다(스펙 §8).',
+      tr(root, {
+        en: `${uxNodeId} has an empty artboard name — nobody can tell which board on the canvas is this `
+          + 'node. The convention is a name starting with the node id, like "UX-7 Checkout" (spec §8).',
+        ko: `${uxNodeId} 의 아트보드 이름이 비었다 — 캔버스에서 어느 판이 이 노드인지 사람이 찾을 수 없다. `
+          + '명명 관례는 "UX-7 결제 화면" 처럼 노드 id 로 시작하는 이름이다(스펙 §8).',
+      }),
     );
   }
 
@@ -197,18 +214,25 @@ export function listCanvasLinks(root: string): CanvasLink[] {
  * 다음 sync 가 "같다"고 판단해 개정이 영영 사라진다. 순서를 이렇게 두면 최악이 중복 bump(눈에 보임)다.
  */
 export function syncCanvas(root: string, uxNodeId: string, fetchedContent: string): SyncResult {
-  requireUxId(uxNodeId);
+  requireUxId(root, uxNodeId);
   if (typeof fetchedContent !== 'string') {
     throw new Error(
-      '캔버스 본문이 문자열이 아니다 — 코어는 네트워크를 타지 않는다. ' +
-      '에이전트가 WebFetch 로 받아온 본문을 그대로 넘겨라(스펙 §1·§8).',
+      tr(root, {
+        en: 'The canvas body is not a string — the core never touches the network. Hand over the body '
+          + 'an agent fetched with WebFetch (spec §1, §8).',
+        ko: '캔버스 본문이 문자열이 아니다 — 코어는 네트워크를 타지 않는다. '
+          + '에이전트가 WebFetch 로 받아온 본문을 그대로 넘겨라(스펙 §1·§8).',
+      }),
     );
   }
   const doc = loadDoc(root);
   const i = doc.links.findIndex(l => l?.uxNodeId === uxNodeId);
   if (i < 0) {
     throw new Error(
-      `${uxNodeId} 에 연결된 캔버스가 없다 — 먼저 \`harness design link\` 로 아트보드 URL 을 등록하라(스펙 §8).`,
+      tr(root, {
+        en: `No canvas is linked to ${uxNodeId} — register the artboard URL first with \`harness design link\` (spec §8).`,
+        ko: `${uxNodeId} 에 연결된 캔버스가 없다 — 먼저 \`harness design link\` 로 아트보드 URL 을 등록하라(스펙 §8).`,
+      }),
     );
   }
   const link = doc.links[i];
@@ -298,9 +322,9 @@ function relFromRoot(root: string, abs: string): string | null {
  * 통과)에 이미 한 번 물렸다(wave.ts evidenceFiles 참조).
  */
 export function recordBaseline(root: string, uxNodeId: string, pngPath: string): void {
-  requireUxId(uxNodeId);
+  requireUxId(root, uxNodeId);
   if (typeof pngPath !== 'string' || !pngPath.trim()) {
-    throw new Error(`${uxNodeId} 의 기준 이미지 경로가 비었다 — 아트보드 2x PNG 경로를 넘겨라.`);
+    throw new Error(tr(root, { en: `The baseline image path for ${uxNodeId} is empty — pass the path to a 2x PNG export of the artboard.`, ko: `${uxNodeId} 의 기준 이미지 경로가 비었다 — 아트보드 2x PNG 경로를 넘겨라.` }));
   }
   const abs = path.isAbsolute(pngPath) ? pngPath : path.join(root, pngPath);
   let st: fs.Stats;
@@ -308,14 +332,21 @@ export function recordBaseline(root: string, uxNodeId: string, pngPath: string):
     st = fs.statSync(abs);
   } catch {
     throw new Error(
-      `기준 이미지가 없다: ${abs} — 아트보드를 2x 로 내보낸 뒤 그 경로를 넘겨라(스펙 §8).`,
+      tr(root, {
+        en: `No baseline image at ${abs} — export the artboard at 2x and pass that path (spec §8).`,
+        ko: `기준 이미지가 없다: ${abs} — 아트보드를 2x 로 내보낸 뒤 그 경로를 넘겨라(스펙 §8).`,
+      }),
     );
   }
-  if (!st.isFile()) throw new Error(`기준 이미지가 파일이 아니다: ${abs}`);
+  if (!st.isFile()) throw new Error(tr(root, { en: `The baseline image is not a file: ${abs}`, ko: `기준 이미지가 파일이 아니다: ${abs}` }));
   if (st.size === 0) {
     throw new Error(
-      `기준 이미지가 비어 있다(0바이트): ${abs} — 빈 기준선은 P9 시각 비교를 실패시키는 게 아니라 ` +
-      '조용히 통과시킨다. 아트보드를 2x 로 다시 내보내라.',
+      tr(root, {
+        en: `The baseline image is empty (0 bytes): ${abs} — an empty baseline does not fail the P9 visual `
+          + 'comparison, it silently passes it. Export the artboard at 2x again.',
+        ko: `기준 이미지가 비어 있다(0바이트): ${abs} — 빈 기준선은 P9 시각 비교를 실패시키는 게 아니라 `
+          + '조용히 통과시킨다. 아트보드를 2x 로 다시 내보내라.',
+      }),
     );
   }
 

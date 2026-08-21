@@ -1,0 +1,194 @@
+<title>king-wjang-harness 출하 검증 — 종합 리포트</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#6b7280;--line:#e5e7eb;--card:#f8fafc;
+  --red:#b91c1c;--amber:#b45309;--green:#15803d;--gray:#6b7280;--redbg:#fef2f2;
+  --amberbg:#fffbeb;--greenbg:#f0fdf4;--graybg:#f3f4f6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#111418;--fg:#e5e7eb;
+  --mut:#9ca3af;--line:#2a2f36;--card:#1a1f26;--red:#f87171;--amber:#fbbf24;--green:#4ade80;
+  --gray:#9ca3af;--redbg:#3b1213;--amberbg:#3a2b0a;--greenbg:#122b18;--graybg:#252a31}}
+:root[data-theme="dark"]{--bg:#111418;--fg:#e5e7eb;--mut:#9ca3af;--line:#2a2f36;--card:#1a1f26;
+  --red:#f87171;--amber:#fbbf24;--green:#4ade80;--gray:#9ca3af;--redbg:#3b1213;--amberbg:#3a2b0a;
+  --greenbg:#122b18;--graybg:#252a31}
+body{background:var(--bg);color:var(--fg);font:15px/1.65 -apple-system,'Apple SD Gothic Neo',
+  'Noto Sans KR',sans-serif;max-width:960px;margin:0 auto;padding:2rem 1.25rem}
+h1,h2,h3,h4{line-height:1.3}h2{margin-top:2rem;border-bottom:1px solid var(--line);padding-bottom:.3rem}
+code{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:.1em .35em;font-size:.9em}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.8rem;overflow-x:auto}
+pre code{border:0;background:none;padding:0}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92em}
+th,td{border:1px solid var(--line);padding:.35rem .55rem;text-align:left;vertical-align:top}
+th{background:var(--card)}
+.badge{display:inline-block;border-radius:999px;padding:.05em .6em;font-size:.85em;font-weight:600}
+.b-BLOCKER,.b-open{color:var(--red);background:var(--redbg)}
+.b-HIGH,.b-fixing,.b-fixed,.b-claimed{color:var(--amber);background:var(--amberbg)}
+.b-verified,.b-measured{color:var(--green);background:var(--greenbg)}
+.b-MED,.b-LOW,.b-rejected,.b-deferred,.b-code{color:var(--gray);background:var(--graybg)}
+figure{margin:1rem 0}figure img{max-width:100%;border:1px solid var(--line);border-radius:8px}
+figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0 .15rem .5rem}
+.quote{border-left:3px solid var(--green);background:var(--card);padding:.5rem .9rem;margin:.3rem 0;font-weight:600}
+.quote+.quote{margin-top:-.3rem;font-weight:400}
+</style>
+<h1>king-wjang-harness 출하 검증 — 종합 리포트</h1>
+<h2>king-wjang-harness 출하 검증 — 종합 리포트</h2>
+<p><strong>작성 2026-08-21</strong> · 대상 <code>e860460</code> (feature/core-engine-v0) · 방식 11축 감사(단일 세션 직접 수행) + 실측 E2E</p>
+<p><strong>매체</strong>: CLI 도구 + Claude Code 플러그인 — <code>media-adapters.md</code> 의 CLI·라이브러리 표 적용</p>
+<p>---</p>
+<h2>판정</h2>
+<div class='quote'>출하 불가 (NO-GO)</div>
+<p><strong>차단 결함 2건.</strong> 둘 다 같은 뿌리에서 나온다 — <strong>훅이 Bash 표면에서 파일 쓰기를 보지 않는다.</strong></p>
+<div class='li'>• <strong>[SEC-50]</strong> 설계 트랙 소스 쓰기 금지가 <code>echo "x" &gt; src/app.ts</code> 한 줄로 풀린다.</div>
+<p>  <code>Write</code> 는 deny 하면서 Bash 리다이렉트·heredoc·<code>touch</code> 는 통과한다.</p>
+<div class='li'>• <strong>[SEC-49]</strong> <code>events.jsonl</code> 에 이벤트 한 줄을 append 하고 <code>doctor --repair</code> 를 부르면</div>
+<p>  <strong>페이즈와 게이트가 위조된다</strong> — 사람이 클릭한 적 없는 승인 도장이 찍힌다.</p>
+<p>이 제품의 공개된 핵심 약속은 *"AI가 설계 승인 전에 코드를 못 쓰게 <strong>물리적으로</strong> 막습니다 —</p>
+<p>지침이 아니라 훅으로"* 다. MCP 어댑터는 그 약속을 지키려고 코드 수준 불변식까지 동원했고</p>
+<p>(<code>core/src/mcp.ts:294</code>, 실측으로 뚫리지 않음을 확인 — [SEC-33]), 경로 우회·심링크·프롬프트</p>
+<p>인젝션 방어는 이 범주에서 드물게 진지하다. **그런데 검사되지 않는 Bash 두 줄이 그 전부를</p>
+<p>우회한다.** 잠근 문이 훌륭한 것과 옆에 열린 창이 있는 것은 별개다.</p>
+<p><strong>나머지는 대체로 단단하다.</strong> 584 테스트 3회 동일 · tsc 0 · 빌드 바이트 재현 · 맨 클론 설치 ·</p>
+<p>롤백 리허설 · 이력 비밀 0 · 프로덕션 취약점 0. 차단 2건은 <strong>국소적이고 수정 경로가 분명하다</strong></p>
+<p>(⑥ 「완화 방향」). 이건 「기반이 부실하다」가 아니라 <strong>「한 표면을 안 막았다」</strong>다.</p>
+<p><strong>차단을 닫은 뒤에도 남는 출하 전 조건 3건</strong>(현재 게이트 미충족):</p>
+<p>① <strong>G11</strong> — <code>--help</code> 가 존재하지 않는다([UX-24]). 확인: <code>harness --help</code> exit 0 + 13개 명령군 나열.</p>
+<p>② <strong>G12</strong> — <code>doctor</code> 가 승인 후 항상 exit 1([OPS-20]) · <code>--repair</code> 가 근거 등급을 지운다([LOGIC-21]).</p>
+<p>   확인: 승인 후 <code>doctor</code> → <code>ok:true</code>, <code>--repair</code> 후 <code>gate status</code> 에 <code>evidence</code> 보존.</p>
+<p>③ <strong>①축</strong> — 문서·에이전트가 부르는 명령 2건이 없다([FEAT-22] <code>trace</code>, [FEAT-23] <code>gate feedback</code>).</p>
+<p>   확인: <code>evidence/features.log</code> 재생성 시 MISSING 0.</p>
+<p>---</p>
+<h2>게이트 실측</h2>
+<p>목표 열은 **측정 전에 <code>gates.md</code> 로 확정**했다(Iron Rule 1). 임계값 완화 없음.</p>
+<div class="tbl"><table>
+<tr><th>게이트</th><th>목표</th><th>최종 실측</th><th>판정</th></tr>
+<tr><td>G1 테스트</td><td>전건 pass·fail 0·skip 0·3회 동일</td><td><strong>584 passed ×3, 25 파일</strong></td><td>✅</td></tr>
+<tr><td>G2 타입</td><td>오류 0</td><td><code>tsc --noEmit</code> exit 0</td><td>✅</td></tr>
+<tr><td>G3 빌드·자체완결</td><td>맨 클론서 <code>--version</code>·<code>init</code>·<code>status</code> exit 0</td><td>전부 exit 0 (+<code>doctor</code>)</td><td>✅</td></tr>
+<tr><td>G4 훅 무해</td><td>4이벤트 × 4입력 exit 0 · 미초기화 0바이트</td><td><strong>12/12 exit 0</strong>, 0바이트 확인</td><td>✅</td></tr>
+<tr><td>G5 훅 강제력</td><td>소스·코어파일·경로우회·배포Bash deny · stop block</td><td><strong>Write/Edit 표면은 전건 deny</strong></td><td>⚠ 부분 — Bash 표면 미검사 [SEC-49/50]</td></tr>
+<tr><td>G6 🔴 MCP 승인 불가</td><td>승인 시도 후 상태 불변</td><td><strong>submitted 불변</strong>, 우회 3종 거절</td><td>✅ (단 [SEC-49] 로 다른 경로 존재)</td></tr>
+<tr><td>G7 결정성</td><td>3회 동일·<code>Math.random</code> 0·마이그레이션 양방향</td><td>동일 · 실사용 0 · 왕복 성공</td><td>✅</td></tr>
+<tr><td>G8 공급망</td><td>프로덕션 도달 crit/high 0</td><td><code>npm audit --omit=dev</code> <strong>0</strong></td><td>✅</td></tr>
+<tr><td>G9 훅 지연</td><td>pre-tool p95 &lt; 150ms</td><td>정상 경로 <strong>103~113ms</strong> / <strong>폴백 10만건 169ms</strong></td><td>⚠ 부분 [PERF-26]</td></tr>
+<tr><td>G10 이력 비밀</td><td>0</td><td>gitleaks 71 커밋 <strong>no leaks</strong></td><td>✅</td></tr>
+<tr><td>G11 CLI 계약</td><td><code>--help</code> exit 0 · 침묵 성공 0</td><td>**<code>--help</code> 부재** · <code>wave create</code> 침묵 성공</td><td>❌ [UX-24][API-29]</td></tr>
+<tr><td>G12 관측성</td><td>조용한 실패 0 · doctor 가 상태 반영</td><td>침묵 catch 5/5 문서화 ✅ / <strong>doctor 상시 오탐</strong> ❌</td><td>❌ [OPS-20]</td></tr>
+<tr><td>G13 패키징</td><td>선언 산출물 누락 0</td><td>매니페스트·스킬 11·에이전트 5·dist 전부 존재</td><td>✅</td></tr>
+</table></div>
+<p>---</p>
+<h2>축별 결과</h2>
+<div class="tbl"><table>
+<tr><th>축</th><th>결과</th><th>파일</th></tr>
+<tr><td>① 기능 완성도</td><td>문서화된 53개 명령 중 <strong>2개 미구현</strong>(<code>trace</code>·<code>gate feedback</code>)</td><td><code>01-features.md</code></td></tr>
+<tr><td>② 계약(CLI·MCP·훅)</td><td><code>--help</code> 부재 · 하위명령 안내 절반만 · <code>wave create</code> 침묵 성공</td><td><code>02-backend.md</code></td></tr>
+<tr><td>③ 출력 표면</td><td>결함 0 — ANSI 0·비TTY JSON·EPIPE 내성</td><td><code>03-ui.md</code></td></tr>
+<tr><td>④ E2E 페르소나</td><td>4 페르소나 완주, PASS 55 / FAIL 3(전부 스크립트 결함)</td><td><code>04-usability.md</code></td></tr>
+<tr><td>⑤ 성능</td><td>정상 경로는 저널 크기 무관 · 폴백만 게이트 초과</td><td><code>05-perf.md</code></td></tr>
+<tr><td>⑥ 보안</td><td><strong>BLOCKER 2</strong> — Bash 표면 미검사. 그 밖(인젝션·경로·비밀)은 견고</td><td><code>06-security.md</code></td></tr>
+<tr><td>⑦ 공급망</td><td>프로덕션 도달 0 · dev 5건은 도달 경로 추적 후 deferred</td><td><code>07-supply-chain.md</code></td></tr>
+<tr><td>⑧ 논리 불변식</td><td>12개 선언 불변식 중 11 통과 · <code>doctor --repair</code> 데이터 손실 1</td><td><code>08-logic.md</code></td></tr>
+<tr><td>⑨ 결정성</td><td>584×3 동일 · 빌드 바이트 재현 · 시각 주입 규율 부분 적용</td><td><code>09-determinism.md</code></td></tr>
+<tr><td>⑩ 배포·롤백</td><td>맨 클론·롤백 리허설 실제 성공 · <code>--force</code> 자기해제 경로</td><td><code>10-deploy.md</code></td></tr>
+<tr><td>⑪ 관측성</td><td>침묵 catch 5/5 문서화 · <strong>유일한 건강검진이 상시 빨강</strong></td><td><code>11-ops.md</code></td></tr>
+</table></div>
+<p>---</p>
+<h2>감정서 대조 — <code>docs/appraisal/2026-08-21-plugin-appraisal.html</code></h2>
+<p>세션 중 사용자가 붙인 감정서를 <strong>현재 코드로 재확인</strong>했다. 이 문서는 커밋 <code>bbbb9b6</code></p>
+<p>(198 tests, 코어 1,550줄) 기준이라 <strong>핵심 판정 몇 개가 낡았다.</strong></p>
+<div class="tbl"><table>
+<tr><th>감정서 주장</th><th>현재 코드 실측</th></tr>
+<tr><td>「페이즈 게이트 미구현 — <code>phase set</code> 이 자기해제 구멍」</td><td><strong>낡음.</strong> 게이트 구현됨 — <code>phase set P7</code> 이 「직전 게이트 미승인」으로 거부된다. 단 **<code>--force</code> 로 이름만 바뀌어 남아 있다** → [SHIP-52]</td></tr>
+<tr><td>「테스트 198건 · 코어 1,550줄」</td><td>낡음 — <strong>584건 · 7,574줄</strong></td></tr>
+<tr><td>「슬래시 커맨드 없어 발견성 부족」</td><td>부분 낡음 — <strong>스킬 11종</strong> 존재. 그러나 **CLI <code>--help</code> 는 여전히 없다** → [UX-24] 로 유지</td></tr>
+<tr><td>「한국어 전용 README」</td><td>낡음 — <strong>4개 언어</strong>(EN/KO/JA/ZH). CLI·훅 출력은 여전히 한국어 전용(제품 결정 사항)</td></tr>
+<tr><td>「배포 캐시 67MB — devDeps 동봉」</td><td><strong>해당 없음</strong> — <code>git archive HEAD</code> 는 <strong>1.9MB</strong>, node_modules 0건</td></tr>
+<tr><td>「PostToolUse matcher <code>*</code> 로 도구 호출마다 node 기동, p95 104ms」</td><td><strong>유효</strong> — 재측정 103ms. 도구 호출당 pre+post 2회 발화</td></tr>
+<tr><td>「<code>.harness/</code> 가 git 대상이라 브랜치 전환 시 되감김, <code>events.jsonl</code> 병합 충돌 미해결」</td><td><strong>유효·미검증</strong> — <code>.gitignore</code> 에 <code>.harness/</code> 없음(커밋 대상 확인). 병합 충돌 시나리오는 이번에 <strong>보지 않았다</strong></td></tr>
+<tr><td>「의식 비용·온보딩 골짜기」</td><td><strong>유효</strong> — ④ 축에서 같은 마찰을 관측</td></tr>
+</table></div>
+<p><strong>감정서가 놓친 것</strong>: Bash 표면 미검사([SEC-49][SEC-50]). 감정서는 「경로 우회를 진지하게</p>
+<p>막았다」고 평가했는데, 그건 <code>Write</code> 표면 이야기다. 소스를 전량 읽고도 못 봤다 —</p>
+<p><strong>실제로 Bash 로 써 보기 전까지는 안 보이는 결함</strong>이다(Iron Rule 3).</p>
+<p>---</p>
+<h2>이번에 보지 않은 축</h2>
+<h3>가. 의도적 제외 (결정)</h3>
+<div class='li'>• <strong>①의 경쟁 벤치마크</strong> — 같은 범주 제품의 체험 수단이 없다. 시늉 감사는 미감사보다 나쁘므로 뺐다.</div>
+<p>  자사 스펙·README 대비 완성도로 대체했다.</p>
+<div class='li'>• **⑥ 의 <code>/security-review</code>·<code>/cso</code> 위임** — 축을 서브에이전트로 분리하지 않고 직접 수행했다</div>
+<p>  (세션 지침상 Agent 도구 미사용). 도구가 없어서가 아니라 <strong>방식 선택</strong>이다.</p>
+<h3>나. 확인 불가 (볼 수단이 없었다)</h3>
+<div class='li'>• <strong>실제 마켓플레이스 설치 경로</strong> — GitHub 리모트가 없다. 사용자가 리모트를 만들면</div>
+<p>  <code>claude plugin install</code> 로 1회 실측할 수 있다.</p>
+<div class='li'>• <strong>다른 장비에서의 설치</strong> — 이 장비 1대에서만 확인했다.</div>
+<div class='li'>• **<code>.harness/</code> 브랜치 병합 충돌** — 감정서가 지적한 시나리오. <code>events.jsonl</code> 을 양쪽 브랜치에서</div>
+<p>  append 한 뒤 병합하는 실험이 필요하다. 이번 범위에 넣지 못했다.</p>
+<div class='li'>• <strong>동시 세션 경합</strong> — 같은 <code>.harness/</code> 에 두 세션이 동시에 쓸 때의 저널 원자성. 코드상</div>
+<p>  append-only 이나 <strong>실측하지 않았다.</strong></p>
+<div class='li'>• <strong>장기 상주 관찰</strong> — 수백 턴 누적 시 <code>hook-errors.log</code>·저널 증가 거동.</div>
+<p>---</p>
+<h2>사용자·제품 결정 사항 (기술 판정 아님)</h2>
+<p>1. <strong>LICENSE 파일이 없다.</strong> 공개 마켓플레이스 배포를 목표로 하는데 라이선스가 없으면</p>
+<p>   법적으로 "모든 권리 유보"다 — 사용자가 설치해도 쓸 권리가 불분명하다.</p>
+<p>2. <strong>CLI·훅 출력이 한국어 전용.</strong> README 는 4개 언어인데 실제 사용 표면은 한국어다.</p>
+<p>   글로벌 배포라면 i18n 이 선결이고, 국내 대상이면 결함이 아니다. <strong>범위 결정이 필요하다.</strong></p>
+<p>3. <strong>CI 가 없다.</strong> 테스트·타입·audit 이 사람 손으로만 돈다.</p>
+<p>4. <strong>GitHub 리모트 없음 · main 병합 보류 · push 금지</strong> — 이전 세션 결정 유지.</p>
+<p>5. **<code>--force</code> 를 남길 것인가.** 부트스트랩 탈출구로서 정당하지만 접근 제한이 없다([SHIP-52]).</p>
+<p>   훅으로 막을지, 환경변수로 게이팅할지, 그대로 둘지는 제품 판단이다.</p>
+<p>---</p>
+<h2>출하 후 백로그 (deferred)</h2>
+<div class='li'>• <strong>[DEP-32]</strong> dev 체인 취약점 5건(critical 1) — 전부 「리스닝 dev 서버」 전제라 도달 경로 없음.</div>
+<p>  vitest 3.x 업그레이드는 파괴적 변경. <code>evidence/gates.log</code> · <code>07-supply-chain.md</code>.</p>
+<p>---</p>
+<h2>이 감사에서 배운 것</h2>
+<p>1. <strong>정적 감사·소스 전량 열람으로도 안 보이는 결함이 있다.</strong> 감정서는 코어 11모듈을 전부 읽고</p>
+<p>   「경로 우회를 진지하게 막았다」고 평가했다. 사실이다 — <code>Write</code> 표면에서는. **막힌 다음에</p>
+<p>   무엇을 시도하게 되는지**를 실제로 해 봐야 옆문이 보인다.</p>
+<p>2. <strong>측정 도구가 결함을 지어낸다.</strong> zsh 는 무인용 확장을 단어 분리하지 않는다 — 이 한 가지로</p>
+<p>   「미구현 명령 48건」이라는 가짜 결함이 나왔다. 실측 결과가 너무 극적이면 도구부터 의심하라.</p>
+<p>3. <strong>상시 빨간 진단은 위조를 숨긴다.</strong> [OPS-20](doctor 상시 오탐)이 없었다면 [SEC-49] 의 저널</p>
+<p>   위조가 <code>doctor</code> 의 <code>ok:false</code> 로 드러났을 것이다. 오탐 하나가 진짜 경보를 무의미하게 만든다 —</p>
+<p>   Iron Rule 6 이 테스트뿐 아니라 <strong>운영 도구에도</strong> 적용된다.</p>
+<p>4. <strong>같은 규율의 부분 적용이 결함의 뿌리다.</strong> 시각 주입(<code>usage</code>·<code>migrate</code>·<code>tokens</code> 에는 있고</p>
+<p>   <code>gate</code> 에는 없음 → [OPS-20]), 하위명령 안내(절반만 → [API-27]), 인젝션 방어(두 벌 → [SEC-28]),</p>
+<p>   코어 파일 보호(Write 만 → [SEC-51]). <strong>네 결함이 전부 같은 모양이다.</strong></p>
+<hr>
+<h2>결함 대장 — king-wjang-harness <code>e860460</code> (feature/core-engine-v0)</h2>
+<p><strong>갱신</strong> 2026-08-21 · <strong>판정</strong> 출하 불가(NO-GO) · <strong>open BLOCKER</strong> 2 · <strong>open 전체</strong> 16 (+ deferred 1)</p>
+<p>ID 는 <strong>20 번부터</strong> 시작한다 — <code>docs/release-readiness/readiness.md</code>(커밋 <code>bbbb9b6</code>, 198 tests)의</p>
+<p>1~19 번대와 겹치지 않게 하기 위해서다. 그 대장은 <strong>대상 커밋이 다르므로 이 감사에서 승계하지 않았다</strong></p>
+<p>(코드가 3배로 늘었고 <code>verified</code> 행은 전부 낡았다 — 해당 불변식은 여기서 재측정해 다시 올렸다).</p>
+<div class="tbl"><table>
+<tr><th>ID</th><th>심각도</th><th>축</th><th>한 줄</th><th>상태</th><th>근거등급</th><th>근거</th><th>닫은 증거</th></tr>
+<tr><td>OPS-20</td><td><span class="badge b-HIGH">HIGH</span></td><td>11</td><td>게이트를 한 번이라도 승인하면 <code>doctor</code> 가 영구히 <code>gates 불일치</code>·exit 1 — 유일한 건강검진이 상시 빨강이라 진짜 드리프트를 덮는다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/gate.ts:134</code></td><td>—</td></tr>
+<tr><td>LOGIC-21</td><td><span class="badge b-HIGH">HIGH</span></td><td>08</td><td><code>doctor --repair</code> 가 게이트의 <code>evidence</code>·<code>submittedAt</code> 을 삭제한다 — 저널은 갖고 있는데 재생 리듀서가 반영하지 않는다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/events.ts:74</code></td><td>—</td></tr>
+<tr><td>FEAT-22</td><td><span class="badge b-HIGH">HIGH</span></td><td>01</td><td><code>harness trace &lt;노드ID&gt;</code> 가 CLI 에 없다 — 스펙과 <code>wave-verifier</code> 에이전트 지시문이 호출한다(MCP 도구로만 존재)</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>agents/wave-verifier.md:31</code></td><td>—</td></tr>
+<tr><td>FEAT-23</td><td><span class="badge b-HIGH">HIGH</span></td><td>01</td><td><code>harness gate feedback</code> 미구현 — 공개 README 4개 언어 모두가 기능으로 광고한다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>README.md:88</code></td><td>—</td></tr>
+<tr><td>UX-24</td><td><span class="badge b-HIGH">HIGH</span></td><td>02</td><td><code>--help</code>·<code>-h</code>·<code>help</code>·무인자가 전부 exit 1 「알 수 없는 명령」 — 13개 명령군·60여 하위명령의 진입점이 0</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:775</code></td><td>—</td></tr>
+<tr><td>SEC-25</td><td><span class="badge b-MED">MED</span></td><td>06</td><td>게이트 산출물 경로가 루트 밖(<code>../../../etc/passwd</code>·<code>/etc/hosts</code>)이어도 제출·승인된다 — 웨이브 id 는 검증하면서 산출물 경로는 안 한다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/gate.ts:38</code></td><td>—</td></tr>
+<tr><td>PERF-26</td><td><span class="badge b-MED">MED</span></td><td>05</td><td>state.json 부재(저널 폴백) + 저널 10만 건에서 pre-tool p95 169ms — G9 목표 150ms 초과</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/latency.log</code></td><td>—</td></tr>
+<tr><td>API-27</td><td><span class="badge b-MED">MED</span></td><td>02</td><td>명령군 절반(gate·adr·doc·wave·node)은 하위명령 목록을 안 알려주고 나머지 절반은 알려준다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:219</code></td><td>—</td></tr>
+<tr><td>SEC-28</td><td><span class="badge b-MED">MED</span></td><td>06</td><td>인젝션 방어 규칙 <code>sanitizeUntrusted</code> 가 두 벌이고 구현이 서로 다르다(정규식 vs 코드포인트 루프)</td><td><span class="badge b-open">open</span></td><td><span class="badge b-code">code</span></td><td><code>core/src/loop.ts:100</code></td><td>—</td></tr>
+<tr><td>API-29</td><td><span class="badge b-MED">MED</span></td><td>02</td><td><code>wave create</code> 를 인자 없이 부르면 exit 0 으로 목표·마일스톤 없는 <code>wave-001</code> 이 생긴다(침묵 성공)</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:649</code></td><td>—</td></tr>
+<tr><td>API-30</td><td><span class="badge b-LOW">LOW</span></td><td>02</td><td>CLI <code>wave update</code> 는 위치인자, MCP 는 <code>text</code> 파라미터 — <code>--text "x"</code> 를 쓰면 「--text x」가 그대로 로그된다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:673</code></td><td>—</td></tr>
+<tr><td>SHIP-31</td><td><span class="badge b-LOW">LOW</span></td><td>10</td><td><code>schemaVersion: 99</code> 인 미래 상태 파일을 경고 없이 그대로 읽는다</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/state.ts:10</code></td><td>—</td></tr>
+<tr><td>DEP-32</td><td><span class="badge b-LOW">LOW</span></td><td>07</td><td>dev 체인 취약점 5건(critical 1) — 전부 「리스닝 dev 서버」 전제라 프로덕션·빌드 도달 없음</td><td><span class="badge b-deferred">deferred</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/gates.log</code></td><td>출하 후 백로그 — vitest 3.x 는 파괴적 변경이고 도달 경로가 없다</td></tr>
+<tr><td>SEC-49</td><td><span class="badge b-BLOCKER">BLOCKER</span></td><td>06</td><td>저널에 <code>phase-set</code>/<code>gate-approved</code> 한 줄을 Bash 로 append + <code>doctor --repair</code> 만으로 페이즈·게이트가 위조된다 — <strong>사람 승인 없이 게이트가 approved 가 된다</strong></td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:395</code></td><td>—</td></tr>
+<tr><td>SEC-50</td><td><span class="badge b-BLOCKER">BLOCKER</span></td><td>06</td><td>설계 트랙 소스 쓰기 금지가 Bash 로 무력화 — <code>Write</code> 는 deny 하면서 <code>echo "x" &gt; src/app.ts</code>·heredoc·<code>touch</code> 는 허용</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:395</code></td><td>—</td></tr>
+<tr><td>SEC-51</td><td><span class="badge b-HIGH">HIGH</span></td><td>06</td><td>코어 파일 손편집 차단이 Write/Edit 표면에만 적용 — <code>echo x &gt; .harness/state.json</code>·<code>sed -i</code> 는 통과</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:47</code></td><td>—</td></tr>
+<tr><td>SHIP-52</td><td><span class="badge b-HIGH">HIGH</span></td><td>10</td><td><code>harness phase set &lt;P&gt; --force</code> 가 게이트 검사를 건너뛴다. 훅이 이 Bash 를 막지 않아 에이전트가 스스로 설계 트랙을 풀 수 있다(의도된 탈출구이나 접근 제한이 없다)</td><td><span class="badge b-open">open</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:158</code></td><td>—</td></tr>
+<tr><td>SEC-33</td><td>—</td><td>06</td><td>🔴 <strong>MCP 경로로는</strong> 게이트 승인 불가 — 3종 우회 시도 후에도 <code>submitted</code> 불변. <strong>단 저널 위조 경로는 열려 있다 → [SEC-49]</strong></td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/mcp.ts:294</code></td><td><code>evidence/e2e.log</code> G6 절 10건 PASS</td></tr>
+<tr><td>SEC-34</td><td>—</td><td>06</td><td>셸 인젝션 없음(인자가 셸을 경유하지 않음) · 심링크 우회 deny · 프로토타입 오염 입력에 무사</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:385</code></td><td><code>evidence/contract2.log</code> · <code>evidence/e2e.log</code></td></tr>
+<tr><td>SEC-35</td><td>—</td><td>06</td><td>이력 비밀 0 — 71 커밋 전수 스캔</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/secrets.log</code></td><td>gitleaks 8.30.1 <code>no leaks found</code></td></tr>
+<tr><td>LOGIC-36</td><td>—</td><td>08</td><td>훅 무해·비간섭 — 미초기화 4 이벤트 0바이트·exit 0, 깨진/빈/미지/null/9000자/유니코드 입력 전부 exit 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:162</code></td><td><code>evidence/e2e.log</code> 12건 PASS</td></tr>
+<tr><td>LOGIC-37</td><td>—</td><td>08</td><td>훅 강제력 — 소스쓰기·코어파일·경로우회·심링크·배포Bash deny, docs·일반Bash 허용</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:385</code></td><td><code>evidence/e2e.log</code> 7건 PASS</td></tr>
+<tr><td>LOGIC-38</td><td>—</td><td>08</td><td>상태 복원력 — state.json 삭제·형태손상에도 훅 exit 0, 저널 손상은 doctor 가 거부로 알린다</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:117</code></td><td><code>evidence/e2e.log</code> 3건 PASS</td></tr>
+<tr><td>USE-39</td><td>—</td><td>04</td><td>페르소나 4종(신규·설계자·구현자·출하) 전 시나리오 완주 — 유령 참조·증적 없는 UX 웨이브·중복 활성 전부 정상 거부</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/e2e.log</code></td><td>PASS=55 FAIL=3(전부 스크립트 오류로 규명)</td></tr>
+<tr><td>DET-40</td><td>—</td><td>09</td><td>584 tests ×3 동일 · tsc 오류 0 · 결정 경로에 <code>Math.random</code>·<code>Date.now()</code> 실사용 0(주석뿐)</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/gates.log</code></td><td>3회 모두 <code>584 passed (584)</code></td></tr>
+<tr><td>DET-41</td><td>—</td><td>09</td><td>빌드 재현성 — 재빌드 산출물이 커밋된 <code>core/dist</code> 와 바이트 동일</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/dist/cli.js</code></td><td><code>git diff --stat core/dist</code> 빈 출력</td></tr>
+<tr><td>SHIP-42</td><td>—</td><td>10</td><td>맨 클론(빌드·node_modules 없음)에서 CLI·훅 4종·MCP tools/list 전부 동작</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/deploy.log</code></td><td><code>--version</code>·<code>init</code>·<code>status</code>·<code>doctor</code> exit 0</td></tr>
+<tr><td>SHIP-43</td><td>—</td><td>10</td><td>롤백 리허설 — 구버전(<code>f8b1516</code>)이 신버전 상태 위에서 동작하고, 이후 신버전이 데이터 보존 상태로 읽는다</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/rollback.log</code></td><td>구버전 훅 deny 정상 · 신버전 <code>gate status</code> 복원</td></tr>
+<tr><td>SHIP-44</td><td>—</td><td>10</td><td>dist 부재 클론 — 일반 명령 exit 1 + 빌드 안내, 훅 exit 0(세션 불파괴), MCP 는 빈 도구 목록으로 생존</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>bin/harness:5</code></td><td><code>evidence/deploy.log</code></td></tr>
+<tr><td>SHIP-45</td><td>—</td><td>10</td><td>패키징 — 플러그인 매니페스트·훅 4이벤트·스킬 11·에이전트 5·프로파일 2·dist 2 전부 아카이브에 포함, 버전 일치</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/contract.log</code></td><td>manifest ↔ 파일 대조 누락 0</td></tr>
+<tr><td>UX-46</td><td>—</td><td>03</td><td>CLI 출력 — ANSI 0 · NO_COLOR 무영향 · 비TTY stdout JSON 파싱 가능 · EPIPE 내성</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/contract.log</code></td><td>md5 동일 · <code>JSON.parse</code> OK</td></tr>
+<tr><td>OPS-47</td><td>—</td><td>11</td><td>침묵 catch 5건 — 전부 「세션을 깨지 않는다」 계약 경로이고 대체 관측 경로(<code>hook-errors.log</code>)가 존재. 무처리·무문서 catch 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-code">code</span></td><td><code>core/src/hook.ts:162</code></td><td>전 소스 스캔 결과 5/5 문서화</td></tr>
+<tr><td>DEP-48</td><td>—</td><td>07</td><td>프로덕션 도달 취약점 0 — 런타임 의존은 <code>yaml</code> 하나</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-21/evidence/gates.log</code></td><td><code>npm audit --omit=dev</code> → <code>found 0 vulnerabilities</code></td></tr>
+</table></div>

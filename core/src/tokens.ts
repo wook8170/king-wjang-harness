@@ -1,4 +1,10 @@
 /**
+ * **i18n 예외(의도적)**: 이 모듈은 `root` 를 받지 않는 순수 스키마 검증기라 언어를 해석할
+ * 수단이 없다. 토큰 문서 검증 오류는 **영어 고정**이다 — 언어 해석을 위해 순수 함수에
+ * root 를 흘려 넣는 것이 얻는 것보다 잃는 게 크다고 판단했다(테스트 가능성·재사용성).
+ * 사용자가 이 메시지를 보는 지점은 `harness tokens lint|gen|swap` 이고, 그 CLI 래퍼의
+ * 사용법·요약 문구는 양 언어를 탄다.
+ *
  * 디자인 토큰 파이프라인(스펙 §7 — 요구 11·12).
  *
  * **불변식: 제품의 시각적 톤 전체가 토큰 파일 1개의 함수다.**
@@ -25,6 +31,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { designDir } from './paths';
+import { tr } from './tr';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 문서 모델
@@ -142,14 +149,14 @@ function rawAt(doc: TokenDoc, tokenPath: string, mode: Mode): string | undefined
 function resolve(doc: TokenDoc, tokenPath: string, mode: Mode, seen: string[] = []): string {
   if (seen.includes(tokenPath)) {
     throw new Error(
-      `토큰 별칭이 순환한다: ${[...seen, tokenPath].join(' → ')}. ` +
-      `별칭 사슬 중 한 곳을 실제 값으로 끊어라 (${tokensPath('<root>')}).`,
+      `Token aliases form a cycle: ${[...seen, tokenPath].join(' → ')}. `
+      + `Break the chain somewhere with a real value (${tokensPath('<root>')}).`,
     );
   }
   const raw = rawAt(doc, tokenPath, mode);
   if (raw === undefined) {
     const from = seen.length ? ` (${seen[seen.length - 1]} 에서 참조)` : '';
-    throw new Error(`토큰 ${tokenPath} 이(가) 문서에 없다${from}. 오타이거나 삭제된 토큰이다.`);
+    throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
   }
   const next = aliasTarget(raw);
   return next === null ? raw : resolve(doc, next, mode, [...seen, tokenPath]);
@@ -191,18 +198,18 @@ function checkGroups<T extends string>(
   v: unknown, groups: readonly T[], label: string,
 ): void {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) {
-    throw new Error(`토큰 문서의 ${label} 은(는) 객체여야 한다.`);
+    throw new Error(`${label} in the token document must be an object.`);
   }
   const unknownKeys = Object.keys(v).filter(k => !(groups as readonly string[]).includes(k));
   if (unknownKeys.length) {
     throw new Error(
-      `토큰 문서 ${label} 에 알 수 없는 하위 그룹: ${unknownKeys.join(', ')}. ` +
-      `허용: ${groups.join(', ')}. 새 그룹이 필요하면 스키마 개정(=설계 개정)이지 조용한 추가가 아니다.`,
+      `Unknown subgroup in token document ${label}: ${unknownKeys.join(', ')}. `
+      + `Allowed: ${groups.join(', ')}. A new group is a schema revision (= a design revision), not a silent addition.`,
     );
   }
   for (const g of groups) {
     if (!isStrMap((v as Record<string, unknown>)[g] ?? {})) {
-      throw new Error(`토큰 문서 ${label}.${g} 의 값은 전부 문자열이어야 한다.`);
+      throw new Error(`Every value under ${label}.${g} must be a string.`);
     }
   }
 }
@@ -214,41 +221,41 @@ function checkGroups<T extends string>(
  */
 export function validateTokens(input: unknown): TokenDoc {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    throw new Error('토큰 문서가 객체가 아니다. design-tokens.json 은 최상위가 객체여야 한다.');
+    throw new Error('The token document is not an object. design-tokens.json must have an object at the top level.');
   }
   const o = input as Record<string, unknown>;
 
   const unknownTop = Object.keys(o).filter(k => !(TOP_LEVEL_KEYS as readonly string[]).includes(k));
   if (unknownTop.length) {
     throw new Error(
-      `토큰 문서에 알 수 없는 최상위 카테고리: ${unknownTop.join(', ')}. ` +
-      `허용: ${TOP_LEVEL_KEYS.filter(k => k !== 'schemaVersion').join(', ')}. ` +
-      `팔레트를 따로 두려 했다면 그건 토큰 파일 내부 사정이 아니라 새 계층이다 — 스펙 §7 주입 철칙 2.`,
+      `Unknown top-level category in the token document: ${unknownTop.join(', ')}. `
+      + `Allowed: ${TOP_LEVEL_KEYS.filter(k => k !== 'schemaVersion').join(', ')}. `
+      + 'If you were adding a separate palette, that is a new layer, not the token file\'s internal business — spec §7 rule 2.',
     );
   }
   if (o.schemaVersion !== 1) {
-    throw new Error(`토큰 문서 schemaVersion 이 ${String(o.schemaVersion)} 이다. 지원 버전은 1.`);
+    throw new Error(`Token document schemaVersion is ${String(o.schemaVersion)}. Supported version: 1.`);
   }
 
   if (typeof o.color !== 'object' || o.color === null || Array.isArray(o.color)) {
-    throw new Error('토큰 문서의 color 는 객체여야 한다.');
+    throw new Error('`color` in the token document must be an object.');
   }
   for (const [name, tok] of Object.entries(o.color as Record<string, unknown>)) {
     const t = tok as Record<string, unknown> | null;
     if (typeof t !== 'object' || t === null || typeof t.light !== 'string') {
-      throw new Error(`색 토큰 color.${name} 에 light 값(문자열)이 없다.`);
+      throw new Error(`Colour token color.${name} has no light value (string).`);
     }
     if (t.dark !== undefined && typeof t.dark !== 'string') {
-      throw new Error(`색 토큰 color.${name} 의 dark 값이 문자열이 아니다.`);
+      throw new Error(`The dark value of colour token color.${name} is not a string.`);
     }
     const extra = Object.keys(t).filter(k => k !== 'light' && k !== 'dark');
     if (extra.length) {
-      throw new Error(`색 토큰 color.${name} 에 알 수 없는 모드: ${extra.join(', ')}. 허용: light, dark.`);
+      throw new Error(`Unknown mode on colour token color.${name}: ${extra.join(', ')}. Allowed: light, dark.`);
     }
   }
   for (const cat of FLAT_CATEGORIES) {
     if (!isStrMap(o[cat] ?? {})) {
-      throw new Error(`토큰 문서 ${cat} 의 값은 전부 문자열이어야 한다.`);
+      throw new Error(`Every value under ${cat} must be a string.`);
     }
   }
   checkGroups(o.type ?? {}, TYPE_GROUPS, 'type');
@@ -271,15 +278,15 @@ export function loadTokens(root: string): TokenDoc {
   const p = tokensPath(root);
   if (!fs.existsSync(p)) {
     throw new Error(
-      `토큰 파일이 없다: ${p}. 디자인 토큰은 단일 원천이라 코어가 기본값을 지어내지 않는다 — ` +
-      `P4 정본 HTML 의 CSS 변수 블록을 design-tokens.json 으로 내려받아 두어라(스펙 §7).`,
+      `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent `
+      + 'defaults — export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec §7).',
     );
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
   } catch (e) {
-    throw new Error(`토큰 파일을 읽을 수 없다: ${p} — ${(e as Error).message}`);
+    throw new Error(`Cannot read the token file: ${p} — ${(e as Error).message}`);
   }
   return validateTokens(parsed);
 }
@@ -622,8 +629,8 @@ export function assertSwapIsMeaningful(
   const changed = diffTokens(before, after);
   if (changed.length === 0) {
     throw new Error(
-      '스왑 드릴이 공허하다: 바뀐 토큰이 하나도 없다. ' +
-      '무변경 테마로는 하드코딩 화면과 정상 화면을 구별할 수 없다 — 대체 팔레트를 실제로 넣어라.',
+      'The swap drill is empty: not a single token changed. A no-op theme cannot tell a hard-coded '
+      + 'screen apart from a correct one — supply a real alternative palette.',
     );
   }
   const colorPaths = [...flatDeclared(before).keys()].filter(k => k.startsWith('color.'));
@@ -631,8 +638,9 @@ export function assertSwapIsMeaningful(
   const need = Math.ceil(colorPaths.length * minColorRatio);
   if (changedColors < need) {
     throw new Error(
-      `스왑 드릴이 공허하다: 색 토큰 ${colorPaths.length}개 중 ${changedColors}개만 바뀌었다(최소 ${need}개). ` +
-      '팔레트를 통째로 갈아끼워야 안 바뀐 화면이 하드코딩 증거가 된다(스펙 §7).',
+      `The swap drill is too shallow: only ${changedColors} of ${colorPaths.length} colour tokens changed `
+      + `(need at least ${need}). The palette must be replaced wholesale so that whatever does not change `
+      + 'becomes evidence of hard-coding (spec §7).',
     );
   }
   return changed;

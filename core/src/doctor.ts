@@ -15,6 +15,7 @@ import {
   harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir,
 } from './paths';
 import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
+import { tr } from './tr';
 import { readState, writeState, defaultState } from './state';
 import type { HarnessState } from './types';
 
@@ -139,9 +140,14 @@ export function runDoctor(
   const effective = current ?? replayed;
   if (effective.activeWave && !fs.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
-      `activeWave ${effective.activeWave} 의 웨이브 파일 부재 — `
-      + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
-      + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라',
+      tr(root, {
+        en: `The wave file for activeWave ${effective.activeWave} is missing — it may be temporarily absent `
+          + '(a git branch switch, say), so restoring the file comes first. If it really is lost, settle '
+          + 'activeWave to null with `harness doctor --repair`',
+        ko: `activeWave ${effective.activeWave} 의 웨이브 파일 부재 — `
+          + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
+          + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라',
+      }),
     );
   }
 
@@ -162,8 +168,12 @@ export function runDoctor(
     if (!trustworthy && !opts.force) {
       refused = true;
       warnings.push(
-        'state 발산이 있으나 저널을 신뢰할 수 없어 복구 거부 — '
-        + '저널 손상 원인을 먼저 확인하라. 그래도 복구하려면 --force',
+        tr(root, {
+        en: 'State has diverged but the journal cannot be trusted, so repair is refused — find out why '
+          + 'the journal is damaged first. To repair anyway, use --force',
+        ko: 'state 발산이 있으나 저널을 신뢰할 수 없어 복구 거부 — '
+          + '저널 손상 원인을 먼저 확인하라. 그래도 복구하려면 --force',
+      }),
       );
     } else {
       // 정산 판정은 repair 가 실제로 쓸 상태(replayed) 기준이다 — current 기준으로 정산하면

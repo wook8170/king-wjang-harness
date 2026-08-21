@@ -1,0 +1,244 @@
+<title>King Harness 감정서</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --surface: #fdfcfa;
+    --surface2: #eeece7;
+    --ink: #23241f;
+    --ink-soft: #5c5e55;
+    --line: #d8d5cc;
+    --accent: #d9640a;        /* safety orange — 하네스(안전벨트)의 색 */
+    --accent-ink: #a34a05;
+    --good: #2e7d43;
+    --warn: #b3830b;
+    --crit: #b3372b;
+    --chip-bg: #e9e6df;
+    --code-bg: #eeece7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #191a17; --surface: #20211d; --surface2: #272822;
+      --ink: #e8e6df; --ink-soft: #a3a297; --line: #3a3b33;
+      --accent: #f08a2d; --accent-ink: #f5a45b;
+      --good: #6cc285; --warn: #d9ad3c; --crit: #e0705f;
+      --chip-bg: #2e2f28; --code-bg: #14150f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #191a17; --surface: #20211d; --surface2: #272822;
+    --ink: #e8e6df; --ink-soft: #a3a297; --line: #3a3b33;
+    --accent: #f08a2d; --accent-ink: #f5a45b;
+    --good: #6cc285; --warn: #d9ad3c; --crit: #e0705f;
+    --chip-bg: #2e2f28; --code-bg: #14150f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15.5px; line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 22px 80px; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  code, .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.86em; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  /* ── header ── */
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-ink);
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h1 {
+    font-size: 32px; line-height: 1.25; margin: 0 0 6px; font-weight: 700;
+    letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .sub { color: var(--ink-soft); margin: 0 0 8px; }
+  .meta { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-soft); }
+  /* ── verdict card ── */
+  .verdict {
+    margin: 30px 0 8px; background: var(--surface);
+    border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    padding: 20px 22px;
+  }
+  .verdict-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px;
+  }
+  .verdict p { margin: 8px 0 0; }
+  .verdict .headline { font-size: 17.5px; font-weight: 700; margin: 0; }
+  /* ── score table ── */
+  .scores { display: grid; gap: 9px; margin: 26px 0 4px; }
+  .score { display: grid; grid-template-columns: 128px 1fr 52px; gap: 12px; align-items: center; }
+  .score .name { font-size: 13.5px; font-weight: 500; }
+  .score .track { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .score .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .score .val { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; text-align: right; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .score-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; }
+  /* ── sections ── */
+  h2 {
+    font-size: 15px; font-weight: 700; letter-spacing: 0.02em;
+    margin: 46px 0 12px; padding-top: 18px; border-top: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h2 .tag {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent-ink); letter-spacing: 0.1em;
+  }
+  h3 { font-size: 14.5px; margin: 22px 0 6px; }
+  p { margin: 10px 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin: 5px 0; }
+  li::marker { color: var(--accent-ink); }
+  .soft { color: var(--ink-soft); }
+  /* ── chips ── */
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    padding: 1px 8px; border-radius: 20px; background: var(--chip-bg);
+    letter-spacing: 0.04em; vertical-align: 1px;
+  }
+  .chip.good { color: var(--good); } .chip.warn { color: var(--warn); } .chip.crit { color: var(--crit); }
+  /* ── tables ── */
+  .tblwrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th {
+    text-align: left; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
+    font-weight: 500; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  /* ── persona cards ── */
+  .personas { display: grid; gap: 12px; margin: 16px 0; }
+  .persona {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 14px 16px; border-radius: 6px;
+  }
+  .persona .who { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .persona p { margin: 6px 0 0; font-size: 13.5px; }
+  .quote {
+    border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin: 14px 0;
+    color: var(--ink-soft); font-style: normal;
+  }
+  .foot { margin-top: 52px; padding-top: 14px; border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-soft); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Plugin Appraisal · 실측 기반</div>
+  <h1>king-wjang-harness 감정서</h1>
+  <p class="sub">설계→구축→출하 규율을 훅으로 물리 강제하는 Claude Code 하네스 — 효용·실효성·가성비·상품성·수용성 평가</p>
+  <p class="meta">v0.0.1 · 코어 TS 약 1,550줄 · 테스트 198건(본 감정에서 재실행 전건 통과, 1.7s) · 훅 4종 배선 · 2026-08-21</p>
+
+  <div class="verdict">
+    <div class="verdict-label">종합 판정</div>
+    <p class="headline">"v0 치고는 이례적으로 단단한 기반 — 지금은 엔진이지 상품이 아니다."</p>
+    <p>세션 단절·설계 무시·미정산 종료라는 <b>에이전트 코딩의 3대 실패 모드를 프롬프트가 아니라 훅으로 차단</b>하는 접근은 시장에서 실제로 드물고, 코드 품질(이벤트 소싱·보안 방어·198 테스트)은 v0 플러그인 기준을 한참 상회한다. 반면 페이즈 게이트가 미구현(<code>phase set</code> 수동)이라 강제력에 자기해제 구멍이 있고, 한국어 전용·의식(ceremony) 비용·발견성 부족이 대중 수용의 벽이다. <b>장기 프로젝트를 굴리는 소수에게 깊게 팔리는 도구</b>이지, 바이브코더 대중에게 넓게 팔리는 도구는 아직 아니다.</p>
+  </div>
+
+  <div class="scores">
+    <div class="score"><span class="name">효용성 (문제 적합)</span><div class="track"><div class="fill" style="width:90%"></div></div><span class="val">4.5</span></div>
+    <div class="score"><span class="name">실효성 (v0 강제력)</span><div class="track"><div class="fill" style="width:70%"></div></div><span class="val">3.5</span></div>
+    <div class="score"><span class="name">엔지니어링 품질</span><div class="track"><div class="fill" style="width:96%"></div></div><span class="val">5.0</span></div>
+    <div class="score"><span class="name">가성비</span><div class="track"><div class="fill" style="width:84%"></div></div><span class="val">4.0</span></div>
+    <div class="score"><span class="name">사용성</span><div class="track"><div class="fill" style="width:60%"></div></div><span class="val">3.0</span></div>
+    <div class="score"><span class="name">상품성 (현재)</span><div class="track"><div class="fill" style="width:50%"></div></div><span class="val">2.5</span></div>
+  </div>
+  <p class="score-note">5점 척도. 상품성은 13페이즈 게이트 완성 + 영문화 시 4.0 전망.</p>
+
+  <h2><span class="tag">01</span>무엇인가</h2>
+  <p>슬래시 커맨드가 아니라 <b>훅 4종(SessionStart / PreToolUse / PostToolUse / Stop) + CLI</b>다. <code>events.jsonl</code> 저널을 진실의 원천으로 페이즈(P0~P12)·웨이브(작업 지시서)·설계 원장을 관리하고, 훅이 규율을 물리 차단으로 강제한다. 설계 스펙은 13페이즈 풀사이클 SDLC를 그리고 있으나 <b>현재 구현은 코어 엔진 v0</b> — 상태 머신·웨이브·원장·doctor·훅 판정기까지다.</p>
+  <ul>
+    <li><b>설계 트랙(P0~P6)</b>: 소스 쓰기·배포성 Bash를 deny. 허용은 <code>.harness/</code>·<code>docs/</code>·루트 *.md뿐.</li>
+    <li><b>구축 트랙(P7~)</b>: 반대로 설계 문서 직접 수정을 deny — <code>backtrack</code> 공식 역행으로만.</li>
+    <li><b>Stop 가드</b>: 활성 웨이브에 미정산 작업이 있으면 세션 종료를 막고 턴 로그 정산을 요구.</li>
+    <li><b>코어 파일 보호</b>: <code>state.json</code>·<code>events.jsonl</code>·<code>ledger.yaml</code> 손편집을 페이즈 무관 차단.</li>
+    <li><b>UX 증적 게이트</b>: UX 노드를 참조한 웨이브는 스크린샷 증적 없이 완료 불가.</li>
+  </ul>
+
+  <h2><span class="tag">02</span>효용성 — 어떤 아픔을 해결하나 <span class="chip good">4.5</span></h2>
+  <p>에이전트 코딩에서 실제로 돈이 새는 지점 세 곳을 정확히 겨냥한다.</p>
+  <div class="tblwrap"><table>
+    <tr><th>실패 모드</th><th>하네스의 답</th><th>실증</th></tr>
+    <tr><td><b>세션 단절·컨텍스트 소실</b></td><td>SessionStart가 페이즈·활성 웨이브·최근 턴 로그를 자동 주입 + Stop 가드가 정산을 강제</td><td>Moa 프로젝트가 9차례 세션 릴레이로 조건부 출하까지 도달</td></tr>
+    <tr><td><b>설계 승인 전 구현 폭주</b></td><td>PreToolUse가 설계 트랙에서 Write/Edit 자체를 deny — 모델이 잊어도 물리적으로 막힘</td><td>E2E 23건에서 deny 실측 (readiness 감사 동봉)</td></tr>
+    <tr><td><b>상태 파일 오염·유실</b></td><td>저널 우선 변이 순서 계약 + <code>doctor --repair</code> 저널 재생 복구</td><td>state.json 삭제·손상 시 인메모리 재생으로 판정 지속</td></tr>
+  </table></div>
+  <p>핵심 통찰이 좋다: <b>CLAUDE.md 지침은 컨텍스트 요약·모델 변덕에 침식되지만, 훅 deny는 침식되지 않는다.</b> "모델이 규칙을 잊는" 문제를 지침 반복이 아니라 인프라로 푼 것이 이 플러그인의 존재 이유다.</p>
+
+  <h2><span class="tag">03</span>실효성 — 강제가 정말 강제인가 <span class="chip warn">3.5</span></h2>
+  <p>잊는 것은 완벽히 막고, <b>우회하려 드는 것은 v0에서 부분적으로만</b> 막는다.</p>
+  <ul>
+    <li><span class="chip crit">구멍 1</span> <code>harness phase set P7</code> 이 v0 임시 명령이라 게이트 없이 페이즈를 넘길 수 있다 — 에이전트가 Bash로 스스로 실행하면 설계 트랙 차단이 풀린다. 스펙에 "게이트 구현 후 대체"로 명기된 알려진 구멍이지만, 현재 강제력의 최대 약점.</li>
+    <li><span class="chip warn">구멍 2</span> Stop 가드는 "사소한 턴이면 사유 한 줄 보고 후 종료 가능"이라 반(半)강제 — 다만 이는 잡음 방지를 위한 의도된 설계다.</li>
+    <li><span class="chip good">막은 것</span> 경로 우회는 진지하게 막았다: 리터럴·realpath <b>이중 공간 정규화</b>로 심링크·<code>docs/../src</code> 우회를 차단하고, 웨이브 frontmatter·턴 로그 등 신뢰 경계 밖 텍스트는 개행 세탁·제어문자 제거 후 <b>본문 SHA-256 nonce 펜스</b>로 감싸 프롬프트 인젝션 지시 위조까지 방어한다(고정점 논증). 이 수준의 인젝션 방어를 갖춘 하네스 플러그인은 거의 없다.</li>
+  </ul>
+
+  <h2><span class="tag">04</span>장점 <span class="chip good">품질 5.0</span></h2>
+  <ul>
+    <li><b>2대 불변식이 설치 부담을 없앤다.</b> 비간섭(<code>.harness/</code> 없는 프로젝트에선 완전 침묵)과 무해(훅은 어떤 실패에도 exit 0 — 세션을 절대 깨지 않음). 전역 설치해도 opt-in 전까지 비용이 0이다.</li>
+    <li><b>이벤트 소싱이 진짜로 구현됐다.</b> "저널 먼저, 파생 캐시 나중" 순서 계약이 전 변이 경로에 일관 적용되고, 손상 시 재생 폴백 + 열화(degraded) 고지 + <code>doctor</code> 복구까지 닫혀 있다.</li>
+    <li><b>fail-open이 관측 가능하다.</b> 침묵 흡수된 훅 실패는 반드시 <code>.runtime/hook-errors.log</code>에 남는다 — "하네스가 꺼진 걸 아무도 모르는" 상태를 설계적으로 배제.</li>
+    <li><b>게이트 익스플로잇을 스스로 사냥했다.</b> 빈 디렉토리로 UX 증적 게이트 통과, 웨이브 번호 재발급으로 남의 스크린샷 상속, 동시 생성 TOCTOU — 전부 주석에 공격 시나리오와 함께 방어가 박혀 있다.</li>
+    <li><b>자기 프로세스로 자기를 출하했다.</b> 동봉된 readiness 감사가 게이트 선확정·실측 근거(G1~G9)로 자체 판정 — 도그푸딩의 모범.</li>
+    <li>에러 메시지마다 탈출 경로를 안내한다(원인 + 다음 명령) — CLI UX가 세심하다.</li>
+  </ul>
+
+  <h2><span class="tag">05</span>단점</h2>
+  <ul>
+    <li><b>한국어 전용.</b> README·CLI·훅 주입 전부 한국어 — 마켓플레이스 배포 목표와 정면 충돌. 글로벌 상품화엔 i18n이 선결 과제.</li>
+    <li><b>의식(ceremony) 비용.</b> <code>wave create → activate → update → complete</code> + <code>node upsert</code> + 원장·페이즈·STALE 어휘 선학습. 짧은 작업엔 절차가 작업보다 무겁게 느껴진다.</li>
+    <li><b>발견성 부족.</b> 슬래시 커맨드가 없어 설치 후 "뭘 해야 하는지" 보이지 않는다 — 이 프로젝트의 progress.md에조차 "<code>/king-wjang-harness</code> 는 존재하지 않음" 혼동 기록이 남아 있다.</li>
+    <li><b>훅 오버헤드.</b> PostToolUse matcher가 <code>*</code> — 모든 도구 호출마다 node 프로세스 기동(실측 p95 104ms). 긴 세션에서 수백 회 누적된다. 치명적이진 않으나 공짜도 아니다.</li>
+    <li><b>브랜치 병렬 작업과 마찰.</b> <code>.harness/</code>가 git 커밋 대상이라 브랜치 전환 시 저널·웨이브가 함께 되감긴다. 잔존 증적 가드로 일부 방어했지만 <code>events.jsonl</code> 병합 충돌 시나리오는 미해결·미문서화.</li>
+    <li><b>솔로 가정.</b> 활성 웨이브 1개, 동시 세션·팀 협업 시나리오 없음. (타깃이 솔로 개발자라면 결함이 아니라 스코프.)</li>
+    <li>배포 캐시 67MB — dist 자체완결인데 devDeps node_modules가 동봉된다. 다이어트 여지.</li>
+  </ul>
+
+  <h2><span class="tag">06</span>가성비 <span class="chip good">4.0</span></h2>
+  <p>비용: 훅 지연 100ms대 × 이벤트, SessionStart 주입 토큰 수백, 세션당 정산 명령 몇 건, 학습 1~2시간. 효익: <b>핸드오프 유실 1회 = 재탐색 수만~수십만 토큰 + 재작업 리스크.</b> 웨이브 하나 정산하는 비용이 세션 하나 잃는 비용보다 두 자릿수 싸다.</p>
+  <p>손익분기는 <b>"세션 3개 이상 걸리는 프로젝트"</b> 근처다. 그 아래(일회성 스크립트·단일 세션 작업)에서는 순수 오버헤드지만, 비간섭 불변식 덕에 init 안 하면 비용이 정확히 0이라 — <b>하방이 막힌 투자</b>다. 이 비대칭이 가성비 평가의 핵심.</p>
+
+  <h2><span class="tag">07</span>사용성 <span class="chip warn">3.0</span></h2>
+  <p><code>harness init</code> 한 번이면 훅이 전자동이고, 이후 세션 주입·차단·정산 요구가 알아서 돈다 — <b>일단 궤도에 오르면 마찰이 낮다.</b> 문제는 궤도에 오르기까지: 개념 어휘가 6개(페이즈·트랙·웨이브·원장·노드·STALE), 문서는 README와 설계 스펙뿐, 온보딩 튜토리얼·<code>/harness</code> 스킬·상태 HUD가 없다. "설치 → 침묵 → ???"의 골짜기를 메워줄 첫 10분 경험이 상품화의 최우선 과제.</p>
+
+  <h2><span class="tag">08</span>상품성 <span class="chip warn">현재 2.5 → 전망 4.0</span></h2>
+  <p>시장은 혼잡하다(superpowers·oh-my-claudecode·gstack 등). 그러나 기존 하네스 대부분이 <b>프롬프트 지침 기반의 "소프트 규율"</b>인 반면, 이 플러그인의 <b>하드 강제 + 이벤트 소싱 무결성 + 인젝션 방어</b> 조합은 실질 차별점이다. 포지셔닝 한 줄이 이미 나와 있다:</p>
+  <p class="quote">"AI가 설계 승인 전에 코드를 못 쓰게 <b>물리적으로</b> 막습니다 — 지침이 아니라 훅으로."</p>
+  <p>다만 현재 v0은 그 약속의 절반(게이트 미구현·한국어 전용·코어만 존재)이다. 상품이 되려면: ① 페이즈 게이트 구현으로 자기해제 구멍 봉인, ② 영문화, ③ 온보딩 스킬/커맨드, ④ 13페이즈 중 최소 설계 트랙의 산출물 스킬. 타깃은 명확하다 — <b>에이전트로 며칠~몇 주짜리 프로젝트를 굴리다 세션 단절·설계 폭주에 데인 솔로 개발자.</b> 좁지만 아픔이 깊은 시장이라, 넓게 팔기보다 깊게 파는 쪽이 맞다.</p>
+
+  <h2><span class="tag">09</span>바이브코더 반응 예상</h2>
+  <div class="personas">
+    <div class="persona">
+      <div class="who">순수 바이브코더 — "일단 되게 해줘" <span class="chip crit">이탈 위험 높음</span></div>
+      <p>첫 <b>deny</b>에서 갈등. "설계 트랙에서는 소스 코드를 쓸 수 없다"는 바이브코딩의 안티테제다. 상당수가 "왜 내 AI를 막아?"라며 uninstall — 이 플러그인은 애초에 이들을 위한 물건이 아니다.</p>
+    </div>
+    <div class="persona">
+      <div class="who">데인 경험자 — 에이전트 폭주로 프로젝트 망쳐본 사람 <span class="chip good">핵심 팬층</span></div>
+      <p>"Claude가 설계 무시하고 3시간 폭주한 뒤 되돌린 적 있다"는 사람에게 하드 차단은 정확히 원하던 것. Stop 가드의 정산 강제도 "다음 세션이 이어받는다"는 실익으로 받아들인다. 입소문의 진원지.</p>
+    </div>
+    <div class="persona">
+      <div class="who">프로세스 지향 개발자 / PM 성향 <span class="chip good">열광</span></div>
+      <p>설계 원장·추적성·UX 증적 게이트·이벤트 저널에 반응. "드디어 에이전트 작업에 감사(audit) 가능한 궤적이 남는다." 코드 품질을 열어보고 신뢰를 굳히는 층.</p>
+    </div>
+    <div class="persona">
+      <div class="who">플러그인 수집가 <span class="chip warn">조용한 미온</span></div>
+      <p>설치 후 <code>harness init</code>을 몰라 "아무 일도 안 일어나는데?"로 끝날 확률이 높다 — 비간섭 불변식의 역설. 첫 실행 안내가 없으면 별점도 후기도 없이 잊힌다.</p>
+    </div>
+  </div>
+  <p>예상되는 밈 스펙트럼: <span class="soft">"AI한테 잔소리하는 시어머니 플러그인"</span> ↔ <span class="soft">"드디어 Claude가 말을 듣게 됐다"</span>. 논쟁적 반응 자체가 마케팅 자산이 될 수 있는 유형이다.</p>
+
+  <h2><span class="tag">10</span>감정 근거</h2>
+  <ul>
+    <li>소스 전량 열람: <code>hook.ts</code>(443줄 판정기)·<code>cli.ts</code>·<code>wave.ts</code>·<code>events.ts</code>·<code>config.ts</code> 등 코어 11모듈.</li>
+    <li>테스트 재실행 실측: <b>198 passed / 0 failed</b> (vitest, 1.74s, 본 감정 세션에서 직접 구동).</li>
+    <li>동봉 readiness 감사(E2E 23건·게이트 G1~G9 실측), 설계 스펙, hooks.json 배선, 이 프로젝트(<code>NFD/.harness/</code>)에서의 실사용 궤적(wave-001~003) 검토.</li>
+    <li>이해충돌 고지: 감정 대상은 의뢰인 본인이 제작한 플러그인이다 — 평가는 코드·실측·실사용 기록에만 근거했다.</li>
+  </ul>
+
+  <div class="foot">king-wjang-harness v0.0.1 · appraised 2026-08-21 · 198/198 tests passed (re-measured) · claude fable 5</div>
+</div>

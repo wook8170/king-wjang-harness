@@ -87,8 +87,8 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_gate_submit',
       description:
-        '페이즈 게이트에 산출물을 제출한다(심사 요청). 산출물 해시를 고정하고 리뷰 패킷을 '
-        + '.harness/packets/ 에 남긴다. 승인은 별도이며 사람만 할 수 있다.',
+        'Submit artifacts to a phase gate for review. Pins the artifact hash and writes a review '
+        + 'packet under .harness/packets/. Approval is separate and only a human can do it.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -106,9 +106,9 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_gate_approve',
       description:
-        '[사용 불가] 게이트 승인은 MCP 로 할 수 없다. 승인은 터미널에서 '
-        + '`harness gate approve <P>` 로만 가능하며, 실행마다 권한 다이얼로그가 떠서 '
-        + '최종 클릭은 항상 사람이 한다(스펙 §4-3). 이 도구는 그 경로를 안내만 한다.',
+        '[UNAVAILABLE] Gate approval cannot be done over MCP. Approval only happens in the terminal '
+        + 'via `harness gate approve <P>`, which raises a permission dialog on every run so the final '
+        + 'click is always a human (spec §4-3). This tool only points you to that path.',
       inputSchema: {
         type: 'object',
         properties: { phase: phaseProp },
@@ -122,8 +122,8 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_wave_create',
       description:
-        '웨이브 지시서를 만든다(pending). design_refs 는 설계 원장에 이미 등록된 노드여야 한다 — '
-        + '유령 참조는 거부된다.',
+        'Create a wave instruction sheet (pending). design_refs must already exist in the design '
+        + 'ledger — ghost references are rejected.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -184,8 +184,8 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_node_bump',
       description:
-        '설계 노드를 개정한다(version++ · stale). 이 노드를 참조하는 웨이브를 완료분까지 '
-        + 'STALE 로 전파해 교차 검증 큐에 올린다.',
+        'Revise a design node (version++, stale) and propagate STALE to every wave that cites it, '
+        + 'including completed ones, so they land in the cross-check queue.',
       inputSchema: {
         type: 'object',
         properties: { id: { type: 'string', description: '개정할 노드 ID' } },
@@ -195,8 +195,8 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_trace',
       description:
-        '설계→웨이브→코드 추적 조회(§3-2). 노드와, 그 노드를 design_refs 로 참조하는 웨이브들, '
-        + '그 노드를 linkedNodes 로 링크한 등록 문서들을 조인해 돌려준다.',
+        'Design→wave→code trace (§3-2). Joins the node with the waves that cite it in design_refs '
+        + 'and the registered documents that link it via linkedNodes.',
       inputSchema: {
         type: 'object',
         properties: { node_id: { type: 'string', description: '추적할 설계 원장 노드 ID' } },
@@ -216,7 +216,8 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_ship_verdict',
       description:
-        'P12 최종 go/no-go 판정. measured 근거 없이는 통과하지 않는다. NO-GO 면 사유 목록을 함께 돌려준다.',
+        'Final P12 go/no-go verdict. Never passes without measured evidence. On NO-GO it returns the '
+        + 'list of reasons.',
       inputSchema: NO_ARGS,
     },
     {
@@ -261,19 +262,19 @@ const json = (v: unknown): McpToolResult => ok(JSON.stringify(v, null, 2));
 const NEEDS_INIT_EXEMPT = new Set(['harness_doctor', 'harness_gate_approve']);
 
 const INIT_GUIDANCE =
-  '.harness/ 가 없다 — 이 프로젝트는 아직 하네스로 관리되지 않는다. '
-  + '터미널에서 `harness init` 을 먼저 실행하라.';
+  'No .harness/ here — this project is not managed by the harness yet. '
+  + 'Run `harness init` in the terminal first.';
 
 /** §4-3 안전 속성. 어떤 인자·어떤 상태에서도 승인은 일어나지 않는다. */
 function refuseApprove(o: Record<string, unknown>): McpToolResult {
   const phase = str(o, 'phase');
   const target = isPhase(phase) ? phase : '<P0..P12>';
   return fail(
-    `게이트 승인은 MCP 로 할 수 없다 — 터미널에서 \`harness gate approve ${target}\` 를 실행하라.\n`
-    + '이 명령은 의도적으로 permission allowlist 에서 제외되어 있어 실행할 때마다 권한 '
-    + '다이얼로그가 뜨고, 게이트를 여는 최종 클릭은 항상 사람이 한다(스펙 §4-3). '
-    + 'MCP 도구로 승인을 대행하면 그 장치를 우회하게 되므로 이 경로는 승인하지 않는다.\n'
-    + '제출까지는 `harness_gate_submit` 으로 할 수 있다 — 리뷰 패킷을 만들어 사람에게 넘겨라.',
+    `Gate approval cannot be done over MCP — run \`harness gate approve ${target}\` in the terminal.\n`
+    + 'That command is deliberately excluded from the permission allowlist, so a permission dialog '
+    + 'appears on every run and the final click that opens a gate is always a human (spec §4-3). Approving on '
+    + "your behalf through an MCP tool would bypass that, so this path refuses.\n"
+    + 'You can still submit: use `harness_gate_submit` to build a review packet and hand it to a human.',
   );
 }
 
@@ -290,7 +291,7 @@ export function callTool(root: string, name: string, args: unknown): McpToolResu
   const known = toolDefinitions().some(d => d.name === name);
   if (!known) {
     return fail(
-      `알 수 없는 도구: ${name} — 사용 가능한 도구: `
+      `Unknown tool: ${name} — available tools: `
       + toolDefinitions().map(d => d.name).join(', '),
     );
   }
@@ -316,11 +317,11 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
     case 'harness_gate_submit': {
       const phase = str(o, 'phase');
       if (!isPhase(phase)) {
-        return fail(`유효하지 않은 페이즈: ${String(o.phase)} (${PHASES.join(', ')} 중 하나)`);
+        return fail(`Invalid phase: ${String(o.phase)} (one of ${PHASES.join(', ')})`);
       }
       const evidence = (str(o, 'evidence') ?? 'claimed') as EvidenceGrade;
       if (!isEvidenceGrade(evidence)) {
-        return fail(`유효하지 않은 근거 등급: ${evidence} (${EVIDENCE_GRADES.join(', ')} 중 하나)`);
+        return fail(`Invalid evidence grade: ${evidence} (one of ${EVIDENCE_GRADES.join(', ')})`);
       }
       const r = submitGate(root, phase, { paths: strArr(o, 'paths'), evidence });
       // 제출은 곧 심사 요청이다 — 리뷰 패킷을 함께 남긴다(§4-3, cli.ts 와 같은 계약).
@@ -332,14 +333,14 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
         fs.writeFileSync(packet, buildReviewPacket(root, phase));
       } catch (e) {
         return ok(
-          `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}\n`
-          + `경고: 리뷰 패킷 생성 실패(제출은 유효) — ${String(e)}`,
+          `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}\n`
+          + `Warning: review packet generation failed (the submission still stands) — ${String(e)}`,
         );
       }
       return ok(
-        `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}\n`
-        + `리뷰 패킷: ${path.relative(root, packet)}\n`
-        + `승인은 터미널에서 \`harness gate approve ${phase}\` — 최종 클릭은 사람이 한다.`,
+        `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}\n`
+        + `Review packet: ${path.relative(root, packet)}\n`
+        + `Approve in the terminal with \`harness gate approve ${phase}\` — the final click is a human.`,
       );
     }
 
@@ -349,8 +350,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       const missing = refs.filter(id => !getNode(root, id));
       if (missing.length > 0) {
         return fail(
-          `원장에 없는 설계 참조: ${missing.join(', ')} — `
-          + '`harness_node_upsert` 로 먼저 등록하라',
+          `Design refs not in the ledger: ${missing.join(', ')} — `
+          + 'register them first with `harness_node_upsert`',
         );
       }
       const meta = createWave(root, {
@@ -364,21 +365,21 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
 
     case 'harness_wave_activate': {
       const id = str(o, 'id');
-      if (!id) return fail('웨이브 ID 가 필요하다 — `harness_wave_list` 로 목록을 확인하라');
+      if (!id) return fail('A wave id is required — list them with `harness_wave_list`');
       activateWave(root, id);
-      return ok(`활성: ${id}`);
+      return ok(`Active: ${id}`);
     }
 
     case 'harness_wave_update': {
       const text = (str(o, 'text') ?? '').trim();
-      if (!text) return fail('턴 로그 내용이 비어 있다 — 한 일과 다음 할 일을 적어라');
+      if (!text) return fail('The turn log entry is empty — write what you did and what is next');
       logTurn(root, text);
-      return ok('턴 로그 기록');
+      return ok('Turn log recorded');
     }
 
     case 'harness_wave_complete':
       completeWave(root);
-      return ok('웨이브 완료');
+      return ok('Wave completed');
 
     case 'harness_wave_list':
       return json(listWaves(root));
@@ -386,10 +387,10 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
     case 'harness_node_upsert': {
       const id = str(o, 'id');
       const title = str(o, 'title');
-      if (!id || !title) return fail('id 와 title 이 모두 필요하다');
+      if (!id || !title) return fail('Both id and title are required');
       const status = str(o, 'status');
       if (status !== undefined && !LEDGER_STATUSES.includes(status as LedgerNode['status'])) {
-        return fail(`유효하지 않은 status: ${status} (${LEDGER_STATUSES.join(', ')} 중 하나)`);
+        return fail(`Invalid status: ${status} (one of ${LEDGER_STATUSES.join(', ')})`);
       }
       const prev = getNode(root, id);
       upsertNode(root, {
@@ -405,7 +406,7 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
 
     case 'harness_node_bump': {
       const id = str(o, 'id');
-      if (!id) return fail('개정할 노드 ID 가 필요하다');
+      if (!id) return fail('A node id to revise is required');
       const { node, affectedWaves, unverifiable } = bumpNode(root, id);
       // 저널 먼저 — 마킹 루프 도중에 죽어도 bump 사실은 남아야 한다(events.ts 순서 계약).
       appendEvent(root, 'node-bumped', {
@@ -420,20 +421,20 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       // 판정 못 한 웨이브와 마킹 못 한 웨이브는 둘 다 STALE 전파가 뚫린 것이다 — 성공으로 끝내지 않는다.
       const incomplete = [...unverifiable, ...failed];
       if (incomplete.length > 0) {
-        return fail(`${head}\nSTALE 전파 불완전 — 검증 불가/실패 웨이브: ${incomplete.join(', ')} — 수동 확인 필요`);
+        return fail(`${head}\nIncomplete STALE propagation — unverifiable/failed waves: ${incomplete.join(', ')} — check manually`);
       }
       return ok(head);
     }
 
     case 'harness_trace': {
       const id = str(o, 'node_id');
-      if (!id) return fail('추적할 노드 ID 가 필요하다 (node_id)');
+      if (!id) return fail('A node id to trace is required (node_id)');
       // 조인 규칙은 report.traceNode 한 벌이다 — CLI `harness trace` 와 같은 결과를 보장한다.
       const t = traceNode(root, id);
       if (!t) {
         return fail(
-          `노드 ${id} 가 설계 원장에 없다 — \`harness_node_upsert\` 로 먼저 등록하거나 `
-          + '`harness_report_rtm` 으로 등록된 노드를 확인하라',
+          `Node ${id} is not in the design ledger — register it with \`harness_node_upsert\`, `
+          + 'or list known nodes with `harness_report_rtm`',
         );
       }
       return json(t);
@@ -447,7 +448,7 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
 
     case 'harness_ship_verdict': {
       const v = shipVerdict(root);
-      const body = (v.ok ? '출하 가능(GO)' : '출하 불가(NO-GO)')
+      const body = (v.ok ? 'GO' : 'NO-GO')
         + (v.reasons.length > 0 ? `\n${v.reasons.map(r => `  - ${r}`).join('\n')}` : '');
       // NO-GO 는 도구 실패가 아니라 판정 결과다 — 다만 모델이 "통과했다"로 읽지 않도록
       // ok:false 로 돌려 CLI 의 exit code 계약(verdict NO-GO = 1)과 맞춘다.
@@ -461,6 +462,6 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
 
     /* c8 ignore next 2 */
     default:
-      return fail(`알 수 없는 도구: ${name}`);
+      return fail(`Unknown tool: ${name}`);
   }
 }

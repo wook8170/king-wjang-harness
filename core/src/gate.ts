@@ -21,6 +21,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
+import { tr } from './tr';
 import { packetsDir } from './paths';
 import { sanitizeUntrusted } from './untrusted';
 import { readState, writeState } from './state';
@@ -50,9 +51,14 @@ function assertInsideRoot(root: string, paths: string[]): void {
   });
   if (outside.length > 0) {
     throw new Error(
-      `심사 대상은 프로젝트 안에 있어야 한다 — 루트 밖 경로: ${outside.join(', ')}. `
-      + '게이트는 «심사한 것과 승인할 것이 같다»를 보장하는 장치다. 리뷰어가 저장소에서 볼 수 '
-      + '없는 파일에는 승인 도장을 찍을 수 없다.',
+      tr(root, {
+        en: `Artifacts under review must live inside the project — outside paths: ${outside.join(', ')}. `
+          + 'A gate exists to guarantee «what was reviewed is what gets approved». You cannot stamp '
+          + 'approval on a file the reviewer cannot see in the repository.',
+        ko: `심사 대상은 프로젝트 안에 있어야 한다 — 루트 밖 경로: ${outside.join(', ')}. `
+          + '게이트는 «심사한 것과 승인할 것이 같다»를 보장하는 장치다. 리뷰어가 저장소에서 볼 수 '
+          + '없는 파일에는 승인 도장을 찍을 수 없다.',
+      }),
     );
   }
 }
@@ -70,7 +76,10 @@ export function computeArtifactHash(root: string, relPaths: string[]): string {
       content = fs.readFileSync(path.resolve(root, rel));
     } catch {
       throw new Error(
-        `심사 대상 산출물을 읽을 수 없다: ${rel} — 경로를 확인하거나 문서를 먼저 만들어라`,
+        tr(root, {
+          en: `Cannot read the artifact under review: ${rel} — check the path, or write the document first`,
+          ko: `심사 대상 산출물을 읽을 수 없다: ${rel} — 경로를 확인하거나 문서를 먼저 만들어라`,
+        }),
       );
     }
     // 경로·길이·내용 사이에 구분자를 넣는다. 경계 없이 이으면 서로 다른 파일 조합이 같은
@@ -101,15 +110,22 @@ export function submitGate(
   const paths = normalizePaths(opts.paths);
   if (paths.length === 0) {
     throw new Error(
-      `심사 대상 산출물이 없다 — \`harness gate submit ${phase} --paths <경로,...>\` 로 `
-      + '승인받을 문서를 지정하라. 게이트는 산출물 승인이지 작업 완료 선언이 아니다',
+      tr(root, {
+        en: `No artifacts to review — name the documents with \`harness gate submit ${phase} --paths <a,b>\`. `
+          + 'A gate approves artifacts; it is not a declaration that work is done',
+        ko: `심사 대상 산출물이 없다 — \`harness gate submit ${phase} --paths <경로,...>\` 로 `
+          + '승인받을 문서를 지정하라. 게이트는 산출물 승인이지 작업 완료 선언이 아니다',
+      }),
     );
   }
   // CLI 문자열이 그대로 들어오는 자리다 — 열거형 밖 값이 레코드에 박히면 출하 게이트
   // 판정(measured 비교)이 조용히 무력화된다.
   if (!isEvidenceGrade(opts.evidence)) {
     throw new Error(
-      `유효하지 않은 근거 등급: ${String(opts.evidence)} (claimed, code, measured 중 하나)`,
+      tr(root, {
+        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
+        ko: `유효하지 않은 근거 등급: ${String(opts.evidence)} (claimed, code, measured 중 하나)`,
+      }),
     );
   }
   assertInsideRoot(root, paths);
@@ -137,20 +153,31 @@ export function approveGate(root: string, phase: Phase): GateRecord {
   const current = state.gates[phase];
   if (!current || current.status !== 'submitted') {
     throw new Error(
-      `게이트 ${phase} 는 승인할 수 있는 상태가 아니다 (현재: ${current?.status ?? 'pending'}) — `
-      + `\`harness gate submit ${phase}\` 로 산출물을 먼저 제출하라`,
+      tr(root, {
+        en: `Gate ${phase} is not in an approvable state (currently: ${current?.status ?? 'pending'}) — `
+          + `submit artifacts first with \`harness gate submit ${phase}\``,
+        ko: `게이트 ${phase} 는 승인할 수 있는 상태가 아니다 (현재: ${current?.status ?? 'pending'}) — `
+          + `\`harness gate submit ${phase}\` 로 산출물을 먼저 제출하라`,
+      }),
     );
   }
   if (SHIP_PHASES.includes(phase) && current.evidence !== 'measured') {
     throw new Error(
-      `출하 트랙 게이트 ${phase} 는 measured 근거만 통과한다 (현재: ${current.evidence ?? '없음'}) — `
-      + '실주행·측정 증적을 붙여 재제출하라 (Iron Rule, 스펙 §3-4)',
+      tr(root, {
+        en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${current.evidence ?? 'none'}) — `
+          + 'resubmit with real-run measurements attached (Iron Rule, spec §3-4)',
+        ko: `출하 트랙 게이트 ${phase} 는 measured 근거만 통과한다 (현재: ${current.evidence ?? '없음'}) — `
+          + '실주행·측정 증적을 붙여 재제출하라 (Iron Rule, 스펙 §3-4)',
+      }),
     );
   }
   const paths = recordedPaths(root, phase);
   if (!paths) {
     throw new Error(
-      `게이트 ${phase} 의 제출 이력이 저널에 없다 — \`harness gate submit ${phase}\` 로 다시 제출하라`,
+      tr(root, {
+        en: `No submission history for gate ${phase} in the journal — submit again with \`harness gate submit ${phase}\``,
+        ko: `게이트 ${phase} 의 제출 이력이 저널에 없다 — \`harness gate submit ${phase}\` 로 다시 제출하라`,
+      }),
     );
   }
   // 제출과 승인 사이에 산출물이 바뀌었다면 심사한 것과 승인할 것이 다르다 — 여기서 막지
@@ -158,8 +185,12 @@ export function approveGate(root: string, phase: Phase): GateRecord {
   const artifactHash = computeArtifactHash(root, paths);
   if (artifactHash !== current.artifactHash) {
     throw new Error(
-      `게이트 ${phase} 의 산출물이 제출 이후 변경됐다 — 심사한 내용과 승인할 내용이 다르다. `
-      + `\`harness gate submit ${phase}\` 로 재제출한 뒤 승인하라`,
+      tr(root, {
+        en: `Artifacts for gate ${phase} changed after submission — what was reviewed is not what would `
+          + `be approved. Resubmit with \`harness gate submit ${phase}\`, then approve`,
+        ko: `게이트 ${phase} 의 산출물이 제출 이후 변경됐다 — 심사한 내용과 승인할 내용이 다르다. `
+          + `\`harness gate submit ${phase}\` 로 재제출한 뒤 승인하라`,
+      }),
     );
   }
   // OPS-20: 위 submitGate 와 같은 이유 — 이벤트의 ts 가 유일한 승인 시각이다.
@@ -188,8 +219,12 @@ export function recordGateFeedback(root: string, phase: Phase, raw: string): num
   const lines = raw.split('\n').map(l => sanitizeUntrusted(l)).filter(l => l.trim());
   if (lines.length === 0) {
     throw new Error(
-      `수집할 피드백이 비어 있다 — \`harness gate feedback ${phase} --from <파일>\` 의 파일에 `
-      + '리뷰 코멘트를 담아라. 빈 피드백은 개정 근거가 되지 못한다',
+      tr(root, {
+        en: `Nothing to collect — put the review comments in the file you pass to `
+          + `\`harness gate feedback ${phase} --from <file>\`. Empty feedback is not revision grounds`,
+        ko: `수집할 피드백이 비어 있다 — \`harness gate feedback ${phase} --from <파일>\` 의 파일에 `
+          + '리뷰 코멘트를 담아라. 빈 피드백은 개정 근거가 되지 못한다',
+      }),
     );
   }
   const ev = appendEvent(root, 'gate-feedback', { phase, count: lines.length });
@@ -275,10 +310,16 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
   return {
     ok: false,
     reason:
-      `${phase} 로 갈 수 없다 — 직전 페이즈 ${prev} 의 게이트가 승인되지 않았다 `
-      + `(현재: ${g?.status ?? 'pending'}). \`harness gate submit ${prev}\` → `
-      + `\`harness gate approve ${prev}\` 로 산출물을 승인하라. `
-      + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2)",
+      tr(root, {
+        en: `Cannot move to ${phase} — the gate for the previous phase ${prev} is not approved `
+          + `(currently: ${g?.status ?? 'pending'}). Approve the artifacts: \`harness gate submit ${prev}\` → `
+          + `\`harness gate approve ${prev}\`. `
+          + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2)",
+        ko: `${phase} 로 갈 수 없다 — 직전 페이즈 ${prev} 의 게이트가 승인되지 않았다 `
+          + `(현재: ${g?.status ?? 'pending'}). \`harness gate submit ${prev}\` → `
+          + `\`harness gate approve ${prev}\` 로 산출물을 승인하라. `
+          + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2)",
+      }),
   };
 }
 

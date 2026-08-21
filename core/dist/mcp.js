@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs15 = this.flowScalar(this.type);
+              const fs16 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs15, sep: [] });
+                map.items.push({ start, key: fs16, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs15);
+                this.stack.push(fs16);
               } else {
-                Object.assign(it, { key: fs15, sep: [] });
+                Object.assign(it, { key: fs16, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs15 = this.flowScalar(this.type);
+              const fs16 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs15, sep: [] });
+                fc.items.push({ start: [], key: fs16, sep: [] });
               else if (it.sep)
-                this.stack.push(fs15);
+                this.stack.push(fs16);
               else
-                Object.assign(it, { key: fs15, sep: [] });
+                Object.assign(it, { key: fs16, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7257,7 +7257,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse6(src, reviver, options) {
+    function parse7(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7298,7 +7298,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse6;
+    exports2.parse = parse7;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
     exports2.stringify = stringify6;
@@ -7364,11 +7364,11 @@ __export(mcp_exports, {
   toolDefinitions: () => toolDefinitions
 });
 module.exports = __toCommonJS(mcp_exports);
-var fs14 = __toESM(require("fs"));
+var fs15 = __toESM(require("fs"));
 var path14 = __toESM(require("path"));
 
 // core/src/state.ts
-var fs = __toESM(require("fs"));
+var fs2 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 
 // core/src/paths.ts
@@ -7376,6 +7376,7 @@ var path = __toESM(require("path"));
 var harnessDir = (root) => path.join(root, ".harness");
 var statePath = (root) => path.join(harnessDir(root), "state.json");
 var eventsPath = (root) => path.join(harnessDir(root), "events.jsonl");
+var configPath = (root) => path.join(harnessDir(root), "config.yaml");
 var designDir = (root) => path.join(harnessDir(root), "design");
 var ledgerPath = (root) => path.join(designDir(root), "ledger.yaml");
 var registryPath = (root) => path.join(designDir(root), "registry.yaml");
@@ -7384,6 +7385,71 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+
+// core/src/config.ts
+var fs = __toESM(require("fs"));
+var YAML = __toESM(require_dist());
+
+// core/src/i18n.ts
+var LANGS = ["en", "ko"];
+var isLang = (v) => LANGS.includes(v);
+function pick(m, lang) {
+  return lang === "ko" && m.ko ? m.ko : m.en;
+}
+var DEFAULT_LANG = "en";
+
+// core/src/config.ts
+var DEFAULT_CONFIG = {
+  lang: DEFAULT_LANG,
+  profile: "generic",
+  remote_control: true,
+  terse: false,
+  design_allowed_prefixes: [".harness/", "docs/"],
+  design_blocked_bash: ["docker push", "kubectl apply", "vercel deploy", "netlify deploy", "fly deploy"],
+  design_system_frozen_roots: [],
+  block_raw_values: false
+};
+var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
+var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
+function loadConfig(root) {
+  const p = configPath(root);
+  let raw = {};
+  if (fs.existsSync(p)) {
+    try {
+      raw = YAML.parse(fs.readFileSync(p, "utf8")) ?? {};
+    } catch {
+      raw = {};
+    }
+  }
+  return {
+    // 환경변수가 config 를 이긴다 — 일회성 전환을 프로젝트 설정 수정 없이 하게.
+    lang: isLang(process.env.HARNESS_LANG) ? process.env.HARNESS_LANG : isLang(raw.lang) ? raw.lang : DEFAULT_CONFIG.lang,
+    profile: typeof raw.profile === "string" ? raw.profile : DEFAULT_CONFIG.profile,
+    remote_control: asBool(raw.remote_control, DEFAULT_CONFIG.remote_control),
+    terse: asBool(raw.terse, DEFAULT_CONFIG.terse),
+    design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
+    design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
+    design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
+    block_raw_values: raw.block_raw_values === true
+  };
+}
+
+// core/src/tr.ts
+var cache = /* @__PURE__ */ new Map();
+function langFor(root) {
+  const hit = cache.get(root);
+  if (hit) return hit;
+  let lang = DEFAULT_LANG;
+  try {
+    lang = loadConfig(root).lang;
+  } catch {
+  }
+  cache.set(root, lang);
+  return lang;
+}
+function tr(root, m) {
+  return pick(m, langFor(root));
+}
 
 // core/src/state.ts
 function defaultState() {
@@ -7397,21 +7463,21 @@ function defaultState() {
   };
 }
 function isInitialized(root) {
-  return fs.existsSync(statePath(root));
+  return fs2.existsSync(statePath(root));
 }
 function readState(root) {
-  return JSON.parse(fs.readFileSync(statePath(root), "utf8"));
+  return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
 }
 function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs.renameSync(tmp, target);
+  fs2.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+  fs2.renameSync(tmp, target);
 }
 
 // core/src/events.ts
-var fs2 = __toESM(require("fs"));
+var fs3 = __toESM(require("fs"));
 
 // core/src/types.ts
 var PHASES = [
@@ -7457,14 +7523,14 @@ var KNOWN_EVENT_TYPES = /* @__PURE__ */ new Set([
 ]);
 function appendEvent(root, type, data) {
   const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs2.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  fs3.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
   return ev;
 }
 function readJournal(root) {
-  if (!fs2.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events = [];
   let corruptLines = 0;
-  for (const line of fs2.readFileSync(eventsPath(root), "utf8").split("\n")) {
+  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
     if (!line.trim()) continue;
     let parsed;
     try {
@@ -7489,10 +7555,22 @@ function readJournal(root) {
 function readEvents(root) {
   return readJournal(root).events;
 }
+var REPLAY_TYPES = /* @__PURE__ */ new Set([
+  "phase-set",
+  "wave-activated",
+  "wave-completed",
+  "wave-stale",
+  "gate-submitted",
+  "gate-approved",
+  "backtrack-started",
+  "backtrack-cleared"
+]);
 function replayState(events) {
   const s = defaultState();
+  let lastAppliedTs = "";
   for (const ev of events) {
     const d = ev.data;
+    if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
       case "phase-set":
         if (isPhase(d.phase)) s.phase = d.phase;
@@ -7537,12 +7615,13 @@ function replayState(events) {
         break;
     }
   }
+  if (lastAppliedTs) s.updatedAt = lastAppliedTs;
   return s;
 }
 
 // core/src/gate.ts
 var crypto = __toESM(require("crypto"));
-var fs3 = __toESM(require("fs"));
+var fs4 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 
 // core/src/untrusted.ts
@@ -7555,7 +7634,7 @@ function normalizePaths(relPaths) {
 function assertInsideRoot(root, paths) {
   const real = (p) => {
     try {
-      return fs3.realpathSync(p);
+      return fs4.realpathSync(p);
     } catch {
       return p;
     }
@@ -7567,7 +7646,10 @@ function assertInsideRoot(root, paths) {
   });
   if (outside.length > 0) {
     throw new Error(
-      `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      tr(root, {
+        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      })
     );
   }
 }
@@ -7576,10 +7658,13 @@ function computeArtifactHash(root, relPaths) {
   for (const rel of normalizePaths(relPaths)) {
     let content;
     try {
-      content = fs3.readFileSync(path3.resolve(root, rel));
+      content = fs4.readFileSync(path3.resolve(root, rel));
     } catch {
       throw new Error(
-        `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+        tr(root, {
+          en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
+          ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+        })
       );
     }
     h.update(`${rel}\0${content.length}\0`);
@@ -7603,12 +7688,18 @@ function submitGate(root, phase, opts) {
   const paths = normalizePaths(opts.paths);
   if (paths.length === 0) {
     throw new Error(
-      `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      tr(root, {
+        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      })
     );
   }
   if (!isEvidenceGrade(opts.evidence)) {
     throw new Error(
-      `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      tr(root, {
+        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
+        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      })
     );
   }
   assertInsideRoot(root, paths);
@@ -7630,7 +7721,7 @@ function feedbackPath(root, phase) {
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs3.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs4.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -7660,30 +7751,30 @@ function verifyGate(root, phase) {
 }
 
 // core/src/wave.ts
-var fs5 = __toESM(require("fs"));
+var fs6 = __toESM(require("fs"));
 var path5 = __toESM(require("path"));
-var YAML = __toESM(require_dist());
+var YAML2 = __toESM(require_dist());
 
 // core/src/runtime.ts
-var fs4 = __toESM(require("fs"));
+var fs5 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
 var f = (root, name) => path4.join(runtimeDir(root), name);
 function noteTurnLogged(root) {
-  fs4.mkdirSync(runtimeDir(root), { recursive: true });
-  fs4.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs5.mkdirSync(runtimeDir(root), { recursive: true });
+  fs5.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 
 // core/src/wave.ts
-function parseWave(txt) {
+function parseWave(txt, lang = DEFAULT_LANG) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
-  if (!m) throw new Error("\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4");
+  if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML.parse(m[1]);
+    raw = YAML2.parse(m[1]);
   } catch {
     raw = null;
   }
-  if (typeof raw !== "object" || raw === null) throw new Error("\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4");
+  if (typeof raw !== "object" || raw === null) throw new Error(pick({ en: "Malformed wave file: frontmatter could not be parsed", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4" }, lang));
   const r = raw;
   const asArr = (v) => Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : [];
   const statuses = ["pending", "active", "done", "stale"];
@@ -7698,19 +7789,19 @@ function parseWave(txt) {
 }
 function serializeWave(meta, body) {
   return `---
-${YAML.stringify(meta).trimEnd()}
+${YAML2.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs5.readFileSync(wavePath(root, id), "utf8"));
+  return parseWave(fs6.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs5.existsSync(wavesDir(root))) return [];
+  if (!fs6.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs5.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     try {
-      out.push(parseWave(fs5.readFileSync(path5.join(wavesDir(root), f2), "utf8")).meta);
+      out.push(parseWave(fs6.readFileSync(path5.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -7720,22 +7811,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs5.writeFileSync(tmp, serializeWave(meta, body));
-  fs5.renameSync(tmp, target);
+  fs6.writeFileSync(tmp, serializeWave(meta, body));
+  fs6.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs5.existsSync(dir)) return [];
-  return fs5.readdirSync(dir).filter((f2) => {
+  if (!fs6.existsSync(dir)) return [];
+  return fs6.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs5.statSync(path5.join(dir, f2));
+    const st = fs6.statSync(path5.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs5.existsSync(wavesDir(root))) {
-    for (const f2 of fs5.readdirSync(wavesDir(root))) {
+  if (fs6.existsSync(wavesDir(root))) {
+    for (const f2 of fs6.readdirSync(wavesDir(root))) {
       const m = /^wave-(\d+)\.md$/.exec(f2);
       if (m) nums.push(parseInt(m[1], 10));
     }
@@ -7751,8 +7842,8 @@ function nextWaveId(root) {
 }
 function createWave(root, opts) {
   const id = nextWaveId(root);
-  if (fs5.existsSync(wavePath(root, id))) {
-    throw new Error(`${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4`);
+  if (fs6.existsSync(wavePath(root, id))) {
+    throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
   if (inherited.length > 0) {
@@ -7778,7 +7869,7 @@ function createWave(root, opts) {
 function activateWave(root, id) {
   const state = readState(root);
   if (state.activeWave && state.activeWave !== id) {
-    throw new Error(`\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.`);
+    throw new Error(tr(root, { en: `A wave is already active: ${state.activeWave}. Complete it first (\`harness wave complete\`).`, ko: `\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.` }));
   }
   let meta, body;
   try {
@@ -7789,7 +7880,7 @@ function activateWave(root, id) {
       `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
     );
   }
-  if (meta.status === "done") throw new Error(`${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4`);
+  if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
   meta.status = "active";
   writeWave(root, id, meta, body);
   appendEvent(root, "wave-activated", { id });
@@ -7807,7 +7898,7 @@ function readActiveWave(root, id) {
 }
 function logTurn(root, text) {
   const state = readState(root);
-  if (!state.activeWave) throw new Error("\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${text}`;
@@ -7817,7 +7908,7 @@ function logTurn(root, text) {
 }
 function completeWave(root) {
   const state = readState(root);
-  if (!state.activeWave) throw new Error("\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some((r) => r.startsWith("UX-"))) {
@@ -7844,20 +7935,20 @@ function markStale(root, id) {
 }
 
 // core/src/ledger.ts
-var fs6 = __toESM(require("fs"));
+var fs7 = __toESM(require("fs"));
 var path6 = __toESM(require("path"));
-var YAML2 = __toESM(require_dist());
+var YAML3 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs6.existsSync(ledgerPath(root))) return [];
-  const doc = YAML2.parse(fs6.readFileSync(ledgerPath(root), "utf8"));
+  if (!fs7.existsSync(ledgerPath(root))) return [];
+  const doc = YAML3.parse(fs7.readFileSync(ledgerPath(root), "utf8"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs6.writeFileSync(tmp, YAML2.stringify({ nodes }));
-  fs6.renameSync(tmp, target);
+  fs7.writeFileSync(tmp, YAML3.stringify({ nodes }));
+  fs7.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -7872,18 +7963,18 @@ function upsertNode(root, node) {
 function bumpNode(root, id) {
   const nodes = loadLedger(root);
   const node = nodes.find((n) => n.id === id);
-  if (!node) throw new Error(`\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4`);
+  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
   node.version += 1;
   node.status = "stale";
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs6.existsSync(wavesDir(root))) {
-    for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  if (fs7.existsSync(wavesDir(root))) {
+    for (const f2 of fs7.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs6.readFileSync(path6.join(wavesDir(root), f2), "utf8");
+        txt = fs7.readFileSync(path6.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -7904,14 +7995,14 @@ function bumpNode(root, id) {
 }
 
 // core/src/report.ts
-var fs8 = __toESM(require("fs"));
+var fs9 = __toESM(require("fs"));
 var path8 = __toESM(require("path"));
 
 // core/src/registry.ts
-var fs7 = __toESM(require("fs"));
+var fs8 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
 var crypto2 = __toESM(require("crypto"));
-var YAML3 = __toESM(require_dist());
+var YAML4 = __toESM(require_dist());
 function toDocNode(v) {
   if (typeof v !== "object" || v === null) return null;
   const o = v;
@@ -7932,10 +8023,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs7.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs8.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML3.parse(fs7.readFileSync(registryPath(root), "utf8"));
+    doc = YAML4.parse(fs8.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -7960,10 +8051,13 @@ function computeDocHash(root, doc) {
   const abs = path7.join(root, doc.path);
   let buf;
   try {
-    buf = fs7.readFileSync(abs);
+    buf = fs8.readFileSync(abs);
   } catch {
     throw new Error(
-      `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      tr(root, {
+        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
+        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      })
     );
   }
   return crypto2.createHash("sha256").update(buf).digest("hex");
@@ -8017,10 +8111,10 @@ function currentDocs(root) {
 function waveEntries(root) {
   const entries = [];
   const unreadable = [];
-  if (!fs8.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs9.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs8.readdirSync(wavesDir(root));
+    files = fs9.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
   }
@@ -8036,14 +8130,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs8.readdirSync(dir);
+    files = fs9.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs8.statSync(path8.join(dir, f2));
+      const st = fs9.statSync(path8.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -8295,22 +8389,22 @@ function buildHub(root) {
 }
 
 // core/src/ship.ts
-var fs12 = __toESM(require("fs"));
+var fs13 = __toESM(require("fs"));
 var path12 = __toESM(require("path"));
-var YAML5 = __toESM(require_dist());
+var YAML6 = __toESM(require_dist());
 
 // core/src/evidence.ts
-var fs11 = __toESM(require("fs"));
+var fs12 = __toESM(require("fs"));
 var path11 = __toESM(require("path"));
 
 // core/src/design.ts
-var fs10 = __toESM(require("fs"));
+var fs11 = __toESM(require("fs"));
 var path10 = __toESM(require("path"));
 var crypto3 = __toESM(require("crypto"));
-var YAML4 = __toESM(require_dist());
+var YAML5 = __toESM(require_dist());
 
 // core/src/tokens.ts
-var fs9 = __toESM(require("fs"));
+var fs10 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var TOKENS_REL = "design/tokens/design-tokens.json";
 var BANNER = "\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/" + TOKENS_REL;
@@ -8334,7 +8428,8 @@ var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 function requireWaveId(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
     throw new Error(
-      `\uC6E8\uC774\uBE0C id \uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4: ${String(id)} \u2014 \`wave-001\` \uCC98\uB7FC \uC601\uC22B\uC790\xB7. _ - \uB9CC \uC4F0\uB294 \uC2DD\uBCC4\uC790\uC5EC\uC57C \uD55C\uB2E4(\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uACBD\uB85C\uAC00 \uB418\uBBC0\uB85C \uACBD\uB85C \uBB38\uC790 \uBD88\uAC00).`
+      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
+      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
     );
   }
   return id;
@@ -8342,9 +8437,9 @@ function requireWaveId(id) {
 function pngDimensions(pngPath) {
   let fd = null;
   try {
-    fd = fs11.openSync(pngPath, "r");
+    fd = fs12.openSync(pngPath, "r");
     const head = Buffer.alloc(24);
-    if (fs11.readSync(fd, head, 0, 24, 0) < 24) return null;
+    if (fs12.readSync(fd, head, 0, 24, 0) < 24) return null;
     if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
     if (head.readUInt32BE(8) !== 13) return null;
     if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
@@ -8357,7 +8452,7 @@ function pngDimensions(pngPath) {
   } finally {
     if (fd !== null) {
       try {
-        fs11.closeSync(fd);
+        fs12.closeSync(fd);
       } catch {
       }
     }
@@ -8370,7 +8465,7 @@ function validateEvidence(root, waveId) {
   const problems = [];
   let names;
   try {
-    names = fs11.readdirSync(dir).sort();
+    names = fs12.readdirSync(dir).sort();
   } catch {
     return {
       ok: false,
@@ -8388,7 +8483,7 @@ function validateEvidence(root, waveId) {
     const abs = path11.join(dir, name);
     let st;
     try {
-      st = fs11.statSync(abs);
+      st = fs12.statSync(abs);
     } catch {
       problems.push(`${name}: \uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4`);
       continue;
@@ -8443,26 +8538,27 @@ var shipDir = (root) => path12.join(harnessDir(root), "ship");
 var defectsPath = (root) => path12.join(shipDir(root), "defects.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
-function readRecords(file, key, to) {
-  if (!fs12.existsSync(file)) return [];
+function readRecords(root, file, key, to) {
+  if (!fs13.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML5.parse(fs12.readFileSync(file, "utf8"));
+    doc = YAML6.parse(fs13.readFileSync(file, "utf8"));
   } catch (e) {
-    throw new Error(`${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+    throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
   if (doc === null || doc === void 0) return [];
   const list = doc[key];
   if (list === void 0 || list === null) return [];
   if (!Array.isArray(list)) {
-    throw new Error(`${file} \uC758 ${key} \uAC00 \uBAA9\uB85D\uC774 \uC544\uB2C8\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC190\uC0C1\uB410\uB2E4. git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`);
+    throw new Error(tr(root, { en: `${key} in ${file} is not a list \u2014 the file is damaged. Restore it from git history`, ko: `${file} \uC758 ${key} \uAC00 \uBAA9\uB85D\uC774 \uC544\uB2C8\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC190\uC0C1\uB410\uB2E4. git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
   return list.map((entry, i) => {
     const rec = to(entry);
     if (!rec) {
-      throw new Error(
-        `${file} \uC758 ${key}[${i}] \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD615\uD0DC \uBD88\uB7C9 \uD56D\uBAA9\uC744 \uC870\uC6A9\uD788 \uBC84\uB9AC\uBA74 \uCC28\uB2E8 \uACB0\uD568 \uD55C \uC904\uC774 \uC0AC\uB77C\uC9C4 \uCC44 \uCD9C\uD558 \uD310\uC815\uC774 \uD1B5\uACFC\uD55C\uB2E4. \uD56D\uBAA9\uC744 \uACE0\uCE58\uAC70\uB098 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`
-      );
+      throw new Error(tr(root, {
+        en: `Cannot parse ${key}[${i}] in ${file} \u2014 silently dropping a malformed entry would let the ship verdict pass with a blocker line missing. Fix the entry, or restore from git history`,
+        ko: `${file} \uC758 ${key}[${i}] \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD615\uD0DC \uBD88\uB7C9 \uD56D\uBAA9\uC744 \uC870\uC6A9\uD788 \uBC84\uB9AC\uBA74 \uCC28\uB2E8 \uACB0\uD568 \uD55C \uC904\uC774 \uC0AC\uB77C\uC9C4 \uCC44 \uCD9C\uD558 \uD310\uC815\uC774 \uD1B5\uACFC\uD55C\uB2E4. \uD56D\uBAA9\uC744 \uACE0\uCE58\uAC70\uB098 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C`
+      }));
     }
     return rec;
   });
@@ -8486,7 +8582,7 @@ function toDefect(v) {
   return rec;
 }
 function listDefects(root) {
-  return readRecords(defectsPath(root), "defects", toDefect);
+  return readRecords(root, defectsPath(root), "defects", toDefect);
 }
 function attempt2(fn) {
   try {
@@ -8498,16 +8594,16 @@ function attempt2(fn) {
 function waveEntries2(root) {
   const entries = [];
   const unreadable = [];
-  if (!fs12.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs13.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs12.readdirSync(wavesDir(root));
+    files = fs13.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
   }
   for (const f2 of files.filter((n) => /^wave-\d+\.md$/.test(n)).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs12.readFileSync(path12.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs13.readFileSync(path12.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else unreadable.push(`\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error} \u2014 \uC99D\uC801 \uD310\uC815 \uBD88\uAC00\uB294 \uD1B5\uACFC\uAC00 \uC544\uB2C8\uB2E4`);
   }
@@ -8567,7 +8663,7 @@ function shipVerdict(root) {
 }
 
 // core/src/doctor.ts
-var fs13 = __toESM(require("fs"));
+var fs14 = __toESM(require("fs"));
 var path13 = __toESM(require("path"));
 var COMPARED_FIELDS = ["phase", "activeWave", "gates", "backtrack"];
 var TMP_RE = /\.tmp-(\d+)$/;
@@ -8585,7 +8681,7 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs13.readdirSync(dir);
+      names = fs14.readdirSync(dir);
     } catch {
       continue;
     }
@@ -8594,8 +8690,8 @@ function sweepOrphanTmp(root) {
       if (!m || pidAlive(Number(m[1]))) continue;
       const p = path13.join(dir, name);
       try {
-        if (!fs13.statSync(p).isFile()) continue;
-        fs13.rmSync(p);
+        if (!fs14.statSync(p).isFile()) continue;
+        fs14.rmSync(p);
         swept++;
       } catch {
       }
@@ -8605,8 +8701,8 @@ function sweepOrphanTmp(root) {
 }
 function countHookErrors(root) {
   const p = path13.join(runtimeDir(root), "hook-errors.log");
-  if (!fs13.existsSync(p)) return 0;
-  return fs13.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  if (!fs14.existsSync(p)) return 0;
+  return fs14.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -8616,11 +8712,11 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  const journalExists = fs13.existsSync(eventsPath(root));
+  const journalExists = fs14.existsSync(eventsPath(root));
   const { events, corruptLines } = readJournal(root);
   const replayed = replayState(events);
   let current = null;
-  if (!fs13.existsSync(statePath(root))) {
+  if (!fs14.existsSync(statePath(root))) {
     issues.push("state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694");
   } else {
     try {
@@ -8658,9 +8754,12 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs13.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs14.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
-      `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
+      tr(root, {
+        en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
+        ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
+      })
     );
   }
   const swept = sweepOrphanTmp(root);
@@ -8675,11 +8774,14 @@ function runDoctor(root, opts = {}) {
     if (!trustworthy && !opts.force) {
       refused = true;
       warnings.push(
-        "state \uBC1C\uC0B0\uC774 \uC788\uC73C\uB098 \uC800\uB110\uC744 \uC2E0\uB8B0\uD560 \uC218 \uC5C6\uC5B4 \uBCF5\uAD6C \uAC70\uBD80 \u2014 \uC800\uB110 \uC190\uC0C1 \uC6D0\uC778\uC744 \uBA3C\uC800 \uD655\uC778\uD558\uB77C. \uADF8\uB798\uB3C4 \uBCF5\uAD6C\uD558\uB824\uBA74 --force"
+        tr(root, {
+          en: "State has diverged but the journal cannot be trusted, so repair is refused \u2014 find out why the journal is damaged first. To repair anyway, use --force",
+          ko: "state \uBC1C\uC0B0\uC774 \uC788\uC73C\uB098 \uC800\uB110\uC744 \uC2E0\uB8B0\uD560 \uC218 \uC5C6\uC5B4 \uBCF5\uAD6C \uAC70\uBD80 \u2014 \uC800\uB110 \uC190\uC0C1 \uC6D0\uC778\uC744 \uBA3C\uC800 \uD655\uC778\uD558\uB77C. \uADF8\uB798\uB3C4 \uBCF5\uAD6C\uD558\uB824\uBA74 --force"
+        })
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs13.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs14.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -8701,7 +8803,7 @@ function runDoctor(root, opts = {}) {
   if (opts.repair && !refused && hookErrors > 0) {
     const log = path13.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs13.renameSync(log, `${log}.prev`);
+      fs14.renameSync(log, `${log}.prev`);
       notes.push(`hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`);
     } catch {
     }
@@ -8731,7 +8833,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_gate_submit",
-      description: "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uC5D0 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD55C\uB2E4(\uC2EC\uC0AC \uC694\uCCAD). \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 .harness/packets/ \uC5D0 \uB0A8\uAE34\uB2E4. \uC2B9\uC778\uC740 \uBCC4\uB3C4\uC774\uBA70 \uC0AC\uB78C\uB9CC \uD560 \uC218 \uC788\uB2E4.",
+      description: "Submit artifacts to a phase gate for review. Pins the artifact hash and writes a review packet under .harness/packets/. Approval is separate and only a human can do it.",
       inputSchema: {
         type: "object",
         properties: {
@@ -8748,7 +8850,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_gate_approve",
-      description: "[\uC0AC\uC6A9 \uBD88\uAC00] \uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 MCP \uB85C \uD560 \uC218 \uC5C6\uB2E4. \uC2B9\uC778\uC740 \uD130\uBBF8\uB110\uC5D0\uC11C `harness gate approve <P>` \uB85C\uB9CC \uAC00\uB2A5\uD558\uBA70, \uC2E4\uD589\uB9C8\uB2E4 \uAD8C\uD55C \uB2E4\uC774\uC5BC\uB85C\uADF8\uAC00 \uB5A0\uC11C \uCD5C\uC885 \uD074\uB9AD\uC740 \uD56D\uC0C1 \uC0AC\uB78C\uC774 \uD55C\uB2E4(\uC2A4\uD399 \xA74-3). \uC774 \uB3C4\uAD6C\uB294 \uADF8 \uACBD\uB85C\uB97C \uC548\uB0B4\uB9CC \uD55C\uB2E4.",
+      description: "[UNAVAILABLE] Gate approval cannot be done over MCP. Approval only happens in the terminal via `harness gate approve <P>`, which raises a permission dialog on every run so the final click is always a human (spec \xA74-3). This tool only points you to that path.",
       inputSchema: {
         type: "object",
         properties: { phase: phaseProp }
@@ -8761,7 +8863,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_wave_create",
-      description: "\uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB97C \uB9CC\uB4E0\uB2E4(pending). design_refs \uB294 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC774\uBBF8 \uB4F1\uB85D\uB41C \uB178\uB4DC\uC5EC\uC57C \uD55C\uB2E4 \u2014 \uC720\uB839 \uCC38\uC870\uB294 \uAC70\uBD80\uB41C\uB2E4.",
+      description: "Create a wave instruction sheet (pending). design_refs must already exist in the design ledger \u2014 ghost references are rejected.",
       inputSchema: {
         type: "object",
         properties: {
@@ -8821,7 +8923,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_node_bump",
-      description: "\uC124\uACC4 \uB178\uB4DC\uB97C \uAC1C\uC815\uD55C\uB2E4(version++ \xB7 stale). \uC774 \uB178\uB4DC\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB97C \uC644\uB8CC\uBD84\uAE4C\uC9C0 STALE \uB85C \uC804\uD30C\uD574 \uAD50\uCC28 \uAC80\uC99D \uD050\uC5D0 \uC62C\uB9B0\uB2E4.",
+      description: "Revise a design node (version++, stale) and propagate STALE to every wave that cites it, including completed ones, so they land in the cross-check queue.",
       inputSchema: {
         type: "object",
         properties: { id: { type: "string", description: "\uAC1C\uC815\uD560 \uB178\uB4DC ID" } },
@@ -8830,7 +8932,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_trace",
-      description: "\uC124\uACC4\u2192\uC6E8\uC774\uBE0C\u2192\uCF54\uB4DC \uCD94\uC801 \uC870\uD68C(\xA73-2). \uB178\uB4DC\uC640, \uADF8 \uB178\uB4DC\uB97C design_refs \uB85C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB4E4, \uADF8 \uB178\uB4DC\uB97C linkedNodes \uB85C \uB9C1\uD06C\uD55C \uB4F1\uB85D \uBB38\uC11C\uB4E4\uC744 \uC870\uC778\uD574 \uB3CC\uB824\uC900\uB2E4.",
+      description: "Design\u2192wave\u2192code trace (\xA73-2). Joins the node with the waves that cite it in design_refs and the registered documents that link it via linkedNodes.",
       inputSchema: {
         type: "object",
         properties: { node_id: { type: "string", description: "\uCD94\uC801\uD560 \uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC ID" } },
@@ -8849,7 +8951,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_ship_verdict",
-      description: "P12 \uCD5C\uC885 go/no-go \uD310\uC815. measured \uADFC\uAC70 \uC5C6\uC774\uB294 \uD1B5\uACFC\uD558\uC9C0 \uC54A\uB294\uB2E4. NO-GO \uBA74 \uC0AC\uC720 \uBAA9\uB85D\uC744 \uD568\uAED8 \uB3CC\uB824\uC900\uB2E4.",
+      description: "Final P12 go/no-go verdict. Never passes without measured evidence. On NO-GO it returns the list of reasons.",
       inputSchema: NO_ARGS
     },
     {
@@ -8875,14 +8977,14 @@ var ok = (content) => ({ ok: true, content });
 var fail = (content) => ({ ok: false, content });
 var json = (v) => ok(JSON.stringify(v, null, 2));
 var NEEDS_INIT_EXEMPT = /* @__PURE__ */ new Set(["harness_doctor", "harness_gate_approve"]);
-var INIT_GUIDANCE = ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8\uB294 \uC544\uC9C1 \uD558\uB124\uC2A4\uB85C \uAD00\uB9AC\uB418\uC9C0 \uC54A\uB294\uB2E4. \uD130\uBBF8\uB110\uC5D0\uC11C `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C.";
+var INIT_GUIDANCE = "No .harness/ here \u2014 this project is not managed by the harness yet. Run `harness init` in the terminal first.";
 function refuseApprove(o) {
   const phase = str(o, "phase");
   const target = isPhase(phase) ? phase : "<P0..P12>";
   return fail(
-    `\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 MCP \uB85C \uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD130\uBBF8\uB110\uC5D0\uC11C \`harness gate approve ${target}\` \uB97C \uC2E4\uD589\uD558\uB77C.
-\uC774 \uBA85\uB839\uC740 \uC758\uB3C4\uC801\uC73C\uB85C permission allowlist \uC5D0\uC11C \uC81C\uC678\uB418\uC5B4 \uC788\uC5B4 \uC2E4\uD589\uD560 \uB54C\uB9C8\uB2E4 \uAD8C\uD55C \uB2E4\uC774\uC5BC\uB85C\uADF8\uAC00 \uB728\uACE0, \uAC8C\uC774\uD2B8\uB97C \uC5EC\uB294 \uCD5C\uC885 \uD074\uB9AD\uC740 \uD56D\uC0C1 \uC0AC\uB78C\uC774 \uD55C\uB2E4(\uC2A4\uD399 \xA74-3). MCP \uB3C4\uAD6C\uB85C \uC2B9\uC778\uC744 \uB300\uD589\uD558\uBA74 \uADF8 \uC7A5\uCE58\uB97C \uC6B0\uD68C\uD558\uAC8C \uB418\uBBC0\uB85C \uC774 \uACBD\uB85C\uB294 \uC2B9\uC778\uD558\uC9C0 \uC54A\uB294\uB2E4.
-\uC81C\uCD9C\uAE4C\uC9C0\uB294 \`harness_gate_submit\` \uC73C\uB85C \uD560 \uC218 \uC788\uB2E4 \u2014 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB9CC\uB4E4\uC5B4 \uC0AC\uB78C\uC5D0\uAC8C \uB118\uACA8\uB77C.`
+    `Gate approval cannot be done over MCP \u2014 run \`harness gate approve ${target}\` in the terminal.
+That command is deliberately excluded from the permission allowlist, so a permission dialog appears on every run and the final click that opens a gate is always a human (spec \xA74-3). Approving on your behalf through an MCP tool would bypass that, so this path refuses.
+You can still submit: use \`harness_gate_submit\` to build a review packet and hand it to a human.`
   );
 }
 function callTool(root, name, args) {
@@ -8891,7 +8993,7 @@ function callTool(root, name, args) {
   const known = toolDefinitions().some((d) => d.name === name);
   if (!known) {
     return fail(
-      `\uC54C \uC218 \uC5C6\uB294 \uB3C4\uAD6C: ${name} \u2014 \uC0AC\uC6A9 \uAC00\uB2A5\uD55C \uB3C4\uAD6C: ` + toolDefinitions().map((d) => d.name).join(", ")
+      `Unknown tool: ${name} \u2014 available tools: ` + toolDefinitions().map((d) => d.name).join(", ")
     );
   }
   if (!NEEDS_INIT_EXEMPT.has(name) && !isInitialized(root)) return fail(INIT_GUIDANCE);
@@ -8910,28 +9012,28 @@ function dispatch(root, name, o) {
     case "harness_gate_submit": {
       const phase = str(o, "phase");
       if (!isPhase(phase)) {
-        return fail(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uD398\uC774\uC988: ${String(o.phase)} (${PHASES.join(", ")} \uC911 \uD558\uB098)`);
+        return fail(`Invalid phase: ${String(o.phase)} (one of ${PHASES.join(", ")})`);
       }
       const evidence = str(o, "evidence") ?? "claimed";
       if (!isEvidenceGrade(evidence)) {
-        return fail(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${evidence} (${EVIDENCE_GRADES.join(", ")} \uC911 \uD558\uB098)`);
+        return fail(`Invalid evidence grade: ${evidence} (one of ${EVIDENCE_GRADES.join(", ")})`);
       }
       const r = submitGate(root, phase, { paths: strArr(o, "paths"), evidence });
       let packet = "";
       try {
-        fs14.mkdirSync(packetsDir(root), { recursive: true });
+        fs15.mkdirSync(packetsDir(root), { recursive: true });
         packet = path14.join(packetsDir(root), `${phase}.md`);
-        fs14.writeFileSync(packet, buildReviewPacket(root, phase));
+        fs15.writeFileSync(packet, buildReviewPacket(root, phase));
       } catch (e) {
         return ok(
-          `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}
-\uACBD\uACE0: \uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`
+          `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
+Warning: review packet generation failed (the submission still stands) \u2014 ${String(e)}`
         );
       }
       return ok(
-        `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}
-\uB9AC\uBDF0 \uD328\uD0B7: ${path14.relative(root, packet)}
-\uC2B9\uC778\uC740 \uD130\uBBF8\uB110\uC5D0\uC11C \`harness gate approve ${phase}\` \u2014 \uCD5C\uC885 \uD074\uB9AD\uC740 \uC0AC\uB78C\uC774 \uD55C\uB2E4.`
+        `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
+Review packet: ${path14.relative(root, packet)}
+Approve in the terminal with \`harness gate approve ${phase}\` \u2014 the final click is a human.`
       );
     }
     case "harness_wave_create": {
@@ -8939,7 +9041,7 @@ function dispatch(root, name, o) {
       const missing = refs.filter((id) => !getNode(root, id));
       if (missing.length > 0) {
         return fail(
-          `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness_node_upsert\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+          `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first with \`harness_node_upsert\``
         );
       }
       const meta = createWave(root, {
@@ -8952,28 +9054,28 @@ function dispatch(root, name, o) {
     }
     case "harness_wave_activate": {
       const id = str(o, "id");
-      if (!id) return fail("\uC6E8\uC774\uBE0C ID \uAC00 \uD544\uC694\uD558\uB2E4 \u2014 `harness_wave_list` \uB85C \uBAA9\uB85D\uC744 \uD655\uC778\uD558\uB77C");
+      if (!id) return fail("A wave id is required \u2014 list them with `harness_wave_list`");
       activateWave(root, id);
-      return ok(`\uD65C\uC131: ${id}`);
+      return ok(`Active: ${id}`);
     }
     case "harness_wave_update": {
       const text = (str(o, "text") ?? "").trim();
-      if (!text) return fail("\uD134 \uB85C\uADF8 \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uD55C \uC77C\uACFC \uB2E4\uC74C \uD560 \uC77C\uC744 \uC801\uC5B4\uB77C");
+      if (!text) return fail("The turn log entry is empty \u2014 write what you did and what is next");
       logTurn(root, text);
-      return ok("\uD134 \uB85C\uADF8 \uAE30\uB85D");
+      return ok("Turn log recorded");
     }
     case "harness_wave_complete":
       completeWave(root);
-      return ok("\uC6E8\uC774\uBE0C \uC644\uB8CC");
+      return ok("Wave completed");
     case "harness_wave_list":
       return json(listWaves(root));
     case "harness_node_upsert": {
       const id = str(o, "id");
       const title = str(o, "title");
-      if (!id || !title) return fail("id \uC640 title \uC774 \uBAA8\uB450 \uD544\uC694\uD558\uB2E4");
+      if (!id || !title) return fail("Both id and title are required");
       const status = str(o, "status");
       if (status !== void 0 && !LEDGER_STATUSES.includes(status)) {
-        return fail(`\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${status} (${LEDGER_STATUSES.join(", ")} \uC911 \uD558\uB098)`);
+        return fail(`Invalid status: ${status} (one of ${LEDGER_STATUSES.join(", ")})`);
       }
       const prev = getNode(root, id);
       upsertNode(root, {
@@ -8990,7 +9092,7 @@ function dispatch(root, name, o) {
     }
     case "harness_node_bump": {
       const id = str(o, "id");
-      if (!id) return fail("\uAC1C\uC815\uD560 \uB178\uB4DC ID \uAC00 \uD544\uC694\uD558\uB2E4");
+      if (!id) return fail("A node id to revise is required");
       const { node, affectedWaves, unverifiable } = bumpNode(root, id);
       appendEvent(root, "node-bumped", {
         id: node.id,
@@ -9011,17 +9113,17 @@ function dispatch(root, name, o) {
       const incomplete = [...unverifiable, ...failed];
       if (incomplete.length > 0) {
         return fail(`${head}
-STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00/\uC2E4\uD328 \uC6E8\uC774\uBE0C: ${incomplete.join(", ")} \u2014 \uC218\uB3D9 \uD655\uC778 \uD544\uC694`);
+Incomplete STALE propagation \u2014 unverifiable/failed waves: ${incomplete.join(", ")} \u2014 check manually`);
       }
       return ok(head);
     }
     case "harness_trace": {
       const id = str(o, "node_id");
-      if (!id) return fail("\uCD94\uC801\uD560 \uB178\uB4DC ID \uAC00 \uD544\uC694\uD558\uB2E4 (node_id)");
+      if (!id) return fail("A node id to trace is required (node_id)");
       const t = traceNode(root, id);
       if (!t) {
         return fail(
-          `\uB178\uB4DC ${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \`harness_node_upsert\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uAC70\uB098 \`harness_report_rtm\` \uC73C\uB85C \uB4F1\uB85D\uB41C \uB178\uB4DC\uB97C \uD655\uC778\uD558\uB77C`
+          `Node ${id} is not in the design ledger \u2014 register it with \`harness_node_upsert\`, or list known nodes with \`harness_report_rtm\``
         );
       }
       return json(t);
@@ -9032,7 +9134,7 @@ STALE \uC804\uD30C \uBD88\uC644\uC804 \u2014 \uAC80\uC99D \uBD88\uAC00/\uC2E4\uD
       return ok(buildHub(root));
     case "harness_ship_verdict": {
       const v = shipVerdict(root);
-      const body = (v.ok ? "\uCD9C\uD558 \uAC00\uB2A5(GO)" : "\uCD9C\uD558 \uBD88\uAC00(NO-GO)") + (v.reasons.length > 0 ? `
+      const body = (v.ok ? "GO" : "NO-GO") + (v.reasons.length > 0 ? `
 ${v.reasons.map((r) => `  - ${r}`).join("\n")}` : "");
       return { ok: v.ok, content: body };
     }
@@ -9042,7 +9144,7 @@ ${v.reasons.map((r) => `  - ${r}`).join("\n")}` : "");
     }
     /* c8 ignore next 2 */
     default:
-      return fail(`\uC54C \uC218 \uC5C6\uB294 \uB3C4\uAD6C: ${name}`);
+      return fail(`Unknown tool: ${name}`);
   }
 }
 // Annotate the CommonJS export names for ESM import in node:

@@ -31,6 +31,7 @@
  */
 import * as fs from 'node:fs';
 import { sanitizeUntrusted as sanitize, contentNonce } from './untrusted';
+import { tr } from './tr';
 import { appendEvent, readEvents, replayState } from './events';
 import { readState } from './state';
 import { readWave, listWaves } from './wave';
@@ -180,12 +181,16 @@ export function recordAttempt(
   root: string, waveId: string, outcome: AttemptOutcome, detail?: string,
 ): AttemptRecord {
   if (outcome !== 'pass' && outcome !== 'fail') {
-    throw new Error(`검증 결과는 pass 또는 fail 이어야 한다: ${String(outcome)}`);
+    throw new Error(tr(root, { en: `The verification outcome must be pass or fail: ${String(outcome)}`, ko: `검증 결과는 pass 또는 fail 이어야 한다: ${String(outcome)}` }));
   }
   if (!fs.existsSync(wavePath(root, waveId))) {
     throw new Error(
-      `웨이브 ${waveId} 지시서가 없다 (${wavePath(root, waveId)}) — `
-      + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
+      tr(root, {
+        en: `No instruction sheet for wave ${waveId} (${wavePath(root, waveId)}) — check the id, or list `
+          + 'them with `harness wave list`',
+        ko: `웨이브 ${waveId} 지시서가 없다 (${wavePath(root, waveId)}) — `
+          + 'id 를 확인하거나 `harness wave list` 로 목록을 보라',
+      }),
     );
   }
   const data: Record<string, unknown> = { id: waveId, outcome };
@@ -234,11 +239,14 @@ export function raiseCritical(
 ): CriticalEvent {
   if (!isCriticalReason(opts.reason)) {
     throw new Error(
-      `알 수 없는 소환 사유: ${String(opts.reason)} — ${CRITICAL_REASONS.join(' | ')} 중 하나여야 한다`,
+      tr(root, {
+        en: `Unknown escalation reason: ${String(opts.reason)} — one of ${CRITICAL_REASONS.join(' | ')}`,
+        ko: `알 수 없는 소환 사유: ${String(opts.reason)} — ${CRITICAL_REASONS.join(' | ')} 중 하나여야 한다`,
+      }),
     );
   }
   if (!opts.detail || !opts.detail.trim()) {
-    throw new Error('소환 설명(detail)이 비었다 — 사용자가 무엇을 판단해야 하는지 한 줄로 적어라');
+    throw new Error(tr(root, { en: 'The escalation detail is empty — say in one line what the user has to decide', ko: '소환 설명(detail)이 비었다 — 사용자가 무엇을 판단해야 하는지 한 줄로 적어라' }));
   }
   const data: Record<string, unknown> = { reason: opts.reason, detail: opts.detail };
   if (opts.waveId) data.id = opts.waveId;

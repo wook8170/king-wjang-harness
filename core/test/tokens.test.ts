@@ -67,7 +67,7 @@ describe('tokens · IO', () => {
     const root = setup();
     fs.mkdirSync(path.dirname(tokensPath(root)), { recursive: true });
     fs.writeFileSync(tokensPath(root), '{ not json');
-    expect(() => loadTokens(root)).toThrow(/토큰 파일/);
+    expect(() => loadTokens(root)).toThrow(/token file/);
   });
 
   it('TOKENS_REL 은 스펙 §3-1 경로', () => {
@@ -91,7 +91,7 @@ describe('tokens · validate', () => {
     const doc = fixture();
     doc.color['a.one'] = { light: '{color.a.two}' };
     doc.color['a.two'] = { light: '{color.a.one}' };
-    expect(() => validateTokens(doc)).toThrow(/순환/);
+    expect(() => validateTokens(doc)).toThrow(/cycle/);
     expect(() => validateTokens(doc)).toThrow(/color\.a\.one/);
   });
 
@@ -106,8 +106,8 @@ describe('tokens · validate', () => {
   });
 
   it('doc 이 객체가 아니면 throw (크래시 아님)', () => {
-    expect(() => validateTokens(null)).toThrow(/토큰 문서/);
-    expect(() => validateTokens('nope')).toThrow(/토큰 문서/);
+    expect(() => validateTokens(null)).toThrow(/token document/);
+    expect(() => validateTokens('nope')).toThrow(/token document/);
   });
 });
 
@@ -326,13 +326,13 @@ describe('tokens · 스왑 드릴', () => {
     const a = fixture();
     const b = swapTokens(a, {});
     expect(diffTokens(a, b)).toEqual([]);
-    expect(() => assertSwapIsMeaningful(a, b)).toThrow(/스왑 드릴/);
+    expect(() => assertSwapIsMeaningful(a, b)).toThrow(/swap drill/);
   });
 
   it('색 절반 미만만 바뀐 스왑도 거부된다', () => {
     const a = fixture();
     const b = swapTokens(a, { color: { 'bg.surface': { light: '#0b0b0f' } } });
-    expect(() => assertSwapIsMeaningful(a, b)).toThrow(/색 토큰/);
+    expect(() => assertSwapIsMeaningful(a, b)).toThrow(/colour tokens/);
   });
 
   it('팔레트 전체를 갈아끼운 스왑은 통과하고 바뀐 경로를 돌려준다', () => {
