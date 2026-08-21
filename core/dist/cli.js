@@ -8503,10 +8503,12 @@ function commandName(tokens) {
 }
 function redirectTargets(segment) {
   const out = [];
-  const re = /\d*>>?\|?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  const re = /\d*>>?([|&])?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
   let m;
   while ((m = re.exec(segment)) !== null) {
-    const t = m[1] ?? m[2] ?? m[3] ?? "";
+    const amp = m[1] === "&";
+    const t = m[2] ?? m[3] ?? m[4] ?? "";
+    if (amp && /^\d+$/.test(t)) continue;
     if (t && !t.startsWith("&")) out.push(t);
   }
   return out;
@@ -8541,6 +8543,7 @@ function innerCommandOf(args) {
 function scanBashWrites(cmd) {
   const targets = [];
   let mutating = false;
+  let patchesWorkingTree = false;
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   targets.push(...redirects);
@@ -8550,6 +8553,7 @@ function scanBashWrites(cmd) {
     const { name, args } = commandName(tokens);
     if (MUTATING_TOKENS.includes(name)) mutating = true;
     const paths = args.filter(looksLikePath);
+    const operands = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
     switch (name) {
       case "tee":
       case "touch":
@@ -8566,7 +8570,7 @@ function scanBashWrites(cmd) {
       case "cp":
       case "mv":
       case "install":
-        if (paths.length >= 1) targets.push(paths[paths.length - 1]);
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         break;
       case "ln":
         if (paths.length >= 2) targets.push(paths[paths.length - 1]);
@@ -8586,6 +8590,44 @@ function scanBashWrites(cmd) {
       case "eslint":
         if (args.some((a) => a === "--write" || a === "--fix")) targets.push(...paths);
         break;
+      case "patch":
+      case "ed":
+      case "ex":
+        targets.push(...paths);
+        break;
+      case "tar":
+      case "unzip":
+      case "bsdtar": {
+        const dirFlag = name === "unzip" ? "-d" : "-C";
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i] === dirFlag && !isFlag(args[i + 1])) targets.push(args[i + 1]);
+        }
+        break;
+      }
+      case "rsync":
+      case "scp":
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        break;
+      case "sponge":
+        targets.push(...operands);
+        break;
+      case "vim":
+      case "vi":
+      case "nvim":
+        if (args.some((a) => /^-(es|s|c|S)$/.test(a) || a === "--cmd")) targets.push(...paths);
+        break;
+      case "git": {
+        if (args.some((a) => a === "apply" || a === "am")) {
+          patchesWorkingTree = true;
+          mutating = true;
+        }
+        const ci = operands.indexOf("clone");
+        if (ci >= 0) {
+          const rest = operands.slice(ci + 1).filter((a) => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes("@"));
+          if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+        }
+        break;
+      }
       case "xargs": {
         const inner = innerCommandOf(args);
         if (inner.length > 0) targets.push(...scanBashWrites(inner.join(" ")).targets);
@@ -8595,7 +8637,7 @@ function scanBashWrites(cmd) {
         break;
     }
   }
-  return { targets: [...new Set(targets.filter(Boolean))], mutating };
+  return { targets: [...new Set(targets.filter(Boolean))], mutating, patchesWorkingTree };
 }
 function pathLikeMentions(cmd) {
   const out = [];
@@ -9514,6 +9556,12 @@ function preTool(root, state, config, input, degraded) {
     for (const target of scan.targets) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true);
       if (verdict) return verdict;
+    }
+    if (scan.patchesWorkingTree && DESIGN_PHASES.includes(state.phase)) {
+      return deny(L(
+        "Applying a patch writes into the working tree, and its targets live inside the patch file \u2014 so it cannot be checked here. The design track blocks implementation, so apply patches after the P6 gate is approved.",
+        "\uD328\uCE58 \uC801\uC6A9\uC740 \uC791\uC5C5\uD2B8\uB9AC\uC5D0 \uC4F0\uB294 \uC77C\uC774\uACE0 \uB300\uC0C1\uC774 \uD328\uCE58 \uD30C\uC77C \uC548\uC5D0 \uC788\uC5B4 \uC5EC\uAE30\uC11C \uAC80\uC0AC\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799\uC740 \uAD6C\uD604\uC744 \uB9C9\uB294 \uAD6C\uAC04\uC774\uBBC0\uB85C P6 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uB4A4\uC5D0 \uC801\uC6A9\uD558\uB77C."
+      ), degraded, lang);
     }
     if (scan.mutating) {
       for (const target of pathLikeMentions(cmd)) {

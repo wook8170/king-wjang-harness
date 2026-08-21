@@ -253,3 +253,69 @@ describe('bashwrite — 받아쓰기·간접 실행', () => {
     expect(scanBashWrites('eslint src/app.ts').targets).toEqual([]);
   });
 });
+
+/**
+ * 「받아쓰기」 다음에는 「**풀어쓰기**」가 있다 — 패치 적용·압축 해제·동기화.
+ * 전부 명령 이름만 보면 쓰기처럼 안 생겼지만 결과는 작업트리에 파일이 생기는 것이다.
+ */
+describe('bashwrite — 풀어쓰기(패치·압축·동기화·행 편집기)', () => {
+  it('patch 의 대상 파일', () => {
+    expect(scanBashWrites('patch -p1 src/app.ts < /tmp/p.diff').targets).toContain('src/app.ts');
+  });
+  it('ed 의 대상 파일', () => {
+    expect(scanBashWrites('ed src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('tar -C 의 전개 디렉토리', () => {
+    expect(scanBashWrites('tar -x -C src -f /tmp/a.tar').targets).toContain('src');
+  });
+  it('unzip -d 의 전개 디렉토리', () => {
+    expect(scanBashWrites('unzip /tmp/a.zip -d src').targets).toContain('src');
+  });
+  it('rsync 의 목적지(마지막 경로)', () => {
+    expect(scanBashWrites('rsync -a /tmp/x/ src/').targets).toContain('src/');
+  });
+  it('>& 리다이렉트도 파일 대상이다', () => {
+    expect(scanBashWrites('echo x >& src/app.ts').targets).toContain('src/app.ts');
+  });
+  it('fd 복제(2>&1)는 파일이 아니다 — 오탐 금지', () => {
+    expect(scanBashWrites('npm test 2>&1').targets).toEqual([]);
+  });
+  it('git apply/am 은 작업트리를 패치한다고 표시한다', () => {
+    expect(scanBashWrites('git apply /tmp/p.diff').patchesWorkingTree).toBe(true);
+    expect(scanBashWrites('git am /tmp/p.mbox').patchesWorkingTree).toBe(true);
+    expect(scanBashWrites('git status').patchesWorkingTree).toBe(false);
+  });
+});
+
+/**
+ * **위치가 경로임을 말해 주는 자리**에서는 `looksLikePath` 를 요구하면 안 된다.
+ * `cp -r /tmp/x src` 의 `src` 는 슬래시도 확장자도 없어 경로 판별을 통과하지 못했다 —
+ * rubric 이 명시적으로 덮는다고 한 cp/mv 규칙에 난 구멍이었다. 디렉토리 이름 하나로
+ * 소스 트리를 통째로 덮어쓸 수 있으면 그건 「cp 를 막았다」가 아니다.
+ */
+describe('bashwrite — 목적지 위치 인자(디렉토리 이름 포함)', () => {
+  it('cp 의 목적지가 디렉토리 이름이어도 잡는다', () => {
+    expect(scanBashWrites('cp -r /tmp/x src').targets).toContain('src');
+  });
+  it('mv 의 목적지가 디렉토리 이름이어도 잡는다', () => {
+    expect(scanBashWrites('mv /tmp/x src').targets).toContain('src');
+  });
+  it('rsync 목적지', () => {
+    expect(scanBashWrites('rsync -a /tmp/x/ src').targets).toContain('src');
+  });
+  it('git clone 의 대상 디렉토리', () => {
+    expect(scanBashWrites('git clone https://x/y src').targets).toContain('src');
+  });
+  it('git clone 에 대상이 없으면 URL 을 대상으로 삼지 않는다', () => {
+    expect(scanBashWrites('git clone https://x/y').targets).toEqual([]);
+  });
+  it('sponge 의 대상', () => {
+    expect(scanBashWrites('cat /tmp/x | sponge src/a.ts').targets).toContain('src/a.ts');
+  });
+  it('배치 모드 편집기(vim -es / ex)의 대상', () => {
+    expect(scanBashWrites('vim -es -c "w" src/a.ts').targets).toContain('src/a.ts');
+  });
+  it('플래그는 목적지가 아니다', () => {
+    expect(scanBashWrites('cp -r /tmp/x /tmp/y').targets).toEqual(['/tmp/y']);
+  });
+});

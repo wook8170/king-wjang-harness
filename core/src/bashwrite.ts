@@ -66,6 +66,12 @@ function commandName(tokens: string[]): { name: string; args: string[] } {
 }
 
 export interface BashWriteScan {
+  /**
+   * 패치·머지가 **작업트리 어디에 쓸지 명령만 봐서는 알 수 없는** 경우(`git apply <diff>`).
+   * 대상이 패치 파일 안에 있어 정적으로 못 뽑는다 — 그래서 경로가 아니라 **사실**을 올린다.
+   * 설계 트랙에서는 이것만으로 차단 사유가 된다(구현이 금지된 구간이므로).
+   */
+  patchesWorkingTree: boolean;
   /** 추출된 쓰기 대상 경로(따옴표 제거, 원문 그대로 — 해석은 호출측). */
   targets: string[];
   /** 변형 명령·연산자가 하나라도 있었는가. 안전망 (2) 의 조건. */
@@ -80,10 +86,15 @@ function redirectTargets(segment: string): string[] {
   const out: string[] = [];
   // `>|` 는 noclobber 를 무시하는 리다이렉트다 — `>` 와 같은 자리에서 같은 일을 하므로
   // 같은 판정을 받아야 한다. 한 글자 차이로 차단이 풀리면 그건 차단이 아니라 우연이다.
-  const re = /\d*>>?\|?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  // `>&` 는 두 얼굴이다: `2>&1` 은 **fd 복제**(파일 아님), `echo x >& out.txt` 는 파일 쓰기다.
+  // 그래서 `&` 뒤가 숫자뿐이면 대상에서 뺀다 — 안 그러면 흔한 `2>&1` 이 `1` 이라는 파일로 잡혀
+  // 정상 명령이 대량으로 deny 되고, 그러면 사람이 하네스를 꺼버린다(과차단이 곧 방어 0).
+  const re = /\d*>>?([|&])?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(segment)) !== null) {
-    const t = m[1] ?? m[2] ?? m[3] ?? '';
+    const amp = m[1] === '&';
+    const t = m[2] ?? m[3] ?? m[4] ?? '';
+    if (amp && /^\d+$/.test(t)) continue; // fd 복제(`2>&1`) — 파일이 아니다
     if (t && !t.startsWith('&')) out.push(t);
   }
   return out;
@@ -110,6 +121,7 @@ function innerCommandOf(args: string[]): string[] {
 export function scanBashWrites(cmd: string): BashWriteScan {
   const targets: string[] = [];
   let mutating = false;
+  let patchesWorkingTree = false;
 
   // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니다.
   const redirects = redirectTargets(cmd);
@@ -123,6 +135,10 @@ export function scanBashWrites(cmd: string): BashWriteScan {
     if (MUTATING_TOKENS.includes(name)) mutating = true;
 
     const paths = args.filter(looksLikePath);
+    // **위치가 경로임을 말해 주는 자리**(cp/mv 의 목적지 등)에서는 `looksLikePath` 를 요구하지
+    // 않는다. `cp -r /tmp/x src` 의 `src` 는 슬래시도 확장자도 없지만 분명한 쓰기 대상이고,
+    // 그걸 놓치면 디렉토리 이름 하나로 소스 트리를 통째로 덮어쓸 수 있다.
+    const operands = args.filter(a => !isFlag(a) && !/^[a-z]+=/.test(a));
     switch (name) {
       case 'tee':
       case 'touch':
@@ -141,8 +157,8 @@ export function scanBashWrites(cmd: string): BashWriteScan {
       case 'cp':
       case 'mv':
       case 'install':
-        // 목적지는 마지막 경로 인자다. 원본은 읽기이므로 대상이 아니다.
-        if (paths.length >= 1) targets.push(paths[paths.length - 1]);
+        // 목적지는 마지막 피연산자다. 원본은 읽기이므로 대상이 아니다.
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         break;
       case 'ln':
         // 심링크는 **링크 이름**이 생기는 자리다(마지막 인자). 대상 파일은 건드리지 않는다.
@@ -168,6 +184,51 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         // 제자리 수정 플래그가 있을 때만 쓰기다(sed -i 와 같은 규칙). `--check`·무플래그 조회는 통과.
         if (args.some(a => a === '--write' || a === '--fix')) targets.push(...paths);
         break;
+      case 'patch':
+      case 'ed':
+      case 'ex':
+        // 패치 적용·행 편집기는 인자로 받은 파일을 제자리에서 고친다.
+        targets.push(...paths);
+        break;
+      case 'tar':
+      case 'unzip':
+      case 'bsdtar': {
+        // 전개 디렉토리(`-C` / `-d`)가 대상이다. 아카이브 자체는 읽기다.
+        // 플래그 자체가 「여기가 디렉토리다」라고 말하므로 `looksLikePath` 를 요구하지 않는다 —
+        // `-C src` 의 `src` 는 슬래시도 확장자도 없지만 분명한 쓰기 대상이다.
+        const dirFlag = name === 'unzip' ? '-d' : '-C';
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i] === dirFlag && !isFlag(args[i + 1])) targets.push(args[i + 1]);
+        }
+        break;
+      }
+      case 'rsync':
+      case 'scp':
+        // 목적지는 마지막 피연산자다(cp 와 같은 규칙).
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        break;
+      case 'sponge':
+        // moreutils. 파이프 결과를 파일에 **덮어쓴다** — 이름만 보면 쓰기처럼 안 생겼다.
+        targets.push(...operands);
+        break;
+      case 'vim':
+      case 'vi':
+      case 'nvim':
+        // 배치 모드(`-es`·`-c`·`-S`)는 스크립트로 파일을 고친다. 대화형 실행은 훅이 볼 일이 없다.
+        if (args.some(a => /^-(es|s|c|S)$/.test(a) || a === '--cmd')) targets.push(...paths);
+        break;
+      case 'git': {
+        // `git apply`·`git am` 은 **패치 파일 안**에 대상이 있어 정적으로 못 뽑는다.
+        // 경로가 아니라 「작업트리를 패치한다」는 사실을 올려 호출측이 페이즈로 판정하게 한다.
+        if (args.some(a => a === 'apply' || a === 'am')) { patchesWorkingTree = true; mutating = true; }
+        // `git clone <url> <dir>` 은 저장소를 통째로 그 자리에 푼다. URL 은 대상이 아니다.
+        const ci = operands.indexOf('clone');
+        if (ci >= 0) {
+          const rest = operands.slice(ci + 1).filter(a => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes('@'));
+          if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+        }
+        break;
+      }
       case 'xargs': {
         // xargs 는 진짜 명령을 한 겹 감싼다. 감싼 명령을 그대로 다시 판정하지 않으면
         // `xargs -I{} cp {} src/app.ts` 한 줄로 cp 규칙이 통째로 무의미해진다.
@@ -181,7 +242,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   }
 
   // 중복 제거 — 같은 대상으로 두 번 deny 사유를 만들 이유가 없다.
-  return { targets: [...new Set(targets.filter(Boolean))], mutating };
+  return { targets: [...new Set(targets.filter(Boolean))], mutating, patchesWorkingTree };
 }
 
 /**

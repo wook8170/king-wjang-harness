@@ -480,6 +480,19 @@ function preTool(
     // 안전망: 대상 추출에 실패해도(`python -c "open('.harness/events.jsonl','a')"`) 코어 파일
     // 이름이 **변형 명령과 함께** 등장하면 막는다. 순수 조회(`cat`·`grep`)는 걸리지 않는다 —
     // 저널을 읽어 디버깅하는 건 정당하고, 그것까지 막으면 사람이 하네스를 끈다.
+    // `git apply`·`git am` 은 대상이 **패치 파일 안**에 있어 정적으로 못 뽑는다. 설계 트랙은
+    // 구현이 금지된 구간이므로, 무엇을 패치하는지 몰라도 「작업트리를 패치한다」는 사실만으로
+    // 차단 사유가 된다 — 알 수 없는 쓰기를 통과시키면 트랙 강제가 패치 한 장으로 풀린다.
+    if (scan.patchesWorkingTree && (DESIGN_PHASES as readonly string[]).includes(state.phase)) {
+      return deny(L(
+        'Applying a patch writes into the working tree, and its targets live inside the patch file — '
+        + 'so it cannot be checked here. The design track blocks implementation, so apply patches after '
+        + 'the P6 gate is approved.',
+        '패치 적용은 작업트리에 쓰는 일이고 대상이 패치 파일 안에 있어 여기서 검사할 수 없다 — '
+        + '설계 트랙은 구현을 막는 구간이므로 P6 게이트 승인 뒤에 적용하라.',
+      ), degraded, lang);
+    }
+
     if (scan.mutating) {
       // 같은 안전망을 **설계 트랙 소스에도** 건다. 대칭이 아니면 뚫리는 쪽이 정본이 된다:
       // 이 net 이 없던 동안 `python3 -c "open('src/x.ts','w')"` 는 코어 파일에는 막히고
