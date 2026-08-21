@@ -33,11 +33,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evidenceDir, wavesDir } from './paths';
-import { verifyGate } from './gate';
-import { loadLedger } from './ledger';
-import { docsForPhase, inspectRegistry, staleDocs } from './registry';
+import { verifyGate, readGateFeedback } from './gate';
+import { loadLedger, getNode } from './ledger';
+import { docsForPhase, inspectRegistry, staleDocs, loadRegistry } from './registry';
 import { readState } from './state';
-import { readWave } from './wave';
+import { readWave, listWaves } from './wave';
 import { PHASES } from './types';
 import type { DocNode, LedgerNode, Phase, WaveMeta } from './types';
 
@@ -254,6 +254,28 @@ export function renderRtm(root: string): string {
   return out.join('\n') + '\n';
 }
 
+export interface TraceResult {
+  node: LedgerNode;
+  waves: WaveMeta[];
+  docs: DocNode[];
+}
+
+/**
+ * FEAT-22: 설계→웨이브→문서 추적(§3-2). 스펙 §125·§200 이 정의하고
+ * `agents/wave-verifier.md` 가 검증 절차로 지시하는데 **CLI 에 없었다** — MCP 도구로만
+ * 존재해 MCP 없이 에이전트를 돌리면 그 단계가 죽었다.
+ * 조인 규칙을 CLI·MCP 두 벌로 두지 않으려고 여기 한 곳에 둔다.
+ */
+export function traceNode(root: string, id: string): TraceResult | undefined {
+  const node = getNode(root, id);
+  if (!node) return undefined;
+  return {
+    node,
+    waves: listWaves(root).filter(w => w.design_refs.includes(id)),
+    docs: loadRegistry(root).docs.filter(d => d.linkedNodes.includes(id)),
+  };
+}
+
 /** 게이트 레코드를 사람이 읽는 줄로. 상태 파일을 못 읽으면 사유를 그대로 올린다. */
 function gateLines(root: string, phase: Phase): { lines: string[]; unreadable: string[] } {
   const state = attempt(() => readState(root));
@@ -348,6 +370,11 @@ export function buildReviewPacket(root: string, phase: Phase): string {
       out.push('');
     }
   }
+
+  // FEAT-23: 수집된 리뷰 피드백. 개정 근거가 패킷 안에 있어야 「검토 → 코멘트 → 개정 →
+  // 재제출」 루프가 채팅 없이 닫힌다. 내용은 수집 시점에 이미 중화됐다.
+  const feedback = readGateFeedback(root, phase).trim();
+  if (feedback) out.push('## 리뷰 피드백 (수집됨)', '', feedback, '');
 
   const gate = gateLines(root, phase);
   unreadable.push(...gate.unreadable);

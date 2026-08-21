@@ -16,13 +16,18 @@ import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale } from './wave';
 import { getNode, upsertNode, bumpNode } from './ledger';
 import { runDoctor } from './doctor';
+import { loadConfig } from './config';
+import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
-import { submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate } from './gate';
+import {
+  submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate,
+  recordGateFeedback, readGateFeedback, feedbackPath,
+} from './gate';
 import {
   getDoc, upsertDoc, submitDoc, approveDoc, reviseDoc, setDocArtifactUrl,
   staleDocs, loadRegistry,
 } from './registry';
-import { buildReviewPacket, renderRtm, buildHub } from './report';
+import { buildReviewPacket, renderRtm, buildHub, traceNode } from './report';
 import { proposeAdr, decideAdr, reviseAdr, getAdr, listAdrs, renderAdrPacket } from './adr';
 import {
   loadTokens, generateCss, generateTs, generateTailwind, findRawValues,
@@ -123,6 +128,25 @@ export function run(argv: string[], root: string): number {
     return 0;
   }
 
+  // 언어는 config 가 정한다(기본 en, `lang: ko` 로 전환 — i18n.ts). 미초기화 프로젝트에서도
+  // loadConfig 는 기본값을 돌려주므로 `harness --help` 가 init 전에도 동작한다.
+  const lang = loadConfig(root).lang;
+
+  // UX-24: 진입점. 예전에는 이 넷이 전부 exit 1 「알 수 없는 명령」이었다 — 60여 개 명령을
+  // 가진 CLI 에 사용법이 없으면 소스를 읽어야 쓸 수 있다.
+  if (cmd === undefined || cmd === '' || cmd === '--help' || cmd === '-h' || cmd === 'help') {
+    console.log(renderHelp(lang));
+    return 0;
+  }
+  {
+    // `harness <군> --help` — 군별 상세. 하위명령 자리에 왔든 뒤에 붙었든 받는다.
+    const group = findGroup(cmd);
+    if (group && (sub === '--help' || sub === '-h' || argv.includes('--help'))) {
+      console.log(renderGroupHelp(group, lang));
+      return 0;
+    }
+  }
+
   try {
     switch (cmd) {
       case 'init':
@@ -155,6 +179,17 @@ export function run(argv: string[], root: string): number {
         // 페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 발생한다(§2 흐름 규칙).
         // setPhaseViaGate 가 직전 페이즈 게이트 승인 여부를 검사하고 거부 사유를 던진다.
         // --force 는 게이트 검사를 건너뛰는 탈출구다(부트스트랩·복구용, 이벤트에 흔적을 남긴다).
+        // SHIP-52: 훅이 에이전트의 Bash 실행을 막지만, 훅을 타지 않는 경로(직접 실행·다른
+        // 클라이언트)가 있으므로 CLI 자체에도 잠금을 둔다. 사람이 자기 터미널에서 env 를
+        // 켜는 것은 통과 — 그 순간이 곧 "사람의 최종 클릭"이다(§4-3 과 같은 논리).
+        if (argv.includes('--force') && process.env.HARNESS_ALLOW_FORCE !== '1') {
+          throw new Error(
+            '`--force` 는 게이트 검사를 건너뛰므로 기본 잠금이다 — 설계 트랙 강제가 한 줄로 '
+            + '풀리는 것을 막는다. 정상 경로는 `harness gate submit <P>` → `harness gate approve <P>`. '
+            + '부트스트랩·복구로 정말 필요하면 사용자가 직접 '
+            + `\`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` 로 실행하라.`,
+          );
+        }
         if (argv.includes('--force')) {
           appendEvent(root, 'phase-set', { phase, forced: true }); // 순서 계약: 저널 먼저
           writeState(root, { ...readState(root), phase });
@@ -216,7 +251,27 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
-          default: throw new Error(`알 수 없는 gate 하위 명령: ${sub}`);
+
+          case 'feedback': {
+            // FEAT-23: 캔버스·리뷰 코멘트를 개정 근거로 수집한다. 가져오기는 에이전트/CLI 몫이고
+            // (코어는 네트워크를 타지 않는다, §1) 여기서는 `design sync --from` 과 같은 패턴을 쓴다.
+            const phase = rest[0];
+            if (!isPhase(phase)) throw new Error(`유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`);
+            const from = flag(rest, 'from');
+            if (!from) {
+              const existing = readGateFeedback(root, phase).trim();
+              console.log(existing || (lang === 'ko'
+                ? `${phase} 에 수집된 리뷰 피드백이 없다 — \`harness gate feedback ${phase} --from <코멘트파일>\` 로 수집하라.`
+                : `No review feedback collected for ${phase} — collect it with \`harness gate feedback ${phase} --from <comments-file>\`.`));
+              return 0;
+            }
+            const n = recordGateFeedback(root, phase, fs.readFileSync(from, 'utf8'));
+            console.log(lang === 'ko'
+              ? `${phase} 리뷰 피드백 ${n}건 수집 — ${path.relative(root, feedbackPath(root, phase))}\n리뷰 패킷을 다시 만들면(\`harness report packet ${phase}\`) 개정 근거로 실린다.`
+              : `Collected ${n} review comment(s) for ${phase} — ${path.relative(root, feedbackPath(root, phase))}\nRegenerate the packet (\`harness report packet ${phase}\`) to include them as revision grounds.`);
+            return 0;
+          }
+          default: throw new Error(unknownSub('gate', sub, lang));
         }
       }
 
@@ -267,7 +322,7 @@ export function run(argv: string[], root: string): number {
             return v.ok ? 0 : 1;
           }
           case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
-          default: throw new Error(`알 수 없는 ship 하위 명령: ${sub} (defect|deploy|deployments|verdict|checklist)`);
+          default: throw new Error(unknownSub('ship', sub, lang));
         }
       }
 
@@ -286,7 +341,7 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
         if (sub === 'status') { console.log(JSON.stringify({ lastTier: lastTier(root) }, null, 2)); return 0; }
-        throw new Error(`알 수 없는 usage 하위 명령: ${sub} (tier|status)`);
+        throw new Error(unknownSub('usage', sub, lang));
       }
 
       case 'migrate': {
@@ -349,7 +404,7 @@ export function run(argv: string[], root: string): number {
             console.log(c ? summonMessage(c) : '대기 중인 소환 없음');
             return c ? 2 : 0;
           }
-          default: throw new Error(`알 수 없는 loop 하위 명령: ${sub} (next|attempt|brief|critical)`);
+          default: throw new Error(unknownSub('loop', sub, lang));
         }
       }
 
@@ -384,7 +439,7 @@ export function run(argv: string[], root: string): number {
             else console.log(html);
             return 0;
           }
-          default: throw new Error(`알 수 없는 evidence 하위 명령: ${sub} (spec|check|packet)`);
+          default: throw new Error(unknownSub('evidence', sub, lang));
         }
       }
 
@@ -409,7 +464,7 @@ export function run(argv: string[], root: string): number {
             console.log(c);
             return 0;
           }
-          default: throw new Error(`알 수 없는 profile 하위 명령: ${sub} (show|cmd)`);
+          default: throw new Error(unknownSub('profile', sub, lang));
         }
       }
 
@@ -466,7 +521,7 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'list': console.log(JSON.stringify(listCanvasLinks(root), null, 2)); return 0;
-          default: throw new Error(`알 수 없는 design 하위 명령: ${sub} (link|sync|inventory|baseline|html|list)`);
+          default: throw new Error(unknownSub('design', sub, lang));
         }
       }
 
@@ -521,7 +576,7 @@ export function run(argv: string[], root: string): number {
             console.log(`스왑 유효 — 변경 토큰 ${changed.length}건${out ? ` · CSS → ${out}` : ''}`);
             return 0;
           }
-          default: throw new Error(`알 수 없는 tokens 하위 명령: ${sub} (gen|lint|swap)`);
+          default: throw new Error(unknownSub('tokens', sub, lang));
         }
       }
 
@@ -535,7 +590,7 @@ export function run(argv: string[], root: string): number {
           }
           case 'rtm': console.log(renderRtm(root)); return 0;
           case 'hub': console.log(buildHub(root)); return 0;
-          default: throw new Error(`알 수 없는 report 하위 명령: ${sub} (packet|rtm|hub)`);
+          default: throw new Error(unknownSub('report', sub, lang));
         }
       }
 
@@ -598,7 +653,7 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'list': console.log(JSON.stringify(listAdrs(root), null, 2)); return 0;
-          default: throw new Error(`알 수 없는 adr 하위 명령: ${sub}`);
+          default: throw new Error(unknownSub('adr', sub, lang));
         }
       }
 
@@ -639,7 +694,7 @@ export function run(argv: string[], root: string): number {
           case 'revise': { const d = reviseDoc(root, rest[0], flag(args, 'path')); console.log(`${d.id} → v${d.version} (이전 버전 superseded)`); return 0; }
           case 'stale': { const s = staleDocs(root); console.log(s.length ? s.map(d => `${d.id} v${d.version}`).join('\n') : '변조된 승인 문서 없음'); return 0; }
           case 'list': console.log(JSON.stringify(loadRegistry(root), null, 2)); return 0;
-          default: throw new Error(`알 수 없는 doc 하위 명령: ${sub}`);
+          default: throw new Error(unknownSub('doc', sub, lang));
         }
       }
 
@@ -657,9 +712,18 @@ export function run(argv: string[], root: string): number {
                 + '`harness node upsert --id <id> --title <제목>` 로 먼저 등록하라',
               );
             }
+            // API-29: 목표 없는 웨이브는 지시서가 아니라 빈 껍데기다 — 다음 세션이
+            // `wave-001 (미지정)` 만 보고 무엇을 하려던 웨이브인지 알 수 없다.
+            // 예전에는 무인자 `wave create` 가 exit 0 으로 성공했다(침묵 성공).
+            const goal = (flag(args, 'goal') ?? '').trim();
+            if (!goal) {
+              throw new Error(lang === 'ko'
+                ? '웨이브 목표가 필요하다 — `harness wave create --goal "<이 웨이브가 무엇을 끝내는가>"`. 목표 없는 지시서는 다음 세션이 이어받을 수 없다'
+                : 'A wave needs a goal — `harness wave create --goal "<what this wave finishes>"`. An instruction sheet without a goal cannot be picked up by the next session');
+            }
             const meta = createWave(root, {
               milestone: flag(args, 'milestone') ?? '(미지정)',
-              goal: flag(args, 'goal') ?? '(미지정)',
+              goal,
               design_refs: refs,
               acceptance: csv(flag(args, 'accept')),
             });
@@ -678,7 +742,7 @@ export function run(argv: string[], root: string): number {
           }
           case 'complete': completeWave(root); console.log('웨이브 완료'); return 0;
           case 'list': console.log(JSON.stringify(listWaves(root), null, 2)); return 0;
-          default: throw new Error(`알 수 없는 wave 하위 명령: ${sub}`);
+          default: throw new Error(unknownSub('wave', sub, lang));
         }
       }
 
@@ -744,7 +808,23 @@ export function run(argv: string[], root: string): number {
           }
           return 0;
         }
-        throw new Error(`알 수 없는 node 하위 명령: ${sub}`);
+        throw new Error(unknownSub('node', sub, lang));
+      }
+
+      case 'trace': {
+        // FEAT-22: 스펙과 wave-verifier 에이전트가 부르던 명령. MCP 도구와 **같은 조인 함수**를 쓴다.
+        const id = sub;
+        // 인자 누락은 「알 수 없는 명령」이 아니다 — 명령은 존재하고 인자가 없을 뿐이다.
+        // 사용법을 그대로 보여 준다(막다른 골목을 만들지 않는다).
+        if (!id) throw new Error(renderGroupHelp(findGroup('trace')!, lang));
+        const t = traceNode(root, id);
+        if (!t) {
+          throw new Error(lang === 'ko'
+            ? `노드 ${id} 가 설계 원장에 없다 — \`harness node upsert --id ${id} --title <제목>\` 로 등록하거나 \`harness report rtm\` 으로 등록된 노드를 확인하라`
+            : `Node ${id} is not in the design ledger — register it with \`harness node upsert --id ${id} --title <title>\`, or list known nodes with \`harness report rtm\``);
+        }
+        console.log(JSON.stringify(t, null, 2));
+        return 0;
       }
 
       case 'backtrack': {
@@ -767,7 +847,7 @@ export function run(argv: string[], root: string): number {
         return 0;
 
       default:
-        console.error(`알 수 없는 명령: ${argv.join(' ') || '(없음)'}`);
+        console.error(unknownCommand(cmd, lang));
         return 1;
     }
   } catch (e) {

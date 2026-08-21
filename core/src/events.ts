@@ -8,14 +8,14 @@
 import * as fs from 'node:fs';
 import { eventsPath } from './paths';
 import { defaultState } from './state';
-import { isPhase } from './types';
+import { isPhase, isEvidenceGrade } from './types';
 import type { HarnessEvent, HarnessState } from './types';
 
 /** doctor가 아는 이벤트 타입 — 이 밖의 타입이 저널에 있으면 재생 신뢰도 하락 신호. */
 export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set([
   'init', 'phase-set', 'wave-created', 'wave-activated', 'wave-turn-logged',
   'wave-completed', 'wave-stale', 'node-upserted', 'node-bumped',
-  'gate-submitted', 'gate-approved', 'backtrack-started', 'backtrack-cleared',
+  'gate-submitted', 'gate-approved', 'gate-feedback', 'backtrack-started', 'backtrack-cleared',
   'doctor-repaired', // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
 ]);
 
@@ -72,9 +72,14 @@ export function replayState(events: HarnessEvent[]): HarnessState {
       case 'wave-stale': if (typeof d.id === 'string' && s.activeWave === d.id) s.activeWave = null; break;
       case 'gate-submitted':
         if (isPhase(d.phase)) {
+          // LOGIC-21: 이벤트가 실어 온 evidence 를 버리면 `doctor --repair` 가 **복구하면서
+          // 근거 등급을 지운다**. 저널이 진실의 원천이라는 계약은 "저널에 있는 것은 전부
+          // 되살아난다"까지 포함한다.
           s.gates[d.phase] = {
             status: 'submitted',
             artifactHash: typeof d.artifactHash === 'string' ? d.artifactHash : undefined,
+            evidence: isEvidenceGrade(d.evidence) ? d.evidence : undefined,
+            submittedAt: ev.ts,
           };
         }
         break;
@@ -84,6 +89,7 @@ export function replayState(events: HarnessEvent[]): HarnessState {
             ...s.gates[d.phase],
             status: 'approved',
             artifactHash: typeof d.artifactHash === 'string' ? d.artifactHash : s.gates[d.phase]?.artifactHash,
+            evidence: isEvidenceGrade(d.evidence) ? d.evidence : s.gates[d.phase]?.evidence,
             approvedAt: ev.ts,
           };
         }

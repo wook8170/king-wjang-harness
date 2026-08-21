@@ -37,7 +37,7 @@ import { submitGate } from './gate';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale } from './wave';
 import { getNode, upsertNode, bumpNode } from './ledger';
 import { loadRegistry } from './registry';
-import { renderRtm, buildHub, buildReviewPacket } from './report';
+import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
 import { runDoctor } from './doctor';
 import { packetsDir } from './paths';
@@ -428,18 +428,15 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
     case 'harness_trace': {
       const id = str(o, 'node_id');
       if (!id) return fail('추적할 노드 ID 가 필요하다 (node_id)');
-      const node = getNode(root, id);
-      if (!node) {
+      // 조인 규칙은 report.traceNode 한 벌이다 — CLI `harness trace` 와 같은 결과를 보장한다.
+      const t = traceNode(root, id);
+      if (!t) {
         return fail(
           `노드 ${id} 가 설계 원장에 없다 — \`harness_node_upsert\` 로 먼저 등록하거나 `
           + '`harness_report_rtm` 으로 등록된 노드를 확인하라',
         );
       }
-      return json({
-        node,
-        waves: listWaves(root).filter(w => w.design_refs.includes(id)),
-        docs: loadRegistry(root).docs.filter(d => d.linkedNodes.includes(id)),
-      });
+      return json(t);
     }
 
     case 'harness_report_rtm':

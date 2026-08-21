@@ -9,6 +9,20 @@ import { getNode } from '../src/ledger';
 import { readEvents } from '../src/events';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
+
+/**
+ * `phase set --force` 는 SHIP-52 이후 기본 잠금이다(에이전트가 설계 트랙을 스스로 못 풀게).
+ * 부트스트랩 탈출구를 쓰는 테스트는 **사람이 터미널에서 env 를 켠 상황**을 그대로 재현한다 —
+ * 잠금을 약화하는 것이 아니라 잠금이 요구하는 조건을 만족시키는 것이다.
+ */
+const withForce = <T>(fn: () => T): T => {
+  const prev = process.env.HARNESS_ALLOW_FORCE;
+  process.env.HARNESS_ALLOW_FORCE = '1';
+  try { return fn(); } finally {
+    if (prev === undefined) delete process.env.HARNESS_ALLOW_FORCE;
+    else process.env.HARNESS_ALLOW_FORCE = prev;
+  }
+};
 const quiet = () => {
   const logs: string[] = [];
   const errs: string[] = []; // stderr 만 따로 — 경고 유무를 stdout 과 섞지 않고 단언한다
@@ -33,7 +47,7 @@ describe('cli', () => {
     const root = tmp();
     const q = quiet();
     run(['init'], root);
-    run(['phase', 'set', 'P8', '--force'], root); // 게이트 경유가 정식 경로 — 이 테스트는 웨이브 수명주기가 대상이라 부트스트랩 탈출구를 쓴다
+    withForce(() => run(['phase', 'set', 'P8', '--force'], root)); // 게이트 경유가 정식 경로 — 이 테스트는 웨이브 수명주기가 대상이라 부트스트랩 탈출구를 쓴다
     expect(readState(root).phase).toBe('P8');
     run(['node', 'upsert', '--id', 'F-1', '--title', '로그인'], root);
     run(['wave', 'create', '--milestone', 'M1', '--goal', '로그인', '--refs', 'F-1'], root);
@@ -88,7 +102,7 @@ describe('cli', () => {
     const root = tmp();
     const q = quiet();
     run(['init'], root);
-    run(['phase', 'set', 'P7', '--force'], root);
+    withForce(() => run(['phase', 'set', 'P7', '--force'], root));
     fs.appendFileSync(path.join(root, '.harness/events.jsonl'), '{broken\n');
     fs.writeFileSync(path.join(root, '.harness/state.json'), '{corrupted');
     expect(run(['doctor', '--repair'], root)).toBe(1);

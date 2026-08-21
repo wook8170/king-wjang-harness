@@ -1,9 +1,11 @@
 import * as fs from 'node:fs';
 import * as YAML from 'yaml';
 import { configPath } from './paths';
+import { isLang, DEFAULT_LANG } from './i18n';
 import type { HarnessConfig } from './types';
 
 export const DEFAULT_CONFIG: HarnessConfig = {
+  lang: DEFAULT_LANG,
   profile: 'generic',
   remote_control: true,
   terse: false,
@@ -30,6 +32,9 @@ export function loadConfig(root: string): HarnessConfig {
     }
   }
   return {
+    // 환경변수가 config 를 이긴다 — 일회성 전환을 프로젝트 설정 수정 없이 하게.
+    lang: isLang(process.env.HARNESS_LANG) ? process.env.HARNESS_LANG
+      : isLang(raw.lang) ? raw.lang : DEFAULT_CONFIG.lang,
     profile: typeof raw.profile === 'string' ? raw.profile : DEFAULT_CONFIG.profile,
     remote_control: asBool(raw.remote_control, DEFAULT_CONFIG.remote_control),
     terse: asBool(raw.terse, DEFAULT_CONFIG.terse),

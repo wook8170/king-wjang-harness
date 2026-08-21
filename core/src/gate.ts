@@ -21,6 +21,8 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
+import { packetsDir } from './paths';
+import { sanitizeUntrusted } from './untrusted';
 import { readState, writeState } from './state';
 import { PHASES, SHIP_PHASES, isEvidenceGrade } from './types';
 import type { EvidenceGrade, GateRecord, Phase } from './types';
@@ -28,6 +30,31 @@ import type { EvidenceGrade, GateRecord, Phase } from './types';
 /** 중복·공백을 걷고 정렬한다 — 같은 파일 집합은 입력 순서와 무관하게 같은 해시여야 한다. */
 function normalizePaths(relPaths: string[]): string[] {
   return [...new Set(relPaths.map(p => p.trim()).filter(Boolean))].sort();
+}
+
+/**
+ * SEC-25: 심사 대상은 **이 저장소 안**이어야 한다.
+ * 예전에는 `--paths ../../../etc/passwd` 도 제출·승인됐다. 정보가 새지는 않았지만(패킷은 해시만
+ * 싣는다) 게이트의 존재 이유인 «심사한 것과 승인할 것이 같다»가 깨진다 — 승인 도장이 버전 관리
+ * 밖 파일에 찍히고, 해시 감시가 리뷰어가 볼 수 없는 대상을 겨눈다. 웨이브 id 는 이미 검증하면서
+ * 산출물 경로만 안 하던 **비대칭**이었다.
+ */
+function assertInsideRoot(root: string, paths: string[]): void {
+  // 심링크로 밖을 가리키는 경우까지 잡으려면 실경로로 비교해야 한다. 해석 실패(아직 없는
+  // 파일 등)는 리터럴 경로로 판정한다 — 존재 여부는 computeArtifactHash 가 따로 말한다.
+  const real = (p: string): string => { try { return fs.realpathSync(p); } catch { return p; } };
+  const base = real(root);
+  const outside = paths.filter(p => {
+    const rel = path.relative(base, real(path.resolve(root, p)));
+    return rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
+  });
+  if (outside.length > 0) {
+    throw new Error(
+      `심사 대상은 프로젝트 안에 있어야 한다 — 루트 밖 경로: ${outside.join(', ')}. `
+      + '게이트는 «심사한 것과 승인할 것이 같다»를 보장하는 장치다. 리뷰어가 저장소에서 볼 수 '
+      + '없는 파일에는 승인 도장을 찍을 수 없다.',
+    );
+  }
 }
 
 /**
@@ -85,18 +112,22 @@ export function submitGate(
       `유효하지 않은 근거 등급: ${String(opts.evidence)} (claimed, code, measured 중 하나)`,
     );
   }
+  assertInsideRoot(root, paths);
   const artifactHash = computeArtifactHash(root, paths);
   const state = readState(root);
   const prevStatus = state.gates[phase]?.status ?? 'pending';
   // 재제출은 승인된 게이트도 다시 연다 — 개정된 산출물은 다시 심사받아야 한다.
   // 직전 상태는 이벤트에 남긴다(무엇이 닫혔다 다시 열렸는지가 감사 대상).
+  // OPS-20: 저널을 **먼저** 쓰고 그 이벤트의 ts 를 상태에도 그대로 쓴다. 예전에는 두 곳이
+  // 각자 `new Date()` 를 찍어 밀리초가 갈렸고, 그 차이 때문에 `doctor` 가 승인 이후 **영구히**
+  // `gates 불일치` 를 보고했다 — 상시 빨간 진단은 진짜 드리프트를 덮는다.
+  const ev = appendEvent(root, 'gate-submitted', { phase, artifactHash, evidence: opts.evidence, paths, prevStatus });
   const record: GateRecord = {
     status: 'submitted',
     artifactHash,
     evidence: opts.evidence,
-    submittedAt: new Date().toISOString(),
+    submittedAt: ev.ts,
   };
-  appendEvent(root, 'gate-submitted', { phase, artifactHash, evidence: opts.evidence, paths, prevStatus });
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
 }
@@ -131,10 +162,47 @@ export function approveGate(root: string, phase: Phase): GateRecord {
       + `\`harness gate submit ${phase}\` 로 재제출한 뒤 승인하라`,
     );
   }
-  const record: GateRecord = { ...current, status: 'approved', approvedAt: new Date().toISOString() };
-  appendEvent(root, 'gate-approved', { phase, artifactHash, evidence: current.evidence, paths });
+  // OPS-20: 위 submitGate 와 같은 이유 — 이벤트의 ts 가 유일한 승인 시각이다.
+  const ev = appendEvent(root, 'gate-approved', { phase, artifactHash, evidence: current.evidence, paths });
+  const record: GateRecord = { ...current, status: 'approved', approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
+}
+
+/**
+ * FEAT-23: 리뷰 피드백 수집. 공개 README 4개 언어가 「캔버스 코멘트 스레드를 개정으로
+ * 수집한다(`harness gate feedback`)」고 광고하는데 구현이 없었다.
+ *
+ * 코어는 순수·로컬·결정적이다(§1) — 캔버스에서 코멘트를 **가져오는 것**은 네트워크 일이라
+ * 에이전트/CLI 몫이고, 여기서는 `design sync --from <파일>` 과 **같은 패턴**으로 가져온
+ * 내용을 받아 기록한다. 그래야 아이패드에서 「검토 → 코멘트 → 개정 → 재제출」 루프가 닫힌다.
+ *
+ * 내용은 **신뢰 경계 밖**이다 — 리뷰 패킷은 승인 심사자와 모델이 읽는 지시 채널이므로
+ * 줄마다 중화해서 넣는다(SEC-28 과 같은 한 벌).
+ */
+export function feedbackPath(root: string, phase: Phase): string {
+  return path.join(packetsDir(root), `${phase}.feedback.md`);
+}
+
+export function recordGateFeedback(root: string, phase: Phase, raw: string): number {
+  const lines = raw.split('\n').map(l => sanitizeUntrusted(l)).filter(l => l.trim());
+  if (lines.length === 0) {
+    throw new Error(
+      `수집할 피드백이 비어 있다 — \`harness gate feedback ${phase} --from <파일>\` 의 파일에 `
+      + '리뷰 코멘트를 담아라. 빈 피드백은 개정 근거가 되지 못한다',
+    );
+  }
+  const ev = appendEvent(root, 'gate-feedback', { phase, count: lines.length });
+  fs.mkdirSync(packetsDir(root), { recursive: true });
+  fs.appendFileSync(
+    feedbackPath(root, phase),
+    `\n## ${ev.ts} — ${lines.length}건\n\n${lines.map(l => `- ${l}`).join('\n')}\n`,
+  );
+  return lines.length;
+}
+
+export function readGateFeedback(root: string, phase: Phase): string {
+  try { return fs.readFileSync(feedbackPath(root, phase), 'utf8'); } catch { return ''; }
 }
 
 export interface GateVerdict {
