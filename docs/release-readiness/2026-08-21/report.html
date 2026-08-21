@@ -28,6 +28,10 @@ figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0
 .quote{border-left:3px solid var(--green);background:var(--card);padding:.5rem .9rem;margin:.3rem 0;font-weight:600}
 .quote+.quote{margin-top:-.3rem;font-weight:400}
 </style>
+<div style="max-width:960px;margin:0 auto 1.2rem;padding:1rem 1.2rem;border:2px solid #b91c1c;border-radius:8px;background:#fef2f2;color:#7f1d1d;font:15px/1.6 -apple-system,'Apple SD Gothic Neo',sans-serif">
+<div style="font-weight:700;font-size:1.05rem;margin-bottom:.3rem">⛔ 이 판정은 철회 중입니다 — 아래 「출하 가능」을 신뢰하지 마십시오</div>
+42-에이전트 적대적 재감정에서 <b>BLOCKER 가 발견</b>되어 재현 확인됐습니다(2026-08-21 저녁). 핵심: 훅의 정책 파일 <code>.harness/config.yaml</code> 이 피판정자 쓰기 영역 안에 있어, <code>design_allowed_prefixes: ['']</code> 한 줄로 설계 트랙 강제가 통째로 꺼지고 <code>doctor</code> 도 이를 탐지하지 못합니다(자기 무장해제). 부수: 정당한 파일(<code>package.json</code>·<code>test/*</code> 등) 과차단, 배포 계층 i18n 미완, 구축·출하 트랙 배포 강제 미구현. <b>정정 판정 = 출하 불가(NO-GO).</b> 정식 갱신본으로 곧 대체됩니다.
+</div>
 <h1>king-wjang-harness 출하 검증 — 종합 리포트</h1>
 <h2>king-wjang-harness 출하 검증 — 종합 리포트</h2>
 <p><strong>작성 2026-08-21</strong> · 대상 <code>e860460</code> (feature/core-engine-v0) · 방식 11축 감사(단일 세션 직접 수행) + 실측 E2E</p>
