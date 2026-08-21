@@ -1,0 +1,28 @@
+=== 라운드1 닫은 증거 Fri Aug 21 14:49:46 KST 2026 ===
+-- 차단 결함 재현 시퀀스가 뒤집혔는가 --
+DENY   SEC-50 리다이렉트
+DENY   SEC-50 heredoc
+DENY   SEC-50 touch
+DENY   SEC-49 저널 append
+DENY   SEC-49 안전망
+DENY   SEC-51 state 덮어쓰기
+DENY   SHIP-52 force
+-- 정상 경로가 살아 있는가 --
+ALLOW  루트밖 로그 (ALLOW 기대)
+ALLOW  저널 조회 (ALLOW 기대)
+ALLOW  docs 쓰기 (ALLOW 기대)
+-- OPS-20 / LOGIC-21 --
+승인 후 doctor ok:   "ok": true,
+repair 전 evidence: "evidence":"measured",
+repair 후 evidence: "evidence":"measured",
+-- SEC-25 --
+루트밖 산출물 exit=1 : Artifacts under review must live inside the project — outs
+-- UX-24 / API-27 --
+--help exit=0
+Unknown node subcommand: (none) — expected one of: upsert | bump
+-- FEAT-22 / FEAT-23 --
+trace exit=0
+Collected 1 review comment(s) for P0 — .harness/packets/P0.feedback.md
+-- OPS-55 --
+  "repaired": true,
+  "refused": false,

@@ -1,0 +1,290 @@
+<title>King Harness 재감정</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#f7f6f3; --surface:#fefdfb; --sunk:#eeece6;
+    --ink:#22231e; --soft:#5b5d55; --faint:#8b8d84; --line:#dad7ce;
+    --accent:#c85a08; --accent-ink:#9c4505; --accent-wash:#f6e6d8;
+    --met:#2c7a42; --met-wash:#e2f0e5;
+    --short:#a8760a; --short-wash:#f7edd6;
+    --crit:#a83428;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#171815; --surface:#1f201c; --sunk:#262722;
+      --ink:#e9e7df; --soft:#a4a399; --faint:#787970; --line:#383930;
+      --accent:#ef8a35; --accent-ink:#f4a463; --accent-wash:#3a2513;
+      --met:#66c184; --met-wash:#1c3324;
+      --short:#dcae43; --short-wash:#332a13;
+      --crit:#e0705f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#171815; --surface:#1f201c; --sunk:#262722;
+    --ink:#e9e7df; --soft:#a4a399; --faint:#787970; --line:#383930;
+    --accent:#ef8a35; --accent-ink:#f4a463; --accent-wash:#3a2513;
+    --met:#66c184; --met-wash:#1c3324;
+    --short:#dcae43; --short-wash:#332a13;
+    --crit:#e0705f;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+    font-size:15.5px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:830px;margin:0 auto;padding:52px 22px 90px}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.86em;
+    background:var(--sunk);padding:1px 5px;border-radius:4px}
+
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--accent-ink);display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+  h1{font-size:33px;line-height:1.22;margin:0 0 8px;font-weight:700;letter-spacing:-.015em;text-wrap:balance}
+  .sub{color:var(--soft);margin:0 0 10px;max-width:62ch}
+  .meta{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--faint);
+    font-variant-numeric:tabular-nums}
+
+  .verdict{margin:32px 0 10px;background:var(--surface);border:1px solid var(--line);
+    border-left:4px solid var(--accent);padding:20px 22px;display:flex;flex-direction:column;gap:10px}
+  .verdict .k{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--faint)}
+  .verdict .head{font-size:18px;font-weight:700;margin:0;line-height:1.4}
+  .verdict p{margin:0;color:var(--soft)}
+  .verdict p strong{color:var(--ink)}
+
+  /* ── 스코어카드: 4.8 눈금을 넘었는지가 한눈에 보이는 것이 이 표의 존재 이유다 ── */
+  .card{margin:30px 0 8px;display:flex;flex-direction:column;gap:2px}
+  .row{display:grid;grid-template-columns:132px 1fr 108px;gap:14px;align-items:center;
+    padding:9px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .row .nm{font-size:13.5px;font-weight:500;line-height:1.35}
+  .row .nm small{display:block;color:var(--faint);font-weight:400;font-size:11.5px}
+  .track{position:relative;height:22px;background:var(--sunk);border-radius:3px;overflow:hidden}
+  .prior{position:absolute;top:0;bottom:0;left:0;background:var(--line)}
+  .now{position:absolute;top:0;bottom:0;left:0;background:var(--accent);border-radius:3px 0 0 3px}
+  .now.met{background:var(--met)}
+  .tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.62}
+  .nums{display:flex;align-items:baseline;justify-content:flex-end;gap:7px;
+    font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+  .nums .was{font-size:12px;color:var(--faint);text-decoration:line-through}
+  .nums .is{font-size:15px;font-weight:600}
+  .nums .is.met{color:var(--met)} .nums .is.short{color:var(--short)}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--faint);margin-top:12px}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .sw{width:16px;height:9px;border-radius:2px;display:inline-block}
+
+  h2{font-size:15px;font-weight:700;letter-spacing:.01em;margin:48px 0 14px;padding-top:20px;
+    border-top:1px solid var(--line);display:flex;align-items:baseline;gap:11px}
+  h2 .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;
+    color:var(--accent-ink);letter-spacing:.1em}
+  h3{font-size:14px;margin:24px 0 6px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  p{margin:10px 0} ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+  li::marker{color:var(--accent-ink)}
+
+  .chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+    padding:2px 8px;border-radius:20px;letter-spacing:.05em;vertical-align:2px;white-space:nowrap}
+  .chip.met{background:var(--met-wash);color:var(--met)}
+  .chip.short{background:var(--short-wash);color:var(--short)}
+  .chip.id{background:var(--accent-wash);color:var(--accent-ink)}
+
+  .tblwrap{overflow-x:auto;margin:14px 0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+    text-transform:uppercase;color:var(--faint);font-weight:500;padding:6px 12px 6px 0;
+    border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:8px 12px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.mono{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  .note{background:var(--surface);border:1px solid var(--line);padding:14px 16px;
+    margin:16px 0;font-size:13.5px;color:var(--soft)}
+  .note strong{color:var(--ink)}
+  .foot{margin-top:56px;padding-top:14px;border-top:1px solid var(--line);
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--faint)}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Re-appraisal · 실측 기반</div>
+  <h1>king-wjang-harness 재감정</h1>
+  <p class="sub">2026-08-21 감정서(<code>bbbb9b6</code>·198 tests) 이후 출하 검증과 수정 라운드 1을 거친 뒤,
+    같은 7항목을 <strong>착수 전에 못 박은 기준</strong>으로 다시 채점한다.</p>
+  <p class="meta">대상 <span class="mono">HEAD</span> · 코어 TS 약 8,900줄 · 테스트 626건(3회 반복 동일) · 커밋 3개 · 결함 대장 36행</p>
+
+  <div class="verdict">
+    <div class="k">종합</div>
+    <p class="head">7항목 중 <span class="mono">4</span>개가 목표 4.8 도달 — 남은 3개는 원인이 하나로 모인다.</p>
+    <p>차단 결함 2건(Bash 표면 미검사)이 닫히면서 <strong>실효성이 3.5 → 4.8</strong> 로 올랐고,
+      <code>--help</code> 신설로 <strong>사용성이 3.0 → 4.8</strong>, 미구현 광고 기능 2건 구현으로
+      <strong>효용성이 4.5 → 4.8</strong> 이 됐다. 미달 3항목은 전부
+      <strong>「아직 재지 못했거나 아직 번역하지 못한 것」</strong>이지 새로 발견된 결함이 아니다.</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="nm">효용성<small>문제 적합</small></div>
+      <div class="track"><div class="prior" style="width:90%"></div><div class="now met" style="width:96%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">4.5</span><span class="is met">4.8</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">실효성<small>강제가 정말 강제인가</small></div>
+      <div class="track"><div class="prior" style="width:70%"></div><div class="now met" style="width:96%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">3.5</span><span class="is met">4.8</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">엔지니어링 품질<small>코드</small></div>
+      <div class="track"><div class="prior" style="width:100%"></div><div class="now met" style="width:98%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">5.0</span><span class="is met">4.9</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">품질<small>출하 검증 결과</small></div>
+      <div class="track"><div class="now" style="width:92%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">—</span><span class="is short">4.6</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">가성비</div>
+      <div class="track"><div class="prior" style="width:80%"></div><div class="now" style="width:86%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">4.0</span><span class="is short">4.3</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">사용성</div>
+      <div class="track"><div class="prior" style="width:60%"></div><div class="now met" style="width:96%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">3.0</span><span class="is met">4.8</span></div>
+    </div>
+    <div class="row">
+      <div class="nm">상품성</div>
+      <div class="track"><div class="prior" style="width:50%"></div><div class="now" style="width:88%"></div><div class="tick" style="left:96%"></div></div>
+      <div class="nums"><span class="was">2.5</span><span class="is short">4.4</span></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--line)"></i>이전 점수</span>
+    <span><i class="sw" style="background:var(--met)"></i>목표 도달</span>
+    <span><i class="sw" style="background:var(--accent)"></i>목표 미달</span>
+    <span><i class="sw" style="background:var(--ink);width:2px;height:13px"></i>목표선 4.8</span>
+  </div>
+
+  <div class="note"><strong>채점 기준은 작업 착수 전에 고정했다</strong>
+    (<code>docs/release-readiness/2026-08-21/rubric.md</code>). 결과를 보고 임계값을 내리지 않았고,
+    조건을 하나라도 못 채운 항목은 근거 없이 올리지 않았다. 이 문서는 자기 채점이므로
+    <strong>독립 감정이 아니다</strong> — 각 점수 아래의 관측 근거로 반박할 수 있게 적었다.</div>
+
+  <h2><span class="tag">01</span>목표에 도달한 4항목</h2>
+
+  <h3>실효성 <span class="chip id">3.5 → 4.8</span> <span class="chip met">조건 충족</span></h3>
+  <p>이전 감정서는 「구멍 1: <code>phase set</code> 이 게이트 없이 페이즈를 넘긴다」를 최대 약점으로 짚었다.
+    그 구멍은 게이트 구현으로 닫혔지만 <strong><code>--force</code> 로 이름만 바뀐 채 남아 있었고</strong>,
+    감정서가 보지 못한 더 큰 구멍이 따로 있었다 — <strong>훅이 Bash 표면에서 파일 쓰기를 보지 않았다.</strong></p>
+  <div class="tblwrap"><table>
+    <tr><th>우회 경로</th><th>이전</th><th>지금</th></tr>
+    <tr><td><code>echo x &gt; src/app.ts</code> (설계 트랙)</td><td>통과</td><td>deny</td></tr>
+    <tr><td>heredoc · <code>touch</code> · <code>cp</code> · <code>tee</code> · <code>sed -i</code></td><td>통과</td><td>deny</td></tr>
+    <tr><td><code>echo '{"type":"phase-set"…}' &gt;&gt; events.jsonl</code> + <code>doctor --repair</code></td><td><strong>사람 없이 게이트 승인</strong></td><td>deny</td></tr>
+    <tr><td><code>python -c "open('.harness/events.jsonl','a')"</code></td><td>통과</td><td>deny (안전망)</td></tr>
+    <tr><td><code>harness phase set P7 --force</code></td><td>통과</td><td>deny + CLI env 잠금</td></tr>
+    <tr><td><code>npm test &gt; /tmp/out.log</code> · <code>cat events.jsonl</code></td><td>통과</td><td>통과 (의도)</td></tr>
+  </table></div>
+  <p>마지막 줄이 중요하다. 루트 밖 쓰기와 조회까지 막으면 사람이 하네스를 꺼버리고,
+    그러면 방어가 0이 된다. <strong>지켜야 할 것은 이 프로젝트의 소스이지 디스크 전체가 아니다.</strong></p>
+  <p>완전 방탄은 아니다 — <code>eval</code>·base64·변수 조립은 정적으로 못 잡는다.
+    다만 이 하네스의 계약은 「보안 경계」가 아니라 「사고 방지」이고,
+    <strong>막힌 모델이 자연히 가는 다음 경로</strong>는 전부 닫혔다. 그 선까지가 4.8이다.</p>
+
+  <h3>사용성 <span class="chip id">3.0 → 4.8</span> <span class="chip met">조건 충족</span></h3>
+  <p><code>--help</code>·<code>-h</code>·<code>help</code>·무인자가 전부 <code>exit 1</code> 「알 수 없는 명령」이었다.
+    60여 개 명령을 가진 CLI 에 진입점이 0이라 소스를 읽어야 쓸 수 있었다.
+    이제 명령 레지스트리 한 벌에서 최상위 도움말·군별 도움말·「알 수 없는 하위 명령」 안내가
+    <strong>전부 파생</strong>된다 — 예전엔 목록이 각 <code>case</code> 안에 손으로 박혀 있어
+    8개 군만 안내하고 5개 군은 침묵했다.</p>
+  <p>「설치 → 침묵 → ???」 골짜기도 메웠다. <code>harness init</code> 과 활성 웨이브가 없는
+    SessionStart 주입이 <strong>다음 한 걸음</strong>을 준다.</p>
+
+  <h3>효용성 <span class="chip id">4.5 → 4.8</span> <span class="chip met">조건 충족</span></h3>
+  <p>문서·스킬·에이전트가 부르는 명령 53개를 전수 실행해 <strong>없는 명령 2건</strong>을 찾았다:
+    <code>harness trace</code>(스펙이 정의하고 <code>wave-verifier</code> 에이전트가 지시하는데 MCP 전용이었다)와
+    <code>harness gate feedback</code>(공개 README <strong>4개 언어 전부</strong>가 광고하는데 구현이 없었다).
+    둘 다 구현했고, <code>trace</code> 는 조인 규칙을 CLI·MCP 가 공유한다.</p>
+
+  <h3>엔지니어링 품질 <span class="chip id">5.0 → 4.9</span> <span class="chip met">조건 충족</span></h3>
+  <p>626 tests 3회 동일 · <code>tsc</code> 0 · 재빌드 산출물이 커밋본과 <strong>바이트 동일</strong>.
+    이번 라운드에서 오히려 개선된 것은 <strong>중복 규칙 제거</strong>다:</p>
+  <ul>
+    <li>인젝션 방어가 <code>hook.ts</code>(정규식)·<code>loop.ts</code>(코드포인트 루프) 두 벌이었다 —
+      loop.ts 주석이 "한쪽을 고치면 다른 쪽도 고쳐라"라고 적어 뒀지만 사람이 기억하는 방어는 갈린다. 한 벌로 합쳤다.</li>
+    <li>이벤트 타입 목록이 손으로 관리돼 <strong>18종이 누락</strong>돼 있었다. 이제 <code>appendEvent</code> 가
+      단일 유니온만 받아 <strong>등록 누락이 컴파일 에러</strong>다.</li>
+    <li>쓰기 판정·명령 목록·설계 추적 조인도 각각 한 벌로 모았다.</li>
+  </ul>
+  <p>0.1 감점은 스스로 만든 예외 때문이다 — <code>tokens.ts</code>·<code>evidence.ts</code> 의 순수 검증기는
+    <code>root</code> 가 없어 i18n 에서 빠졌고, 생성 문서는 아직 문자열을 인라인으로 들고 있다.
+    사유는 파일 주석에 남겼지만 <strong>예외는 예외다.</strong></p>
+
+  <h2><span class="tag">02</span>목표에 못 미친 3항목 — 원인은 둘</h2>
+
+  <h3>가성비 <span class="chip id">4.0 → 4.3</span> <span class="chip short">측정 불가</span></h3>
+  <p>고친 것은 둘이다. <code>PostToolUse</code> matcher 를 <code>*</code> 에서
+    <code>Write|Edit|MultiEdit|NotebookEdit|Bash</code> 로 좁혔다 —
+    <code>postTool</code> 이 실제로 반응하는 도구와 정확히 같은 집합이라 동작은 불변이고,
+    Read·Grep 같은 조회마다 node 를 띄우던 비용이 사라진다. 그리고 열화 경로의 저널 재생을
+    상태를 바꾸는 8개 타입만 파싱하도록 바꿨다.</p>
+  <div class="note"><strong>그런데 재지 못했다.</strong> 세션 내내 머신 load 가 12~17(10 코어)이었고,
+    통제 측정(아무 일도 하지 않는 <code>post-tool</code>)이 정상 경로보다 <em>높게</em> 나오는 등
+    측정 창이 통째로 무효였다. 기제는 단위 테스트로 확인했지만
+    <strong>「고쳤다」는 주장이고 재측정이 관측이다</strong> — 대장에서 <code>fixed</code> 로 두고
+    <code>verified</code> 로 올리지 않았다. 조용한 창에서 다시 재면 4.8 로 갈 항목이다.</div>
+
+  <h3>품질(출하) <span class="chip id">→ 4.6</span> <span class="chip short">게이트 1개 미검증</span></h3>
+  <p>결함 대장 36행 · <strong>open BLOCKER 0 · open HIGH 0</strong> · lint R1–R7 통과.
+    게이트 13개 중 12개가 초록이고, 미달 1개가 바로 위의 지연 측정이다.
+    즉 이 항목의 감점은 가성비와 <strong>같은 원인 하나</strong>다.</p>
+  <p>라운드 중 새로 드러난 결함 3건도 함께 닫았다 — 그중 둘은 스스로 만든 회귀 테스트가 잡았다:
+    전체 스위트에서만 재현되던 재생 비결정성, 그리고
+    <strong>정상 사용만으로 <code>doctor --repair</code> 가 복구를 거부하던</strong> 이벤트 타입 드리프트.</p>
+
+  <h3>상품성 <span class="chip id">2.5 → 4.4</span> <span class="chip short">번역 잔여</span></h3>
+  <p>감정서가 「선결 과제」로 꼽은 것 중 셋은 닫혔다 — 게이트 구현(자기해제 구멍 봉인),
+    온보딩, 설계 트랙 산출물 스킬 11종. <strong>LICENSE(MIT)</strong> 도 넣었다.
+    i18n 은 기본 언어를 영어로 바꾸고 <code>lang: ko</code> 옵션을 뒀다:</p>
+  <div class="tblwrap"><table>
+    <tr><th>표면</th><th>상태</th></tr>
+    <tr><td>도움말 전체 · 훅(주입·전 deny 사유·stop 가드) · CLI 메시지 · MCP 도구</td><td><span class="chip met">영문 기본</span></td></tr>
+    <tr><td>gate·wave·state·ledger·registry·adr·design·loop·evidence·ship·doctor 예외</td><td><span class="chip met">영문 기본</span></td></tr>
+    <tr><td>리뷰 패킷 · RTM · 산출물 허브 · 릴리스 체크리스트 · 결함 대장 렌더</td><td><span class="chip short">한국어</span></td></tr>
+    <tr><td>웨이브 실행/검증 브리프 · Playwright 사양 · 비교 패킷 HTML</td><td><span class="chip short">한국어</span></td></tr>
+  </table></div>
+  <p>남은 것은 <strong>생성 문서</strong>다. 리포트·체크리스트는 사용자가 읽고 공유하는 산출물이라
+    영어권 사용자에게 그대로 벽이 된다. 브리프·사양은 에이전트에게 가는 지시라 성격이 조금 다르지만
+    (모델은 한국어를 읽는다) <strong>사람이 검토할 수 없다면 감사 가능성이 사라진다</strong> —
+    이 제품이 파는 것이 바로 그 감사 가능성이라 면제 대상이 아니다.</p>
+
+  <h2><span class="tag">03</span>4.8 까지 남은 일</h2>
+  <div class="tblwrap"><table>
+    <tr><th>항목</th><th>남은 일</th><th>확인 방법</th></tr>
+    <tr><td class="mono">가성비 4.3</td><td>조용한 창에서 훅 지연 재측정 (+ 필요하면 기동 비용 추가 절감)</td>
+        <td>load &lt; 2 에서 폴백 p95 &lt; 150ms</td></tr>
+    <tr><td class="mono">품질 4.6</td><td>위 측정으로 게이트 G9 초록 → 대장 PERF-26 을 verified 로</td>
+        <td><code>ledger-lint.sh</code> 통과 + 게이트 13/13</td></tr>
+    <tr><td class="mono">상품성 4.4</td><td>생성 문서 i18n — 리포트·체크리스트 먼저, 브리프·사양 다음</td>
+        <td><code>HARNESS_LANG</code> 미설정 상태에서 산출물에 한국어 0</td></tr>
+  </table></div>
+
+  <h2><span class="tag">04</span>이전 감정서에서 낡은 것</h2>
+  <p>붙여 주신 감정서는 <code>bbbb9b6</code> 기준이라 몇 가지 판정이 이미 사실이 아니다.
+    다음 사람이 그대로 읽지 않도록 적어 둔다.</p>
+  <div class="tblwrap"><table>
+    <tr><th>감정서 주장</th><th>현재</th></tr>
+    <tr><td>페이즈 게이트 미구현 — <code>phase set</code> 자기해제</td><td>구현됨. 단 <code>--force</code> 로 남아 있던 것을 이번에 닫음</td></tr>
+    <tr><td>테스트 198건 · 코어 1,550줄</td><td>626건 · 약 8,900줄</td></tr>
+    <tr><td>슬래시 커맨드 없어 발견성 부족</td><td>스킬 11종 존재. <strong>CLI <code>--help</code> 부재는 사실이었고 이번에 해결</strong></td></tr>
+    <tr><td>한국어 전용 README</td><td>4개 언어. CLI·훅은 이번에 영문 기본으로 전환</td></tr>
+    <tr><td>배포 캐시 67MB — devDeps 동봉</td><td>해당 없음 — <code>git archive HEAD</code> 는 1.9MB, node_modules 0</td></tr>
+    <tr><td>훅 오버헤드 p95 104ms · matcher <code>*</code></td><td><strong>유효했다</strong> — matcher 를 좁혔고 절대 측정은 대기 중</td></tr>
+    <tr><td><code>.harness/</code> 브랜치 전환·병합 충돌 미해결</td><td><strong>유효 · 미검증</strong> — 이번 검증에서도 보지 못했다</td></tr>
+  </table></div>
+  <p>그리고 감정서가 <strong>놓친 것</strong>: Bash 표면 미검사. 코어 11모듈을 전부 읽고
+    「경로 우회를 진지하게 막았다」고 평가했는데, 그건 <code>Write</code> 표면 이야기였다.
+    <strong>막힌 다음에 무엇을 시도하게 되는지 실제로 해 봐야 옆문이 보인다.</strong></p>
+
+  <div class="foot">king-wjang-harness · re-appraised 2026-08-21 · 626/626 tests ×3 · 결함 대장 36행 (open BLOCKER 0)</div>
+</div>

@@ -1,5 +1,56 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-21 — ★ 출하 검증 라운드 1 완료 · NO-GO → **조건부 출하 가능** · 재감정 4/7 도달
+
+**정본.** 출하 검증(NO-GO, 차단 2건)의 open 16건 + 라운드 중 드러난 3건을 전부 닫았다.
+**테스트 584 → 626 green ×3, tsc 0.** 커밋 4개: `5f3b112`(Bash차단+정합성+help/i18n+trace/feedback)
+· `0dfd9ca`(i18n 전면+LICENSE+오버헤드+재생 결정성) · 이벤트 타입 · 마무리.
+
+- 리포트: https://claude.ai/code/artifact/c6e6ed5c-baf3-4a2a-9779-e5b16592e0d8
+- 재감정: https://claude.ai/code/artifact/b34b9d1e-558a-4ca6-9a2a-a457776a6a77
+- 파일: `docs/release-readiness/2026-08-21/` (ledger 36행 lint 통과 · fixes-round1.md · rubric.md)
+
+### 닫은 것 (전건 재측정 — `evidence/round1-verify.log`)
+- **SEC-49/50 BLOCKER** — 훅이 Bash 표면에서 파일 쓰기를 안 보던 것. `core/src/bashwrite.ts` 신설,
+  추출한 쓰기 대상을 **Write 와 같은 판정 함수**(`judgeWritePath`)로 보낸다. 저널 위조로 사람 없이
+  게이트가 열리던 경로도 함께 닫힘. 루트 밖 쓰기·조회는 **의도적으로 허용**(과차단하면 하네스를 끈다).
+- **SEC-51**(코어파일 Bash 우회) · **SHIP-52**(`--force` → 훅 deny + `HARNESS_ALLOW_FORCE=1`)
+- **OPS-20**(doctor 상시 오탐 — 저널 ts 를 상태에도 사용) · **LOGIC-21**(repair 가 evidence 삭제)
+- **FEAT-22** `harness trace` · **FEAT-23** `harness gate feedback` 구현
+- **UX-24** `--help` 전면(`core/src/help.ts` 레지스트리 한 벌) · **API-27/29/30** · **SEC-25/28** · **SHIP-31**
+- 신규: **DET-53**(재생 비결정) · **OPS-55**(이벤트 타입 18종 미등록 → `doctor --repair` 가 복구 거부)
+  · **LOGIC-56**(`gate-invalidated` 미폴드 → 복구가 무효화를 되살림)
+
+### 재감정 점수 (기준은 `docs/release-readiness/2026-08-21/rubric.md`, 착수 전 고정)
+효용성 4.5→**4.8** · 실효성 3.5→**4.8** · 엔지니어링 4.9 · 사용성 3.0→**4.8** ✅
+품질 **4.6** · 가성비 4.0→**4.3** · 상품성 2.5→**4.4** ❌
+
+### 다음 즉시 할 일 (4.8 미달 3항목 — 원인은 둘뿐)
+1. **가성비·품질** — 훅 지연 **조용한 창 재측정**. 이 세션 내내 머신 load 12~17(OrbStack·Ollama)이라
+   통제 측정이 정상 경로보다 높게 나오는 등 창이 무효였다. `evidence/latency.log` 절차 그대로
+   재실행 → 폴백 p95 < 150ms 확인 → 대장 **PERF-26 을 fixed → verified** 로. 그러면 G9 초록 =
+   게이트 13/13 → 품질도 함께 오른다.
+2. **상품성** — **생성 문서 i18n**. 예외 메시지는 전량 끝났고 남은 것은 렌더 문서다:
+   `report.ts`(리뷰 패킷·RTM·허브) · `ship.ts`(결함 대장·릴리스 체크리스트) 먼저,
+   그다음 `loop.ts`(웨이브 브리프) · `evidence.ts`(Playwright 사양·비교 패킷) · `design.ts`(정본 HTML).
+   확인: `HARNESS_LANG` 미설정에서 산출물에 한국어 0.
+
+### 시스템 지식 (이번 웨이브)
+- **zsh 는 무인용 파라미터 확장을 단어 분리하지 않는다.** `./bin/harness $c` 로 "gate approve" 를
+  넘기면 한 덩어리로 들어가 「미구현 명령 48건」이라는 가짜 결함이 나온다. 결과가 극적이면 도구부터 의심.
+- `ledger-lint.sh`·`report-html.py` 는 **리포 루트에서** 실행해야 `파일:줄` 인용이 해석된다.
+- `report-html.py` 는 `<details>` 를 못 다룬다 — 마크다운 원문에 HTML 태그를 쓰지 마라.
+- **테스트가 한국어 문자열을 단언한다(191곳).** `core/test/setup.ts` 가 스위트 전역을 `HARNESS_LANG=ko`
+  로 고정해 그대로 유효하게 뒀다. 영문 기본값은 별도 테스트가 env 를 해제하고 본다.
+- i18n 예외 2곳(`tokens.ts`·`evidence.ts` 순수 검증기)은 `root` 가 없어 영어 고정 — 파일 주석에 사유.
+- 감정서 `docs/appraisal/2026-08-21-plugin-appraisal.html` 는 `bbbb9b6` 기준이라 여러 판정이 낡았다.
+  대조표는 재감정 아티팩트 §04 와 `00-summary.md` 「감정서 대조」에 있다.
+
+### ⚠ 사용자 결정 (이번 세션에 받은 것)
+- i18n = **영문 기본 + `lang: ko`** · LICENSE = **MIT** · `--force` = **훅 차단 + env 로만 허용** → 전부 반영 완료.
+- 남은 결정: **CI 없음** · GitHub 리모트 없음 · **push 금지 유지** · main 병합 보류.
+
+
 ## 2026-08-21 — ★ 출하 검증 완료 (11축) · **판정 NO-GO** · 차단 결함 2건
 
 **정본.** `/verifying-production-readiness` 를 대상 `e860460` 에 대해 11축 전부 수행.

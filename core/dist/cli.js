@@ -8054,6 +8054,14 @@ function runDoctor(root, opts = {}) {
       })
     );
   }
+  if (current && current.schemaVersion !== 1) {
+    warnings.push(
+      tr(root, {
+        en: `state.json schemaVersion is ${String(current.schemaVersion)}, but this build only knows 1 \u2014 it was probably written by a newer harness. Upgrade, or the state may be misread.`,
+        ko: `state.json \uC758 schemaVersion \uC774 ${String(current.schemaVersion)} \uC778\uB370 \uC774 \uBE4C\uB4DC\uB294 1 \uB9CC \uC548\uB2E4 \u2014 \uB354 \uC0C8 \uBC84\uC804\uC758 \uD558\uB124\uC2A4\uAC00 \uC4F4 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4. \uC5C5\uADF8\uB808\uC774\uB4DC\uD558\uC9C0 \uC54A\uC73C\uBA74 \uC0C1\uD0DC\uB97C \uC624\uB3C5\uD55C\uB2E4.`
+      })
+    );
+  }
   const swept = sweepOrphanTmp(root);
   if (swept > 0) notes.push(`\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC`);
   const hookErrors = countHookErrors(root);
@@ -12716,7 +12724,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             console.log(L(`Active: ${rest[0]}`, `\uD65C\uC131: ${rest[0]}`));
             return 0;
           case "update": {
-            const text = rest.join(" ").trim();
+            const text = (flag(rest, "text") ?? rest.join(" ")).trim();
             if (!text) throw new Error(L("The turn log entry is empty \u2014 write what you did and what is next", "\uD134 \uB85C\uADF8 \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uD55C \uC77C\uACFC \uB2E4\uC74C \uD560 \uC77C\uC744 \uC801\uC5B4\uB77C"));
             logTurn(root, text);
             console.log(L("Turn log recorded", "\uD134 \uB85C\uADF8 \uAE30\uB85D"));

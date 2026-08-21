@@ -757,7 +757,9 @@ export function run(argv: string[], root: string): number {
           case 'update': {
             // 빈 로그는 지시서를 오염시키기만 하고 정산 증거가 되지 못한다 — stop 가드가
             // 내용 없는 `- [ts]` 한 줄로 풀리는 것도 막는다.
-            const text = rest.join(' ').trim();
+            // API-30: MCP 는 `text` 파라미터를 쓰고 CLI 는 위치인자였다 — `--text "내용"` 을
+            // 그대로 쓰면 「--text 내용」이 로그에 박혔다. 둘 다 받는다.
+            const text = (flag(rest, 'text') ?? rest.join(' ')).trim();
             if (!text) throw new Error(L('The turn log entry is empty — write what you did and what is next', '턴 로그 내용이 비어 있다 — 한 일과 다음 할 일을 적어라'));
             logTurn(root, text);
             console.log(L('Turn log recorded', '턴 로그 기록'));

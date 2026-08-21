@@ -1,6 +1,8 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 · **판정** 출하 불가(NO-GO) · **open BLOCKER** 2 · **open 전체** 16 (+ deferred 1)
+**갱신** 2026-08-21 · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 1 (+ deferred 1)
+
+라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
 
 ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(커밋 `bbbb9b6`, 198 tests)의
 1~19 번대와 겹치지 않게 하기 위해서다. 그 대장은 **대상 커밋이 다르므로 이 감사에서 승계하지 않았다**
@@ -8,23 +10,26 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 
 | ID | 심각도 | 축 | 한 줄 | 상태 | 근거등급 | 근거 | 닫은 증거 |
 |---|---|---|---|---|---|---|---|
-| OPS-20 | HIGH | 11 | 게이트를 한 번이라도 승인하면 `doctor` 가 영구히 `gates 불일치`·exit 1 — 유일한 건강검진이 상시 빨강이라 진짜 드리프트를 덮는다 | open | measured | `core/src/gate.ts:134` | — |
-| LOGIC-21 | HIGH | 08 | `doctor --repair` 가 게이트의 `evidence`·`submittedAt` 을 삭제한다 — 저널은 갖고 있는데 재생 리듀서가 반영하지 않는다 | open | measured | `core/src/events.ts:74` | — |
-| FEAT-22 | HIGH | 01 | `harness trace <노드ID>` 가 CLI 에 없다 — 스펙과 `wave-verifier` 에이전트 지시문이 호출한다(MCP 도구로만 존재) | open | measured | `agents/wave-verifier.md:31` | — |
-| FEAT-23 | HIGH | 01 | `harness gate feedback` 미구현 — 공개 README 4개 언어 모두가 기능으로 광고한다 | open | measured | `README.md:88` | — |
-| UX-24 | HIGH | 02 | `--help`·`-h`·`help`·무인자가 전부 exit 1 「알 수 없는 명령」 — 13개 명령군·60여 하위명령의 진입점이 0 | open | measured | `core/src/cli.ts:775` | — |
-| SEC-25 | MED | 06 | 게이트 산출물 경로가 루트 밖(`../../../etc/passwd`·`/etc/hosts`)이어도 제출·승인된다 — 웨이브 id 는 검증하면서 산출물 경로는 안 한다 | open | measured | `core/src/gate.ts:38` | — |
-| PERF-26 | MED | 05 | state.json 부재(저널 폴백) + 저널 10만 건에서 pre-tool p95 169ms — G9 목표 150ms 초과 | open | measured | `docs/release-readiness/2026-08-21/evidence/latency.log` | — |
-| API-27 | MED | 02 | 명령군 절반(gate·adr·doc·wave·node)은 하위명령 목록을 안 알려주고 나머지 절반은 알려준다 | open | measured | `core/src/cli.ts:219` | — |
-| SEC-28 | MED | 06 | 인젝션 방어 규칙 `sanitizeUntrusted` 가 두 벌이고 구현이 서로 다르다(정규식 vs 코드포인트 루프) | open | code | `core/src/loop.ts:100` | — |
-| API-29 | MED | 02 | `wave create` 를 인자 없이 부르면 exit 0 으로 목표·마일스톤 없는 `wave-001` 이 생긴다(침묵 성공) | open | measured | `core/src/cli.ts:649` | — |
-| API-30 | LOW | 02 | CLI `wave update` 는 위치인자, MCP 는 `text` 파라미터 — `--text "x"` 를 쓰면 「--text x」가 그대로 로그된다 | open | measured | `core/src/cli.ts:673` | — |
-| SHIP-31 | LOW | 10 | `schemaVersion: 99` 인 미래 상태 파일을 경고 없이 그대로 읽는다 | open | measured | `core/src/state.ts:10` | — |
+| OPS-20 | HIGH | 11 | 게이트를 한 번이라도 승인하면 `doctor` 가 영구히 `gates 불일치`·exit 1 — 유일한 건강검진이 상시 빨강이라 진짜 드리프트를 덮는다 | verified | measured | `core/src/gate.ts:134` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| LOGIC-21 | HIGH | 08 | `doctor --repair` 가 게이트의 `evidence`·`submittedAt` 을 삭제한다 — 저널은 갖고 있는데 재생 리듀서가 반영하지 않는다 | verified | measured | `core/src/events.ts:74` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| FEAT-22 | HIGH | 01 | `harness trace <노드ID>` 가 CLI 에 없다 — 스펙과 `wave-verifier` 에이전트 지시문이 호출한다(MCP 도구로만 존재) | verified | measured | `agents/wave-verifier.md:31` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| FEAT-23 | HIGH | 01 | `harness gate feedback` 미구현 — 공개 README 4개 언어 모두가 기능으로 광고한다 | verified | measured | `README.md:88` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| UX-24 | HIGH | 02 | `--help`·`-h`·`help`·무인자가 전부 exit 1 「알 수 없는 명령」 — 13개 명령군·60여 하위명령의 진입점이 0 | verified | measured | `core/src/cli.ts:775` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SEC-25 | MED | 06 | 게이트 산출물 경로가 루트 밖(`../../../etc/passwd`·`/etc/hosts`)이어도 제출·승인된다 — 웨이브 id 는 검증하면서 산출물 경로는 안 한다 | verified | measured | `core/src/gate.ts:38` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| PERF-26 | MED | 05 | state.json 부재(저널 폴백) + 저널 10만 건에서 pre-tool p95 169ms — G9 목표 150ms 초과 | fixed | measured | `docs/release-readiness/2026-08-21/evidence/latency.log` | `fixes-round1.md` — 기제는 단위 테스트로 확인. **절대 p95 재측정은 조용한 창 필요**(측정 창 load 12~17로 무효) |
+| API-27 | MED | 02 | 명령군 절반(gate·adr·doc·wave·node)은 하위명령 목록을 안 알려주고 나머지 절반은 알려준다 | verified | measured | `core/src/cli.ts:219` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SEC-28 | MED | 06 | 인젝션 방어 규칙 `sanitizeUntrusted` 가 두 벌이고 구현이 서로 다르다(정규식 vs 코드포인트 루프) | verified | measured | `core/src/loop.ts:100` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| API-29 | MED | 02 | `wave create` 를 인자 없이 부르면 exit 0 으로 목표·마일스톤 없는 `wave-001` 이 생긴다(침묵 성공) | verified | measured | `core/src/cli.ts:649` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| API-30 | LOW | 02 | CLI `wave update` 는 위치인자, MCP 는 `text` 파라미터 — `--text "x"` 를 쓰면 「--text x」가 그대로 로그된다 | verified | measured | `core/src/cli.ts:673` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SHIP-31 | LOW | 10 | `schemaVersion: 99` 인 미래 상태 파일을 경고 없이 그대로 읽는다 | verified | measured | `core/src/state.ts:10` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
 | DEP-32 | LOW | 07 | dev 체인 취약점 5건(critical 1) — 전부 「리스닝 dev 서버」 전제라 프로덕션·빌드 도달 없음 | deferred | measured | `docs/release-readiness/2026-08-21/evidence/gates.log` | 출하 후 백로그 — vitest 3.x 는 파괴적 변경이고 도달 경로가 없다 |
-| SEC-49 | BLOCKER | 06 | 저널에 `phase-set`/`gate-approved` 한 줄을 Bash 로 append + `doctor --repair` 만으로 페이즈·게이트가 위조된다 — **사람 승인 없이 게이트가 approved 가 된다** | open | measured | `core/src/hook.ts:395` | — |
-| SEC-50 | BLOCKER | 06 | 설계 트랙 소스 쓰기 금지가 Bash 로 무력화 — `Write` 는 deny 하면서 `echo "x" > src/app.ts`·heredoc·`touch` 는 허용 | open | measured | `core/src/hook.ts:395` | — |
-| SEC-51 | HIGH | 06 | 코어 파일 손편집 차단이 Write/Edit 표면에만 적용 — `echo x > .harness/state.json`·`sed -i` 는 통과 | open | measured | `core/src/hook.ts:47` | — |
-| SHIP-52 | HIGH | 10 | `harness phase set <P> --force` 가 게이트 검사를 건너뛴다. 훅이 이 Bash 를 막지 않아 에이전트가 스스로 설계 트랙을 풀 수 있다(의도된 탈출구이나 접근 제한이 없다) | open | measured | `core/src/cli.ts:158` | — |
+| SEC-49 | BLOCKER | 06 | 저널에 `phase-set`/`gate-approved` 한 줄을 Bash 로 append + `doctor --repair` 만으로 페이즈·게이트가 위조된다 — **사람 승인 없이 게이트가 approved 가 된다** | verified | measured | `core/src/hook.ts:395` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SEC-50 | BLOCKER | 06 | 설계 트랙 소스 쓰기 금지가 Bash 로 무력화 — `Write` 는 deny 하면서 `echo "x" > src/app.ts`·heredoc·`touch` 는 허용 | verified | measured | `core/src/hook.ts:395` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SEC-51 | HIGH | 06 | 코어 파일 손편집 차단이 Write/Edit 표면에만 적용 — `echo x > .harness/state.json`·`sed -i` 는 통과 | verified | measured | `core/src/hook.ts:49` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| SHIP-52 | HIGH | 10 | `harness phase set <P> --force` 가 게이트 검사를 건너뛴다. 훅이 이 Bash 를 막지 않아 에이전트가 스스로 설계 트랙을 풀 수 있다(의도된 탈출구이나 접근 제한이 없다) | verified | measured | `core/src/cli.ts:158` | `fixes-round1.md` · `docs/release-readiness/2026-08-21/evidence/round1-verify.log` |
+| DET-53 | — | 09 | `replayState` 가 비결정적이었다 — 같은 저널을 두 번 재생하면 `updatedAt` 이 달랐다(전체 스위트에서만 재현되던 플레이키) | verified | measured | `core/src/events.ts:63` | `fixes-round1.md` · 3회 반복 동일 |
+| OPS-55 | HIGH | 11 | 하네스가 쓰는 이벤트 타입 18종이 미등록 → doctor 가 저널을 불신해 **`doctor --repair` 가 복구를 거부**(정상 사용만으로 잠김) | verified | measured | `core/src/events.ts:15` | `fixes-round1.md` · `evidence/round1-verify.log` OPS-55 절 repaired:true |
+| LOGIC-56 | HIGH | 08 | `gate-invalidated` 미폴드 — 산출물이 바뀌어 무효가 된 게이트를 `doctor --repair` 가 승인으로 되살렸다 | verified | measured | `core/src/events.ts:78` | `fixes-round1.md` · `core/test/bashwrite.test.ts:159` |
 | SEC-33 | — | 06 | 🔴 **MCP 경로로는** 게이트 승인 불가 — 3종 우회 시도 후에도 `submitted` 불변. **단 저널 위조 경로는 열려 있다 → [SEC-49]** | verified | measured | `core/src/mcp.ts:294` | `evidence/e2e.log` G6 절 10건 PASS |
 | SEC-34 | — | 06 | 셸 인젝션 없음(인자가 셸을 경유하지 않음) · 심링크 우회 deny · 프로토타입 오염 입력에 무사 | verified | measured | `core/src/hook.ts:385` | `evidence/contract2.log` · `evidence/e2e.log` |
 | SEC-35 | — | 06 | 이력 비밀 0 — 71 커밋 전수 스캔 | verified | measured | `docs/release-readiness/2026-08-21/evidence/secrets.log` | gitleaks 8.30.1 `no leaks found` |

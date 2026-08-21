@@ -151,6 +151,19 @@ export function runDoctor(
     );
   }
 
+  // 5b. 스키마 버전 — 미래 버전이 쓴 state 를 구 코드가 조용히 읽으면 다운그레이드가
+  //     오독한다. 지금은 v1 하나뿐이라 잠재 결함이지만, 경고가 없으면 갈리는 순간을 놓친다.
+  if (current && current.schemaVersion !== 1) {
+    warnings.push(
+      tr(root, {
+        en: `state.json schemaVersion is ${String(current.schemaVersion)}, but this build only knows 1 — `
+          + 'it was probably written by a newer harness. Upgrade, or the state may be misread.',
+        ko: `state.json 의 schemaVersion 이 ${String(current.schemaVersion)} 인데 이 빌드는 1 만 안다 — `
+          + '더 새 버전의 하네스가 쓴 파일일 수 있다. 업그레이드하지 않으면 상태를 오독한다.',
+      }),
+    );
+  }
+
   // 6. 고아 tmp 스윕 — 죽은 pid 것만이라 항상 안전하게 수행한다
   const swept = sweepOrphanTmp(root);
   if (swept > 0) notes.push(`고아 임시파일 ${swept}개 정리`);
