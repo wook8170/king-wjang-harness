@@ -30,11 +30,19 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evidenceDir } from './paths';
-import { tr } from './tr';
+import { tr, langFor } from './tr';
+import { pick, type Lang, type Msg } from './i18n';
 import { readState } from './state';
 import { getNode } from './ledger';
 import { readWave } from './wave';
 import { getBaseline } from './design';
+
+/**
+ * 생성물(Playwright 시나리오·비교 패킷)은 줄이 많아 언어를 진입점에서 한 번 해석해 넘긴다.
+ * 위 `requireUxId`/`requireWaveId` 두 순수 검증기만 root 가 없어 영어 고정이다(각 주석 참조).
+ */
+type Tr = (m: Msg) => string;
+const trFor = (lang: Lang): Tr => (m: Msg) => pick(m, lang);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 모델 · 상수
@@ -177,20 +185,30 @@ export function generatePlaywrightSpec(
   const acceptance = opts?.acceptance ?? waveAcceptance(root, waveId);
   const capture = captureFileNameFor(uxNodeId);
   const testName = title ? `${uxNodeId} — ${title}` : uxNodeId;
+  const t = trFor(langFor(root));
 
   const steps: string[] = [];
   if (acceptance.length === 0) {
     steps.push(
-      '  // 이 UX 노드에 수용 기준이 없다 — 스크린샷만 남기는 시나리오는 증적이 아니라 알리바이다.',
-      `  // TODO(${uxNodeId}): 웨이브 지시서의 수용 기준을 채운 뒤 다시 생성하라.`,
+      `  // ${t({
+        en: 'This UX node has no acceptance criteria — a scenario that only takes a screenshot is an alibi, not evidence.',
+        ko: '이 UX 노드에 수용 기준이 없다 — 스크린샷만 남기는 시나리오는 증적이 아니라 알리바이다.',
+      })}`,
+      `  // TODO(${uxNodeId}): ${t({
+        en: "fill in the wave instruction sheet's acceptance criteria, then regenerate.",
+        ko: '웨이브 지시서의 수용 기준을 채운 뒤 다시 생성하라.',
+      })}`,
       '  await expect(page.locator(\'body\')).toBeVisible();',
       '',
     );
   } else {
     acceptance.forEach((a, i) => {
       steps.push(
-        `  // [수용 기준 ${i + 1}] ${comment(a)}`,
-        `  // TODO(${uxNodeId}): 위 기준을 실제로 검증하는 단언으로 교체하라. placeholder 로 그린을 만들지 마라.`,
+        `  // [${t({ en: `acceptance ${i + 1}`, ko: `수용 기준 ${i + 1}` })}] ${comment(a)}`,
+        `  // TODO(${uxNodeId}): ${t({
+          en: 'replace this with an assertion that actually verifies the criterion above. Do not manufacture green with a placeholder.',
+          ko: '위 기준을 실제로 검증하는 단언으로 교체하라. placeholder 로 그린을 만들지 마라.',
+        })}`,
         '  await expect(page.locator(\'body\')).toBeVisible();',
         '',
       );
@@ -198,24 +216,50 @@ export function generatePlaywrightSpec(
   }
 
   return [
-    `// 생성물 — ${specFileNameFor(uxNodeId)} 는 ${uxNodeId} 에서 다시 찍어낼 수 있다.`,
-    `// ${uxNodeId}${title ? ` "${comment(title)}"` : ''}${node ? ` (원장 v${node.version})` : ''}`,
-    '// → P7 Playwright 시나리오 1:1 변환 (스펙 §3-5).',
+    `// ${t({
+      en: `Generated — ${specFileNameFor(uxNodeId)} can be re-emitted from ${uxNodeId}.`,
+      ko: `생성물 — ${specFileNameFor(uxNodeId)} 는 ${uxNodeId} 에서 다시 찍어낼 수 있다.`,
+    })}`,
+    `// ${uxNodeId}${title ? ` "${comment(title)}"` : ''}${node
+      ? ` (${t({ en: `ledger v${node.version}`, ko: `원장 v${node.version}` })})`
+      : ''}`,
+    `// ${t({
+      en: '→ 1:1 conversion into a P7 Playwright scenario (spec §3-5).',
+      ko: '→ P7 Playwright 시나리오 1:1 변환 (스펙 §3-5).',
+    })}`,
     '//',
-    '// 캡처 규율은 지침이 아니라 이 파일에 박혀 있다:',
-    '//   - 항상 headless — 창이 뜨면 사용자 화면의 포커스를 빼앗아 작업을 끊는다.',
-    '//   - deviceScaleFactor: 2 — 1x 캡처는 원격 검토에서 글자가 뭉개져 회귀를 눈으로 잡을 수 없다.',
+    `// ${t({
+      en: 'The capture discipline is not a guideline — it is baked into this file:',
+      ko: '캡처 규율은 지침이 아니라 이 파일에 박혀 있다:',
+    })}`,
+    `//   - ${t({
+      en: 'always headless — a window stealing focus interrupts whatever the user is doing.',
+      ko: '항상 headless — 창이 뜨면 사용자 화면의 포커스를 빼앗아 작업을 끊는다.',
+    })}`,
+    `//   - ${t({
+      en: 'deviceScaleFactor: 2 — at 1x the text smears in remote review and regressions cannot be seen.',
+      ko: 'deviceScaleFactor: 2 — 1x 캡처는 원격 검토에서 글자가 뭉개져 회귀를 눈으로 잡을 수 없다.',
+    })}`,
     "import * as path from 'node:path';",
     "import { test, expect } from '@playwright/test';",
     '',
-    '// 증적은 이 웨이브의 증적 디렉토리로만 떨어진다 — `harness wave complete` 의 UX 게이트가 여기를 본다.',
-    '// 경로는 리포 루트 기준이다(Playwright 는 설정 파일이 있는 루트에서 도는 것을 전제).',
+    `// ${t({
+      en: "Evidence lands only in this wave's evidence directory — the UX gate of `harness wave complete` looks here.",
+      ko: '증적은 이 웨이브의 증적 디렉토리로만 떨어진다 — `harness wave complete` 의 UX 게이트가 여기를 본다.',
+    })}`,
+    `// ${t({
+      en: 'Paths are relative to the repo root (Playwright is assumed to run from the root holding its config).',
+      ko: '경로는 리포 루트 기준이다(Playwright 는 설정 파일이 있는 루트에서 도는 것을 전제).',
+    })}`,
     `const EVIDENCE_DIR = path.resolve(process.cwd(), '.harness', 'evidence', ${js(waveId)});`,
     '',
     'test.use({',
     '  headless: true,',
     '  deviceScaleFactor: 2,',
-    `  viewport: { width: ${vw}, height: ${vh} }, // 논리 크기 — 실제 캡처는 ${vw * 2}x${vh * 2}px`,
+    `  viewport: { width: ${vw}, height: ${vh} }, // ${t({
+      en: `logical size — the actual capture is ${vw * 2}x${vh * 2}px`,
+      ko: `논리 크기 — 실제 캡처는 ${vw * 2}x${vh * 2}px`,
+    })}`,
     '});',
     '',
     `test(${js(testName)}, async ({ page }) => {`,
@@ -314,6 +358,7 @@ export function isTwoXCapture(
  * 조용한 드롭은 "증적이 있는 줄 알았는데 없었다"를 만드는 가장 빠른 길이다.
  */
 export function validateEvidence(root: string, waveId: string): EvidenceReport {
+  const t = trFor(langFor(root));
   requireWaveId(waveId);
   const dir = evidenceDir(root, waveId);
   const files: EvidenceFile[] = [];
@@ -327,15 +372,22 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
       ok: false,
       files,
       problems: [
-        `증적 디렉토리가 없거나 읽을 수 없다: ${dir} — ` +
-        'headless 실주행으로 2x 스크린샷을 남겨야 UX 게이트가 열린다(스펙 §3-5).',
+        t({
+          en: `the evidence directory is missing or unreadable: ${dir} — the UX gate opens only once a headless `
+            + 'real run has left a 2x screenshot (spec §3-5).',
+          ko: `증적 디렉토리가 없거나 읽을 수 없다: ${dir} — `
+            + 'headless 실주행으로 2x 스크린샷을 남겨야 UX 게이트가 열린다(스펙 §3-5).',
+        }),
       ],
     };
   }
 
   for (const name of names) {
     if (name.startsWith('.')) {
-      problems.push(`${name}: dot 파일은 증적으로 세지 않는다`);
+      problems.push(`${name}: ${t({
+        en: 'dot files do not count as evidence',
+        ko: 'dot 파일은 증적으로 세지 않는다',
+      })}`);
       continue;
     }
     const abs = path.join(dir, name);
@@ -343,24 +395,34 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     try {
       st = fs.statSync(abs);
     } catch {
-      problems.push(`${name}: 상태를 읽을 수 없다(끊긴 심볼릭 링크?) — 셀 수 없는 것은 증적이 아니다`);
+      problems.push(`${name}: ${t({
+        en: 'cannot stat it (a broken symlink?) — what cannot be counted is not evidence',
+        ko: '상태를 읽을 수 없다(끊긴 심볼릭 링크?) — 셀 수 없는 것은 증적이 아니다',
+      })}`);
       continue;
     }
     if (st.isDirectory()) {
-      problems.push(
-        `${name}/: 디렉토리는 증적이 아니다 — 빈 서브디렉토리 하나로 UX 게이트가 통과되면 안 된다. ` +
-        '안에 파일이 있다면 증적 디렉토리 바로 밑으로 옮겨라.',
-      );
+      problems.push(t({
+        en: `${name}/: a directory is not evidence — one empty subdirectory must not pass the UX gate. `
+          + 'If there are files inside, move them directly under the evidence directory.',
+        ko: `${name}/: 디렉토리는 증적이 아니다 — 빈 서브디렉토리 하나로 UX 게이트가 통과되면 안 된다. `
+          + '안에 파일이 있다면 증적 디렉토리 바로 밑으로 옮겨라.',
+      }));
       continue;
     }
     if (!st.isFile()) {
-      problems.push(`${name}: 일반 파일이 아니다 — 증적으로 세지 않는다`);
+      problems.push(`${name}: ${t({
+        en: 'not a regular file — it does not count as evidence',
+        ko: '일반 파일이 아니다 — 증적으로 세지 않는다',
+      })}`);
       continue;
     }
     if (st.size === 0) {
-      problems.push(
-        `${name}: 0바이트다 — 빈 캡처는 시각 비교를 실패시키는 게 아니라 조용히 통과시킨다. 다시 찍어라.`,
-      );
+      problems.push(t({
+        en: `${name}: 0 bytes — an empty capture does not fail a visual comparison, it silently passes it. `
+          + 'Capture it again.',
+        ko: `${name}: 0바이트다 — 빈 캡처는 시각 비교를 실패시키는 게 아니라 조용히 통과시킨다. 다시 찍어라.`,
+      }));
       continue;
     }
 
@@ -369,22 +431,29 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     if (ext === 'png') {
       const d = pngDimensions(abs);
       if (!d) {
-        problems.push(`${name}: PNG 헤더를 읽을 수 없다 — 확장자만 png 인 손상 파일일 수 있다`);
+        problems.push(`${name}: ${t({
+          en: 'cannot read the PNG header — it may be a corrupt file that is only named .png',
+          ko: 'PNG 헤더를 읽을 수 없다 — 확장자만 png 인 손상 파일일 수 있다',
+        })}`);
       } else {
         file.dimensions = d;
         if (st.size < MIN_PNG_BYTES) {
-          problems.push(
-            `${name}: ${st.size}바이트(${d.width}x${d.height})로 너무 작다 — ` +
-            '빈 화면이거나 실패한 캡처일 가능성이 높다. 실주행 화면인지 눈으로 확인하라.',
-          );
+          problems.push(t({
+            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small — most likely a blank screen or `
+              + 'a failed capture. Open it and confirm it shows a real run.',
+            ko: `${name}: ${st.size}바이트(${d.width}x${d.height})로 너무 작다 — `
+              + '빈 화면이거나 실패한 캡처일 가능성이 높다. 실주행 화면인지 눈으로 확인하라.',
+          }));
         }
       }
     }
     if (!EXPECTED_EXTS.has(ext)) {
-      problems.push(
-        `${name}: 증적으로 예상되지 않는 형식(${ext ? `.${ext}` : '확장자 없음'}) — ` +
-        '스크린샷·비디오·트레이스·리포트만 시각 증적으로 다룬다.',
-      );
+      problems.push(t({
+        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : 'no extension'}) — only screenshots, `
+          + 'videos, traces and reports are treated as visual evidence.',
+        ko: `${name}: 증적으로 예상되지 않는 형식(${ext ? `.${ext}` : '확장자 없음'}) — `
+          + '스크린샷·비디오·트레이스·리포트만 시각 증적으로 다룬다.',
+      }));
     }
     files.push(file);
   }
@@ -463,6 +532,9 @@ const PACKET_CSS = [
 ];
 
 /** 한쪽 액자 — 이미지가 없으면 `<img>` 를 아예 내지 않는다(빈 액자가 통과처럼 보이면 안 된다). */
+const NOT_COMPARABLE: Msg = { en: 'not comparable', ko: '비교 불가' };
+const ACCEPTANCE_HEADING: Msg = { en: 'Acceptance criteria', ko: '수용 기준' };
+
 function figure(caption: string, uri: string | null, missingText: string, meta: string): string[] {
   return [
     '    <figure>',
@@ -488,6 +560,8 @@ function figure(caption: string, uri: string | null, missingText: string, meta: 
 export function buildComparisonPacket(root: string, opts: ComparisonPacketOptions): string {
   const uxNodeId = requireUxId(opts?.uxNodeId);
   const waveId = requireWaveId(opts?.waveId);
+  const lang = langFor(root);
+  const t = trFor(lang);
   const blockers: string[] = [];
 
   // ── 기준 이미지 (P4 아트보드 2x)
@@ -495,19 +569,27 @@ export function buildComparisonPacket(root: string, opts: ComparisonPacketOption
   let baselineUri: string | null = null;
   let baselineMeta = '';
   if (!baseline) {
-    blockers.push(
-      `${uxNodeId} 의 기준 이미지가 등록되지 않았다 — P4 아트보드를 2x 로 내보내 ` +
-      '기준 이미지로 등록해야 P9 비교가 성립한다(스펙 §8).',
-    );
+    blockers.push(t({
+      en: `no baseline image is registered for ${uxNodeId} — export the P4 artboard at 2x and register it as `
+        + 'the baseline before a P9 comparison means anything (spec §8).',
+      ko: `${uxNodeId} 의 기준 이미지가 등록되지 않았다 — P4 아트보드를 2x 로 내보내 `
+        + '기준 이미지로 등록해야 P9 비교가 성립한다(스펙 §8).',
+    }));
   } else {
     const abs = path.isAbsolute(baseline.path) ? baseline.path : path.join(root, baseline.path);
     baselineUri = dataUri(abs);
     if (!baselineUri) {
-      blockers.push(`기준 이미지 파일을 읽을 수 없다: ${abs} — 등록은 됐는데 파일이 사라졌거나 이미지가 아니다.`);
+      blockers.push(t({
+        en: `cannot read the baseline image file: ${abs} — it is registered, but the file is gone or is not an image.`,
+        ko: `기준 이미지 파일을 읽을 수 없다: ${abs} — 등록은 됐는데 파일이 사라졌거나 이미지가 아니다.`,
+      }));
       baselineMeta = baseline.path;
     } else {
       const d = pngDimensions(abs);
-      baselineMeta = `${baseline.path}${d ? ` · ${d.width}x${d.height}px` : ''} · 등록 ${baseline.recordedAt}`;
+      baselineMeta = `${baseline.path}${d ? ` · ${d.width}x${d.height}px` : ''} · ${t({
+        en: `registered ${baseline.recordedAt}`,
+        ko: `등록 ${baseline.recordedAt}`,
+      })}`;
     }
   }
 
@@ -519,22 +601,35 @@ export function buildComparisonPacket(root: string, opts: ComparisonPacketOption
   let captureUri: string | null = null;
   let captureMeta = '';
   if (!capture) {
-    blockers.push(
-      `구현 캡처가 없다 — ${evidenceDir(root, waveId)} 에 PNG 스크린샷이 하나도 없다. ` +
-      'headless 실주행으로 2x 스크린샷을 남겨라(스펙 §3-5).',
-    );
+    blockers.push(t({
+      en: `there is no implementation capture — ${evidenceDir(root, waveId)} holds no PNG screenshot at all. `
+        + 'Leave a 2x screenshot from a headless real run (spec §3-5).',
+      ko: `구현 캡처가 없다 — ${evidenceDir(root, waveId)} 에 PNG 스크린샷이 하나도 없다. `
+        + 'headless 실주행으로 2x 스크린샷을 남겨라(스펙 §3-5).',
+    }));
   } else {
     captureUri = dataUri(capture.path);
     if (!captureUri) {
-      blockers.push(`구현 캡처를 읽을 수 없다: ${capture.path}`);
+      blockers.push(`${t({
+        en: 'cannot read the implementation capture',
+        ko: '구현 캡처를 읽을 수 없다',
+      })}: ${capture.path}`);
     }
     const d = capture.dimensions;
-    captureMeta = `${capture.name}${d ? ` · ${d.width}x${d.height}px` : ' · 헤더 판독 불가'} · ${capture.size}바이트`;
+    const dimPart = d
+      ? ` · ${d.width}x${d.height}px`
+      : ` · ${t({ en: 'header unreadable', ko: '헤더 판독 불가' })}`;
+    captureMeta = `${capture.name}${dimPart} · ${t({
+      en: `${capture.size} bytes`,
+      ko: `${capture.size}바이트`,
+    })}`;
     if (!isRealCapture(capture)) {
-      blockers.push(
-        `${capture.name} 은 실주행 캡처로 인정되지 않는다(${capture.size}바이트) — ` +
-        '빈 화면이거나 손상된 파일일 수 있다.',
-      );
+      blockers.push(t({
+        en: `${capture.name} does not count as a real-run capture (${capture.size} bytes) — it may be a blank `
+          + 'screen or a corrupt file.',
+        ko: `${capture.name} 은 실주행 캡처로 인정되지 않는다(${capture.size}바이트) — `
+          + '빈 화면이거나 손상된 파일일 수 있다.',
+      }));
     }
   }
 
@@ -545,33 +640,44 @@ export function buildComparisonPacket(root: string, opts: ComparisonPacketOption
   try {
     acceptance = readWave(root, waveId).meta.acceptance;
   } catch {
-    waveNote = `${waveId} 지시서를 읽을 수 없어 수용 기준을 실을 수 없었다`;
-    blockers.push(`${waveNote} — 무엇과 대조하는지 없이 하는 비교는 감상이다.`);
+    waveNote = t({
+      en: `the instruction sheet of ${waveId} could not be read, so its acceptance criteria are missing`,
+      ko: `${waveId} 지시서를 읽을 수 없어 수용 기준을 실을 수 없었다`,
+    });
+    blockers.push(`${waveNote} — ${t({
+      en: 'a comparison with nothing to compare against is an impression.',
+      ko: '무엇과 대조하는지 없이 하는 비교는 감상이다.',
+    })}`);
   }
 
   const blocked = blockers.length > 0;
-  const title = `${uxNodeId} P9 비교 리뷰 패킷`;
+  const title = `${uxNodeId} ${t({ en: 'P9 comparison review packet', ko: 'P9 비교 리뷰 패킷' })}`;
 
   const out: string[] = [
     '<!doctype html>',
-    '<html lang="ko">',
+    `<html lang="${lang}">`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<title>${blocked ? '[비교 불가] ' : ''}${esc(title)}</title>`,
+    `<title>${blocked ? `[${t(NOT_COMPARABLE)}] ` : ''}${esc(title)}</title>`,
     '<style>',
     ...PACKET_CSS,
     '</style>',
     '</head>',
     '<body>',
     `  <h1>${esc(title)}</h1>`,
-    `  <p class="sub">${esc(node?.title ?? '(원장에 없는 노드)')} · 원장 v${esc(node?.version ?? '?')} · 웨이브 ${esc(waveId)}</p>`,
+    `  <p class="sub">${esc(node?.title ?? t({ en: '(node not in the ledger)', ko: '(원장에 없는 노드)' }))}`
+    + ` · ${esc(t({ en: 'ledger', ko: '원장' }))} v${esc(node?.version ?? '?')}`
+    + ` · ${esc(t({ en: 'wave', ko: '웨이브' }))} ${esc(waveId)}</p>`,
   ];
 
   if (blocked) {
     out.push(
       '  <section class="alert" role="alert">',
-      '    <h2>비교 불가 — 이 패킷으로 P9 를 통과시키지 마라</h2>',
+      `    <h2>${esc(t({
+        en: 'Not comparable — do not pass P9 on this packet',
+        ko: '비교 불가 — 이 패킷으로 P9 를 통과시키지 마라',
+      }))}</h2>`,
       '    <ul>',
       ...blockers.map(b => `      <li>${esc(b)}</li>`),
       '    </ul>',
@@ -580,23 +686,36 @@ export function buildComparisonPacket(root: string, opts: ComparisonPacketOption
   }
 
   out.push(
-    '  <h2>기준 vs 구현</h2>',
+    `  <h2>${esc(t({ en: 'Baseline vs implementation', ko: '기준 vs 구현' }))}</h2>`,
     '  <div class="cmp">',
-    ...figure('기준 — P4 아트보드 (2x)', baselineUri, '기준 이미지 없음 — 비교할 대상이 없다', baselineMeta),
-    ...figure(`구현 — ${waveId} 실주행 캡처`, captureUri, '구현 캡처 없음 — 실주행 증적이 없다', captureMeta),
+    ...figure(
+      t({ en: 'Baseline — P4 artboard (2x)', ko: '기준 — P4 아트보드 (2x)' }),
+      baselineUri,
+      t({ en: 'no baseline image — there is nothing to compare against', ko: '기준 이미지 없음 — 비교할 대상이 없다' }),
+      baselineMeta,
+    ),
+    ...figure(
+      t({ en: `Implementation — real-run capture of ${waveId}`, ko: `구현 — ${waveId} 실주행 캡처` }),
+      captureUri,
+      t({ en: 'no implementation capture — there is no real-run evidence', ko: '구현 캡처 없음 — 실주행 증적이 없다' }),
+      captureMeta,
+    ),
     '  </div>',
-    '  <h2>수용 기준</h2>',
+    `  <h2>${esc(t(ACCEPTANCE_HEADING))}</h2>`,
   );
 
   if (acceptance.length > 0) {
     out.push('  <ul class="criteria">', ...acceptance.map(a => `    <li>${esc(a)}</li>`), '  </ul>');
   } else {
-    out.push(`  <p class="missing">${esc(waveNote || `${waveId} 에 수용 기준이 없다 — 대조 기준 없이는 통과 판정을 할 수 없다`)}</p>`);
+    out.push(`  <p class="missing">${esc(waveNote || t({
+      en: `${waveId} has no acceptance criteria — with nothing to check against, no pass verdict is possible`,
+      ko: `${waveId} 에 수용 기준이 없다 — 대조 기준 없이는 통과 판정을 할 수 없다`,
+    }))}</p>`);
   }
 
   if (report.problems.length > 0) {
     out.push(
-      '  <h2>증적 디렉토리 소견</h2>',
+      `  <h2>${esc(t({ en: 'Evidence directory findings', ko: '증적 디렉토리 소견' }))}</h2>`,
       '  <ul>',
       ...report.problems.map(p => `    <li>${esc(p)}</li>`),
       '  </ul>',
@@ -604,12 +723,15 @@ export function buildComparisonPacket(root: string, opts: ComparisonPacketOption
   }
 
   out.push(
-    '  <h2>출처</h2>',
+    `  <h2>${esc(t({ en: 'Provenance', ko: '출처' }))}</h2>`,
     '  <dl>',
-    `    <dt>UX 노드</dt><dd><code>${esc(uxNodeId)}</code></dd>`,
-    `    <dt>시나리오</dt><dd><code>${esc(specFileNameFor(uxNodeId))}</code></dd>`,
-    `    <dt>증적 디렉토리</dt><dd><code>${esc(evidenceDir(root, waveId))}</code></dd>`,
-    `    <dt>측정 근거</dt><dd>${hasMeasuredEvidence(root, waveId) ? '실주행 캡처 있음 (measured 주장 가능)' : '실주행 캡처 없음 — measured 불가 (스펙 §3-5)'}</dd>`,
+    `    <dt>${esc(t({ en: 'UX node', ko: 'UX 노드' }))}</dt><dd><code>${esc(uxNodeId)}</code></dd>`,
+    `    <dt>${esc(t({ en: 'Scenario', ko: '시나리오' }))}</dt><dd><code>${esc(specFileNameFor(uxNodeId))}</code></dd>`,
+    `    <dt>${esc(t({ en: 'Evidence directory', ko: '증적 디렉토리' }))}</dt>`
+    + `<dd><code>${esc(evidenceDir(root, waveId))}</code></dd>`,
+    `    <dt>${esc(t({ en: 'Evidence grade', ko: '측정 근거' }))}</dt><dd>${esc(hasMeasuredEvidence(root, waveId)
+      ? t({ en: 'real-run capture present (measured is claimable)', ko: '실주행 캡처 있음 (measured 주장 가능)' })
+      : t({ en: 'no real-run capture — measured is not available (spec §3-5)', ko: '실주행 캡처 없음 — measured 불가 (스펙 §3-5)' }))}</dd>`,
     '  </dl>',
     '</body>',
     '</html>',

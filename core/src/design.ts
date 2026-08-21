@@ -31,7 +31,8 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as YAML from 'yaml';
 import { designDir } from './paths';
-import { tr } from './tr';
+import { tr, langFor } from './tr';
+import { pick, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { getNode, bumpNode } from './ledger';
 import { markStale } from './wave';
@@ -404,8 +405,13 @@ const cell = (name: string, state: string) => [
   '          </div>',
 ];
 
+const LAYOUT_CSS_HEAD: Msg = {
+  en: "/* The source-of-truth page's own layout — the var() fallback applies only while the token document "
+    + 'does not define that token yet. */',
+  ko: '/* 정본 자신의 레이아웃 — var() 폴백은 토큰 문서에 그 토큰이 아직 없을 때만 쓰인다. */',
+};
+
 const LAYOUT_CSS = [
-  '/* 정본 자신의 레이아웃 — var() 폴백은 토큰 문서에 그 토큰이 아직 없을 때만 쓰인다. */',
   'html { color-scheme: light dark; }',
   'body {',
   '  margin: 0;',
@@ -464,13 +470,16 @@ const TOGGLE_JS = [
  * 검사가 매번 레드가 되고, 그 검사가 죽는 순간 사람이 생성물을 손으로 고치기 시작한다(tokens.ts 머리말).
  */
 export function generateSourceOfTruthHtml(root: string, opts?: SourceOfTruthOptions): string {
-  const css = generateCss(loadTokens(root)); // 토큰 파일이 없으면 여기서 실패 — 기본값을 지어내지 않는다
-  const title = (opts?.title ?? '').trim() || '디자인 시스템 정본 (P4)';
+  const lang = langFor(root);
+  const t = (m: Msg) => pick(m, lang);
+  const css = generateCss(loadTokens(root), lang); // 토큰 파일이 없으면 여기서 실패 — 기본값을 지어내지 않는다
+  const title = (opts?.title ?? '').trim()
+    || t({ en: 'Design system source of truth (P4)', ko: '디자인 시스템 정본 (P4)' });
   const components = (opts?.components?.length ? opts.components : DEFAULT_GALLERY);
 
   const gallery: string[] = [];
   for (const c of components) {
-    const name = String(c?.name ?? '').trim() || '(이름 없음)';
+    const name = String(c?.name ?? '').trim() || t({ en: '(unnamed)', ko: '(이름 없음)' });
     const states = c?.states?.length ? c.states : DEFAULT_STATES;
     gallery.push(
       '      <article class="sot-component">',
@@ -484,34 +493,48 @@ export function generateSourceOfTruthHtml(root: string, opts?: SourceOfTruthOpti
 
   return [
     '<!doctype html>',
-    '<html lang="ko">',
+    `<html lang="${lang}">`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${esc(title)}</title>`,
     '<style>',
     '/* ─────────────────────────────────────────────────────────────────────────',
-    '   이 CSS 변수 블록이 토큰 원천이다(스펙 §7). 캔버스의 디자인 시스템 아트보드는 이것의',
-    '   시각적 표현일 뿐이고, 둘이 어긋나면 이 정본이 이긴다.',
-    '   값은 .harness/design/tokens/design-tokens.json 에서 생성된다 — 손으로 고치지 마라.',
+    ...t({
+      en: '   This CSS variable block is the token source (spec §7). The design-system artboard on the canvas is\n'
+        + '   only a visual rendering of it; where the two disagree, this page wins.\n'
+        + '   The values are generated from .harness/design/tokens/design-tokens.json — do not hand-edit.',
+      ko: '   이 CSS 변수 블록이 토큰 원천이다(스펙 §7). 캔버스의 디자인 시스템 아트보드는 이것의\n'
+        + '   시각적 표현일 뿐이고, 둘이 어긋나면 이 정본이 이긴다.\n'
+        + '   값은 .harness/design/tokens/design-tokens.json 에서 생성된다 — 손으로 고치지 마라.',
+    }).split('\n'),
     '   ───────────────────────────────────────────────────────────────────────── */',
     css.trimEnd(),
     '',
-    '/* 수동 토글이 OS 선호도를 이기도록 위 값을 그대로 재스코프한다(재계산 아님). */',
+    t({
+      en: '/* Re-scope the same values so a manual toggle beats the OS preference (no recomputation). */',
+      ko: '/* 수동 토글이 OS 선호도를 이기도록 위 값을 그대로 재스코프한다(재계산 아님). */',
+    }),
     ...themeScopes(css),
     '',
+    t(LAYOUT_CSS_HEAD),
     ...LAYOUT_CSS,
     '</style>',
     '</head>',
     '<body>',
     '  <header class="sot-bar">',
     `    <h1>${esc(title)}</h1>`,
-    '    <button type="button" id="sot-theme" class="sot-toggle">라이트 / 다크 전환</button>',
+    `    <button type="button" id="sot-theme" class="sot-toggle">${esc(t({
+      en: 'Light / dark toggle', ko: '라이트 / 다크 전환',
+    }))}</button>`,
     '  </header>',
     '  <main>',
     '    <section class="sot-section">',
-    '      <h2>컴포넌트 상태 갤러리</h2>',
-    '      <p class="sot-label">각 칸은 정적 상태(is-*)이며, 마우스·키보드로 실제 hover·focus·active 도 확인할 수 있다.</p>',
+    `      <h2>${esc(t({ en: 'Component state gallery', ko: '컴포넌트 상태 갤러리' }))}</h2>`,
+    `      <p class="sot-label">${esc(t({
+      en: 'Each cell is a static state (is-*); hover, focus and active also work for real with mouse and keyboard.',
+      ko: '각 칸은 정적 상태(is-*)이며, 마우스·키보드로 실제 hover·focus·active 도 확인할 수 있다.',
+    }))}</p>`,
     ...gallery,
     '    </section>',
     '  </main>',

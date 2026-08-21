@@ -33,6 +33,69 @@ const quiet = () => {
   return { logs, errs, restore: () => { l.mockRestore(); e.mockRestore(); } };
 };
 
+describe('cli — 광고한 플래그가 실제로 먹는가 (help ↔ 파서 정합성)', () => {
+  /**
+   * `--help` 가 `--acceptance` 를 광고하는데 파서는 `--accept` 만 읽었다. 사용자가 도움말대로
+   * 치면 수용 기준이 **조용히 빈 채로** 웨이브가 생기고, 검증자 브리프가 "판정 불가"를 낸다.
+   * 광고한 이름이 정본이고 짧은 이름은 별칭으로 남긴다.
+   */
+  it('wave create --acceptance 가 수용 기준을 채운다 (--accept 도 계속 먹는다)', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'F-1', '--title', 'login'], root);
+    expect(run(['wave', 'create', '--goal', 'g', '--refs', 'F-1', '--acceptance', 'returns 200'], root)).toBe(0);
+    expect(run(['wave', 'create', '--goal', 'g2', '--refs', 'F-1', '--accept', 'still works'], root)).toBe(0);
+    q.restore();
+    const waves = listWaves(root);
+    expect(waves[0].acceptance).toEqual(['returns 200']);
+    expect(waves[1].acceptance).toEqual(['still works']);
+  });
+
+  /**
+   * `design baseline <UX-x> --png <file>` 도 같은 어긋남이었다 — 파서가 위치 인자만 봐서
+   * 도움말대로 치면 `--png` 라는 이름의 파일을 찾다 죽었다.
+   */
+  it('design baseline --png 가 파일 경로로 해석된다 (위치 인자도 계속 먹는다)', () => {
+    const root = tmp();
+    const q = quiet();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'UX-7', '--title', 'checkout'], root);
+    const png = path.join(root, 'shot.png');
+    fs.writeFileSync(png, twoXPng());
+    expect(run(['design', 'baseline', 'UX-7', '--png', 'shot.png'], root)).toBe(0);
+    expect(run(['design', 'baseline', 'UX-7', 'shot.png'], root)).toBe(0);
+    q.restore();
+  });
+});
+
+/** 최소 유효 PNG (2x 기준을 넘기는 크기). 헤더만 맞으면 되므로 내용은 의미가 없다. */
+function twoXPng(): Buffer {
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(2880, 0); ihdr.writeUInt32BE(1800, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
+  const idat = Buffer.alloc(20000, 7); // 빈 캡처 의심 크기를 넘기기 위한 더미 본문
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function crc32(buf: Buffer): number {
+  let c = ~0;
+  for (const b of buf) {
+    c ^= b;
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return (~c) >>> 0;
+}
+
 describe('cli', () => {
   it('init → status', () => {
     const root = tmp();

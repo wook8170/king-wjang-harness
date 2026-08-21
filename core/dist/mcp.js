@@ -7809,13 +7809,14 @@ function parseWave(txt, lang = DEFAULT_LANG) {
   const statuses = ["pending", "active", "done", "stale"];
   const meta = {
     id: typeof r.id === "string" ? r.id : "",
-    milestone: typeof r.milestone === "string" ? r.milestone : "(\uBBF8\uC9C0\uC815)",
+    milestone: typeof r.milestone === "string" ? r.milestone : pick(UNSPECIFIED, lang),
     design_refs: asArr(r.design_refs),
     status: statuses.includes(r.status) ? r.status : "pending",
     acceptance: asArr(r.acceptance)
   };
   return { meta, body: m[2] };
 }
+var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
 function serializeWave(meta, body) {
   return `---
 ${YAML2.stringify(meta).trimEnd()}
@@ -7870,25 +7871,28 @@ function nextWaveId(root) {
   return `wave-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
 }
 function createWave(root, opts) {
+  const lang = langFor(root);
   const id = nextWaveId(root);
   if (fs6.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
   if (inherited.length > 0) {
-    throw new Error(
-      `${evidenceDir(root, id)} \uC5D0 \uC774\uC804 \uC99D\uC801 ${inherited.length}\uAC74(${inherited.slice(0, 3).join(", ")}${inherited.length > 3 ? ", \u2026" : ""})\uC774 \uB0A8\uC544 \uC788\uB2E4 \u2014 \uC0C8 \uC6E8\uC774\uBE0C\uAC00 \uB0A8\uC758 \uC2DC\uAC01 \uC99D\uC801\uC744 \uBB3C\uB824\uBC1B\uC73C\uBA74 UX \uAC8C\uC774\uD2B8\uAC00 \uBB34\uB825\uD654\uB41C\uB2E4. \uD574\uB2F9 \uB514\uB809\uD1A0\uB9AC\uB97C \uD655\uC778\uD574 \uBCF4\uAD00\uD558\uAC70\uB098 \uC0AD\uC81C\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
-    );
+    const sample = `${inherited.slice(0, 3).join(", ")}${inherited.length > 3 ? ", \u2026" : ""}`;
+    throw new Error(pick({
+      en: `${evidenceDir(root, id)} still holds ${inherited.length} piece(s) of earlier evidence (${sample}) \u2014 a new wave inheriting someone else's visual evidence disables the UX gate. Check that directory, archive or delete it, then create the wave again.`,
+      ko: `${evidenceDir(root, id)} \uC5D0 \uC774\uC804 \uC99D\uC801 ${inherited.length}\uAC74(${sample})\uC774 \uB0A8\uC544 \uC788\uB2E4 \u2014 \uC0C8 \uC6E8\uC774\uBE0C\uAC00 \uB0A8\uC758 \uC2DC\uAC01 \uC99D\uC801\uC744 \uBB3C\uB824\uBC1B\uC73C\uBA74 UX \uAC8C\uC774\uD2B8\uAC00 \uBB34\uB825\uD654\uB41C\uB2E4. \uD574\uB2F9 \uB514\uB809\uD1A0\uB9AC\uB97C \uD655\uC778\uD574 \uBCF4\uAD00\uD558\uAC70\uB098 \uC0AD\uC81C\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
+    }, lang));
   }
   const meta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: "pending", acceptance: opts.acceptance };
   const body = [
-    `## \uBAA9\uD45C`,
+    `## ${pick({ en: "Goal", ko: "\uBAA9\uD45C" }, lang)}`,
     opts.goal,
     "",
-    `## \uC644\uB8CC \uAE30\uC900`,
+    `## ${pick({ en: "Done when", ko: "\uC644\uB8CC \uAE30\uC900" }, lang)}`,
     ...opts.acceptance.map((a) => `- ${a}`),
     "",
-    `## \uD134 \uB85C\uADF8`,
+    `## ${pick({ en: "Turn log", ko: "\uD134 \uB85C\uADF8" }, lang)}`,
     ""
   ].join("\n");
   writeWave(root, id, meta, body);
@@ -8112,6 +8116,22 @@ function docsForPhase(root, phase) {
 }
 
 // core/src/report.ts
+var trFor = (lang) => (m) => pick(m, lang);
+var MSG = {
+  ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
+  registryUnreadable: { en: "cannot read the artifact registry", ko: "\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
+  stateUnreadable: { en: "cannot read the state file", ko: "\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
+  unreadableHeading: { en: "Unread inputs", ko: "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" },
+  gateStatusHeading: { en: "Gate status", ko: "\uAC8C\uC774\uD2B8 \uD604\uD669" },
+  none: { en: "none", ko: "\uC5C6\uC74C" },
+  seeUnreadable: {
+    en: 'cannot read the state \u2014 see "Unread inputs" below.',
+    ko: '\uC0C1\uD0DC\uB97C \uC77D\uC9C0 \uBABB\uD574 \uAC8C\uC774\uD2B8 \uD604\uD669\uC744 \uB0BC \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.'
+  }
+};
+var GAPS_HEADING = { en: "Gaps", ko: "\uBBF8\uCEE4\uBC84 \uAD6C\uAC04" };
+var BLOCKERS_HEADING = { en: "Blockers", ko: "\uCC28\uB2E8 \uC0AC\uD56D" };
+var AWAITING_PUBLISH = { en: "Awaiting publication", ko: "\uBC1C\uD589 \uB300\uAE30" };
 function attempt(fn) {
   try {
     return { ok: true, value: fn() };
@@ -8119,7 +8139,7 @@ function attempt(fn) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
-var generatedAt = () => `\uC0DD\uC131: ${(/* @__PURE__ */ new Date()).toISOString()}`;
+var generatedAt = (t) => `${t({ en: "Generated", ko: "\uC0DD\uC131" })}: ${(/* @__PURE__ */ new Date()).toISOString()}`;
 var cell = (s) => s.replace(/\|/g, "\\|");
 var listCell = (xs) => xs.length ? xs.map(cell).join(", ") : "\u2014";
 function ledgerIndex(root) {
@@ -8137,7 +8157,7 @@ function docsByPhase(root) {
 function currentDocs(root) {
   return docsByPhase(root).flatMap((g) => g.docs);
 }
-function waveEntries(root) {
+function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
   if (!fs9.existsSync(wavesDir(root))) return { entries, unreadable };
@@ -8145,13 +8165,13 @@ function waveEntries(root) {
   try {
     files = fs9.readdirSync(wavesDir(root));
   } catch (e) {
-    return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
+    return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt(() => readWave(root, id).meta);
     if (r.ok) entries.push({ id, meta: r.value });
-    else unreadable.push(`\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error}`);
+    else unreadable.push(`${t({ en: `cannot parse wave ${id}`, ko: `\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4` })}: ${r.error}`);
   }
   return { entries, unreadable };
 }
@@ -8173,32 +8193,44 @@ function hasEvidence(root, waveId) {
     }
   });
 }
-function gapsFor(row) {
+function gapsFor(row, t) {
   const gaps = [];
   if (row.docs.length === 0 && row.adrs.length === 0) {
-    gaps.push("\uBB38\uC11C \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C \uB2E4\uB8E8\uB294 \uB4F1\uB85D \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4");
+    gaps.push(t({
+      en: "no document \u2014 no registered artifact covers this requirement",
+      ko: "\uBB38\uC11C \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C \uB2E4\uB8E8\uB294 \uB4F1\uB85D \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4"
+    }));
   }
   if (row.waves.length === 0) {
-    gaps.push("\uC124\uACC4\uB9CC \uC788\uACE0 \uAD6C\uD604 \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C design_refs \uB85C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4");
+    gaps.push(t({
+      en: "design only, no implementation \u2014 no wave references this requirement in design_refs",
+      ko: "\uC124\uACC4\uB9CC \uC788\uACE0 \uAD6C\uD604 \uC5C6\uC74C \u2014 \uC774 \uC694\uAD6C\uB97C design_refs \uB85C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4"
+    }));
   } else if (row.evidence.length === 0) {
-    gaps.push(`\uAD6C\uD604\uB9CC \uC788\uACE0 \uAC80\uC99D \uC5C6\uC74C \u2014 ${row.waves.join(", ")} \uC758 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uBE44\uC5B4 \uC788\uB2E4`);
+    gaps.push(t({
+      en: `implementation only, no verification \u2014 the evidence directory of ${row.waves.join(", ")} is empty`,
+      ko: `\uAD6C\uD604\uB9CC \uC788\uACE0 \uAC80\uC99D \uC5C6\uC74C \u2014 ${row.waves.join(", ")} \uC758 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uBE44\uC5B4 \uC788\uB2E4`
+    }));
   }
   return gaps;
 }
-function collectRtm(root) {
+function collectRtm(root, t) {
   const unreadable = [];
   const idx = ledgerIndex(root);
   if (!idx.ok) {
-    return { rows: [], unreadable: [`\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${idx.error}`] };
+    return { rows: [], unreadable: [`${t(MSG.ledgerUnreadable)}: ${idx.error}`] };
   }
   const nodes = [...idx.value.values()];
   const reg = inspectRegistry(root);
-  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.parseError) unreadable.push(`${t(MSG.registryUnreadable)}: ${reg.parseError}`);
   if (reg.invalid.length > 0) {
-    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uCD94\uC801\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+    unreadable.push(t({
+      en: `${reg.invalid.length} registry entrie(s) are malformed and were dropped from tracing`,
+      ko: `\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uCD94\uC801\uC5D0\uC11C \uBE60\uC84C\uB2E4`
+    }));
   }
   const docs = currentDocs(root);
-  const waves = waveEntries(root);
+  const waves = waveEntries(root, t);
   unreadable.push(...waves.unreadable);
   const rows = [];
   for (const node of nodes) {
@@ -8207,7 +8239,7 @@ function collectRtm(root) {
     const waveIds = waves.entries.filter((w) => w.meta.design_refs.includes(node.id)).map((w) => w.id);
     const row = {
       id: node.id,
-      title: typeof node.title === "string" && node.title ? node.title : "(\uC81C\uBAA9 \uC5C6\uC74C)",
+      title: typeof node.title === "string" && node.title ? node.title : t({ en: "(untitled)", ko: "(\uC81C\uBAA9 \uC5C6\uC74C)" }),
       version: typeof node.version === "number" ? node.version : 0,
       status: node.status,
       docs: linked.filter((d) => !d.id.startsWith("ADR-")).map((d) => d.id),
@@ -8220,35 +8252,60 @@ function collectRtm(root) {
       deployments: [],
       gaps: []
     };
-    row.gaps = gapsFor(row);
+    row.gaps = gapsFor(row, t);
     rows.push(row);
   }
   return { rows, unreadable };
 }
-function gapLines(rows) {
+function gapLines(rows, t) {
   const holed = rows.filter((r) => r.gaps.length > 0);
-  if (rows.length === 0) return ["- \uCD94\uC801\uD560 \uC694\uAD6C(F-) \uB178\uB4DC\uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 RTM \uC740 \uC544\uC9C1 \uC544\uBB34\uAC83\uB3C4 \uBCF4\uC99D\uD558\uC9C0 \uC54A\uB294\uB2E4"];
-  if (holed.length === 0) return ["- \uBBF8\uCEE4\uBC84 \uAD6C\uAC04 \uC5C6\uC74C \u2014 \uBAA8\uB4E0 \uC694\uAD6C\uAC00 \uBB38\uC11C\xB7\uC6E8\uC774\uBE0C\xB7\uC99D\uC801\uC744 \uAC16\uCDC4\uB2E4"];
+  if (rows.length === 0) {
+    return [`- ${t({
+      en: "the ledger has no requirement (F-) node to trace \u2014 the RTM guarantees nothing yet",
+      ko: "\uCD94\uC801\uD560 \uC694\uAD6C(F-) \uB178\uB4DC\uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 RTM \uC740 \uC544\uC9C1 \uC544\uBB34\uAC83\uB3C4 \uBCF4\uC99D\uD558\uC9C0 \uC54A\uB294\uB2E4"
+    })}`];
+  }
+  if (holed.length === 0) {
+    return [`- ${t({
+      en: "no gaps \u2014 every requirement has a document, a wave, and evidence",
+      ko: "\uBBF8\uCEE4\uBC84 \uAD6C\uAC04 \uC5C6\uC74C \u2014 \uBAA8\uB4E0 \uC694\uAD6C\uAC00 \uBB38\uC11C\xB7\uC6E8\uC774\uBE0C\xB7\uC99D\uC801\uC744 \uAC16\uCDC4\uB2E4"
+    })}`];
+  }
   return holed.map((r) => `- **${r.id}** ${r.title}: ${r.gaps.join(" / ")}`);
 }
-function unreadableSection(unreadable) {
+function unreadableSection(unreadable, t) {
   if (unreadable.length === 0) return [];
   return [
     "",
-    "## \uC77D\uC9C0 \uBABB\uD55C \uC785\uB825",
+    `## ${t(MSG.unreadableHeading)}`,
     "",
-    "\uC544\uB798\uB294 \uC190\uC0C1\xB7\uBD80\uC7AC\uB85C \uC77D\uC9C0 \uBABB\uD55C \uC785\uB825\uC774\uB2E4. \uB9AC\uD3EC\uD2B8\uC5D0\uC11C \uBE60\uC84C\uC73C\uBBC0\uB85C **\uC5C6\uB294 \uAC83\uACFC \uB2E4\uB974\uB2E4.**",
+    t({
+      en: "The inputs below could not be read (corrupt or missing). They are absent from this report, which is **not the same as not existing.**",
+      ko: "\uC544\uB798\uB294 \uC190\uC0C1\xB7\uBD80\uC7AC\uB85C \uC77D\uC9C0 \uBABB\uD55C \uC785\uB825\uC774\uB2E4. \uB9AC\uD3EC\uD2B8\uC5D0\uC11C \uBE60\uC84C\uC73C\uBBC0\uB85C **\uC5C6\uB294 \uAC83\uACFC \uB2E4\uB974\uB2E4.**"
+    }),
     ...unreadable.map((u) => `- ${u}`)
   ];
 }
 function renderRtm(root) {
-  const { rows, unreadable } = collectRtm(root);
-  const out = ["# \uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)", "", generatedAt(), ""];
+  const t = trFor(langFor(root));
+  const { rows, unreadable } = collectRtm(root, t);
+  const out = [
+    `# ${t({ en: "Requirements Traceability Matrix (RTM)", ko: "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)" })}`,
+    "",
+    generatedAt(t),
+    ""
+  ];
   if (rows.length === 0) {
-    out.push("\uC6D0\uC7A5\uC5D0 F- \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uCD94\uC801\uD560 \uC694\uAD6C\uAC00 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uB2E4.");
+    out.push(t({
+      en: "The ledger has no F- node \u2014 no requirement is registered to trace.",
+      ko: "\uC6D0\uC7A5\uC5D0 F- \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uCD94\uC801\uD560 \uC694\uAD6C\uAC00 \uB4F1\uB85D\uB418\uC9C0 \uC54A\uC558\uB2E4."
+    }));
   } else {
     out.push(
-      "| \uC694\uAD6C | \uC81C\uBAA9 | \uC124\uACC4\uBB38\uC11C | ADR | \uC6E8\uC774\uBE0C | \uD14C\uC2A4\uD2B8\xB7\uC99D\uC801 | \uBC30\uD3EC | \uBBF8\uCEE4\uBC84 |",
+      t({
+        en: "| Req | Title | Design docs | ADR | Waves | Tests\xB7evidence | Deploys | Gaps |",
+        ko: "| \uC694\uAD6C | \uC81C\uBAA9 | \uC124\uACC4\uBB38\uC11C | ADR | \uC6E8\uC774\uBE0C | \uD14C\uC2A4\uD2B8\xB7\uC99D\uC801 | \uBC30\uD3EC | \uBBF8\uCEE4\uBC84 |"
+      }),
       "|---|---|---|---|---|---|---|---|",
       ...rows.map((r) => [
         "",
@@ -8259,13 +8316,13 @@ function renderRtm(root) {
         listCell(r.waves),
         listCell(r.evidence),
         listCell(r.deployments),
-        r.gaps.length === 0 ? "\u2014" : `**${r.gaps.length}\uAC74**`,
+        r.gaps.length === 0 ? "\u2014" : `**${t({ en: `${r.gaps.length}`, ko: `${r.gaps.length}\uAC74` })}**`,
         ""
       ].join(" | ").trim())
     );
   }
-  out.push("", "## \uBBF8\uCEE4\uBC84 \uAD6C\uAC04", "", ...gapLines(rows));
-  out.push(...unreadableSection(unreadable));
+  out.push("", `## ${t(GAPS_HEADING)}`, "", ...gapLines(rows, t));
+  out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
 function traceNode(root, id) {
@@ -8277,70 +8334,114 @@ function traceNode(root, id) {
     docs: loadRegistry(root).docs.filter((d) => d.linkedNodes.includes(id))
   };
 }
-function gateLines(root, phase) {
+function gateLines(root, phase, t) {
   const state = attempt(() => readState(root));
-  if (!state.ok) return { lines: [], unreadable: [`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error}`] };
+  if (!state.ok) return { lines: [], unreadable: [`${t(MSG.stateUnreadable)}: ${state.error}`] };
   const g = state.value.gates[phase];
   if (!g || g.status === "pending") {
-    return { lines: [`- \uC0C1\uD0DC: pending \u2014 \uC544\uC9C1 \uC81C\uCD9C\uB418\uC9C0 \uC54A\uC558\uB2E4`], unreadable: [] };
+    return {
+      lines: [`- ${t({ en: "Status", ko: "\uC0C1\uD0DC" })}: pending \u2014 ${t({
+        en: "not submitted yet",
+        ko: "\uC544\uC9C1 \uC81C\uCD9C\uB418\uC9C0 \uC54A\uC558\uB2E4"
+      })}`],
+      unreadable: []
+    };
   }
   const lines = [
-    `- \uC0C1\uD0DC: ${g.status} (\uADFC\uAC70: ${g.evidence ?? "\uC5C6\uC74C"})`,
-    `- \uC0B0\uCD9C\uBB3C \uD574\uC2DC: ${g.artifactHash ? g.artifactHash.slice(0, 12) : "\uC5C6\uC74C"}`
+    `- ${t({ en: "Status", ko: "\uC0C1\uD0DC" })}: ${g.status} (${t({ en: "evidence", ko: "\uADFC\uAC70" })}: ${g.evidence ?? t(MSG.none)})`,
+    `- ${t({ en: "Artifact hash", ko: "\uC0B0\uCD9C\uBB3C \uD574\uC2DC" })}: ${g.artifactHash ? g.artifactHash.slice(0, 12) : t(MSG.none)}`
   ];
-  if (g.submittedAt) lines.push(`- \uC81C\uCD9C: ${g.submittedAt}`);
-  if (g.approvedAt) lines.push(`- \uC2B9\uC778: ${g.approvedAt}`);
-  if (g.invalidatedReason) lines.push(`- \uBB34\uD6A8\uD654 \uC0AC\uC720: ${g.invalidatedReason}`);
+  if (g.submittedAt) lines.push(`- ${t({ en: "Submitted", ko: "\uC81C\uCD9C" })}: ${g.submittedAt}`);
+  if (g.approvedAt) lines.push(`- ${t({ en: "Approved", ko: "\uC2B9\uC778" })}: ${g.approvedAt}`);
+  if (g.invalidatedReason) {
+    lines.push(`- ${t({ en: "Invalidation reason", ko: "\uBB34\uD6A8\uD654 \uC0AC\uC720" })}: ${g.invalidatedReason}`);
+  }
   const verdict = verifyGate(root, phase);
-  lines.push(verdict.ok ? "- \uAC80\uC99D: PASS" : `- \uAC80\uC99D: **FAIL** \u2014 ${verdict.reason ?? "\uC0AC\uC720 \uC5C6\uC74C"}`);
+  const label = t({ en: "Verification", ko: "\uAC80\uC99D" });
+  lines.push(verdict.ok ? `- ${label}: PASS` : `- ${label}: **FAIL** \u2014 ${verdict.reason ?? t({ en: "no reason given", ko: "\uC0AC\uC720 \uC5C6\uC74C" })}`);
   return { lines, unreadable: [] };
 }
 function buildReviewPacket(root, phase) {
-  const out = [`# \uB9AC\uBDF0 \uD328\uD0B7 \u2014 ${phase}`, "", generatedAt(), ""];
+  const t = trFor(langFor(root));
+  const out = [
+    `# ${t({ en: "Review packet", ko: "\uB9AC\uBDF0 \uD328\uD0B7" })} \u2014 ${phase}`,
+    "",
+    generatedAt(t),
+    ""
+  ];
   const blockers = [];
   const unreadable = [];
   const reg = inspectRegistry(root);
-  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.parseError) unreadable.push(`${t(MSG.registryUnreadable)}: ${reg.parseError}`);
   if (reg.invalid.length > 0) {
-    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uD328\uD0B7\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+    unreadable.push(t({
+      en: `${reg.invalid.length} registry entrie(s) are malformed and were dropped from this packet`,
+      ko: `\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uD328\uD0B7\uC5D0\uC11C \uBE60\uC84C\uB2E4`
+    }));
   }
   const docs = docsForPhase(root, phase);
   const idx = ledgerIndex(root);
-  if (!idx.ok) unreadable.push(`\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${idx.error}`);
-  out.push(`## \uC0B0\uCD9C\uBB3C (${docs.length}\uAC74)`, "");
+  if (!idx.ok) unreadable.push(`${t(MSG.ledgerUnreadable)}: ${idx.error}`);
+  out.push(`## ${t({ en: `Artifacts (${docs.length})`, ko: `\uC0B0\uCD9C\uBB3C (${docs.length}\uAC74)` })}`, "");
   if (docs.length === 0) {
-    out.push(
-      `**${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4.** \uC2EC\uC0AC\uD560 \uBB38\uC11C\uAC00 \uC5C6\uC73C\uBBC0\uB85C \uC774 \uD328\uD0B7\uC740 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uACE0 \uC544\uD2F0\uD329\uD2B8\uB97C \uBC1C\uD589\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
-    );
-    blockers.push(`${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uBE48 \uD328\uD0B7\uC73C\uB85C\uB294 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC5C6\uB2E4`);
+    out.push(t({
+      en: `**No artifact is registered for ${phase}.** With no document to review this packet is not grounds for approval \u2014 register the artifacts, publish them, then regenerate.`,
+      ko: `**${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4.** \uC2EC\uC0AC\uD560 \uBB38\uC11C\uAC00 \uC5C6\uC73C\uBBC0\uB85C \uC774 \uD328\uD0B7\uC740 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uACE0 \uC544\uD2F0\uD329\uD2B8\uB97C \uBC1C\uD589\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
+    }));
+    blockers.push(t({
+      en: `no artifact registered for ${phase} \u2014 an empty packet cannot open a gate`,
+      ko: `${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uBE48 \uD328\uD0B7\uC73C\uB85C\uB294 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC5C6\uB2E4`
+    }));
   }
   for (const d of docs) {
-    out.push(`### ${d.id} v${d.version} \u2014 ${d.status}`, `- \uACBD\uB85C: \`${d.path}\``);
+    out.push(`### ${d.id} v${d.version} \u2014 ${d.status}`, `- ${t({ en: "Path", ko: "\uACBD\uB85C" })}: \`${d.path}\``);
+    const artifactLabel = t({ en: "Artifact", ko: "\uC544\uD2F0\uD329\uD2B8" });
     if (d.artifactUrl) {
-      out.push(`- \uC544\uD2F0\uD329\uD2B8: ${d.artifactUrl}`);
+      out.push(`- ${artifactLabel}: ${d.artifactUrl}`);
     } else {
-      out.push("- \uC544\uD2F0\uD329\uD2B8: **\uC5C6\uC74C \u2014 \uBC1C\uD589\uB418\uC9C0 \uC54A\uC740 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16)**");
-      blockers.push(`${d.id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBC1C\uD589\uD558\uACE0 URL \uC744 \uB4F1\uB85D\uD558\uB77C(\uC694\uAD6C 16)`);
+      out.push(`- ${artifactLabel}: **${t({
+        en: "none \u2014 an unpublished document cannot go to a gate (requirement 16)",
+        ko: "\uC5C6\uC74C \u2014 \uBC1C\uD589\uB418\uC9C0 \uC54A\uC740 \uBB38\uC11C\uB85C\uB294 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB2E4(\uC694\uAD6C 16)"
+      })}**`);
+      blockers.push(t({
+        en: `${d.id} has no artifact URL \u2014 publish it as a claude.ai artifact and register the URL (requirement 16)`,
+        ko: `${d.id} \uC5D0 \uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uB2E4 \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBC1C\uD589\uD558\uACE0 URL \uC744 \uB4F1\uB85D\uD558\uB77C(\uC694\uAD6C 16)`
+      }));
     }
-    out.push(`- \uC5F0\uACB0 \uB178\uB4DC: ${d.linkedNodes.length ? d.linkedNodes.join(", ") : "\uC5C6\uC74C"}`, "");
+    out.push(`- ${t({ en: "Linked nodes", ko: "\uC5F0\uACB0 \uB178\uB4DC" })}: ${d.linkedNodes.length ? d.linkedNodes.join(", ") : t(MSG.none)}`, "");
   }
   for (const d of staleDocs(root).filter((d2) => d2.phase === phase)) {
-    blockers.push(`${d.id} \uB294 \uC2B9\uC778 \uC2DC\uC810 \uD574\uC2DC\uC640 \uD604\uC7AC \`${d.path}\` \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC73C\uB85C \uC7AC\uC81C\uCD9C\uD558\uB77C`);
+    blockers.push(t({
+      en: `${d.id} differs from the hash recorded at approval \u2014 the current \`${d.path}\` changed; resubmit a revision`,
+      ko: `${d.id} \uB294 \uC2B9\uC778 \uC2DC\uC810 \uD574\uC2DC\uC640 \uD604\uC7AC \`${d.path}\` \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC73C\uB85C \uC7AC\uC81C\uCD9C\uD558\uB77C`
+    }));
   }
   const linkedIds = [...new Set(docs.flatMap((d) => d.linkedNodes))];
-  out.push("## \uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC", "");
+  out.push(`## ${t({ en: "Design ledger nodes", ko: "\uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC" })}`, "");
   if (!idx.ok) {
-    out.push('\uC6D0\uC7A5\uC744 \uC77D\uC9C0 \uBABB\uD574 \uC5F0\uACB0 \uB178\uB4DC\uB97C \uD655\uC778\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.', "");
+    out.push(t({
+      en: 'the ledger could not be read, so linked nodes cannot be checked \u2014 see "Unread inputs" below.',
+      ko: '\uC6D0\uC7A5\uC744 \uC77D\uC9C0 \uBABB\uD574 \uC5F0\uACB0 \uB178\uB4DC\uB97C \uD655\uC778\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.'
+    }), "");
   } else if (linkedIds.length === 0) {
-    out.push("\uC5F0\uACB0\uB41C \uC6D0\uC7A5 \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uC774 \uC0B0\uCD9C\uBB3C\uC774 \uC5B4\uB5A4 \uC124\uACC4\uB97C \uB2E4\uB8E8\uB294\uC9C0 \uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4.", "");
+    out.push(t({
+      en: "no ledger node is linked \u2014 there is no way to trace which design these artifacts cover.",
+      ko: "\uC5F0\uACB0\uB41C \uC6D0\uC7A5 \uB178\uB4DC\uAC00 \uC5C6\uB2E4 \u2014 \uC774 \uC0B0\uCD9C\uBB3C\uC774 \uC5B4\uB5A4 \uC124\uACC4\uB97C \uB2E4\uB8E8\uB294\uC9C0 \uCD94\uC801\uD560 \uC218 \uC5C6\uB2E4."
+    }), "");
   } else {
-    out.push("| \uB178\uB4DC | \uC81C\uBAA9 | \uBC84\uC804 | \uC0C1\uD0DC |", "|---|---|---|---|");
+    out.push(t({
+      en: "| Node | Title | Version | Status |",
+      ko: "| \uB178\uB4DC | \uC81C\uBAA9 | \uBC84\uC804 | \uC0C1\uD0DC |"
+    }), "|---|---|---|---|");
     const stale = [];
     for (const id of linkedIds) {
       const n = idx.value.get(id);
       if (!n) {
-        out.push(`| ${id} | **\uC6D0\uC7A5\uC5D0 \uC5C6\uC74C** | \u2014 | \u2014 |`);
-        blockers.push(`${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBB38\uC11C\uAC00 \uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uB178\uB4DC\uB97C \uCC38\uC870\uD55C\uB2E4`);
+        out.push(`| ${id} | **${t({ en: "not in the ledger", ko: "\uC6D0\uC7A5\uC5D0 \uC5C6\uC74C" })}** | \u2014 | \u2014 |`);
+        blockers.push(t({
+          en: `${id} is not in the design ledger \u2014 the document references a node that does not exist`,
+          ko: `${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBB38\uC11C\uAC00 \uC874\uC7AC\uD558\uC9C0 \uC54A\uB294 \uB178\uB4DC\uB97C \uCC38\uC870\uD55C\uB2E4`
+        }));
         continue;
       }
       out.push(`| ${n.id} | ${cell(n.title ?? "")} | ${n.version} | ${n.status} |`);
@@ -8348,57 +8449,81 @@ function buildReviewPacket(root, phase) {
     }
     out.push("");
     if (stale.length > 0) {
-      out.push("## STALE \uACBD\uACE0", "");
+      out.push(`## ${t({ en: "STALE warnings", ko: "STALE \uACBD\uACE0" })}`, "");
       for (const n of stale) {
-        out.push(
-          `- **${n.id}** ${n.title} (v${n.version}) \u2014 \uC124\uACC4\uAC00 \uAC1C\uC815\uB410\uB2E4. \uC0B0\uCD9C\uBB3C\uC774 \uAC1C\uC815\uBCF8\uC744 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uAE30 \uC804\uC5D0\uB294 \uC2B9\uC778\uD558\uC9C0 \uB9C8\uB77C.`
-        );
-        blockers.push(`${n.id} \uAC00 STALE \uC774\uB2E4 \u2014 \uAC1C\uC815\uB41C \uC124\uACC4\uB97C \uC0B0\uCD9C\uBB3C\uC774 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uB77C`);
+        out.push(t({
+          en: `- **${n.id}** ${n.title} (v${n.version}) \u2014 the design was revised. Do not approve before confirming the artifacts reflect the revision.`,
+          ko: `- **${n.id}** ${n.title} (v${n.version}) \u2014 \uC124\uACC4\uAC00 \uAC1C\uC815\uB410\uB2E4. \uC0B0\uCD9C\uBB3C\uC774 \uAC1C\uC815\uBCF8\uC744 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uAE30 \uC804\uC5D0\uB294 \uC2B9\uC778\uD558\uC9C0 \uB9C8\uB77C.`
+        }));
+        blockers.push(t({
+          en: `${n.id} is STALE \u2014 confirm the artifacts reflect the revised design`,
+          ko: `${n.id} \uAC00 STALE \uC774\uB2E4 \u2014 \uAC1C\uC815\uB41C \uC124\uACC4\uB97C \uC0B0\uCD9C\uBB3C\uC774 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uB77C`
+        }));
       }
       out.push("");
     }
   }
   const feedback = readGateFeedback(root, phase).trim();
-  if (feedback) out.push("## \uB9AC\uBDF0 \uD53C\uB4DC\uBC31 (\uC218\uC9D1\uB428)", "", feedback, "");
-  const gate = gateLines(root, phase);
+  if (feedback) {
+    out.push(`## ${t({ en: "Review feedback (collected)", ko: "\uB9AC\uBDF0 \uD53C\uB4DC\uBC31 (\uC218\uC9D1\uB428)" })}`, "", feedback, "");
+  }
+  const gate = gateLines(root, phase, t);
   unreadable.push(...gate.unreadable);
-  out.push("## \uAC8C\uC774\uD2B8 \uD604\uD669", "");
-  out.push(...gate.lines.length ? gate.lines : ['- \uC0C1\uD0DC\uB97C \uC77D\uC9C0 \uBABB\uD588\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.']);
+  out.push(`## ${t(MSG.gateStatusHeading)}`, "");
+  out.push(...gate.lines.length ? gate.lines : [`- ${t(MSG.seeUnreadable)}`]);
   out.push("");
-  out.push("## \uCC28\uB2E8 \uC0AC\uD56D", "");
-  out.push(...blockers.length === 0 ? ["\uCC28\uB2E8 \uC0AC\uD56D \uC5C6\uC74C \u2014 \uC704 \uC0B0\uCD9C\uBB3C \uAE30\uC900\uC73C\uB85C \uC2B9\uC778 \uC2EC\uC0AC\uB97C \uC9C4\uD589\uD560 \uC218 \uC788\uB2E4."] : blockers.map((b) => `- ${b}`));
-  out.push(...unreadableSection(unreadable));
+  out.push(`## ${t(BLOCKERS_HEADING)}`, "");
+  out.push(...blockers.length === 0 ? [t({
+    en: "No blockers \u2014 approval review can proceed on the artifacts above.",
+    ko: "\uCC28\uB2E8 \uC0AC\uD56D \uC5C6\uC74C \u2014 \uC704 \uC0B0\uCD9C\uBB3C \uAE30\uC900\uC73C\uB85C \uC2B9\uC778 \uC2EC\uC0AC\uB97C \uC9C4\uD589\uD560 \uC218 \uC788\uB2E4."
+  })] : blockers.map((b) => `- ${b}`));
+  out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
 function buildHub(root) {
-  const out = ["# \uD504\uB85C\uC81D\uD2B8 \uD5C8\uBE0C", "", generatedAt(), ""];
+  const t = trFor(langFor(root));
+  const out = [`# ${t({ en: "Project hub", ko: "\uD504\uB85C\uC81D\uD2B8 \uD5C8\uBE0C" })}`, "", generatedAt(t), ""];
   const unreadable = [];
   const reg = inspectRegistry(root);
-  if (reg.parseError) unreadable.push(`\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${reg.parseError}`);
+  if (reg.parseError) unreadable.push(`${t(MSG.registryUnreadable)}: ${reg.parseError}`);
   if (reg.invalid.length > 0) {
-    unreadable.push(`\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uBAA9\uCC28\uC5D0\uC11C \uBE60\uC84C\uB2E4`);
+    unreadable.push(t({
+      en: `${reg.invalid.length} registry entrie(s) are malformed and were dropped from this index`,
+      ko: `\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC5D4\uD2B8\uB9AC ${reg.invalid.length}\uAC74\uC774 \uD615\uD0DC \uBD88\uB7C9\uC774\uB77C \uBAA9\uCC28\uC5D0\uC11C \uBE60\uC84C\uB2E4`
+    }));
   }
   const groups = docsByPhase(root);
   const all = groups.flatMap((g) => g.docs);
-  out.push("## \uD398\uC774\uC988\uBCC4 \uC0B0\uCD9C\uBB3C", "");
+  out.push(`## ${t({ en: "Artifacts by phase", ko: "\uD398\uC774\uC988\uBCC4 \uC0B0\uCD9C\uBB3C" })}`, "");
   if (all.length === 0) {
-    out.push("\uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uC544\uC9C1 \uBAA9\uCC28\uC5D0 \uC62C\uB9B4 \uBB38\uC11C\uAC00 \uC5C6\uB2E4.", "");
+    out.push(t({
+      en: "No artifact is registered \u2014 there is nothing to index yet.",
+      ko: "\uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uC544\uC9C1 \uBAA9\uCC28\uC5D0 \uC62C\uB9B4 \uBB38\uC11C\uAC00 \uC5C6\uB2E4."
+    }), "");
   }
+  const openLabel = t({ en: "open", ko: "\uC5F4\uAE30" });
+  const awaitingCell = `**${t(AWAITING_PUBLISH)}**`;
   for (const { phase, docs } of groups) {
     if (docs.length === 0) continue;
-    out.push(`### ${phase}`, "", "| \uBB38\uC11C | \uBC84\uC804 | \uC0C1\uD0DC | \uC544\uD2F0\uD329\uD2B8 |", "|---|---|---|---|");
+    out.push(`### ${phase}`, "", t({
+      en: "| Document | Version | Status | Artifact |",
+      ko: "| \uBB38\uC11C | \uBC84\uC804 | \uC0C1\uD0DC | \uC544\uD2F0\uD329\uD2B8 |"
+    }), "|---|---|---|---|");
     for (const d of docs) {
-      out.push(`| ${d.id} | ${d.version} | ${d.status} | ${d.artifactUrl ? `[\uC5F4\uAE30](${d.artifactUrl})` : "**\uBC1C\uD589 \uB300\uAE30**"} |`);
+      out.push(`| ${d.id} | ${d.version} | ${d.status} | ${d.artifactUrl ? `[${openLabel}](${d.artifactUrl})` : awaitingCell} |`);
     }
     out.push("");
   }
   const state = attempt(() => readState(root));
-  out.push("## \uAC8C\uC774\uD2B8 \uD604\uD669", "");
+  out.push(`## ${t(MSG.gateStatusHeading)}`, "");
   if (!state.ok) {
-    unreadable.push(`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error}`);
-    out.push('\uC0C1\uD0DC\uB97C \uC77D\uC9C0 \uBABB\uD574 \uAC8C\uC774\uD2B8 \uD604\uD669\uC744 \uB0BC \uC218 \uC5C6\uB2E4 \u2014 \uC544\uB798 "\uC77D\uC9C0 \uBABB\uD55C \uC785\uB825" \uCC38\uC870.', "");
+    unreadable.push(`${t(MSG.stateUnreadable)}: ${state.error}`);
+    out.push(t(MSG.seeUnreadable), "");
   } else {
-    out.push(`- \uD604\uC7AC \uD398\uC774\uC988: ${state.value.phase}`, "", "| \uD398\uC774\uC988 | \uC0C1\uD0DC | \uADFC\uAC70 | \uC2B9\uC778 |", "|---|---|---|---|");
+    out.push(`- ${t({ en: "Current phase", ko: "\uD604\uC7AC \uD398\uC774\uC988" })}: ${state.value.phase}`, "", t({
+      en: "| Phase | Status | Evidence | Approved |",
+      ko: "| \uD398\uC774\uC988 | \uC0C1\uD0DC | \uADFC\uAC70 | \uC2B9\uC778 |"
+    }), "|---|---|---|---|");
     for (const phase of PHASES) {
       const g = state.value.gates[phase];
       out.push(`| ${phase} | ${g?.status ?? "pending"} | ${g?.evidence ?? "\u2014"} | ${g?.approvedAt ?? "\u2014"} |`);
@@ -8406,14 +8531,20 @@ function buildHub(root) {
     out.push("");
   }
   const pending = all.filter((d) => !d.artifactUrl);
-  out.push("## \uBC1C\uD589 \uB300\uAE30", "");
-  out.push(pending.length === 0 ? "\uBC1C\uD589 \uB300\uAE30 \uC5C6\uC74C \u2014 \uB4F1\uB85D\uB41C \uBB38\uC11C \uC804\uBD80\uAC00 \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uAC00\uC9C4\uB2E4." : "\uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uC5B4 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB294 \uBB38\uC11C\uB2E4(\uC694\uAD6C 16). \uBC1C\uD589 \uAC00\uB2A5\uD574\uC9C0\uBA74 \uC77C\uAD04 \uCC98\uB9AC\uD558\uB77C.");
+  out.push(`## ${t(AWAITING_PUBLISH)}`, "");
+  out.push(pending.length === 0 ? t({
+    en: "Nothing awaiting publication \u2014 every registered document has an artifact URL.",
+    ko: "\uBC1C\uD589 \uB300\uAE30 \uC5C6\uC74C \u2014 \uB4F1\uB85D\uB41C \uBB38\uC11C \uC804\uBD80\uAC00 \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uAC00\uC9C4\uB2E4."
+  }) : t({
+    en: "These documents have no artifact URL and cannot go to a gate (requirement 16). Publish them in one batch once publishing is possible.",
+    ko: "\uC544\uD2F0\uD329\uD2B8 URL \uC774 \uC5C6\uC5B4 \uAC8C\uC774\uD2B8\uC5D0 \uC62C\uB9B4 \uC218 \uC5C6\uB294 \uBB38\uC11C\uB2E4(\uC694\uAD6C 16). \uBC1C\uD589 \uAC00\uB2A5\uD574\uC9C0\uBA74 \uC77C\uAD04 \uCC98\uB9AC\uD558\uB77C."
+  }));
   for (const d of pending) out.push(`- ${d.phase} **${d.id}** v${d.version} (${d.status}) \u2014 \`${d.path}\``);
   out.push("");
-  const rtm = collectRtm(root);
+  const rtm = collectRtm(root, t);
   unreadable.push(...rtm.unreadable);
-  out.push("## \uBBF8\uCEE4\uBC84 \uC694\uC57D", "", ...gapLines(rtm.rows));
-  out.push(...unreadableSection(unreadable));
+  out.push(`## ${t({ en: "Gap summary", ko: "\uBBF8\uCEE4\uBC84 \uC694\uC57D" })}`, "", ...gapLines(rtm.rows, t));
+  out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
 
@@ -8436,9 +8567,13 @@ var YAML5 = __toESM(require_dist());
 var fs10 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var TOKENS_REL = "design/tokens/design-tokens.json";
-var BANNER = "\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/" + TOKENS_REL;
+var BANNER = {
+  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
+  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
+};
 
 // core/src/evidence.ts
+var trFor2 = (lang) => (m) => pick(m, lang);
 var MIN_PNG_BYTES = 1024;
 var EXPECTED_EXTS = /* @__PURE__ */ new Set([
   "png",
@@ -8488,6 +8623,7 @@ function pngDimensions(pngPath) {
   }
 }
 function validateEvidence(root, waveId) {
+  const t = trFor2(langFor(root));
   requireWaveId(waveId);
   const dir = evidenceDir(root, waveId);
   const files = [];
@@ -8500,13 +8636,19 @@ function validateEvidence(root, waveId) {
       ok: false,
       files,
       problems: [
-        `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
+        t({
+          en: `the evidence directory is missing or unreadable: ${dir} \u2014 the UX gate opens only once a headless real run has left a 2x screenshot (spec \xA73-5).`,
+          ko: `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
+        })
       ]
     };
   }
   for (const name of names) {
     if (name.startsWith(".")) {
-      problems.push(`${name}: dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4`);
+      problems.push(`${name}: ${t({
+        en: "dot files do not count as evidence",
+        ko: "dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
       continue;
     }
     const abs = path11.join(dir, name);
@@ -8514,23 +8656,31 @@ function validateEvidence(root, waveId) {
     try {
       st = fs12.statSync(abs);
     } catch {
-      problems.push(`${name}: \uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4`);
+      problems.push(`${name}: ${t({
+        en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
+        ko: "\uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4"
+      })}`);
       continue;
     }
     if (st.isDirectory()) {
-      problems.push(
-        `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
-      );
+      problems.push(t({
+        en: `${name}/: a directory is not evidence \u2014 one empty subdirectory must not pass the UX gate. If there are files inside, move them directly under the evidence directory.`,
+        ko: `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
+      }));
       continue;
     }
     if (!st.isFile()) {
-      problems.push(`${name}: \uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4`);
+      problems.push(`${name}: ${t({
+        en: "not a regular file \u2014 it does not count as evidence",
+        ko: "\uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
       continue;
     }
     if (st.size === 0) {
-      problems.push(
-        `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
-      );
+      problems.push(t({
+        en: `${name}: 0 bytes \u2014 an empty capture does not fail a visual comparison, it silently passes it. Capture it again.`,
+        ko: `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+      }));
       continue;
     }
     const ext = path11.extname(name).slice(1).toLowerCase();
@@ -8538,20 +8688,25 @@ function validateEvidence(root, waveId) {
     if (ext === "png") {
       const d = pngDimensions(abs);
       if (!d) {
-        problems.push(`${name}: PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4`);
+        problems.push(`${name}: ${t({
+          en: "cannot read the PNG header \u2014 it may be a corrupt file that is only named .png",
+          ko: "PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4"
+        })}`);
       } else {
         file.dimensions = d;
         if (st.size < MIN_PNG_BYTES) {
-          problems.push(
-            `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uD654\uBA74\uC778\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uB77C.`
-          );
+          problems.push(t({
+            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. Open it and confirm it shows a real run.`,
+            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uD654\uBA74\uC778\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uB77C.`
+          }));
         }
       }
     }
     if (!EXPECTED_EXTS.has(ext)) {
-      problems.push(
-        `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
-      );
+      problems.push(t({
+        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : "no extension"}) \u2014 only screenshots, videos, traces and reports are treated as visual evidence.`,
+        ko: `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
+      }));
     }
     files.push(file);
   }
@@ -8563,6 +8718,7 @@ function hasMeasuredEvidence(root, waveId) {
 }
 
 // core/src/ship.ts
+var trFor3 = (lang) => (m) => pick(m, lang);
 var shipDir = (root) => path12.join(harnessDir(root), "ship");
 var defectsPath = (root) => path12.join(shipDir(root), "defects.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
@@ -8620,7 +8776,7 @@ function attempt2(fn) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
-function waveEntries2(root) {
+function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
   if (!fs13.existsSync(wavesDir(root))) return { entries, unreadable };
@@ -8628,64 +8784,81 @@ function waveEntries2(root) {
   try {
     files = fs13.readdirSync(wavesDir(root));
   } catch (e) {
-    return { entries, unreadable: [`\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${e.message}`] };
+    return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter((n) => /^wave-\d+\.md$/.test(n)).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt2(() => parseWave(fs13.readFileSync(path12.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
-    else unreadable.push(`\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error} \u2014 \uC99D\uC801 \uD310\uC815 \uBD88\uAC00\uB294 \uD1B5\uACFC\uAC00 \uC544\uB2C8\uB2E4`);
+    else {
+      unreadable.push(t({
+        en: `cannot parse wave ${id}: ${r.error} \u2014 being unable to judge evidence is not a pass`,
+        ko: `\uC6E8\uC774\uBE0C ${id} \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${r.error} \u2014 \uC99D\uC801 \uD310\uC815 \uBD88\uAC00\uB294 \uD1B5\uACFC\uAC00 \uC544\uB2C8\uB2E4`
+      }));
+    }
   }
   return { entries, unreadable };
 }
 function shipVerdict(root) {
+  const t = trFor3(langFor(root));
   const reasons = [];
   const defects = attempt2(() => listDefects(root));
   if (!defects.ok) {
-    reasons.push(`\uACB0\uD568 \uB300\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${defects.error} \u2014 \uB300\uC7A5\uC744 \uBABB \uC77D\uB294 \uC0C1\uD0DC\uB294 "\uACB0\uD568 \uC5C6\uC74C"\uC774 \uC544\uB2C8\uB2E4`);
+    reasons.push(t({
+      en: `cannot read the defect ledger: ${defects.error} \u2014 an unreadable ledger is not "no defects"`,
+      ko: `\uACB0\uD568 \uB300\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${defects.error} \u2014 \uB300\uC7A5\uC744 \uBABB \uC77D\uB294 \uC0C1\uD0DC\uB294 "\uACB0\uD568 \uC5C6\uC74C"\uC774 \uC544\uB2C8\uB2E4`
+    }));
   } else {
     for (const d of defects.value) {
       if (d.severity !== "blocker") continue;
       if (d.status === "open") {
-        reasons.push(
-          `\uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
-        );
+        reasons.push(t({
+          en: `open blocker: ${d.id} ${d.title} (evidence ${d.evidence}) \u2014 fix it, re-measure, then close it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
+        }));
       } else if (d.status === "fixed") {
-        reasons.push(
-          `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
-        );
+        reasons.push(t({
+          en: `unverified blocker: ${d.id} ${d.title} (fixed) \u2014 "fixed" is a claim, re-measurement is the observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
+        }));
       }
     }
   }
   const state = attempt2(() => readState(root));
   if (!state.ok) {
-    reasons.push(`\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error} \u2014 \`harness doctor --repair\` \uB85C \uBA3C\uC800 \uBCF5\uAD6C\uD558\uB77C`);
+    reasons.push(t({
+      en: `cannot read the state file: ${state.error} \u2014 repair it first with \`harness doctor --repair\``,
+      ko: `\uC0C1\uD0DC \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${state.error} \u2014 \`harness doctor --repair\` \uB85C \uBA3C\uC800 \uBCF5\uAD6C\uD558\uB77C`
+    }));
   } else {
     for (const phase of ["P10", "P11"]) {
       const g = state.value.gates[phase];
       if (g?.status === "approved") continue;
-      reasons.push(
-        `\uCD9C\uD558 \uAC8C\uC774\uD2B8 \uBBF8\uC2B9\uC778: ${phase} (\uD604\uC7AC: ${g?.status ?? "pending"}) \u2014 \`harness gate submit ${phase} --evidence measured --paths <\uC0B0\uCD9C\uBB3C>\` \uB4A4 \uC0AC\uC6A9\uC790 \uC2B9\uC778\uC774 \uD544\uC694\uD558\uB2E4`
-      );
+      reasons.push(t({
+        en: `ship gate not approved: ${phase} (currently: ${g?.status ?? "pending"}) \u2014 run \`harness gate submit ${phase} --evidence measured --paths <artifacts>\`, then a human must approve`,
+        ko: `\uCD9C\uD558 \uAC8C\uC774\uD2B8 \uBBF8\uC2B9\uC778: ${phase} (\uD604\uC7AC: ${g?.status ?? "pending"}) \u2014 \`harness gate submit ${phase} --evidence measured --paths <\uC0B0\uCD9C\uBB3C>\` \uB4A4 \uC0AC\uC6A9\uC790 \uC2B9\uC778\uC774 \uD544\uC694\uD558\uB2E4`
+      }));
     }
     for (const phase of SHIP_PHASES) {
       const g = state.value.gates[phase];
       if (!g || g.status === "pending") continue;
       if (g.evidence !== "measured") {
-        reasons.push(
-          `\uCD9C\uD558 \uAC8C\uC774\uD2B8 ${phase} \uC758 \uADFC\uAC70 \uB4F1\uAE09\uC774 measured \uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${g.evidence ?? "\uC5C6\uC74C"}) \u2014 \uCD9C\uD558 \uD2B8\uB799\uC740 measured \uB9CC \uD1B5\uACFC\uD55C\uB2E4(Iron Rule, \uC2A4\uD399 \xA73-4). \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C`
-        );
+        reasons.push(t({
+          en: `ship gate ${phase} evidence grade is not measured (currently: ${g.evidence ?? "none"}) \u2014 the ship track passes on measured only (Iron Rule, spec \xA73-4). Attach real-run evidence and resubmit`,
+          ko: `\uCD9C\uD558 \uAC8C\uC774\uD2B8 ${phase} \uC758 \uADFC\uAC70 \uB4F1\uAE09\uC774 measured \uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${g.evidence ?? "\uC5C6\uC74C"}) \u2014 \uCD9C\uD558 \uD2B8\uB799\uC740 measured \uB9CC \uD1B5\uACFC\uD55C\uB2E4(Iron Rule, \uC2A4\uD399 \xA73-4). \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C`
+        }));
       }
     }
   }
-  const waves = waveEntries2(root);
+  const waves = waveEntries2(root, t);
   for (const { id, meta } of waves.entries) {
     const ux = meta.design_refs.filter((r) => r.startsWith("UX-"));
     if (ux.length === 0) continue;
     if (hasMeasuredEvidence(root, id)) continue;
-    reasons.push(
-      `UX \uB178\uB4DC(${ux.join(", ")})\uB97C \uCC38\uC870\uD558\uB294 ${id} \uC5D0 \uC2E4\uC8FC\uD589 \uCEA1\uCC98 \uC99D\uC801\uC774 \uC5C6\uB2E4 \u2014 headless 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 ${evidenceDir(root, id)} \uC5D0 \uB0A8\uACA8\uC57C measured \uB97C \uC8FC\uC7A5\uD560 \uC218 \uC788\uB2E4(\xA73-5)`
-    );
+    reasons.push(t({
+      en: `${id} references UX nodes (${ux.join(", ")}) but has no real-run capture \u2014 leave headless 2x screenshots in ${evidenceDir(root, id)} before claiming measured (\xA73-5)`,
+      ko: `UX \uB178\uB4DC(${ux.join(", ")})\uB97C \uCC38\uC870\uD558\uB294 ${id} \uC5D0 \uC2E4\uC8FC\uD589 \uCEA1\uCC98 \uC99D\uC801\uC774 \uC5C6\uB2E4 \u2014 headless 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 ${evidenceDir(root, id)} \uC5D0 \uB0A8\uACA8\uC57C measured \uB97C \uC8FC\uC7A5\uD560 \uC218 \uC788\uB2E4(\xA73-5)`
+    }));
   }
   reasons.push(...waves.unreadable);
   return { ok: reasons.length === 0, reasons };
@@ -9082,8 +9255,8 @@ Approve in the terminal with \`harness gate approve ${phase}\` \u2014 the final 
         );
       }
       const meta = createWave(root, {
-        milestone: str(o, "milestone") ?? "(\uBBF8\uC9C0\uC815)",
-        goal: str(o, "goal") ?? "(\uBBF8\uC9C0\uC815)",
+        milestone: str(o, "milestone") ?? pick(UNSPECIFIED, langFor(root)),
+        goal: str(o, "goal") ?? pick(UNSPECIFIED, langFor(root)),
         design_refs: refs,
         acceptance: strArr(o, "acceptance")
       });

@@ -34,7 +34,9 @@ import * as path from 'node:path';
 import { isInitialized, readState } from './state';
 import { appendEvent } from './events';
 import { submitGate } from './gate';
-import { createWave, activateWave, logTurn, completeWave, listWaves, markStale } from './wave';
+import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
+import { pick } from './i18n';
+import { langFor } from './tr';
 import { getNode, upsertNode, bumpNode } from './ledger';
 import { loadRegistry } from './registry';
 import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
@@ -355,8 +357,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
         );
       }
       const meta = createWave(root, {
-        milestone: str(o, 'milestone') ?? '(미지정)',
-        goal: str(o, 'goal') ?? '(미지정)',
+        milestone: str(o, 'milestone') ?? pick(UNSPECIFIED, langFor(root)),
+        goal: str(o, 'goal') ?? pick(UNSPECIFIED, langFor(root)),
         design_refs: refs,
         acceptance: strArr(o, 'acceptance'),
       });

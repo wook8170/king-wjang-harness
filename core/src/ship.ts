@@ -44,7 +44,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { harnessDir, evidenceDir, wavesDir } from './paths';
-import { tr } from './tr';
+import { tr, langFor } from './tr';
+import { pick, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { hasMeasuredEvidence } from './evidence';
 import { renderRtm } from './report';
@@ -52,6 +53,13 @@ import { readState } from './state';
 import { parseWave } from './wave';
 import { SHIP_PHASES } from './types';
 import type { WaveMeta } from './types';
+
+/**
+ * 생성 문서(결함 대장·릴리스 체크리스트)의 문자열. 예외 메시지는 `tr(root, …)` 로 바로 가지만
+ * 문서 렌더는 줄이 많아 언어를 진입점에서 한 번 해석해 함수로 넘긴다(report.ts 와 같은 형태).
+ */
+type Tr = (m: Msg) => string;
+const trFor = (lang: Lang): Tr => (m: Msg) => pick(m, lang);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 경로 · 모델
@@ -171,7 +179,7 @@ export function listDefects(root: string): DefectRecord[] {
 /** yaml(정본) 을 쓰고 readiness.md(사본) 를 다시 찍는다. 순서: 정본 먼저. */
 function saveDefects(root: string, defects: DefectRecord[]): void {
   writeAtomic(defectsPath(root), YAML.stringify({ defects }));
-  writeAtomic(readinessPath(root), renderLedger(defects));
+  writeAtomic(readinessPath(root), renderLedger(defects, trFor(langFor(root))));
 }
 
 /** `deferred` 에는 사유가 **반드시** 있어야 한다 — 조용한 유예가 블로커를 실어 보낸다. */
@@ -331,30 +339,42 @@ function ledgerRows(defects: DefectRecord[]): string[] {
   ].join(' | ').trim());
 }
 
-function renderLedger(defects: DefectRecord[]): string {
+function renderLedger(defects: DefectRecord[], t: Tr): string {
   const open = defects.filter(d => d.status === 'open');
+  const n = (st: DefectRecord['status']) => defects.filter(d => d.status === st).length;
+  const blockers = defects.filter(d => d.severity === 'blocker' && d.status === 'open').length;
   const out: string[] = [
-    '# 결함 대장 — P10 HARDEN',
+    `# ${t({ en: 'Defect ledger', ko: '결함 대장' })} — P10 HARDEN`,
     '',
-    '정본은 `.harness/ship/defects.yaml` 이다. 이 파일은 거기서 렌더한 **사본**이므로 손으로 고치지 마라 —',
-    '다음 `harness ship defect` 실행이 덮어쓴다.',
+    t({
+      en: 'The source of truth is `.harness/ship/defects.yaml`. This file is a **copy** rendered from it, '
+        + 'so do not hand-edit — the next `harness ship defect` run overwrites it.',
+      ko: '정본은 `.harness/ship/defects.yaml` 이다. 이 파일은 거기서 렌더한 **사본**이므로 손으로 고치지 마라 —\n'
+        + '다음 `harness ship defect` 실행이 덮어쓴다.',
+    }),
     '',
-    `- open BLOCKER **${defects.filter(d => d.severity === 'blocker' && d.status === 'open').length}건**`
-    + ` · open 전체 ${open.length}건 · fixed ${defects.filter(d => d.status === 'fixed').length}건`
-    + ` · verified ${defects.filter(d => d.status === 'verified').length}건`
-    + ` · deferred ${defects.filter(d => d.status === 'deferred').length}건 · 전체 ${defects.length}건`,
+    t({
+      en: `- open BLOCKER **${blockers}** · open total ${open.length} · fixed ${n('fixed')}`
+        + ` · verified ${n('verified')} · deferred ${n('deferred')} · total ${defects.length}`,
+      ko: `- open BLOCKER **${blockers}건** · open 전체 ${open.length}건 · fixed ${n('fixed')}건`
+        + ` · verified ${n('verified')}건 · deferred ${n('deferred')}건 · 전체 ${defects.length}건`,
+    }),
     '',
   ];
   if (defects.length === 0) {
     out.push(
-      '등록된 결함이 없다 — `verifying-production-readiness` 판정을 아직 돌리지 않았다면 이 대장은',
-      '아무것도 보증하지 않는다. 빈 대장은 "결함이 없다"가 아니라 "아직 보지 않았다"이다.',
+      t({
+        en: 'No defect is registered — if the `verifying-production-readiness` audit has not been run, this '
+          + 'ledger guarantees nothing. An empty ledger means "not looked at yet", not "no defects".',
+        ko: '등록된 결함이 없다 — `verifying-production-readiness` 판정을 아직 돌리지 않았다면 이 대장은\n'
+          + '아무것도 보증하지 않는다. 빈 대장은 "결함이 없다"가 아니라 "아직 보지 않았다"이다.',
+      }),
       '',
     );
     return out.join('\n');
   }
   out.push(
-    '| ID | 심각도 | 한 줄 | 상태 | 근거 | 미룬 사유 |',
+    t(LEDGER_TABLE_HEAD),
     '|---|---|---|---|---|---|',
     ...ledgerRows(defects),
     '',
@@ -362,9 +382,14 @@ function renderLedger(defects: DefectRecord[]): string {
   return out.join('\n');
 }
 
+const LEDGER_TABLE_HEAD: Msg = {
+  en: '| ID | Severity | Summary | Status | Evidence | Deferral reason |',
+  ko: '| ID | 심각도 | 한 줄 | 상태 | 근거 | 미룬 사유 |',
+};
+
 /** 기계 정본(yaml) → 사람이 읽는 마크다운. `.harness/ship/readiness.md` 의 내용과 같다. */
 export function renderDefectLedger(root: string): string {
-  return renderLedger(listDefects(root));
+  return renderLedger(listDefects(root), trFor(langFor(root)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -470,7 +495,7 @@ function attempt<T>(fn: () => T): Safe<T> {
  * 파일명으로 나뉘므로 meta.id 를 믿으면 남의 증적을 읽는다(report.ts·wave.ts 와 같은 이유).
  * 해석 불가는 침묵 스킵이 아니라 사유로 올린다 — 판정 불가는 통과가 아니다.
  */
-function waveEntries(root: string): { entries: { id: string; meta: WaveMeta }[]; unreadable: string[] } {
+function waveEntries(root: string, t: Tr): { entries: { id: string; meta: WaveMeta }[]; unreadable: string[] } {
   const entries: { id: string; meta: WaveMeta }[] = [];
   const unreadable: string[] = [];
   if (!fs.existsSync(wavesDir(root))) return { entries, unreadable };
@@ -478,13 +503,18 @@ function waveEntries(root: string): { entries: { id: string; meta: WaveMeta }[];
   try {
     files = fs.readdirSync(wavesDir(root));
   } catch (e) {
-    return { entries, unreadable: [`웨이브 디렉토리를 읽을 수 없다: ${(e as Error).message}`] };
+    return { entries, unreadable: [`${t({ en: 'cannot read the waves directory', ko: '웨이브 디렉토리를 읽을 수 없다' })}: ${(e as Error).message}`] };
   }
   for (const f of files.filter(n => /^wave-\d+\.md$/.test(n)).sort()) {
     const id = f.replace(/\.md$/, '');
     const r = attempt(() => parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8')).meta);
     if (r.ok) entries.push({ id, meta: r.value });
-    else unreadable.push(`웨이브 ${id} 를 해석할 수 없다: ${r.error} — 증적 판정 불가는 통과가 아니다`);
+    else {
+      unreadable.push(t({
+        en: `cannot parse wave ${id}: ${r.error} — being unable to judge evidence is not a pass`,
+        ko: `웨이브 ${id} 를 해석할 수 없다: ${r.error} — 증적 판정 불가는 통과가 아니다`,
+      }));
+    }
   }
   return { entries, unreadable };
 }
@@ -501,25 +531,33 @@ function waveEntries(root: string): { entries: { id: string; meta: WaveMeta }[];
  * 던지지 않는다(판정 함수) — 대장·상태 손상도 사유를 담은 NO-GO 다.
  */
 export function shipVerdict(root: string): ShipVerdict {
+  const t = trFor(langFor(root));
   const reasons: string[] = [];
 
   // ── 결함 대장 (등록 순서 = 사유 순서)
   const defects = attempt(() => listDefects(root));
   if (!defects.ok) {
-    reasons.push(`결함 대장을 읽을 수 없다: ${defects.error} — 대장을 못 읽는 상태는 "결함 없음"이 아니다`);
+    reasons.push(t({
+      en: `cannot read the defect ledger: ${defects.error} — an unreadable ledger is not "no defects"`,
+      ko: `결함 대장을 읽을 수 없다: ${defects.error} — 대장을 못 읽는 상태는 "결함 없음"이 아니다`,
+    }));
   } else {
     for (const d of defects.value) {
       if (d.severity !== 'blocker') continue;
       if (d.status === 'open') {
-        reasons.push(
-          `열린 차단 결함: ${d.id} ${d.title} (근거 ${d.evidence}) — 수정 후 재측정하고 `
-          + `\`harness ship defect update ${d.id} --status verified\` 로 닫아라`,
-        );
+        reasons.push(t({
+          en: `open blocker: ${d.id} ${d.title} (evidence ${d.evidence}) — fix it, re-measure, then close it `
+            + `with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `열린 차단 결함: ${d.id} ${d.title} (근거 ${d.evidence}) — 수정 후 재측정하고 `
+            + `\`harness ship defect update ${d.id} --status verified\` 로 닫아라`,
+        }));
       } else if (d.status === 'fixed') {
-        reasons.push(
-          `재측정되지 않은 차단 결함: ${d.id} ${d.title} (fixed) — 「고쳤다」는 주장이고 재측정이 `
-          + `관측이다. 다시 돌려 확인한 뒤 \`harness ship defect update ${d.id} --status verified\` 로 올려라`,
-        );
+        reasons.push(t({
+          en: `unverified blocker: ${d.id} ${d.title} (fixed) — "fixed" is a claim, re-measurement is the `
+            + `observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `재측정되지 않은 차단 결함: ${d.id} ${d.title} (fixed) — 「고쳤다」는 주장이고 재측정이 `
+            + `관측이다. 다시 돌려 확인한 뒤 \`harness ship defect update ${d.id} --status verified\` 로 올려라`,
+        }));
       }
     }
   }
@@ -527,38 +565,47 @@ export function shipVerdict(root: string): ShipVerdict {
   // ── 게이트 (페이즈 순서)
   const state = attempt(() => readState(root));
   if (!state.ok) {
-    reasons.push(`상태 파일을 읽을 수 없다: ${state.error} — \`harness doctor --repair\` 로 먼저 복구하라`);
+    reasons.push(t({
+      en: `cannot read the state file: ${state.error} — repair it first with \`harness doctor --repair\``,
+      ko: `상태 파일을 읽을 수 없다: ${state.error} — \`harness doctor --repair\` 로 먼저 복구하라`,
+    }));
   } else {
     for (const phase of ['P10', 'P11'] as const) {
       const g = state.value.gates[phase];
       if (g?.status === 'approved') continue;
-      reasons.push(
-        `출하 게이트 미승인: ${phase} (현재: ${g?.status ?? 'pending'}) — `
-        + `\`harness gate submit ${phase} --evidence measured --paths <산출물>\` 뒤 사용자 승인이 필요하다`,
-      );
+      reasons.push(t({
+        en: `ship gate not approved: ${phase} (currently: ${g?.status ?? 'pending'}) — run `
+          + `\`harness gate submit ${phase} --evidence measured --paths <artifacts>\`, then a human must approve`,
+        ko: `출하 게이트 미승인: ${phase} (현재: ${g?.status ?? 'pending'}) — `
+          + `\`harness gate submit ${phase} --evidence measured --paths <산출물>\` 뒤 사용자 승인이 필요하다`,
+      }));
     }
     for (const phase of SHIP_PHASES) {
       const g = state.value.gates[phase];
       if (!g || g.status === 'pending') continue; // 아직 제출 전 — 위 승인 검사가 이미 말했다
       if (g.evidence !== 'measured') {
-        reasons.push(
-          `출하 게이트 ${phase} 의 근거 등급이 measured 가 아니다 (현재: ${g.evidence ?? '없음'}) — `
-          + '출하 트랙은 measured 만 통과한다(Iron Rule, 스펙 §3-4). 실주행·측정 증적을 붙여 재제출하라',
-        );
+        reasons.push(t({
+          en: `ship gate ${phase} evidence grade is not measured (currently: ${g.evidence ?? 'none'}) — the ship `
+            + 'track passes on measured only (Iron Rule, spec §3-4). Attach real-run evidence and resubmit',
+          ko: `출하 게이트 ${phase} 의 근거 등급이 measured 가 아니다 (현재: ${g.evidence ?? '없음'}) — `
+            + '출하 트랙은 measured 만 통과한다(Iron Rule, 스펙 §3-4). 실주행·측정 증적을 붙여 재제출하라',
+        }));
       }
     }
   }
 
   // ── UX 참조 웨이브의 실주행 증적 (§3-5: E2E 실주행 증적 없으면 measured 불가)
-  const waves = waveEntries(root);
+  const waves = waveEntries(root, t);
   for (const { id, meta } of waves.entries) {
     const ux = meta.design_refs.filter(r => r.startsWith('UX-'));
     if (ux.length === 0) continue;
     if (hasMeasuredEvidence(root, id)) continue;
-    reasons.push(
-      `UX 노드(${ux.join(', ')})를 참조하는 ${id} 에 실주행 캡처 증적이 없다 — `
-      + `headless 2x 스크린샷을 ${evidenceDir(root, id)} 에 남겨야 measured 를 주장할 수 있다(§3-5)`,
-    );
+    reasons.push(t({
+      en: `${id} references UX nodes (${ux.join(', ')}) but has no real-run capture — leave headless 2x `
+        + `screenshots in ${evidenceDir(root, id)} before claiming measured (§3-5)`,
+      ko: `UX 노드(${ux.join(', ')})를 참조하는 ${id} 에 실주행 캡처 증적이 없다 — `
+        + `headless 2x 스크린샷을 ${evidenceDir(root, id)} 에 남겨야 measured 를 주장할 수 있다(§3-5)`,
+    }));
   }
   reasons.push(...waves.unreadable);
 
@@ -570,7 +617,7 @@ export function shipVerdict(root: string): ShipVerdict {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 사람이 읽는 머리글. 어떤 판정도 이 값에 의존하지 않는다(report.ts 와 같은 계약). */
-const generatedAt = () => `생성: ${new Date().toISOString()}`;
+const generatedAt = (t: Tr) => `${t({ en: 'Generated', ko: '생성' })}: ${new Date().toISOString()}`;
 
 /**
  * P12 최종 체크리스트(§2·§3-7) — 판정 · 결함 대장 요약 · 배포 기록 · RTM 첨부.
@@ -579,42 +626,68 @@ const generatedAt = () => `생성: ${new Date().toISOString()}`;
  * P12 출하 체크리스트에 첨부"). 옮겨 적는 순간 두 문서가 갈라지고, 갈라지면 느슨한 쪽이 읽힌다.
  */
 export function renderReleaseChecklist(root: string): string {
+  const t = trFor(langFor(root));
   const verdict = shipVerdict(root);
-  const out: string[] = ['# 출하 체크리스트 — P12 SHIP', '', generatedAt(), '', '## 판정', ''];
+  const out: string[] = [
+    `# ${t({ en: 'Release checklist', ko: '출하 체크리스트' })} — P12 SHIP`, '', generatedAt(t), '',
+    `## ${t({ en: 'Verdict', ko: '판정' })}`, '',
+  ];
 
   if (verdict.ok) {
     out.push(
-      '**출하 가능** — 아래 차단 조건이 모두 비어 있다.',
+      t({
+        en: '**Ready to ship** — every blocking condition below is empty.',
+        ko: '**출하 가능** — 아래 차단 조건이 모두 비어 있다.',
+      }),
       '',
-      '- 열린 차단 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음',
+      t({
+        en: '- No open blocker · P10·P11 gates approved · ship gate evidence is measured · UX waves have real-run evidence',
+        ko: '- 열린 차단 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음',
+      }),
       '',
-      '이 판정은 게이트를 대신 열지 않는다 — `harness gate approve P12` 는 사람이 누른다.',
+      t({
+        en: 'This verdict does not open the gate for you — a human presses `harness gate approve P12`.',
+        ko: '이 판정은 게이트를 대신 열지 않는다 — `harness gate approve P12` 는 사람이 누른다.',
+      }),
     );
   } else {
-    out.push(`**출하 불가** — 차단 사유 ${verdict.reasons.length}건. 하나라도 남으면 출하하지 않는다.`, '');
+    out.push(t({
+      en: `**Do not ship** — ${verdict.reasons.length} blocking reason(s). If even one remains, do not ship.`,
+      ko: `**출하 불가** — 차단 사유 ${verdict.reasons.length}건. 하나라도 남으면 출하하지 않는다.`,
+    }), '');
     out.push(...verdict.reasons.map(r => `- ${r}`));
   }
   out.push('');
 
   // ── 결함 대장
-  out.push('## 결함 대장', '');
+  out.push(`## ${t({ en: 'Defect ledger', ko: '결함 대장' })}`, '');
   const defects = attempt(() => listDefects(root));
   if (!defects.ok) {
-    out.push(`대장을 읽을 수 없다: ${defects.error}`, '');
+    out.push(`${t({ en: 'cannot read the ledger', ko: '대장을 읽을 수 없다' })}: ${defects.error}`, '');
   } else if (defects.value.length === 0) {
-    out.push('등록된 결함이 없다 — 판정을 돌리지 않았다면 이 칸은 "결함 없음"이 아니라 "아직 보지 않았다"이다.', '');
+    out.push(t({
+      en: 'No defect is registered — if the audit has not been run, this section means "not looked at yet", '
+        + 'not "no defects".',
+      ko: '등록된 결함이 없다 — 판정을 돌리지 않았다면 이 칸은 "결함 없음"이 아니라 "아직 보지 않았다"이다.',
+    }), '');
   } else {
     const openish = defects.value.filter(d => d.status !== 'verified');
+    const blockers = defects.value.filter(d => d.severity === 'blocker' && d.status === 'open').length;
     out.push(
-      `정본: \`.harness/ship/defects.yaml\` · 사람이 읽는 사본: \`.harness/ship/readiness.md\``,
+      t({
+        en: 'Source of truth: `.harness/ship/defects.yaml` · human-readable copy: `.harness/ship/readiness.md`',
+        ko: '정본: `.harness/ship/defects.yaml` · 사람이 읽는 사본: `.harness/ship/readiness.md`',
+      }),
       '',
-      `- 전체 ${defects.value.length}건 · 미종결(verified 아님) ${openish.length}건`
-      + ` · open BLOCKER ${defects.value.filter(d => d.severity === 'blocker' && d.status === 'open').length}건`,
+      t({
+        en: `- total ${defects.value.length} · unclosed (not verified) ${openish.length} · open BLOCKER ${blockers}`,
+        ko: `- 전체 ${defects.value.length}건 · 미종결(verified 아님) ${openish.length}건 · open BLOCKER ${blockers}건`,
+      }),
       '',
     );
     if (openish.length > 0) {
       out.push(
-        '| ID | 심각도 | 한 줄 | 상태 | 근거 | 미룬 사유 |',
+        t(LEDGER_TABLE_HEAD),
         '|---|---|---|---|---|---|',
         ...ledgerRows(openish),
         '',
@@ -623,30 +696,39 @@ export function renderReleaseChecklist(root: string): string {
   }
 
   // ── 배포 기록
-  out.push('## 배포 기록', '');
+  out.push(`## ${t({ en: 'Deployment record', ko: '배포 기록' })}`, '');
   const deployments = attempt(() => listDeployments(root));
   if (!deployments.ok) {
-    out.push(`배포 기록을 읽을 수 없다: ${deployments.error}`, '');
+    out.push(`${t({ en: 'cannot read the deployment record', ko: '배포 기록을 읽을 수 없다' })}: ${deployments.error}`, '');
   } else if (deployments.value.length === 0) {
-    out.push(
-      '배포 기록이 없다 — P11 에서 `harness ship deploy --version <버전> --sha <커밋> --env <환경>` 로',
-      '등록하라. 기록이 없으면 "이 요구사항이 어느 배포에 실렸나"를 역추적할 수 없다(§3-7).',
-      '',
-    );
+    out.push(t({
+      en: 'No deployment is recorded — register one in P11 with `harness ship deploy --version <version> '
+        + '--sha <commit> --env <environment>`. Without records there is no way to trace which deployment '
+        + 'carried a given requirement (§3-7).',
+      ko: '배포 기록이 없다 — P11 에서 `harness ship deploy --version <버전> --sha <커밋> --env <환경>` 로\n'
+        + '등록하라. 기록이 없으면 "이 요구사항이 어느 배포에 실렸나"를 역추적할 수 없다(§3-7).',
+    }), '');
   } else {
-    out.push('| 버전 | 커밋 | 환경 | 시각 | 증적 |', '|---|---|---|---|---|');
+    out.push(t({
+      en: '| Version | Commit | Environment | Time | Evidence |',
+      ko: '| 버전 | 커밋 | 환경 | 시각 | 증적 |',
+    }), '|---|---|---|---|---|');
+    const noneCell = `**${t({ en: 'none', ko: '없음' })}**`;
     for (const d of deployments.value) {
       out.push(
         `| ${cell(d.version)} | \`${cell(d.commitSha)}\` | ${cell(d.environment)} | ${d.recordedAt || '—'} `
-        + `| ${d.evidence.length ? d.evidence.map(cell).join(', ') : '**없음**'} |`,
+        + `| ${d.evidence.length ? d.evidence.map(cell).join(', ') : noneCell} |`,
       );
     }
     out.push('');
   }
 
   // ── RTM 첨부
-  out.push('## 첨부 — 요구사항 추적 매트릭스', '');
+  out.push(`## ${t({
+    en: 'Attachment — Requirements Traceability Matrix',
+    ko: '첨부 — 요구사항 추적 매트릭스',
+  })}`, '');
   const rtm = attempt(() => renderRtm(root));
-  out.push(rtm.ok ? rtm.value : `RTM 을 생성할 수 없다: ${rtm.error}`);
+  out.push(rtm.ok ? rtm.value : `${t({ en: 'cannot generate the RTM', ko: 'RTM 을 생성할 수 없다' })}: ${rtm.error}`);
   return out.join('\n').replace(/\n+$/, '\n');
 }

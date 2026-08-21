@@ -13,7 +13,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initHarness, isInitialized, readState, writeState } from './state';
 import { appendEvent } from './events';
-import { createWave, activateWave, logTurn, completeWave, listWaves, markStale } from './wave';
+import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { getNode, upsertNode, bumpNode } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
@@ -388,7 +388,7 @@ export function run(argv: string[], root: string): number {
             recordAttempt(root, waveId, outcome, flag(args, 'detail'));
             const c = outcome === 'fail' ? checkThreshold(root, waveId, Number(flag(args, 'limit')) || undefined) : null;
             console.log(L(`${waveId} ${outcome} · ${attemptCount(root, waveId)} consecutive failure(s)`, `${waveId} ${outcome} · 연속 실패 ${attemptCount(root, waveId)}회`));
-            if (c) { console.error(summonMessage(c)); return 2; }
+            if (c) { console.error(summonMessage(c, root)); return 2; }
             return 0;
           }
           case 'brief': {
@@ -415,7 +415,7 @@ export function run(argv: string[], root: string): number {
               return 2;
             }
             const c = pendingCritical(root);
-            console.log(c ? summonMessage(c) : L('No pending escalation', '대기 중인 소환 없음'));
+            console.log(c ? summonMessage(c, root) : L('No pending escalation', '대기 중인 소환 없음'));
             return c ? 2 : 0;
           }
           default: throw new Error(unknownSub('loop', sub, lang));
@@ -528,8 +528,11 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'baseline': {
-            recordBaseline(root, rest[0], rest[1] ?? '');
-            console.log(L(`Baseline recorded for ${rest[0]}: ${rest[1]}`, `${rest[0]} 기준 이미지 등록: ${rest[1]}`));
+            // 도움말은 `--png <file>` 을 광고하는데 위치 인자만 읽어 `--png` 자체를 경로로 삼았다.
+            // 광고한 형태를 정본으로 두고 위치 인자는 별칭으로 남긴다.
+            const png = flag(args, 'png') ?? rest[1] ?? '';
+            recordBaseline(root, rest[0], png);
+            console.log(L(`Baseline recorded for ${rest[0]}: ${png}`, `${rest[0]} 기준 이미지 등록: ${png}`));
             return 0;
           }
           case 'html': {
@@ -552,9 +555,9 @@ export function run(argv: string[], root: string): number {
             const doc = loadTokens(root);
             const out = flag(args, 'out') ?? '.';
             const targets: [string, string][] = [
-              ['tokens.css', generateCss(doc)],
-              ['tokens.ts', generateTs(doc)],
-              ['tailwind.tokens.js', generateTailwind(doc)],
+              ['tokens.css', generateCss(doc, lang)],
+              ['tokens.ts', generateTs(doc, lang)],
+              ['tailwind.tokens.js', generateTailwind(doc, lang)],
             ];
             fs.mkdirSync(path.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
@@ -591,7 +594,7 @@ export function run(argv: string[], root: string): number {
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, 'out');
-            if (out) fs.writeFileSync(path.resolve(root, out), generateCss(swapped));
+            if (out) fs.writeFileSync(path.resolve(root, out), generateCss(swapped, lang));
             console.log(L(`Swap is meaningful — ${changed.length} token(s) changed${out ? ` · CSS → ${out}` : ''}`, `스왑 유효 — 변경 토큰 ${changed.length}건${out ? ` · CSS → ${out}` : ''}`));
             return 0;
           }
@@ -745,10 +748,11 @@ export function run(argv: string[], root: string): number {
                 : 'A wave needs a goal — `harness wave create --goal "<what this wave finishes>"`. An instruction sheet without a goal cannot be picked up by the next session');
             }
             const meta = createWave(root, {
-              milestone: flag(args, 'milestone') ?? '(미지정)',
+              milestone: flag(args, 'milestone') ?? pick(UNSPECIFIED, lang),
               goal,
               design_refs: refs,
-              acceptance: csv(flag(args, 'accept')),
+              // `--help` 가 광고하는 이름이 정본이다. `--accept` 는 기존 호출을 깨지 않으려 남긴 별칭.
+              acceptance: csv(flag(args, 'acceptance') ?? flag(args, 'accept')),
             });
             console.log(meta.id);
             return 0;

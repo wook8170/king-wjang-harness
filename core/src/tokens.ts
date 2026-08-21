@@ -31,7 +31,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { designDir } from './paths';
-import { tr } from './tr';
+import { tr, langFor } from './tr';
+import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 문서 모델
@@ -305,17 +306,29 @@ export function saveTokens(root: string, doc: TokenDoc): void {
 // 생성기 — 전부 순수 문자열 빌더 (같은 doc → 바이트 동일)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BANNER = '생성물 — 손으로 고치지 마라. 원천: .harness/' + TOKENS_REL;
+/**
+ * 생성 파일 머리글. 생성기는 순수(doc → 문자열)라 root 가 없으므로 언어를 인자로 받는다 —
+ * 호출부(cli·design.ts)가 root 로 해석해 넘긴다. 결정성은 그대로다(같은 doc+lang → 바이트 동일).
+ */
+const BANNER: Msg = {
+  en: `Generated — do not hand-edit. Source: .harness/${TOKENS_REL}`,
+  ko: `생성물 — 손으로 고치지 마라. 원천: .harness/${TOKENS_REL}`,
+};
+
+const TW_NOTE: Msg = {
+  en: 'Values point at CSS variables (runtime theme switching). Only screens are literal — media queries cannot resolve var().',
+  ko: '값은 CSS 변수를 가리킨다(런타임 테마 전환). screens 만 리터럴 — 미디어 쿼리는 var() 를 못 푼다.',
+};
 
 /** `:root` 라이트 선언 + 값이 다른 색만 담은 다크 블록. */
-export function generateCss(doc: TokenDoc): string {
+export function generateCss(doc: TokenDoc, lang: Lang = DEFAULT_LANG): string {
   const paths = tokenPaths(doc);
   const light = paths.map(p => `  ${cssVar(p)}: ${resolve(doc, p, 'light')};`);
   const dark = paths
     .filter(p => p.startsWith('color.') && resolve(doc, p, 'dark') !== resolve(doc, p, 'light'))
     .map(p => `    ${cssVar(p)}: ${resolve(doc, p, 'dark')};`);
 
-  const out = [`/* ${BANNER} */`, ':root {', ...light, '}'];
+  const out = [`/* ${pick(BANNER, lang)} */`, ':root {', ...light, '}'];
   if (dark.length) {
     out.push('', '@media (prefers-color-scheme: dark) {', '  :root {', ...dark, '  }', '}');
   }
@@ -335,8 +348,8 @@ const tsBlock = (doc: TokenDoc, key: string, prefix: string, indent: string): st
 };
 
 /** 타입이 붙은 `as const` 상수 객체. 값은 별칭이 풀린 실제 값이다. */
-export function generateTs(doc: TokenDoc): string {
-  const out: string[] = [`// ${BANNER}`, 'export const tokens = {'];
+export function generateTs(doc: TokenDoc, lang: Lang = DEFAULT_LANG): string {
+  const out: string[] = [`// ${pick(BANNER, lang)}`, 'export const tokens = {'];
 
   const colors = tokenPaths(doc).filter(p => p.startsWith('color.'));
   out.push('  color: {');
@@ -375,10 +388,10 @@ const twBlock = (doc: TokenDoc, key: string, prefix: string, literal = false): s
  * Tailwind theme 조각. 값은 CSS 변수를 가리켜 런타임 테마 전환이 그대로 먹는다.
  * `screens` 만 리터럴인 이유: 미디어 쿼리 조건은 var() 를 해석하지 못한다.
  */
-export function generateTailwind(doc: TokenDoc): string {
+export function generateTailwind(doc: TokenDoc, lang: Lang = DEFAULT_LANG): string {
   const out: string[] = [
-    `// ${BANNER}`,
-    '// 값은 CSS 변수를 가리킨다(런타임 테마 전환). screens 만 리터럴 — 미디어 쿼리는 var() 를 못 푼다.',
+    `// ${pick(BANNER, lang)}`,
+    `// ${pick(TW_NOTE, lang)}`,
     'module.exports = {',
     '  theme: {',
     '    extend: {',

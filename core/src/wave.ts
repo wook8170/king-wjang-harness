@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { wavesDir, wavePath, evidenceDir } from './paths';
 import { tr, langFor } from './tr';
-import { pick, DEFAULT_LANG, type Lang } from './i18n';
+import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { readState, writeState } from './state';
 import { appendEvent, readEvents } from './events';
 import { noteTurnLogged } from './runtime';
@@ -27,13 +27,16 @@ export function parseWave(txt: string, lang: Lang = DEFAULT_LANG): { meta: WaveM
   const statuses = ['pending', 'active', 'done', 'stale'] as const;
   const meta: WaveMeta = {
     id: typeof r.id === 'string' ? r.id : '',
-    milestone: typeof r.milestone === 'string' ? r.milestone : '(미지정)',
+    milestone: typeof r.milestone === 'string' ? r.milestone : pick(UNSPECIFIED, lang),
     design_refs: asArr(r.design_refs),
     status: statuses.includes(r.status as any) ? r.status as WaveMeta['status'] : 'pending',
     acceptance: asArr(r.acceptance),
   };
   return { meta, body: m[2] };
 }
+
+/** 미지정 마일스톤 자리표시자. 저장 시점(cli·mcp)과 해석 시점(여기)이 같은 문장을 쓴다. */
+export const UNSPECIFIED: Msg = { en: '(unspecified)', ko: '(미지정)' };
 
 export function serializeWave(meta: WaveMeta, body: string): string {
   return `---\n${YAML.stringify(meta).trimEnd()}\n---\n${body}`;
@@ -120,6 +123,7 @@ export function createWave(
   root: string,
   opts: { milestone: string; design_refs: string[]; acceptance: string[]; goal: string },
 ): WaveMeta {
+  const lang = langFor(root);
   const id = nextWaveId(root);
   // 디스크·저널 최댓값을 모두 반영하므로 정상 경로에서는 도달 불가능한 분기다.
   // 두 프로세스가 같은 순간에 같은 번호를 발급받은 TOCTOU 상황의 안전망 —
@@ -131,17 +135,21 @@ export function createWave(
   // 브랜치 전환으로 저널이 되감겨 번호가 재발급된 경우가 실제 경로다(nextWaveId 주석 참조).
   const inherited = evidenceFiles(root, id);
   if (inherited.length > 0) {
-    throw new Error(
-      `${evidenceDir(root, id)} 에 이전 증적 ${inherited.length}건(${inherited.slice(0, 3).join(', ')}`
-      + `${inherited.length > 3 ? ', …' : ''})이 남아 있다 — 새 웨이브가 남의 시각 증적을 `
-      + '물려받으면 UX 게이트가 무력화된다. 해당 디렉토리를 확인해 보관하거나 삭제한 뒤 다시 생성하라.',
-    );
+    const sample = `${inherited.slice(0, 3).join(', ')}${inherited.length > 3 ? ', …' : ''}`;
+    throw new Error(pick({
+      en: `${evidenceDir(root, id)} still holds ${inherited.length} piece(s) of earlier evidence (${sample}) — `
+        + 'a new wave inheriting someone else\'s visual evidence disables the UX gate. Check that directory, '
+        + 'archive or delete it, then create the wave again.',
+      ko: `${evidenceDir(root, id)} 에 이전 증적 ${inherited.length}건(${sample})이 남아 있다 — `
+        + '새 웨이브가 남의 시각 증적을 물려받으면 UX 게이트가 무력화된다. '
+        + '해당 디렉토리를 확인해 보관하거나 삭제한 뒤 다시 생성하라.',
+    }, lang));
   }
   const meta: WaveMeta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: 'pending', acceptance: opts.acceptance };
   const body = [
-    `## 목표`, opts.goal, '',
-    `## 완료 기준`, ...opts.acceptance.map(a => `- ${a}`), '',
-    `## 턴 로그`, '',
+    `## ${pick({ en: 'Goal', ko: '목표' }, lang)}`, opts.goal, '',
+    `## ${pick({ en: 'Done when', ko: '완료 기준' }, lang)}`, ...opts.acceptance.map(a => `- ${a}`), '',
+    `## ${pick({ en: 'Turn log', ko: '턴 로그' }, lang)}`, '',
   ].join('\n');
   writeWave(root, id, meta, body);
   appendEvent(root, 'wave-created', { id, milestone: opts.milestone, design_refs: opts.design_refs });
