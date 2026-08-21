@@ -24,6 +24,7 @@ import { appendEvent, readEvents } from './events';
 import { tr } from './tr';
 import type { Msg } from './i18n';
 import { packetsDir } from './paths';
+import { computePolicyHash } from './policy';
 import { sanitizeUntrusted } from './untrusted';
 import { readState, writeState } from './state';
 import { PHASES, SHIP_PHASES, isEvidenceGrade } from './types';
@@ -195,7 +196,12 @@ export function approveGate(root: string, phase: Phase): GateRecord {
     );
   }
   // OPS-20: 위 submitGate 와 같은 이유 — 이벤트의 ts 가 유일한 승인 시각이다.
-  const ev = appendEvent(root, 'gate-approved', { phase, artifactHash, evidence: current.evidence, paths });
+  // OPS-76: 승인 시점의 **정책 해시를 함께 찍는다**(재고정은 하지 않는다 — policy.ts 결정 (1)).
+  // 승인 도장은 산출물에 찍는 것이지 정책 변경에 찍는 것이 아니므로 베이스라인은 건드리지
+  // 않되, 「이 게이트는 어떤 정책 아래에서 열렸나」는 나중에 저널만으로 답할 수 있어야 한다.
+  const ev = appendEvent(root, 'gate-approved', {
+    phase, artifactHash, evidence: current.evidence, paths, policyHash: computePolicyHash(root).hash,
+  });
   const record: GateRecord = { ...current, status: 'approved', approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;

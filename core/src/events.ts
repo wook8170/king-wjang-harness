@@ -35,6 +35,10 @@ export const EVENT_TYPES = [
   'defect-added', 'defect-updated', 'deployment-recorded',
   'backtrack-started', 'backtrack-cleared',
   'doctor-repaired', // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
+  // OPS-76: 정책 베이스라인 고정(init·`doctor --accept-policy`). 상태 무변이라 replayState 는
+  // 폴드하지 않지만, 여기 등록하지 않으면 정책을 한 번 고정한 프로젝트에서 doctor 가
+  // 「미지 이벤트 → 재생 불신」으로 판정해 `--repair` 가 복구를 거부한다.
+  'policy-pinned',
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

@@ -39,6 +39,7 @@ import {
   generateSourceOfTruthHtml, listCanvasLinks,
 } from './design';
 import { loadProfile, inspectProfile, commandFor } from './profile';
+import { pinPolicy } from './policy';
 import {
   generatePlaywrightSpec, specFileNameFor, validateEvidence, buildComparisonPacket,
 } from './evidence';
@@ -156,6 +157,10 @@ export function run(argv: string[], root: string): number {
       case 'init':
         initHarness(root);
         appendEvent(root, 'init', {});
+        // OPS-76: 정책 베이스라인은 **여기서** 고정된다. init 이 config.yaml 을 막 썼으므로
+        // 이 시점의 해시가 「사람이 아직 아무것도 손대지 않은 정책」이다. 이후 이 값과
+        // 어긋나는 것은 전부 사후 변경이고, doctor 가 그것을 보고한다.
+        pinPolicy(root, 'init');
         console.log(L('.harness/ initialised — run `harness --help` to see the command map.', '.harness/ 초기화 완료 — `harness --help` 로 명령 지도를 볼 수 있다.'));
         // 스펙 §12(알려진 한계) 가 "init 시 경고 고지"를 명시한다. 승인 장치는 권한 다이얼로그에
         // 의존하므로, 사용자가 `harness gate approve` 를 allowlist 에 넣으면 「최종 클릭은 사람」
@@ -178,7 +183,33 @@ export function run(argv: string[], root: string): number {
         return 0;
 
       case 'doctor': {
-        const r = runDoctor(root, { repair: argv.includes('--repair'), force: argv.includes('--force') });
+        // OPS-76: `--accept-policy` 는 정책 베이스라인을 지금 상태로 재고정한다 — 즉 드리프트
+        // 경고를 정산하는 **사람의 판단**이다. 훅이 에이전트의 이 명령을 막지만(hook.ts),
+        // 훅은 문자열을 보는 장치라 훅을 타지 않는 경로가 남는다 — 적대적 검증이
+        // `node <path>/core/dist/cli.js doctor --accept-policy` 로 실제로 통과시켰다.
+        // 그래서 `--force` 와 **같은 두 겹**을 둔다(SHIP-52 와 같은 논리): 훅 + CLI env 게이트.
+        // 한 겹만 있으면 그 겹에 실수가 생기는 순간 탐지 장치가 통째로 꺼진다.
+        if (argv.includes('--accept-policy') && process.env.HARNESS_ACCEPT_POLICY !== '1') {
+          throw new Error(
+            L(
+              '`--accept-policy` re-pins the policy baseline and clears the "policy changed" warning, '
+              + 'so it is locked by default — accepting a change to the files that decide what the hook '
+              + 'blocks is the user\'s judgement, not an agent\'s. Review the diff, then run '
+              + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` yourself. '
+              + 'Diagnosis is always open: plain `harness doctor` reports the drift.',
+              '`--accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우므로 '
+              + '기본 잠금이다 — 훅이 무엇을 막을지 정하는 파일의 변경을 수용하는 것은 에이전트가 '
+              + '아니라 사용자의 판단이다. 차이를 확인한 뒤 사용자가 직접 '
+              + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 실행하라. '
+              + '진단은 언제나 열려 있다: 그냥 `harness doctor` 가 드리프트를 보고한다.',
+            ),
+          );
+        }
+        const r = runDoctor(root, {
+          repair: argv.includes('--repair'),
+          force: argv.includes('--force'),
+          acceptPolicy: argv.includes('--accept-policy'),
+        });
         console.log(JSON.stringify(r, null, 2));
         if (r.refused) {
           console.error(L('Repair refused — the journal cannot be trusted. Find out why, then force with --force.', '복구 거부됨 — 저널 신뢰 불가. 원인 확인 후 --force 로 강제할 수 있다.'));

@@ -25,6 +25,7 @@ import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, isDeployCommand, commandFor } from './profile';
+import { POLICY_FILES, POLICY_PREFIXES } from './policy';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -78,12 +79,10 @@ const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/d
  *
  * 정책을 바꿀 길은 남는다 — 사람이 터미널에서 직접 편집하거나(훅은 에이전트 호출만 본다),
  * 하네스 명령을 거친다. 막는 것은 **에이전트가 스스로 푸는 경로**다.
+ *
+ * [OPS-76] 목록의 정의는 `policy.ts` 에 있다 — 「막는 목록」과 「해시로 감시하는 목록」이
+ * 갈리면 감시되지 않는 정책 파일이나 보호되지 않는 감시 대상이 생기고, 느슨한 쪽이 정본이 된다.
  */
-const POLICY_FILES = ['.harness/config.yaml'];
-
-/** 프로젝트 로컬 프로파일 디렉토리 — 번들 프로파일보다 우선하므로 정책과 같은 무게다. */
-const POLICY_PREFIXES = ['.harness/profile/'];
-
 const CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 
 /**
@@ -639,6 +638,30 @@ function preTool(
         + '페이즈 전환은 `harness gate submit <P>` → 사람 승인 `harness gate approve <P>` 로만 한다. '
         + '부트스트랩·복구가 정말 필요하면 **사용자가 직접 터미널에서** '
         + '`HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` 를 실행해야 한다.',
+      ), degraded, lang);
+    }
+
+    // (OPS-76) `doctor --accept-policy` 는 정책 베이스라인을 **지금 상태로 재고정**하는 명령이다 —
+    // 즉 「정책이 바뀌었다」는 경고를 지우는 유일한 수단이다. 정책 파일 쓰기를 막아 놓고(SEC-69)
+    // 이 명령을 열어 두면, 에이전트가 드리프트를 조용히 수용해 **탐지 장치를 끌 수 있다.**
+    // 정책을 바꾸는 것도, 그 변경을 받아들이는 것도 사람의 판단이다. 진단·복구(`doctor`,
+    // `doctor --repair`)는 그대로 통과한다 — 막는 것은 수용뿐이다.
+    // 탐지에는 `FORCE_ESCAPE_RE` 를 쓴다 — `HARNESS_CMD_RE`(자기호출 제외용)로 재면 개행·접두
+    // 명령·`bash -c` 래퍼로 잠금이 풀린다(SEC-78 이 `--force` 쪽에서 실증했고, 이 잠금도 원래
+    // 같은 정규식을 썼다). 꼬리는 `\b` 가 아니라 `(?![\w-])` 여야 `--accept-policy"`·
+    // `--accept-policy)` 를 놓치지 않는다 — SEC-78 에서 구멍의 절반이 이 경계 검사였다.
+    if (FORCE_ESCAPE_RE.test(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd)) {
+      return deny(L(
+        '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning — '
+        + 'so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to '
+        + 'them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing '
+        + 'the diff: `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`. '
+        + 'Diagnosis is open to you: `harness doctor` reports the drift.',
+        '`doctor --accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우는 '
+        + '명령이라 에이전트가 실행할 수 없다. 정책 파일은 이 훅이 무엇을 막을지 정하고, 그 변경을 '
+        + '수용하는 것은 사용자의 판단이다 — **사용자가 직접 터미널에서** 차이를 확인한 뒤 '
+        + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 실행한다. '
+        + '진단은 열려 있다: `harness doctor` 가 드리프트를 보고한다.',
       ), degraded, lang);
     }
 

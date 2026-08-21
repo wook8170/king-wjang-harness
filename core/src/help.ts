@@ -32,8 +32,13 @@ export const COMMANDS: CommandGroup[] = [
   { name: 'init', summary: M('Create .harness/ and start the design track at P0.', '.harness/ 를 만들고 설계 트랙 P0 에서 시작한다.') },
   { name: 'status', summary: M('Print current phase, active wave, gates and backtrack as JSON.', '현재 페이즈·활성 웨이브·게이트·역행을 JSON 으로 출력한다.') },
   {
-    name: 'doctor', args: '[--repair] [--force]',
-    summary: M('Diagnose state vs journal; --repair rebuilds state from the event journal.', '상태와 저널을 대조해 진단한다. --repair 는 저널 재생으로 상태를 복구한다.'),
+    name: 'doctor', args: '[--repair] [--force] [--accept-policy]',
+    summary: M(
+      'Diagnose state vs journal and policy drift; --repair replays state, --accept-policy re-pins '
+      + 'the policy baseline (needs HARNESS_ACCEPT_POLICY=1 — humans only).',
+      '상태·저널 정합과 정책 변경을 진단한다. --repair 는 저널 재생으로 상태를 복구하고, '
+      + '--accept-policy 는 정책 베이스라인을 재고정한다(HARNESS_ACCEPT_POLICY=1 필요 — 사람만).',
+    ),
   },
   {
     name: 'phase', args: '<P0..P12>',
