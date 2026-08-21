@@ -7409,7 +7409,36 @@ var DEFAULT_CONFIG = {
   remote_control: true,
   terse: false,
   design_allowed_prefixes: [".harness/", "docs/"],
-  design_blocked_bash: ["docker push", "kubectl apply", "vercel deploy", "netlify deploy", "fly deploy"],
+  // 스펙 §4-2 1행 「빌드·배포 명령」. 리터럴 5개뿐이던 것을 **계열별로** 넓혔다 — `npm publish`
+  // 같은 최빈 배포 명령이 그대로 통과하고 있었다. 부분문자열 대조라 접미 플래그는 적지 않는다.
+  // 여기 없는 스택별 명령은 프로파일의 `deploy_commands` 가 채운다(정의는 프로파일 몫, §4-2).
+  design_blocked_bash: [
+    // 컨테이너·오케스트레이션
+    "docker push",
+    "kubectl apply",
+    "helm upgrade",
+    "helm install",
+    // PaaS
+    "vercel deploy",
+    "vercel --prod",
+    "netlify deploy",
+    "fly deploy",
+    "wrangler deploy",
+    "serverless deploy",
+    "sst deploy",
+    "eb deploy",
+    "gcloud app deploy",
+    // 패키지 레지스트리
+    "npm publish",
+    "yarn publish",
+    "pnpm publish",
+    "cargo publish",
+    "gem push",
+    "twine upload",
+    // 인프라
+    "terraform apply",
+    "pulumi up"
+  ],
   design_system_frozen_roots: [],
   block_raw_values: false
 };
@@ -7519,6 +7548,7 @@ var PHASES = [
 ];
 var isPhase = (v) => PHASES.includes(v);
 var DESIGN_PHASES = ["P0", "P1", "P2", "P3", "P4", "P5", "P6"];
+var BUILD_PHASES = ["P7", "P8", "P9"];
 var SHIP_PHASES = ["P10", "P11", "P12"];
 var EVIDENCE_GRADES = ["claimed", "code", "measured"];
 var isEvidenceGrade = (v) => EVIDENCE_GRADES.includes(v);
@@ -9066,12 +9096,30 @@ var GENERIC_FLOOR = Object.freeze({
   name: GENERIC,
   description: "Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.",
   sourceGlobs: Object.freeze(["src/**", "lib/**", "app/**"]),
+  // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
+  // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
   deployCommands: Object.freeze([
     "docker push",
     "kubectl apply",
+    "helm upgrade",
+    "helm install",
     "vercel deploy",
+    "vercel --prod",
     "netlify deploy",
-    "fly deploy"
+    "fly deploy",
+    "wrangler deploy",
+    "serverless deploy",
+    "sst deploy",
+    "eb deploy",
+    "gcloud app deploy",
+    "npm publish",
+    "yarn publish",
+    "pnpm publish",
+    "cargo publish",
+    "gem push",
+    "twine upload",
+    "terraform apply",
+    "pulumi up"
   ]),
   commands: Object.freeze({}),
   designSystemRoots: Object.freeze([]),
@@ -9525,6 +9573,26 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
       lang
     );
   }
+  if (SHIP_PHASES.includes(state.phase)) {
+    const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
+    const target = !isOutsideRoot(rel) ? rel : realRel;
+    const isNew = inRoot && target !== "" && !fs11.existsSync(path10.join(root, target));
+    if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
+      return deny(L(
+        `New files cannot be created in the ship track (${state.phase}) \u2014 this track only changes what the defect ledger lists. New feature code belongs in the build track: go back with \`harness backtrack P7 --reason "<why>"\`, or register it as a defect first (\`harness ship defect add\`). Target: ${sanitizeUntrusted(raw)}`,
+        `\uCD9C\uD558 \uD2B8\uB799(${state.phase})\uC5D0\uC11C\uB294 \uC0C8 \uD30C\uC77C\uC744 \uB9CC\uB4E4 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uAD6C\uAC04\uC740 \uACB0\uD568 \uB300\uC7A5\uC5D0 \uC624\uB978 \uAC83\uB9CC \uACE0\uCE5C\uB2E4. \uC2E0\uADDC \uAE30\uB2A5 \uCF54\uB4DC\uB294 \uAD6C\uCD95 \uD2B8\uB799\uC758 \uC77C\uC774\uB2E4: \`harness backtrack P7 --reason "<\uC0AC\uC720>"\` \uB85C \uC5ED\uD589\uD558\uAC70\uB098, \uBA3C\uC800 \uACB0\uD568\uC73C\uB85C \uB4F1\uB85D\uD558\uB77C(\`harness ship defect add\`). \uB300\uC0C1: ${sanitizeUntrusted(raw)}`
+      ), degraded, lang);
+    }
+  }
+  if (!DESIGN_PHASES.includes(state.phase) && !state.backtrack) {
+    const designDoc = [rel, realRel].some((r) => r !== "" && r.startsWith(".harness/design/"));
+    if (designDoc) {
+      return deny(L(
+        `Design documents cannot be edited outside the design track (${state.phase}) without backtracking \u2014 that is what keeps implementation and design from silently diverging. Use \`harness backtrack <phase> --reason "<why>"\` first.`,
+        `\uC124\uACC4 \uBB38\uC11C\uB294 \uC124\uACC4 \uD2B8\uB799 \uBC16(${state.phase})\uC5D0\uC11C \uC5ED\uD589 \uC5C6\uC774 \uACE0\uCE60 \uC218 \uC5C6\uB2E4 \u2014 \uADF8\uB798\uC57C \uAD6C\uD604\uACFC \uC124\uACC4\uAC00 \uC870\uC6A9\uD788 \uAC08\uB77C\uC9C0\uC9C0 \uC54A\uB294\uB2E4. \`harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>"\` \uB85C \uBA3C\uC800 \uC5ED\uD589\uD558\uB77C.`
+      ), degraded, lang);
+    }
+  }
   if (!DESIGN_PHASES.includes(state.phase)) return null;
   const allowed = [rel, realRel].some(
     (r) => r !== "" && (allowList(config).some((pre) => r.startsWith(pre)) || /^[^/]+\.md$/.test(r))
@@ -9599,19 +9667,38 @@ function preTool(root, state, config, input, degraded) {
         "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
       ), degraded, lang);
     }
-    if (inDesign) {
+    const inBuild = BUILD_PHASES.includes(state.phase);
+    const inShip = SHIP_PHASES.includes(state.phase);
+    const gateOpen = inShip && state.gates[state.phase]?.status === "approved";
+    if (inDesign || inBuild || inShip && !gateOpen) {
+      const where = inDesign ? L("the design track", "\uC124\uACC4 \uD2B8\uB799") : inBuild ? L("the build track", "\uAD6C\uCD95 \uD2B8\uB799") : L(`the ship track without an approved ${state.phase} gate`, `${state.phase} \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5C6\uC774 \uCD9C\uD558 \uD2B8\uB799`);
+      const next = inShip ? L(
+        ` Submit and get it approved first: \`harness gate submit ${state.phase} --evidence measured --paths <artifacts>\`.`,
+        ` \uBA3C\uC800 \uC81C\uCD9C\xB7\uC2B9\uC778\uC744 \uBC1B\uC544\uB77C: \`harness gate submit ${state.phase} --evidence measured --paths <\uC0B0\uCD9C\uBB3C>\`.`
+      ) : "";
       const hit = config.design_blocked_bash.find((b) => cmd.includes(b));
-      if (hit) return deny(L(
-        `Deploy-ish commands (${hit}) cannot run in the design track.`,
-        `\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839(${hit})\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4.`
-      ), degraded, lang);
+      if (hit) {
+        return deny(L(
+          `Deploy-ish commands (${hit}) cannot run in ${where}.${next}`,
+          `${where}\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839(${hit})\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4.${next}`
+        ), degraded, lang);
+      }
       try {
         const profile = loadProfile(root);
         if (isDeployCommand(profile, cmd)) {
           return deny(L(
-            `Deploy-ish commands cannot run in the design track (profile ${profile.name}).`,
-            `\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}).`
+            `Deploy-ish commands cannot run in ${where} (profile ${profile.name}).${next}`,
+            `${where}\uC5D0\uC11C\uB294 \uBC30\uD3EC\uC131 \uBA85\uB839\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}).${next}`
           ), degraded, lang);
+        }
+        if (inDesign) {
+          const build = commandFor(profile, "build");
+          if (build && cmd.includes(build.trim().replace(/\s+/g, " "))) {
+            return deny(L(
+              `The build command (${build}) cannot run in the design track \u2014 there is nothing to build before the P6 design approval.`,
+              `\uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C\uB294 \uBE4C\uB4DC \uBA85\uB839(${build})\uC744 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 P6 \uC124\uACC4 \uC2B9\uC778 \uC804\uC5D0\uB294 \uBE4C\uB4DC\uD560 \uAC83\uC774 \uC5C6\uB2E4.`
+            ), degraded, lang);
+          }
         }
       } catch {
       }

@@ -19,12 +19,12 @@ import { readWave } from './wave';
 import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
-import { DESIGN_PHASES, isPhase } from './types';
+import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
-import { loadProfile, isDeployCommand } from './profile';
+import { loadProfile, isDeployCommand, commandFor } from './profile';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -438,6 +438,43 @@ function judgeWritePath(
     );
   }
 
+  // ── 출하 트랙(P10~P12): 스펙 §4-2 3행 「신규 기능 코드」 차단.
+  // **없던 파일을 새로 만드는 것**만 막는다 — 출하 트랙의 본업은 「결함 대장 항목에 한한 수정」
+  // 이므로 기존 파일 편집은 통과해야 한다. 존재 여부로 신규를 판정하는 것은 근사지만,
+  // 이 구간에서 새 파일이 생긴다는 것 자체가 「대장에 없는 일을 하고 있다」는 신호다.
+  if ((SHIP_PHASES as readonly string[]).includes(state.phase)) {
+    const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
+    const target = !isOutsideRoot(rel) ? rel : realRel;
+    const isNew = inRoot && target !== '' && !fs.existsSync(path.join(root, target));
+    // `.harness/` 산출물(패킷·웨이브·증적)은 출하 트랙에서 계속 생겨야 한다.
+    if (isNew && !target.startsWith('.harness/') && !/^[^/]+\.md$/.test(target)) {
+      return deny(L(
+        `New files cannot be created in the ship track (${state.phase}) — this track only changes what the `
+        + `defect ledger lists. New feature code belongs in the build track: go back with `
+        + '`harness backtrack P7 --reason "<why>"`, or register it as a defect first '
+        + `(\`harness ship defect add\`). Target: ${sanitizeUntrusted(raw)}`,
+        `출하 트랙(${state.phase})에서는 새 파일을 만들 수 없다 — 이 구간은 결함 대장에 오른 것만 고친다. `
+        + '신규 기능 코드는 구축 트랙의 일이다: `harness backtrack P7 --reason "<사유>"` 로 역행하거나, '
+        + `먼저 결함으로 등록하라(\`harness ship defect add\`). 대상: ${sanitizeUntrusted(raw)}`,
+      ), degraded, lang);
+    }
+  }
+
+  // ── 구축·출하 트랙: 설계 문서 직접 수정 차단(스펙 §4-2 2행). backtrack 중이면 정식 경로다.
+  if (!(DESIGN_PHASES as readonly string[]).includes(state.phase) && !state.backtrack) {
+    const designDoc = [rel, realRel].some(r => r !== '' && r.startsWith('.harness/design/'));
+    if (designDoc) {
+      return deny(L(
+        `Design documents cannot be edited outside the design track (${state.phase}) without backtracking — `
+        + 'that is what keeps implementation and design from silently diverging. '
+        + 'Use `harness backtrack <phase> --reason "<why>"` first.',
+        `설계 문서는 설계 트랙 밖(${state.phase})에서 역행 없이 고칠 수 없다 — `
+        + '그래야 구현과 설계가 조용히 갈라지지 않는다. '
+        + '`harness backtrack <페이즈> --reason "<사유>"` 로 먼저 역행하라.',
+      ), degraded, lang);
+    }
+  }
+
   if (!(DESIGN_PHASES as readonly string[]).includes(state.phase)) return null;
 
   const allowed = [rel, realRel].some(
@@ -571,18 +608,50 @@ function preTool(
       ), degraded, lang);
     }
 
-    if (inDesign) {
+    // 배포 명령 차단은 **세 트랙 모두**에 있다(스펙 §4-2 1·2·3행). 사유만 트랙마다 다르다:
+    //  - 설계(P0~P6): 구현 전이라 배포할 것이 없다
+    //  - 구축(P7~P9): 검증 전이라 배포하면 안 된다
+    //  - 출하(P10~P12): 배포가 본업이지만 **게이트 승인 후**여야 한다(「게이트 미승인 배포」 차단)
+    // 이 셋이 빠져 있어 13페이즈 중 6페이즈에 강제가 하나도 없었다(SEC-70).
+    const inBuild = (BUILD_PHASES as readonly string[]).includes(state.phase);
+    const inShip = (SHIP_PHASES as readonly string[]).includes(state.phase);
+    const gateOpen = inShip && state.gates[state.phase]?.status === 'approved';
+    if (inDesign || inBuild || (inShip && !gateOpen)) {
+      const where = inDesign
+        ? L('the design track', '설계 트랙')
+        : inBuild
+          ? L('the build track', '구축 트랙')
+          : L(`the ship track without an approved ${state.phase} gate`, `${state.phase} 게이트 승인 없이 출하 트랙`);
+      const next = inShip
+        ? L(` Submit and get it approved first: \`harness gate submit ${state.phase} --evidence measured --paths <artifacts>\`.`,
+            ` 먼저 제출·승인을 받아라: \`harness gate submit ${state.phase} --evidence measured --paths <산출물>\`.`)
+        : '';
       const hit = config.design_blocked_bash.find(b => cmd.includes(b));
-      if (hit) return deny(L(`Deploy-ish commands (${hit}) cannot run in the design track.`,
-        `설계 트랙에서는 배포성 명령(${hit})을 실행할 수 없다.`), degraded, lang);
+      if (hit) {
+        return deny(L(`Deploy-ish commands (${hit}) cannot run in ${where}.${next}`,
+          `${where}에서는 배포성 명령(${hit})을 실행할 수 없다.${next}`), degraded, lang);
+      }
       // 배포 명령의 정의는 프로파일도 제공한다(§4-2) — config 목록은 코어 기본값이고,
       // 스택별 실제 배포 명령은 프로파일이 안다. 프로파일 해석 실패는 판정을 포기할 이유가
       // 아니므로(무해 불변식) 조용히 config 판정만 남긴다.
       try {
         const profile = loadProfile(root);
         if (isDeployCommand(profile, cmd)) {
-          return deny(L(`Deploy-ish commands cannot run in the design track (profile ${profile.name}).`,
-            `설계 트랙에서는 배포성 명령을 실행할 수 없다 (프로파일 ${profile.name}).`), degraded, lang);
+          return deny(L(`Deploy-ish commands cannot run in ${where} (profile ${profile.name}).${next}`,
+            `${where}에서는 배포성 명령을 실행할 수 없다 (프로파일 ${profile.name}).${next}`), degraded, lang);
+        }
+        // 스펙 §4-2 1행은 **빌드 명령도** 설계 트랙에서 막는다 — 구현 전이라 빌드할 것이 없고,
+        // 「일단 돌려 보자」가 곧 구현 착수다. 무엇이 빌드인지는 프로파일만 안다(정의는 프로파일 몫).
+        // 구축 트랙에서는 빌드가 본업이므로 설계 트랙에서만 본다.
+        if (inDesign) {
+          const build = commandFor(profile, 'build');
+          if (build && cmd.includes(build.trim().replace(/\s+/g, ' '))) {
+            return deny(L(
+              `The build command (${build}) cannot run in the design track — there is nothing to build `
+              + 'before the P6 design approval.',
+              `설계 트랙에서는 빌드 명령(${build})을 실행할 수 없다 — P6 설계 승인 전에는 빌드할 것이 없다.`,
+            ), degraded, lang);
+          }
         }
       } catch { /* 프로파일 없음·손상 → config 판정으로 충분 */ }
     }

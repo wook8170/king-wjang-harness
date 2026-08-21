@@ -103,3 +103,119 @@ describe('pre-tool: 정책 파일 자기 무장해제 차단 (SEC-69)', () => {
     expect(denied(root, { tool_name: 'Write', tool_input: { file_path: path.join(root, '.harness/packets/P0.md') } })).toBe(false);
   });
 });
+
+/**
+ * [SEC-70] 스펙 §4-2 매트릭스 **2·3행이 통째로 미구현**이었다. 13페이즈 중 P7~P12 여섯 개에
+ * 강제가 하나도 없어서, 「Design→Build→Ship 물리 강제」가 실측상 설계 트랙 경로
+ * 화이트리스트 하나로 축소돼 있었다.
+ *
+ * | 페이즈 | 스펙이 요구하는 차단 |
+ * |---|---|
+ * | P7~P9 | 설계 문서 직접 수정(backtrack 없이) · 배포 명령 · 동결 경로 |
+ * | P10~P12 | 신규 기능 코드 · 게이트 미승인 배포 |
+ */
+describe('pre-tool: 구축·출하 트랙 강제 (SEC-70, 스펙 §4-2 2·3행)', () => {
+  const at = (phase: Phase) => setup(phase);
+  const deniedOn = (root: string, payload: object): boolean => {
+    const out = handleHook(root, 'pre-tool', payload as any) as any;
+    return out?.hookSpecificOutput?.permissionDecision === 'deny';
+  };
+  const bash = (root: string, command: string) => deniedOn(root, { tool_name: 'Bash', tool_input: { command } });
+  const writeAt = (root: string, p: string) =>
+    deniedOn(root, { tool_name: 'Write', tool_input: { file_path: path.join(root, p) } });
+
+  describe('P7~P9 (구축)', () => {
+    it('배포 명령을 막는다', () => {
+      const root = at('P8');
+      expect(bash(root, 'vercel deploy')).toBe(true);
+      expect(bash(root, 'docker push registry/app:1')).toBe(true);
+    });
+    it('설계 문서 직접 수정을 막는다 — backtrack 이 정식 경로', () => {
+      expect(writeAt(at('P8'), '.harness/design/spec.md')).toBe(true);
+    });
+    it('backtrack 중이면 설계 문서를 고칠 수 있다', () => {
+      const root = at('P8');
+      writeState(root, { ...readState(root), backtrack: { from: 'P8', to: 'P4', reason: 'r', at: 't' } as any });
+      expect(writeAt(root, '.harness/design/spec.md')).toBe(false);
+    });
+    it('소스·테스트는 그대로 쓸 수 있다 — 구축 트랙의 본업', () => {
+      const root = at('P8');
+      expect(writeAt(root, 'src/app.ts')).toBe(false);
+      expect(writeAt(root, 'test/app.test.ts')).toBe(false);
+      expect(bash(root, 'npm test')).toBe(false);
+    });
+  });
+
+  describe('P10~P12 (출하)', () => {
+    it('신규 기능 코드를 막는다 — 없던 파일을 새로 만드는 것', () => {
+      expect(writeAt(at('P11'), 'src/brand-new.ts')).toBe(true);
+    });
+    it('이미 있는 파일 수정은 허용한다 — 결함 대장 항목 수정이 출하 트랙의 본업', () => {
+      const root = at('P11');
+      fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'src/existing.ts'), 'x\n');
+      expect(writeAt(root, 'src/existing.ts')).toBe(false);
+    });
+    it('게이트 미승인 배포를 막는다', () => {
+      expect(bash(at('P11'), 'vercel deploy')).toBe(true);
+    });
+    it('현재 페이즈 게이트가 승인되면 배포를 허용한다', () => {
+      const root = at('P11');
+      const st = readState(root);
+      writeState(root, { ...st, gates: { ...st.gates, P11: { status: 'approved', evidence: 'measured' } as any } });
+      expect(bash(root, 'vercel deploy')).toBe(false);
+    });
+  });
+});
+
+/**
+ * 스펙 §4-2 **1행** 「P0~P6 차단: 소스 Write/Edit 전부, **빌드·배포 명령**」에서 배포 목록이
+ * 리터럴 5개(docker push · kubectl apply · vercel/netlify/fly deploy)뿐이라 실제 배포 명령이
+ * 그대로 통과했고, **빌드 명령 차단은 아예 없었다**.
+ */
+describe('pre-tool: 설계 트랙 빌드·배포 명령 (스펙 §4-2 1행)', () => {
+  const bashDenied = (root: string, command: string): boolean => {
+    const out = handleHook(root, 'pre-tool', { tool_name: 'Bash', tool_input: { command } } as any) as any;
+    return out?.hookSpecificOutput?.permissionDecision === 'deny';
+  };
+
+  it('패키지 배포 명령을 막는다', () => {
+    const root = setup('P2');
+    for (const c of ['npm publish', 'pnpm publish', 'cargo publish', 'twine upload dist/*']) {
+      expect(bashDenied(root, c), c).toBe(true);
+    }
+  });
+
+  it('인프라 배포 명령을 막는다', () => {
+    const root = setup('P2');
+    for (const c of ['terraform apply', 'helm upgrade x ./c', 'wrangler deploy', 'serverless deploy']) {
+      expect(bashDenied(root, c), c).toBe(true);
+    }
+  });
+
+  it('프로파일이 정의한 빌드 명령을 막는다 — 구현 전이라 빌드할 것이 없다', () => {
+    const root = setup('P2');
+    fs.mkdirSync(path.join(root, '.harness/profile'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.harness/profile/profile.yaml'),
+      'name: t\ndescription: t\nsource_globs: [src/**]\ndeploy_commands: []\ndesign_system_roots: []\n');
+    fs.writeFileSync(path.join(root, '.harness/profile/commands.yaml'), 'build: npm run build\ntest: npm test\n');
+    expect(bashDenied(root, 'npm run build')).toBe(true);
+    expect(bashDenied(root, 'npm test')).toBe(false); // 테스트는 리서치의 일부라 막지 않는다
+  });
+
+  it('구축 트랙에서는 빌드가 본업이라 통과한다', () => {
+    const root = setup('P8');
+    fs.mkdirSync(path.join(root, '.harness/profile'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.harness/profile/profile.yaml'),
+      'name: t\ndescription: t\nsource_globs: [src/**]\ndeploy_commands: []\ndesign_system_roots: []\n');
+    fs.writeFileSync(path.join(root, '.harness/profile/commands.yaml'), 'build: npm run build\n');
+    expect(bashDenied(root, 'npm run build')).toBe(false);
+  });
+
+  it('흔한 조회·개발 명령은 막지 않는다 — 과차단 금지', () => {
+    const root = setup('P2');
+    for (const c of ['git status', 'npm ls', 'git push origin feature', 'cat README.md']) {
+      expect(bashDenied(root, c), c).toBe(false);
+    }
+  });
+});

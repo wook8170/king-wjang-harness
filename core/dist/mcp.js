@@ -7405,7 +7405,36 @@ var DEFAULT_CONFIG = {
   remote_control: true,
   terse: false,
   design_allowed_prefixes: [".harness/", "docs/"],
-  design_blocked_bash: ["docker push", "kubectl apply", "vercel deploy", "netlify deploy", "fly deploy"],
+  // 스펙 §4-2 1행 「빌드·배포 명령」. 리터럴 5개뿐이던 것을 **계열별로** 넓혔다 — `npm publish`
+  // 같은 최빈 배포 명령이 그대로 통과하고 있었다. 부분문자열 대조라 접미 플래그는 적지 않는다.
+  // 여기 없는 스택별 명령은 프로파일의 `deploy_commands` 가 채운다(정의는 프로파일 몫, §4-2).
+  design_blocked_bash: [
+    // 컨테이너·오케스트레이션
+    "docker push",
+    "kubectl apply",
+    "helm upgrade",
+    "helm install",
+    // PaaS
+    "vercel deploy",
+    "vercel --prod",
+    "netlify deploy",
+    "fly deploy",
+    "wrangler deploy",
+    "serverless deploy",
+    "sst deploy",
+    "eb deploy",
+    "gcloud app deploy",
+    // 패키지 레지스트리
+    "npm publish",
+    "yarn publish",
+    "pnpm publish",
+    "cargo publish",
+    "gem push",
+    "twine upload",
+    // 인프라
+    "terraform apply",
+    "pulumi up"
+  ],
   design_system_frozen_roots: [],
   block_raw_values: false
 };

@@ -25,9 +25,25 @@ source_globs:
 deploy_commands:
   - docker push
   - kubectl apply
+  - helm upgrade
+  - helm install
   - vercel deploy
+  - vercel --prod
   - netlify deploy
   - fly deploy
+  - wrangler deploy
+  - serverless deploy
+  - sst deploy
+  - eb deploy
+  - gcloud app deploy
+  - npm publish
+  - yarn publish
+  - pnpm publish
+  - cargo publish
+  - gem push
+  - twine upload
+  - terraform apply
+  - pulumi up
 
 # Design-system directories frozen after the P4 approval (§7). If the stack is unknown, so is
 # the place to freeze — an empty list means nothing freezes. Fill this in a project-local profile.

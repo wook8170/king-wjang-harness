@@ -345,3 +345,62 @@ rubric 이 명시적으로 덮는다고 한 cp/mv 규칙에 난 구멍이고, �
      상태는 「harness 명령으로만」, 정책은 「사용자가 터미널에서 직접」(훅은 에이전트 호출만 본다).
   → **남은 구멍은 탐지다**: 사람이 직접 고치는 건 의도된 탈출구지만 `doctor` 가 그 사실을
      보고하지 않는다 → [OPS-76] 로 open.
+
+## 11. [SEC-70 · SEC-77] 구축·출하 트랙 강제 — 스펙 §4-2 매트릭스 전 3행
+
+13페이즈 중 **P7~P12 여섯 개에 강제가 하나도 없었다.** 「Design→Build→Ship 물리 강제」가
+실측상 설계 트랙 경로 화이트리스트 하나로 축소돼 있었다.
+
+측정은 **정상 게이트 승인 경로**로 했다(12개 게이트 정식 submit+approve 후 도달) —
+`--force` 산물이라는 반론을 없애기 위해서다.
+
+| 페이즈 | 스펙이 요구하는 차단 |
+|---|---|
+| P0~P6 | 소스 Write/Edit 전부 · **빌드·배포 명령** |
+| P7~P9 | 설계 문서 직접 수정(backtrack 없이) · **배포 명령** · 동결 경로 |
+| P10~P12 | **신규 기능 코드** · **게이트 미승인 배포** |
+
+### 수정 전
+  [P8 구축 — 스펙: 배포 명령·backtrack 없는 설계 수정 차단]
+    allow  vercel deploy
+    allow  docker push
+    allow  npm publish
+    deny   설계 문서 직접 수정
+  [P8 — 구축 트랙 본업은 통과해야 한다]
+    allow  Write src/app.ts
+    allow  Write test/a.test.ts
+    allow  npm test
+
+  [P12 출하 — 스펙: 신규 기능 코드·게이트 미승인 배포 차단]
+    allow  Write src/brand-new.ts (신규)
+    allow  vercel deploy (P12 게이트 미승인)
+    allow  Write src/existing.ts (기존 — 대장 수정이 본업)
+    allow  Write .harness/packets/P12.md (산출물)
+
+### 수정 후 (HEAD)
+  [P8 구축 — 스펙: 배포 명령·backtrack 없는 설계 수정 차단]
+    deny   vercel deploy
+    deny   docker push
+    deny   npm publish
+    deny   설계 문서 직접 수정
+  [P8 — 구축 트랙 본업은 통과해야 한다]
+    allow  Write src/app.ts
+    allow  Write test/a.test.ts
+    allow  npm test
+
+  [P12 출하 — 스펙: 신규 기능 코드·게이트 미승인 배포 차단]
+    deny   Write src/brand-new.ts (신규)
+    deny   vercel deploy (P12 게이트 미승인)
+    allow  Write src/existing.ts (기존 — 대장 수정이 본업)
+    allow  Write .harness/packets/P12.md (산출물)
+
+  → **과차단 0 이 절반이다**: 구축 트랙에서 소스·테스트·`npm test` 는 그대로 통과하고,
+     출하 트랙에서 **기존 파일 수정**(결함 대장 항목 수정이 그 트랙의 본업)과 `.harness/` 산출물은 허용된다.
+     backtrack 중이면 설계 문서도 고칠 수 있다 — 역행이 정식 경로이기 때문이다.
+  → 「신규 기능 코드」는 **파일 존재 여부**로 근사한다. 정확한 정의는 불가능하지만, 출하 구간에서
+     새 파일이 생긴다는 것 자체가 「대장에 없는 일을 하고 있다」는 신호다.
+  → [SEC-77] §4-2 1행도 반쪽이었다: 배포 목록이 리터럴 5개뿐이라 `npm publish`·`terraform apply`·
+     `wrangler deploy` 가 통과했고 **빌드 명령 차단은 아예 없었다**. 계열별 21종으로 넓히고
+     프로파일이 정의한 `build` 를 설계 트랙에서 차단했다.
+     config·번들 프로파일·코드 내장 바닥값 **3곳을 동기화**했다 — 기존 테스트가 불일치를 잡았다
+     (「두 곳이 갈라지면 어느 쪽이 정본인지 아무도 모른다」를 지키는 테스트가 실제로 작동했다).
