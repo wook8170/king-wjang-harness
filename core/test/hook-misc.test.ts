@@ -30,7 +30,7 @@ describe('hook: 경로 정규화 (C1)', () => {
     const out = write(root, `${root}/docs/../src/a.ts`);
     expect(out).not.toBeNull();
     expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+    expect(reason(out)).toContain('구현 코드를 쓸 수 없다');
   });
 
   it('허용 프리픽스 안의 정상 경로는 통과한다 (대조군)', () => {
@@ -131,7 +131,7 @@ describe('hook: 심링크 root 정규화 (C3)', () => {
     // 검증하려는 것과 무관한 별개 분기가 걸린다.
     const out = write(link, path.join(link, 'src/새파일.ts'));
     expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+    expect(reason(out)).toContain('구현 코드를 쓸 수 없다');
   });
 
   describe('allow 판정도 두 공간의 합집합이다 (품질 리뷰)', () => {
@@ -432,7 +432,7 @@ describe('hook: state.json 삭제 — 저널 재생 폴백 (LOGIC-11)', () => {
     const out = write(root, path.join(root, 'src/a.ts'));
     expect(out, 'state.json 삭제가 하네스를 조용히 끄면 안 된다').not.toBeNull();
     expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+    expect(reason(out)).toContain('구현 코드를 쓸 수 없다');
     expect(reason(out)).toContain('harness doctor --repair'); // degraded 태그
   });
 
@@ -489,7 +489,7 @@ describe('hook: state.json 형태 손상(유효 JSON) — 저널 재생 폴백 (
       const out = write(root, path.join(root, 'src/a.ts'));
       expect(out, `${content} 는 유효 JSON 이지만 형태가 깨져 판정이 뚫리면 안 된다`).not.toBeNull();
       expect(out.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(reason(out)).toContain('소스 코드를 쓸 수 없다');
+      expect(reason(out)).toContain('구현 코드를 쓸 수 없다');
       expect(reason(out)).toContain('harness doctor --repair');
     });
   }

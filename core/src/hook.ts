@@ -24,7 +24,7 @@ import { scanBashWrites, mentionsPath, pathLikeMentions } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
-import { loadProfile, isDeployCommand, commandFor } from './profile';
+import { loadProfile, isDeployCommand, isSourcePath, commandFor, type Profile } from './profile';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -52,7 +52,7 @@ const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/d
 /**
  * [SEC-69] **판정의 입력이 되는 정책 파일.**
  *
- * 설계 트랙 차단은 `config.yaml` 의 `design_allowed_prefixes` **allow-list** 로 하고, 소스 경로·
+ * 설계 트랙 차단은 `config.yaml` 의 `design_allowed_prefixes` **허용 접두사**를 읽고, 소스 경로·
  * 배포 명령의 정의는 프로파일이 준다(스펙 §4-2 마지막 줄). 그 파일들이 쓰기 허용이면
  * **피판정자가 판정 규칙을 고쳐 스스로를 무죄로 만들 수 있다** — 실제로 빈 문자열 접두사
  * 한 줄이면 모든 경로가 allow-list 에 매치돼 강제가 통째로 꺼졌고, `doctor` 도 깨끗하다고 답했다.
@@ -200,6 +200,81 @@ function allowList(config: HarnessConfig): string[] {
   return ['.harness/', ...config.design_allowed_prefixes.filter(p => p !== '.harness/')];
 }
 
+/**
+ * [UX-71] **소스 코드 확장자 — 프로파일이 얇을 때의 바닥.**
+ *
+ * 설계 트랙 차단의 1차 정의는 프로파일의 `source_globs` 다(§9: 코어는 "여기가 소스냐"만 묻고
+ * 구체값은 프로파일이 준다). 그런데 generic 은 `src/** · lib/** · app/**` 셋뿐이라, 그것만
+ * 쓰면 `server/api.go`·`internal/handler.go` 같은 흔한 배치가 통째로 열린다 — 스펙 §12가
+ * 고지한 한계가 그대로 실제 구멍이 된다. 그래서 **확장자로 한 겹 더 깐다**: 프로파일이
+ * 뭐라 하든 `.go` 파일은 구현이다.
+ *
+ * 담지 않은 것에도 이유가 있다 — 과차단은 이 제품에서 결함과 같은 무게라서다:
+ *  - `.sh`·`.ps1`: 셋업·CI 스크립트가 설계 구간에도 정당하게 생긴다(제품 구현이 아니다).
+ *    셸이 곧 제품인 스택은 프로파일이 `source_globs` 로 선언하는 것이 정본이다.
+ *  - `.css`·`.html`·`.svg`: 목업·자산이다. 디자인 시스템 동결은 §7 `isFrozenPath` 몫이다.
+ *  - `.json`·`.yaml`·`.toml`: 설정이다. `package.json` 을 못 쓰면 리포지토리를 시작할 수 없다.
+ */
+const SOURCE_EXTS: ReadonlySet<string> = new Set([
+  'ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs',
+  'py', 'go', 'rs', 'rb', 'php', 'java', 'kt', 'kts', 'scala', 'groovy',
+  'c', 'h', 'cc', 'cpp', 'cxx', 'hpp', 'hh', 'm', 'mm', 'cs', 'swift',
+  'ex', 'exs', 'erl', 'clj', 'cljs', 'dart', 'vue', 'svelte', 'lua', 'pl', 'sql', 'zig', 'hs',
+]);
+
+/**
+ * 테스트 자리 — **확장자 바닥의 예외.** 수용 기준을 실행 가능한 형태로 적는 것은 설계의
+ * 일이지 구현이 아니다(P5 수용 기준이 그대로 `test/` 에 앉는다). 이걸 막으면 TDD 를 하는
+ * 사람이 설계 구간에서 아무것도 못 적는다.
+ *
+ * 단, 이 예외는 **프로파일이 선언한 소스 트리 밖에서만** 산다 — 그렇지 않으면
+ * `src/app.test.ts` 라는 이름 하나로 `src/**` 차단이 통째로 풀린다(접미사 우회).
+ * 판정 순서가 그 계약이다: source_globs → (걸리면 deny) → 테스트 예외 → 확장자.
+ */
+const TEST_DIRS: ReadonlySet<string> = new Set(['test', 'tests', 'spec', 'specs', '__tests__', 'e2e']);
+const TEST_FILE_RE = /(^|[.\-_])(test|spec)s?\.[^.]+$|^test_[^/]+$/i;
+
+function looksLikeTestPath(rel: string): boolean {
+  const parts = rel.split('/');
+  if (parts.slice(0, -1).some(seg => TEST_DIRS.has(seg.toLowerCase()))) return true;
+  return TEST_FILE_RE.test(parts[parts.length - 1] ?? '');
+}
+
+/**
+ * **설계 트랙에서 이 경로가 「구현」인가** — 맞으면 사유(실제로 걸린 규칙)를, 아니면 null.
+ *
+ * 원래 판정은 allow-list 하나(`design_allowed_prefixes` + 루트 `*.md`)뿐이라, 소스가 아닌
+ * 파일까지 전부 막고 사유는 일률적으로 "소스 코드는 쓸 수 없다"라고 말했다 —
+ * `.gitignore`·`package.json`·`assets/logo.svg` 에 대해 **사실이 아닌 문장**이었다.
+ * 실측 33종 중 27종 과차단. 막아야 하는 것은 「허용목록에 없는 모든 것」이 아니라 **구현**이다.
+ *
+ * 사유를 실제 규칙과 묶어 돌려주는 이유: 문구와 판정이 갈리면 사람이 잘못된 곳을 고친다
+ * (프로파일 탓이 아닌데 프로파일을 뒤진다).
+ */
+function implementationReason(profile: Profile, rel: string): Msg | null {
+  if (isSourcePath(profile, rel)) {
+    const globs = (profile.sourceGlobs ?? []).join(', ');
+    return {
+      en: `it matches the source paths this project's profile declares (profile ${profile.name}, `
+        + `source_globs: ${globs})`,
+      ko: `이 프로젝트 프로파일이 선언한 소스 경로에 걸린다 (프로파일 ${profile.name}, `
+        + `source_globs: ${globs})`,
+    };
+  }
+  if (looksLikeTestPath(rel)) return null;
+  const base = rel.split('/').pop() ?? '';
+  // `.gitignore` 처럼 선행 점만 있는 이름은 확장자가 없는 것으로 본다 — 마지막 점이 첫 글자다.
+  const dot = base.lastIndexOf('.');
+  const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+  if (ext && SOURCE_EXTS.has(ext)) {
+    return {
+      en: `a .${ext} file is source code`,
+      ko: `.${ext} 파일은 소스 코드다`,
+    };
+  }
+  return null;
+}
+
 // ---- session-start ----
 
 function sessionStart(
@@ -224,11 +299,16 @@ function sessionStart(
   ];
   if (degraded) lines.push(degradedNote(degraded, lang));
   if (inDesign) {
+    // [UX-71] 「무엇이 허용인가」를 접두사 목록으로만 말하면 사실과 어긋난다 — 실제 판정은
+    // 「구현이면 deny」이고 설정·자산·테스트는 그 목록 밖에서도 쓸 수 있다. 사람이 이 줄을
+    // 읽고 접두사 안으로만 움직이면, 하네스가 시키지도 않은 제약을 스스로 진다.
     lines.push(L(
-      `Design track — writing source code and deploy-ish commands are blocked `
-      + `(allowed: ${allowList(config).join(', ')}, root *.md).`,
-      `현재 설계 트랙 — 소스 코드 쓰기·배포성 명령이 차단된다 `
-      + `(허용: ${allowList(config).join(', ')}, 루트 *.md).`,
+      'Design track — writing implementation code (the profile\'s source paths, or source-code file '
+      + 'extensions) and deploy-ish commands are blocked. Configuration, assets, tests and documents '
+      + `are writable, as is anything under ${allowList(config).join(', ')} or a root *.md.`,
+      '현재 설계 트랙 — 구현 코드 쓰기(프로파일의 소스 경로 또는 소스 코드 확장자)와 배포성 '
+      + `명령이 차단된다. 설정·자산·테스트·문서는 쓸 수 있고, ${allowList(config).join(', ')} `
+      + '아래와 루트 *.md 도 그대로 허용된다.',
     ));
   }
 
@@ -398,6 +478,7 @@ function isOutsideRoot(rel: string): boolean {
 function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
+  getProfile: () => Profile,
 ): object | null {
   const lang = config.lang;
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
@@ -491,15 +572,23 @@ function judgeWritePath(
       `프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${sanitizeUntrusted(raw)}`,
     ), degraded, lang);
   }
+  // [UX-71] 여기서 막는 것은 **구현**이다 — 「허용목록에 없는 모든 것」이 아니다.
+  // 소스가 아닌 파일(설정·자산·테스트·문서)은 설계 구간에도 정당하게 생긴다. 그걸 다 막으면
+  // 사람이 하네스를 꺼버리고, 그러면 방어가 0이 된다.
+  const judged = !isOutsideRoot(rel) ? rel : realRel;
+  const why = implementationReason(getProfile(), judged);
+  if (!why) return null;
   return deny(
     L(
-      `Source code cannot be written in the design track (${state.phase}) — no implementation `
-      + `before the P6 design approval. Allowed: ${allowList(config).join(', ')}, root *.md. `
+      `Implementation code cannot be written in the design track (${state.phase}) — `
+      + `${sanitizeUntrusted(raw)} is blocked because ${why.en}. No implementation before the P6 `
+      + 'design approval; non-source files (configuration, assets, tests, documents) are writable. '
       + 'Finish the design artifacts first.'
-      + (fromBash ? ` (shell write target: ${sanitizeUntrusted(raw)})` : ''),
-      `설계 트랙(${state.phase})에서는 소스 코드를 쓸 수 없다 (P6 설계 승인 전 구현 금지). `
-      + `허용: ${allowList(config).join(', ')}, 루트 *.md. 설계 산출물을 먼저 완성하라.`
-      + (fromBash ? ` (셸 쓰기 대상: ${sanitizeUntrusted(raw)})` : ''),
+      + (fromBash ? ' (shell write target)' : ''),
+      `설계 트랙(${state.phase})에서는 구현 코드를 쓸 수 없다 — `
+      + `${sanitizeUntrusted(raw)} 은(는) ${why.ko} 이유로 막힌다. P6 설계 승인 전 구현 금지이며, `
+      + '소스가 아닌 파일(설정·자산·테스트·문서)은 쓸 수 있다. 설계 산출물을 먼저 완성하라.'
+      + (fromBash ? ' (셸 쓰기 대상)' : ''),
     ),
     degraded, lang,
   );
@@ -531,6 +620,13 @@ function preTool(
   const rel = raw ? relPath(root, raw) : '';
   const realRel = raw ? realRelPath(root, raw) : '';
 
+  // 프로파일은 훅 호출당 **최대 한 번만** 읽는다 — 셸 한 줄에 쓰기 대상이 여럿이면
+  // judgeWritePath 가 대상마다 불리는데, 그때마다 YAML 을 다시 파싱하면 훅 지연(G9 p95
+  // 150ms)이 대상 개수에 비례해 늘어난다. 캐시는 이 호출 안에서만 산다 — 프로세스 전역에
+  // 두면 테스트처럼 한 프로세스가 여러 루트를 보는 경우 남의 프로파일로 판정하게 된다.
+  let profileCache: Profile | null = null;
+  const getProfile = (): Profile => (profileCache ??= loadProfile(root));
+
   // 판정은 한 벌이다 — judgeWritePath 가 코어 파일 보호(페이즈 무관)와 설계 트랙 허용목록을
   // 함께 본다. Bash 리다이렉트도 아래에서 **같은 함수**로 보낸다.
   if (isWrite) {
@@ -538,7 +634,7 @@ function preTool(
       return deny(L('No file path in the tool input — blocked (safe default).',
         '도구 입력에 파일 경로가 없다 — 차단(안전 기본값).'), degraded, lang);
     }
-    const verdict = judgeWritePath(root, state, config, raw, degraded, false);
+    const verdict = judgeWritePath(root, state, config, raw, degraded, false, getProfile);
     if (verdict) return verdict;
   }
 
@@ -551,7 +647,7 @@ function preTool(
     // 없이 게이트가 열렸다. 페이즈와 무관하게 먼저 본다 — 코어 파일 보호가 페이즈 무관이므로.
     const scan = scanBashWrites(cmd);
     for (const target of scan.targets) {
-      const verdict = judgeWritePath(root, state, config, target, degraded, true);
+      const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
       if (verdict) return verdict;
     }
     // 안전망: 대상 추출에 실패해도(`python -c "open('.harness/events.jsonl','a')"`) 코어 파일
@@ -576,7 +672,7 @@ function preTool(
       // 소스에는 통과했다. `mutating` 과 AND 이므로 `cat src/app.ts` 같은 조회는 걸리지 않는다.
       for (const target of pathLikeMentions(cmd)) {
         if (scan.targets.includes(target)) continue; // 위에서 이미 판정했다
-        const verdict = judgeWritePath(root, state, config, target, degraded, true);
+        const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
       }
       const named = mentionsPath(cmd, CORE_FILES);
