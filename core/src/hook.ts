@@ -24,7 +24,7 @@ import { scanBashWrites, mentionsPath, pathLikeMentions } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
-import { loadProfile, isDeployCommand, isSourcePath, commandFor, type Profile } from './profile';
+import { loadProfile, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
 import { POLICY_FILES, POLICY_PREFIXES } from './policy';
 import type { HarnessConfig, HarnessState } from './types';
 
@@ -293,7 +293,7 @@ function looksLikeConfigPath(rel: string): boolean {
  * (프로파일 탓이 아닌데 프로파일을 뒤진다).
  */
 function implementationReason(profile: Profile, rel: string): Msg | null {
-  if (isSourcePath(profile, rel)) {
+  if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
     const globs = (profile.sourceGlobs ?? []).join(', ');
     return {
       en: `it matches the source paths this project's profile declares (profile ${profile.name}, `
@@ -551,8 +551,26 @@ function judgeWritePath(
   const rel = relPath(root, raw);
   const realRel = realRelPath(root, raw);
 
+  /**
+   * [SEC-91] **디렉토리를 대상으로 쓰는 것은 그 안의 파일을 쓰는 것이다.**
+   *
+   * 스캐너는 `cp -r /tmp/x .harness`·`mv /tmp/x src`·`tar -C src`·`git clone <url> src` 의
+   * 대상을 정확히 뽑아 왔는데, 판정이 **파일 이름 일치**만 봐서 통째로 빠져나갔다 —
+   * `.harness` 는 `.harness/state.json` 과 문자열이 다르고, `src` 는 `src/**` 글롭에 안 걸린다.
+   * 생성물을 만들어 `mv` 로 제자리에 옮기는 것은 모델이 **자연히 가는 경로**라 실효 위험이다.
+   *
+   * 그래서 보호 대상 경로가 이 대상 **아래에 있으면** 같은 판정을 준다. 반대 방향(대상이
+   * 보호 경로 아래)은 기존 접두사 검사가 이미 본다.
+   */
+  const coversPath = (target: string, protectedPath: string): boolean => {
+    const t = target.replace(/\/+$/, '');
+    return t !== '' && (protectedPath === t || protectedPath.startsWith(`${t}/`));
+  };
+  const spaces = [rel, realRel].filter(r => r !== '' && !isOutsideRoot(r));
+
   // 상태 파일과 정책 파일은 **바꾸는 방법이 다르다** — 한 문장으로 뭉뚱그리면 둘 다 틀린 안내가 된다.
-  const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r));
+  const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r))
+    ?? STATE_FILES.find(sf => spaces.some(r => coversPath(r, sf)));
   if (stateFile) {
     return deny(
       L(
@@ -566,7 +584,9 @@ function judgeWritePath(
   }
   const policyFile = [rel, realRel].find(
     r => POLICY_FILES.includes(r) || POLICY_PREFIXES.some(pre => r !== '' && r.startsWith(pre)),
-  );
+  )
+    ?? POLICY_FILES.find(pf => spaces.some(r => coversPath(r, pf)))
+    ?? POLICY_PREFIXES.find(pre => spaces.some(r => coversPath(r, pre.replace(/\/+$/, ''))));
   if (policyFile) {
     return deny(
       L(

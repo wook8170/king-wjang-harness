@@ -459,6 +459,33 @@ export function isSourcePath(profile: Profile, relPath: string): boolean {
   }
 }
 
+/**
+ * [SEC-91] **디렉토리를 통째로 겨눈 쓰기**가 소스 트리를 덮는가.
+ *
+ * `isSourcePath` 는 파일 경로를 글롭에 맞춘다 — `src/app.ts` 는 `src/**` 에 걸리지만
+ * **`src` 자체는 안 걸린다.** 그래서 `mv /tmp/gen src`·`tar -C src -xf …`·`git clone <url> src`
+ * 처럼 디렉토리를 대상으로 주면 소스 트리를 통째로 채우면서 판정을 빠져나갔다.
+ * 생성물을 만들어 제자리에 옮기는 것은 모델이 자연히 가는 경로라 그냥 두면 강제가 반쪽이다.
+ *
+ * 글롭의 **리터럴 접두**(첫 와일드카드 앞)를 뽑아, 그것이 대상 디렉토리 안에 있으면 같은
+ * 판정을 준다 — `src` 아래 전부를 덮는 글롭이면 `src` 자체가 대상이고, 중간에 와일드카드가
+ * 끼면(모노레포 패키지 글롭) 그 앞의 고정 부분이 대상이다.
+ */
+export function isSourceTree(profile: Profile, relPath: string): boolean {
+  try {
+    const rel = normRel(relPath).replace(/\/+$/, '');
+    if (!rel) return false;
+    return (profile.sourceGlobs ?? []).some(g => {
+      const pat = normRel(g);
+      if (!pat) return false;
+      const literal = pat.split(/[*?[]/)[0].replace(/\/+$/, '');
+      return literal !== '' && (literal === rel || literal.startsWith(`${rel}/`));
+    });
+  } catch {
+    return false;
+  }
+}
+
 /** 공백 압축 + 소문자. `vercel   deploy`·`VERCEL DEPLOY` 같은 값싼 우회를 없앤다. */
 const normCmd = (s: unknown) =>
   typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().toLowerCase() : '';

@@ -53,4 +53,4 @@ that keeps that conversation standing **on evidence instead of guesswork**. You 
 - Writing or editing design documents (main session)
 - Touching gates, the ledger, or ADRs (main session)
 - Audit verdicts (design-auditor)
-- Summary-only reports — without a table of facts, "looks broadly fine" carries no information
+- Summary-only reports — without a table of facts, "looks broadly fine" carries no informationㅈ

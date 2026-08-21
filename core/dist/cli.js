@@ -8857,6 +8857,19 @@ function scanBashWrites(cmd) {
         }
         break;
       }
+      case "find": {
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i] !== "-exec" && args[i] !== "-execdir" && args[i] !== "-ok" && args[i] !== "-okdir") continue;
+          const inner = commandName(args.slice(i + 1));
+          if (!inner.name) continue;
+          if (MUTATING_TOKENS.includes(inner.name)) {
+            mutating = true;
+            patchesWorkingTree = true;
+          }
+          targets.push(...inner.args.filter(looksLikePath));
+        }
+        break;
+      }
       case "xargs": {
         const inner = innerCommandOf(args);
         if (inner.length > 0) targets.push(...scanBashWrites(inner.join(" ")).targets);
@@ -9578,6 +9591,20 @@ function isSourcePath(profile, relPath2) {
     return false;
   }
 }
+function isSourceTree(profile, relPath2) {
+  try {
+    const rel = normRel(relPath2).replace(/\/+$/, "");
+    if (!rel) return false;
+    return (profile.sourceGlobs ?? []).some((g) => {
+      const pat = normRel(g);
+      if (!pat) return false;
+      const literal = pat.split(/[*?[]/)[0].replace(/\/+$/, "");
+      return literal !== "" && (literal === rel || literal.startsWith(`${rel}/`));
+    });
+  } catch {
+    return false;
+  }
+}
 var normCmd = (s) => typeof s === "string" ? s.replace(/\s+/g, " ").trim().toLowerCase() : "";
 function isDeployCommand(profile, command) {
   try {
@@ -9724,7 +9751,7 @@ function looksLikeConfigPath(rel) {
   return CONFIG_FILE_RE.test(rel.split("/").pop() ?? "");
 }
 function implementationReason(profile, rel) {
-  if (isSourcePath(profile, rel)) {
+  if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
     const globs = (profile.sourceGlobs ?? []).join(", ");
     return {
       en: `it matches the source paths this project's profile declares (profile ${profile.name}, source_globs: ${globs})`,
@@ -9861,7 +9888,12 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   if (!raw) return null;
   const rel = relPath(root, raw);
   const realRel = realRelPath(root, raw);
-  const stateFile = [rel, realRel].find((r) => STATE_FILES.includes(r));
+  const coversPath = (target, protectedPath) => {
+    const t = target.replace(/\/+$/, "");
+    return t !== "" && (protectedPath === t || protectedPath.startsWith(`${t}/`));
+  };
+  const spaces = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r));
+  const stateFile = [rel, realRel].find((r) => STATE_FILES.includes(r)) ?? STATE_FILES.find((sf) => spaces.some((r) => coversPath(r, sf)));
   if (stateFile) {
     return deny(
       L(
@@ -9874,7 +9906,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   }
   const policyFile = [rel, realRel].find(
     (r) => POLICY_FILES.includes(r) || POLICY_PREFIXES.some((pre) => r !== "" && r.startsWith(pre))
-  );
+  ) ?? POLICY_FILES.find((pf) => spaces.some((r) => coversPath(r, pf))) ?? POLICY_PREFIXES.find((pre) => spaces.some((r) => coversPath(r, pre.replace(/\/+$/, ""))));
   if (policyFile) {
     return deny(
       L(

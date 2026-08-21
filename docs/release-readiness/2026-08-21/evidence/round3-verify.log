@@ -614,3 +614,24 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
         결과: **45조합 전건 실재 · MISSING 0**
         한계: 이 측정은 「명령군+하위명령이 있는가」까지다. **인자 형태**는 덮지 못한다
               — API-80(도움말이 `--url` 을 광고하는데 위치인자만 받던 것)이 그 부류다.
+
+## §20 SEC-90 · SEC-91 — 에이전트 레인 우회 두 계열 (라운드 3-D, 메인)
+
+  독립 재감정(실효성 축)이 짚은 것을 메인에서 전건 재현하고 닫았다.
+  **위협 모델**: 세는 것은 «에이전트의 Bash 도구 호출이 훅을 통과하는가» 다.
+  사람이 자기 터미널에서 치는 것은 SEC-69 가 명시한 의도된 탈출구라 결함이 아니다.
+
+  [SEC-90 접두 명령 — 고치기 전]
+    sudo tee src/app.ts                          ALLOW
+    nohup cp /tmp/x .harness/state.json          ALLOW
+    time sed -i "" s/a/b/ .harness/config.yaml   ALLOW
+    (리다이렉트 형태 `sudo echo x > src/app.ts` 는 계속 DENY — 그래서 안 보였다)
+  [고친 뒤]  접두 12종 × 표적 5종 = 60/60 DENY · 과차단 0/15
+
+  [SEC-91 디렉토리 대상 — 고치기 전]
+    mv /tmp/x src · cp -r /tmp/x .harness · tar -C src · unzip -d src · git clone <url> src  전부 ALLOW
+    find . -name "*.ts" -exec sed -i "" s/a/b/ {} +                                          ALLOW
+  [고친 뒤]  우회 17종 전건 DENY · 과차단 0/11 · 페이즈 계약 불변
+             (P8 에서 `mv /tmp/x src` ALLOW, `.harness` 는 계속 DENY)
+
+  829 → 834 tests green · tsc 0

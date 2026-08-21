@@ -267,6 +267,20 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         }
         break;
       }
+      case 'find': {
+        // [SEC-91] `find . -name '*.ts' -exec sed -i "" s/a/b/ {} +` — 진짜 쓰기는 `-exec` 뒤에 있다.
+        // xargs 와 같은 구조라 같은 처방을 쓴다: 감싸인 명령을 꺼내 **같은 스캐너로 다시 판정**한다.
+        // 대상은 `{}` 라 정적으로 못 뽑으므로, 안쪽이 변형 명령이면 「작업트리를 건드린다」는
+        // 사실만 올린다 — `git apply` 와 같은 처리다(경로가 아니라 사실을 올린다).
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i] !== '-exec' && args[i] !== '-execdir' && args[i] !== '-ok' && args[i] !== '-okdir') continue;
+          const inner = commandName(args.slice(i + 1));
+          if (!inner.name) continue;
+          if (MUTATING_TOKENS.includes(inner.name)) { mutating = true; patchesWorkingTree = true; }
+          targets.push(...inner.args.filter(looksLikePath));
+        }
+        break;
+      }
       case 'xargs': {
         // xargs 는 진짜 명령을 한 겹 감싼다. 감싼 명령을 그대로 다시 판정하지 않으면
         // `xargs -I{} cp {} src/app.ts` 한 줄로 cp 규칙이 통째로 무의미해진다.

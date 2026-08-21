@@ -38,6 +38,13 @@ const writeVerdict = (root: string, p: string) => handleHook(root, 'pre-tool', {
 const denied = (root: string, p: string): boolean =>
   writeVerdict(root, p)?.hookSpecificOutput?.permissionDecision === 'deny';
 
+/** Bash 표면 판정 — Write 와 **같은 규칙 한 벌**을 타는지 보는 것이 요점이다(SEC-50). */
+const bashVerdict = (root: string, command: string) => handleHook(root, 'pre-tool', {
+  tool_name: 'Bash', tool_input: { command },
+}) as any;
+const deniedBash = (root: string, command: string): boolean =>
+  bashVerdict(root, command)?.hookSpecificOutput?.permissionDecision === 'deny';
+
 const reasonOf = (root: string, p: string): string => {
   const out = writeVerdict(root, p);
   return out ? String(out.hookSpecificOutput.permissionDecisionReason) : '';
@@ -249,5 +256,70 @@ describe('설계 트랙: 표면이 갈리지 않는다 (UX-71)', () => {
     const root = setup('P8');
     expect(denied(root, 'src/app.ts')).toBe(false);
     expect(denied(root, 'server/api.go')).toBe(false);
+  });
+});
+
+/**
+ * [SEC-90/91] 독립 재감정(실효성 축)이 실증한 **에이전트 레인** 구멍 두 계열.
+ *
+ * 사용자가 자기 터미널에서 치는 것은 의도된 탈출구다 — 여기서 재는 것은 **모델이 낸 Bash
+ * 도구 호출**이 훅을 통과하는지다. 둘 다 「막힐 거라 예상한 목록」에는 없던 축이라
+ * 자기 채점으로는 구조적으로 안 보였다([OPS-74]).
+ */
+describe('SEC-90: 접두 명령이 쓰기 스캐너를 끄지 못한다', () => {
+  const PREFIXES = ['sudo', 'nohup', 'time', 'env', 'command', 'nice', 'exec', 'doas',
+    'timeout 5', 'nice -n 10', 'sudo -u me', 'env X=1'];
+  const TARGETS = ['tee src/app.ts', 'cp /tmp/x src/app.ts', 'sed -i "" s/a/b/ src/app.ts',
+    'tee .harness/events.jsonl', 'cp /tmp/x .harness/state.json'];
+
+  it('접두 × 표적 전건 deny', () => {
+    const root = setup('P2');
+    const allowed: string[] = [];
+    for (const p of PREFIXES) {
+      for (const t of TARGETS) {
+        const cmd = `${p} ${t}`;
+        if (!deniedBash(root, cmd)) allowed.push(cmd);
+      }
+    }
+    expect(allowed).toEqual([]);
+  });
+
+  it('과차단 금지 — 접두가 붙어도 읽기·테스트는 통과한다', () => {
+    const root = setup('P2');
+    for (const c of ['sudo ls', 'time npm test', 'nice -n 10 npm test', 'sudo cat /etc/hosts',
+      'env', 'tee docs/note.md', 'sudo tee .harness/evidence/w1/shot.png']) {
+      expect(deniedBash(root, c), c).toBe(false);
+    }
+  });
+});
+
+describe('SEC-91: 디렉토리를 대상으로 준 쓰기도 같은 판정을 받는다', () => {
+  it('소스 트리·코어 디렉토리를 겨눈 것은 deny', () => {
+    const root = setup('P2');
+    const allowed: string[] = [];
+    for (const c of ['cp -r /tmp/dir src', 'cp -r /tmp/dir src/', 'mv /tmp/x src',
+      'rsync -a /tmp/d/ src', 'tar -C src -xf /tmp/a.tar', 'unzip -d src /tmp/a.zip',
+      'git clone https://x src', 'cp -r /tmp/x .harness', 'mv /tmp/x .harness',
+      'tar -C .harness -xf /tmp/a.tar', 'cp -r /tmp/x .harness/profile',
+      'find . -name "*.ts" -exec sed -i "" s/a/b/ {} +']) {
+      if (!deniedBash(root, c)) allowed.push(c);
+    }
+    expect(allowed).toEqual([]);
+  });
+
+  it('과차단 금지 — 소스가 아닌 디렉토리와 읽기 전용 find 는 통과한다', () => {
+    const root = setup('P2');
+    for (const c of ['cp -r /tmp/dir docs', 'mv /tmp/x docs/a.md', 'tar -C docs -xf /tmp/a.tar',
+      'cp -r /tmp/x .harness/evidence/w1', 'find . -name "*.md" -print',
+      'find . -type f -exec cat {} +', 'git clone https://x /tmp/scratch',
+      'cp -r /tmp/dir assets', 'rsync -a /tmp/d/ docs']) {
+      expect(deniedBash(root, c), c).toBe(false);
+    }
+  });
+
+  it('구축 트랙에서는 소스 디렉토리가 열리고 코어는 계속 막힌다 — 페이즈 계약은 그대로다', () => {
+    const root = setup('P8');
+    expect(deniedBash(root, 'mv /tmp/x src')).toBe(false);
+    expect(deniedBash(root, 'cp -r /tmp/x .harness')).toBe(true);
   });
 });
