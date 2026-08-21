@@ -442,3 +442,24 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
     allow  ls harness-notes/
     allow  harness status
     allow  harness wave list
+
+## §10 FEAT-73 머지 후 재실측 (라운드 3-D, 메인에서 직접 측정)
+
+워크플로 산출(`worktree-wf_28bae004-b27-5` `2cdfb7d`)을 액면으로 받지 않고 메인 머지본에서 다시 쟀다.
+샌드박스 init → `wave create --goal g` → `wave activate wave-001` → `hook session-start` (python subprocess).
+
+  [remote_control: on (기본값)]
+    지시 번호            [1, 2]  — 1부터 연속
+    remote-control 줄    번호 없음 (선택 안내)
+    위치                 additionalContext 마지막 줄
+    문구                 "Optional: if this environment provides /remote-control, ... if not, skip it
+                          — push notifications and artifacts are the fallback channel."
+
+  [remote_control: false]
+    지시 번호            [1, 2]  — 동일
+    출력 차이            정확히 1줄 (remote-control 안내만 사라짐) → 과차단 0
+
+  [활성 웨이브 없음 (막 설치한 상태)]
+    지시 번호            [] — 번호 붙은 지시 없음, 온보딩 안내 + 선택 안내만
+
+  머지 후 전체: 707 tests green · tsc 0

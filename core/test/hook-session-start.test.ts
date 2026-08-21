@@ -252,3 +252,92 @@ describe('SessionStart — 턴 로그 발췌는 언어에 의존하지 않는다
     });
   }
 });
+
+/**
+ * [FEAT-73] Remote Control 안내는 **외부 기능 의존**이다 — 이 플러그인은 `/remote-control` 을
+ * 제공하지 않는다(`commands/` 디렉토리도 `plugin.json` 의 commands 키도 없다). 스펙 §3-6a 도
+ * 활성화를 「모델 지시 기반(하드 강제 아님)」이라 적고 열화 경로를 명시했다.
+ *
+ * 그런데 수정 전 주입은 그것을 **번호 붙은 첫 지시**로 무조건 내렸다 —
+ * 「지시(1): 첫 행동으로 /remote-control 을 실행하라」. 명령이 없는 환경에서는 매 세션의
+ * 첫 행동이 실패하고, 하네스 자신이 보장하는 일(활성 웨이브 이어받기·정산)이 뒤로 밀린다.
+ *
+ * 그래서 계약을 셋으로 못박는다:
+ *   1. 번호 붙은 지시 목록에는 **하네스가 보장하는 것만** 들어간다.
+ *   2. Remote Control 은 조건부 안내로 남긴다(기능을 죽이지 않는다) + 건너뛰기 경로를 준다.
+ *   3. `remote_control: false` 는 언급 자체를 없앤다(옵트아웃 유지) — 그 외에는 아무것도 안 변한다.
+ */
+describe('SessionStart — Remote Control 안내 (FEAT-73)', () => {
+  const ctxOf = (root: string): string => {
+    const out = handleHook(root, 'session-start', { source: 'startup' }) as
+      { hookSpecificOutput?: { additionalContext?: string } } | null;
+    return out?.hookSpecificOutput?.additionalContext ?? '';
+  };
+  const withWave = (): string => {
+    const root = tmp();
+    initHarness(root);
+    createWave(root, { milestone: 'M1', design_refs: [], acceptance: ['ok'], goal: 'login' });
+    activateWave(root, 'wave-001');
+    logTurn(root, 'skeleton done, next: handler');
+    return root;
+  };
+  const instLine = (ctx: string, n: number): string =>
+    ctx.split('\n').find(l => l.startsWith(`지시(${n}):`)) ?? '';
+  const rcLine = (ctx: string): string =>
+    ctx.split('\n').find(l => l.includes('/remote-control')) ?? '';
+
+  it('번호 붙은 지시가 아니다 — 없을 수 있는 명령은 강제 목록에서 뺀다', () => {
+    const line = rcLine(ctxOf(withWave()));
+    expect(line).not.toBe('');
+    expect(line).not.toMatch(/^(지시|INSTRUCTION)\(\d+\):/);
+  });
+
+  it('첫 지시는 하네스가 보장하는 일이다 — 활성 웨이브 이어받기', () => {
+    expect(instLine(ctxOf(withWave()), 1)).toContain('.harness/waves/wave-001.md');
+  });
+
+  it('활성 웨이브가 없어도 /remote-control 이 지시(1) 을 차지하지 않는다', () => {
+    const root = tmp();
+    initHarness(root);
+    const ctx = ctxOf(root);
+    expect(ctx).toContain('/remote-control');           // 기능은 살아 있다
+    expect(instLine(ctx, 1)).not.toContain('/remote-control');
+  });
+
+  it('문구가 조건부이고 건너뛰기 경로를 준다 (ko)', () => {
+    const line = rcLine(ctxOf(withWave()));
+    expect(line).toContain('있으면');   // 무조건 실행이 아니라 존재 조건부
+    expect(line).toContain('건너뛴다'); // 없을 때 무엇을 할지
+  });
+
+  it('문구가 조건부이고 건너뛰기 경로를 준다 (en)', () => {
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
+    try {
+      const line = rcLine(ctxOf(withWave()));
+      expect(line).toMatch(/if .*provides/i);
+      expect(line).toMatch(/skip/i);
+      expect(line).not.toMatch(/[가-힣]/);
+    } finally {
+      if (prev === undefined) delete process.env.HARNESS_LANG; else process.env.HARNESS_LANG = prev;
+    }
+  });
+
+  it('안내는 지시 목록 **뒤**에 온다', () => {
+    const lines = ctxOf(withWave()).split('\n');
+    const rc = lines.findIndex(l => l.includes('/remote-control'));
+    const lastInst = lines.map(l => /^지시\(\d+\):/.test(l)).lastIndexOf(true);
+    expect(lastInst).toBeGreaterThanOrEqual(0);
+    expect(rc).toBeGreaterThan(lastInst);
+  });
+
+  it('과차단 대조군 — on/off 의 차이는 그 안내 한 줄뿐이다', () => {
+    // 같은 root 를 재사용해야 턴 로그 타임스탬프·발췌 nonce 가 동일하다 → 순수 diff 가 나온다.
+    const root = withWave();
+    const on = ctxOf(root).split('\n');
+    fs.writeFileSync(path.join(root, '.harness/config.yaml'), 'profile: generic\nremote_control: false\n');
+    const off = ctxOf(root).split('\n');
+    expect(on.filter(l => l.includes('/remote-control'))).toHaveLength(1);
+    expect(off).toEqual(on.filter(l => !l.includes('/remote-control')));
+  });
+});

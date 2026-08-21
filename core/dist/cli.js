@@ -9456,12 +9456,6 @@ function sessionStart(root, state, config, degraded, input) {
   const inst = (s) => {
     lines.push(`${label}(${++n}): ${s}`);
   };
-  if (config.remote_control) {
-    inst(L(
-      "Run /remote-control first to enable mobile supervision.",
-      "\uCCAB \uD589\uB3D9\uC73C\uB85C /remote-control \uC744 \uC2E4\uD589\uD574 \uBAA8\uBC14\uC77C \uAD00\uC81C\uB97C \uD65C\uC131\uD654\uD558\uB77C."
-    ));
-  }
   const tier = lastTier(root);
   if (tier !== "normal") inst(guidanceFor(tier, lang));
   if (state.activeWave) {
@@ -9503,6 +9497,12 @@ function sessionStart(root, state, config, degraded, input) {
     lines.push(L(
       `\u26A0 Backtrack in progress \u2192 ${state.backtrack.to} (reason: ${sanitizeUntrusted(state.backtrack.reason)})`,
       `\u26A0 \uC5ED\uD589 \uC9C4\uD589 \uC911 \u2192 ${state.backtrack.to} (\uC0AC\uC720: ${sanitizeUntrusted(state.backtrack.reason)})`
+    ));
+  }
+  if (config.remote_control) {
+    lines.push(L(
+      "Optional: if this environment provides /remote-control, run it to enable mobile supervision; if not, skip it \u2014 push notifications and artifacts are the fallback channel. (Silence this with `remote_control: false` in `.harness/config.yaml`.)",
+      "\uC120\uD0DD: \uC774 \uD658\uACBD\uC5D0 /remote-control \uC774 \uC788\uC73C\uBA74 \uC2E4\uD589\uD574 \uBAA8\uBC14\uC77C \uAD00\uC81C\uB97C \uCF1C\uB77C. \uC5C6\uC73C\uBA74 \uAC74\uB108\uB6F4\uB2E4 \u2014 \uD478\uC2DC \uC54C\uB9BC\xB7\uC544\uD2F0\uD329\uD2B8\uAC00 \uD3F4\uBC31 \uCC44\uB110\uC774\uB2E4. (\uB044\uB824\uBA74 `.harness/config.yaml` \uC5D0 `remote_control: false`.)"
     ));
   }
   return {
