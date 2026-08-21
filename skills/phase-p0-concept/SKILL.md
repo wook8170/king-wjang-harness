@@ -1,79 +1,87 @@
 ---
 name: phase-p0-concept
-description: Use when 하네스 설계 트랙의 P0(CONCEPT) 를 구동할 때 — 제품 컨셉·비전·타깃·성공지표를 사용자 대화와 백데이터·첨부 문서로 확정하고 게이트에 올릴 때. 트리거: "컨셉 잡자", harness phase set P0, P0 게이트 제출, 00-concept.md, C-x 노드 등록, 첨부 문서 분석.
+description: Use when driving P0 (CONCEPT) of the harness design track — settling the product concept, vision, target users and success metrics through conversation with the user plus supplied background material, and putting it up for the gate. Triggers - "let's nail the concept", harness phase set P0, submitting the P0 gate, 00-concept.md, registering C-x nodes, analysing attachments.
 ---
 
-# P0 CONCEPT — 제품 컨셉 확정
+# P0 CONCEPT — settling the product concept
 
 ## Overview
 
-설계 트랙의 첫 페이즈. **사용자와의 대화가 1차 소스**이고 백데이터·첨부 문서는 근거 보강이다.
-산출물은 `.harness/design/00-concept.md` 하나, 원장 노드는 `C-x`.
+The first phase of the design track. **The conversation with the user is the primary source**;
+background material and attachments are supporting evidence. There is one artifact,
+`.harness/design/00-concept.md`, and the ledger nodes are `C-x`.
 
-P0 는 상상하는 자리가 아니다 — 사용자가 말하지 않은 것은 **묻는다**. 추측으로 채운 컨셉은
-P6 감사에서 "모호함"으로 전부 되돌아온다.
+P0 is not the place to imagine. What the user has not said, you **ask**. A concept filled in with
+guesses comes back in full as "ambiguity" in the P6 audit.
 
-## 산출물 구성 (`00-concept.md`)
+## Artifact structure (`00-concept.md`)
 
-| 섹션 | 노드 | 반드시 담을 것 |
+| Section | Node | Must contain |
 |---|---|---|
-| 비전·문제 | `C-1` | 누구의 어떤 고통을 없애는가. 한 문단으로. |
-| 타깃 사용자 | `C-2` | 1차/2차 사용자, 사용 맥락, 규모 가정 |
-| 가치 제안 | `C-3` | 대안(경쟁·현상유지) 대비 무엇이 다른가 |
-| 성공지표 | `C-4` | 측정 가능한 수치. "좋아진다" 금지 |
-| 범위·비범위 | `C-5` | **안 만드는 것**을 적는다 — P1 도메인 경계의 입력 |
-| 제약 | `C-6` | 규모·트래픽·팀·예산·운영 역량·규제 → **P2 ADR 추천의 입력** |
+| Vision / problem | `C-1` | Whose pain, and which pain, this removes. One paragraph. |
+| Target users | `C-2` | Primary and secondary users, usage context, assumptions about scale |
+| Value proposition | `C-3` | What is different from the alternatives (competitors, the status quo) |
+| Success metrics | `C-4` | Measurable numbers. "It gets better" is banned |
+| Scope / non-scope | `C-5` | Write down **what you are not building** — the input to the P1 domain boundary |
+| Constraints | `C-6` | Scale, traffic, team, budget, operational capacity, regulation → **the input to the P2 ADR recommendation** |
 
-각 섹션 헤딩이 노드의 `--anchor` 가 된다. 제약(`C-6`)을 대충 쓰면 P2 기술 스택 ADR 이
-근거 없는 취향 싸움이 된다.
+Each section heading becomes the node's `--anchor`. Write the constraints (`C-6`) carelessly and the
+P2 technology-stack ADR turns into a taste argument with no grounds.
 
-## researcher 활용
+## Using researcher
 
-첨부 문서·백데이터·경쟁 제품 조사는 `researcher` 서브에이전트(읽기 전용, sonnet)에 넘긴다.
-넘길 때 **무엇을 판정해 달라는지** 명시하라 — "읽어봐"는 요약만 돌아온다.
+Hand attachments, background material, and competitor research to the `researcher` subagent
+(read-only, sonnet). When you do, state **what you want established** — "have a look" comes back as
+a summary.
 
 ```
-researcher: 첨부 3건에서 (a) 명시된 사용자 유형 (b) 수치 목표 (c) 언급된 제약을
-파일:줄 근거와 함께 추출. 문서에 없는 것은 "없음"으로 보고할 것.
+researcher: from the 3 attachments extract (a) the user types stated, (b) the numeric targets,
+(c) the constraints mentioned, each with file:line evidence. Report anything absent from the
+documents as "absent".
 ```
 
-## 절차
+## Procedure
 
 ```bash
-# 1. 노드 먼저 — 원장에 없는 id 를 문서가 참조하면 리뷰 패킷이 블로커로 잡는다
-harness node upsert --id C-1 --title "비전·문제" --anchor "00-concept.md#비전-문제"
-# 2. 문서 레지스트리 등록
+# 1. Nodes first — if a document references an id the ledger does not have, the review packet flags a blocker
+harness node upsert --id C-1 --title "Vision / problem" --anchor "00-concept.md#vision--problem"
+# 2. Register the document in the registry
 harness doc upsert --id DOC-P0 --path .harness/design/00-concept.md --phase P0 \
   --refs C-1,C-2,C-3,C-4,C-5,C-6
-# 3. claude.ai 아티팩트로 발행 → URL 등록 (artifact_url 없이는 submit 이 거부된다)
+# 3. Publish as a claude.ai artifact → register the URL (submit is refused without artifact_url)
 harness doc url DOC-P0 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P0
-# 4. 게이트 제출 — 리뷰 패킷이 .harness/packets/P0.md 에 자동 생성된다
+# 4. Submit the gate — the review packet is generated at .harness/packets/P0.md
 harness gate submit P0 --paths .harness/design/00-concept.md --evidence claimed
-# 5. 사용자 승인 — 아래 "승인은 사람이 한다" 참조
-# 6. 승인 뒤
+# 5. User approval — see "Approval is a human's" below
+# 6. After approval
 harness doc approve DOC-P0
 harness phase set P1
 ```
 
-## 승인은 사람이 한다
+## Approval is a human's
 
-**`harness gate approve P0` 를 에이전트가 대신 치지 마라.** 이 명령은 의도적으로 권한
-다이얼로그를 타도록 설계됐고, 승인의 최종 클릭은 언제나 사람이다.
-에이전트가 할 일은 여기까지다:
+**Never run `harness gate approve P0` on the user's behalf.** That command is deliberately routed
+through the permission dialog, and the final approving click is always a human's. The agent's part
+ends here:
 
-1. `.harness/packets/P0.md` 리뷰 패킷 경로와 아티팩트 URL 을 제시한다.
-2. 패킷의 블로커 목록이 비었는지 확인해 보고한다.
-3. 사용자가 승인할 때까지 **기다린다**. 승인 없이 `harness phase set P1` 은 거부된다.
+1. Present the path of the review packet (`.harness/packets/P0.md`) and the artifact URL.
+2. Check whether the packet's blocker list is empty, and report it.
+3. **Wait** for the user to approve. Without approval, `harness phase set P1` is refused.
 
-## 함정
+## Pitfalls
 
-- **`doc submit` 은 `draft` 상태에서만 통과한다.** 이미 submitted 인 문서를 고쳐 다시 올리려면
-  `harness doc revise DOC-P0` 로 새 버전(v+1, draft)을 만든 뒤 발행·제출한다. artifact_url 은
-  개정본이 물려받으므로 같은 URL 로 재발행하면 된다.
-- **제출과 승인 사이에 문서를 고치면 승인이 거부된다** — 해시가 어긋난다. 고쳤으면
-  `harness gate submit P0` 을 다시 쳐라(재제출은 승인된 게이트도 다시 연다).
-- **설계 트랙에서 소스 코드 Write/Edit 는 훅이 물리 차단한다.** 허용 경로는 `.harness/`·`docs/`·
-  루트 `*.md` 다. P0 에서 코드를 만질 일은 없다 — 막혔다면 페이즈가 아니라 판단이 틀린 것이다.
-- **근거 등급은 `claimed`.** 설계 트랙은 `claimed`/`code` 로 충분하다. `measured` 는 출하
-  트랙(P10~P12) 전용이며 여기서 쓸 근거가 없다.
+- **`doc submit` only passes from the `draft` state.** To revise a document that is already submitted,
+  create a new version with `harness doc revise DOC-P0` (v+1, draft), then publish and submit it. The
+  artifact_url carries over to the revision, so republishing at the same URL is fine.
+- **Editing the document between submit and approve gets the approval refused** — the hash no longer
+  matches. If you edited it, run `harness gate submit P0` again (a resubmission also reopens an
+  approved gate).
+- **A gate needs real artifacts.** `gate submit` rejects empty or placeholder files, a submission set
+  under 80 non-whitespace characters, and content that already opened another gate.
+- **In the design track the hook physically blocks writing implementation code.** Documents, assets,
+  configuration, and files *named* as tests are writable, as are `.harness/`, the configured allow
+  prefixes, and root `*.md`. There is no reason to touch code in P0 — if you were blocked, it is the
+  judgement that was wrong, not the phase.
+- **The evidence grade is `claimed`.** `claimed`/`code` is enough for the design track. `measured` is
+  for the ship track (P10~P12); there is nothing to measure here.

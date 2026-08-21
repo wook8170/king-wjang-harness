@@ -749,7 +749,11 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'url': {
-            const d = setDocArtifactUrl(root, rest[0], rest[1] ?? '');
+            // [API-80] 도움말은 `--url <주소>` 를 광고하는데 구현은 위치인자만 받아서, 도움말을
+            // 그대로 따라 친 사람이 「artifact URL 이 https 가 아니다: "--url"」을 본다.
+            // API-30 과 같은 처방으로 **둘 다 받는다** — 도움말과 구현이 갈리면 고칠 곳은 둘 중
+            // 하나가 아니라 「사람이 친 것이 먹게 만드는 것」이다.
+            const d = setDocArtifactUrl(root, rest[0], flag(rest, 'url') ?? rest[1] ?? '');
             console.log(`${d.id} → ${d.artifactUrl}`);
             return 0;
           }

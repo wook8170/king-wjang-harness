@@ -8371,7 +8371,7 @@ var COMMANDS = [
     summary: M("Document registry \u2014 the artifacts a gate reviews.", "\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC \u2014 \uAC8C\uC774\uD2B8\uAC00 \uC2EC\uC0AC\uD558\uB294 \uC0B0\uCD9C\uBB3C."),
     subs: [
       { name: "upsert", args: "--id <DOC-x> --path <p> --phase <P>", summary: M("Register or update a document.", "\uBB38\uC11C\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4.") },
-      { name: "url", args: "<DOC-x> --url <artifact-url>", summary: M("Attach a published artifact URL to a document.", "\uBB38\uC11C\uC5D0 \uAC8C\uC2DC\uB41C \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uBD99\uC778\uB2E4.") },
+      { name: "url", args: "<DOC-x> <artifact-url>", summary: M("Attach a published artifact URL to a document.", "\uBB38\uC11C\uC5D0 \uAC8C\uC2DC\uB41C \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uBD99\uC778\uB2E4.") },
       { name: "submit", args: "<DOC-x>", summary: M("Submit a document for review (pins its hash).", "\uBB38\uC11C\uB97C \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4(\uD574\uC2DC \uACE0\uC815).") },
       { name: "approve", args: "<DOC-x>", summary: M("Approve a submitted document.", "\uC81C\uCD9C\uB41C \uBB38\uC11C\uB97C \uC2B9\uC778\uD55C\uB2E4.") },
       { name: "revise", args: "<DOC-x> [--path <p>]", summary: M("Revise an approved document (supersedes the old version).", "\uC2B9\uC778 \uBB38\uC11C\uB97C \uAC1C\uC815\uD55C\uB2E4(\uC774\uC804 \uBC84\uC804 supersede).") },
@@ -13902,7 +13902,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             return 0;
           }
           case "url": {
-            const d = setDocArtifactUrl(root, rest[0], rest[1] ?? "");
+            const d = setDocArtifactUrl(root, rest[0], flag(rest, "url") ?? rest[1] ?? "");
             console.log(`${d.id} \u2192 ${d.artifactUrl}`);
             return 0;
           }

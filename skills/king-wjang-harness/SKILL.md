@@ -1,78 +1,102 @@
 ---
 name: king-wjang-harness
-description: Use when a project needs king-wjang-harness 프로세스 규율을 적용하거나 운전할 때 — 리포에 활성화(harness init), 페이즈·설계 원장·웨이브 구동, 턴 로그 정산, 그리고 PreToolUse/Stop 훅이 소스 쓰기를 deny 하거나 세션 종료를 block 했을 때 대처. 트리거: "하네스 걸어줘", harness init, 페이즈 전환, 웨이브 생성/정산, node bump, doctor, deny/block 대처, 미정산 종료.
+description: Use when a project needs the king-wjang-harness process discipline applied or driven — activating it in a repo (harness init), driving phases, the design ledger and waves, settling the turn log, and what to do when the PreToolUse/Stop hooks deny a source write or block a session from ending. Triggers - "put the harness on this", harness init, phase transitions, creating or settling a wave, node bump, doctor, handling a deny/block, an unsettled session end.
 ---
 
-# king-wjang-harness 운영
+# Operating king-wjang-harness
 
 ## Overview
 
-`harness` CLI로 **설계→구축→출하** 프로세스 상태를 운전하는 매뉴얼. 강제(설계 트랙 소스 쓰기 차단·미정산 종료 차단)는 **훅이 자동 수행**한다 — 이 스킬은 CLI를 올바로 몰고, deny/block을 만났을 때 무엇을 할지 안내한다.
+The manual for driving **design → build → ship** process state with the `harness` CLI. Enforcement
+(blocking source writes in the design track, blocking an unsettled session end) **happens
+automatically in the hooks** — this skill is about driving the CLI correctly and about what to do
+when you hit a deny or a block.
 
-**철칙: `.harness/state.json`·`events.jsonl`·`design/ledger.yaml`을 손편집하지 마라.** 오직 `harness` 명령으로만 바꾼다(저널이 진실의 원천, 손편집은 상태를 거짓으로 만든다 — 훅도 차단한다).
+**Iron rule: never hand-edit `.harness/state.json`, `events.jsonl`, or `design/ledger.yaml`.**
+Change them only through `harness` commands (the journal is the source of truth; hand-editing makes
+the state a lie — and the hook blocks it anyway). The same holds for the policy files
+(`.harness/config.yaml`, `.harness/profile/`): they decide what the hook blocks, so only the user
+changes them, in their own terminal.
 
 ## When to use / not
 
-- **쓴다**: 프로젝트에 하네스를 걸 때, 페이즈/노드/웨이브를 조작할 때, 훅 deny/block을 만났을 때, 상태·복구를 볼 때.
-- **안 쓴다**: `.harness/` 없는 프로젝트의 일반 작업(훅은 완전 침묵) / king-wjang-harness **자체 개발**(→ `verify` 스킬).
+- **Use it**: putting the harness on a project, driving phases/nodes/waves, hitting a hook deny or
+  block, inspecting state or recovering it.
+- **Do not**: ordinary work in a project with no `.harness/` (the hooks stay completely silent) /
+  developing **king-wjang-harness itself** (→ the `verify` skill).
 
-## 적용 (부트스트랩)
+## Bootstrapping
 
-**대상 프로젝트 루트에서** 실행한다:
+Run this **in the target project's root**:
 
 ```bash
-harness init                                  # .harness/ 생성 — 여기서부터 훅 활성
-harness phase set P0                          # 설계 트랙 진입 (v0 임시 — 게이트 구현 후 대체)
-harness node upsert --id F-1 --title "기능명"  # 설계 원장에 노드 등록
+harness init                                     # creates .harness/ — the hooks go live from here
+harness phase set P0                             # enter the design track
+harness node upsert --id F-1 --title "feature"   # register a node in the design ledger
 ```
 
-⚠ **king-wjang-harness 그 자신의 dev repo에는 init 하지 마라** — 자기참조로 자기 소스 편집이 설계 트랙에서 막힌다.
+⚠ **Never run init in king-wjang-harness's own dev repo** — self-reference would block editing its
+own source in the design track.
 
-## 명령 퀵 레퍼런스
+## Command quick reference
 
-| 명령 | 하는 일 |
+| Command | What it does |
 |---|---|
-| `harness init` | `.harness/` 상태 저장소 생성 |
-| `harness status` | 현재 상태 JSON (미초기화면 init 안내) |
-| `harness phase set <P0..P12>` | 페이즈 전환 |
-| `harness node upsert --id <id> --title <제목> [--status draft\|approved\|stale] [--parent <id>] [--anchor <a>]` | 설계 원장 노드 upsert (재실행 시 version·미지정 필드 보존) |
-| `harness node bump <id>` | 노드 개정 → version++·status=stale + 참조 웨이브 STALE 전파 |
-| `harness wave create [--milestone <m>] [--goal <g>] [--refs <id,id>] [--accept <c,c>]` | 웨이브 생성 → **웨이브 id(wave-001…) 출력** |
-| `harness wave activate <wave-id>` | 웨이브 활성화(state.activeWave 갱신) |
-| `harness wave update "<한 일, 다음 할 일>"` | 턴 로그 정산 (빈 로그 거부) |
-| `harness wave complete` | 웨이브 완료 (UX 노드 참조 시 시각 증적 필요 — 아래 함정) |
-| `harness wave list` | 웨이브 목록 JSON |
-| `harness backtrack <phase> --reason "<사유>"` / `harness backtrack clear` | 구축·출하 트랙에서 설계로 공식 역행 / 역행 종료 |
-| `harness doctor [--repair [--force]]` | 무결성 검사·저널 재생 복구 (JSON: `ok/repaired/refused/issues/warnings`) |
+| `harness init` | Creates the `.harness/` state store |
+| `harness status` | Current state as JSON (tells you to init if it is not initialised) |
+| `harness --help`, `harness <group> --help` | Command map, and the subcommands of one group |
+| `harness phase set <P0..P12>` | Phase transition (gate approval required; `--force` is locked and human-only) |
+| `harness node upsert --id <id> --title <title> [--status draft\|approved\|stale] [--parent <id>] [--anchor <a>]` | Upsert a design-ledger node (a re-run preserves version and unspecified fields) |
+| `harness node bump <id>` | Revise a node → version++, status=stale, and STALE propagates to referencing waves |
+| `harness wave create [--milestone <m>] [--goal <g>] [--refs <id,id>] [--accept <c,c>]` | Create a wave → **prints the wave id (wave-001…)** |
+| `harness wave activate <wave-id>` | Activate a wave (updates state.activeWave) |
+| `harness wave update "<what you did, what is next>"` | Settle the turn log (an empty log is rejected) |
+| `harness wave complete` | Complete the wave (a UX node reference requires visual evidence — see Pitfalls) |
+| `harness wave list` | Wave list as JSON |
+| `harness gate submit <P> --paths <a,b> [--evidence claimed\|code\|measured]` / `harness gate approve <P>` | Submit artifacts for review / **human** approval |
+| `harness backtrack <phase> --reason "<reason>"` / `harness backtrack clear` | Formally go back to design from the build/ship track / end the backtrack |
+| `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check and journal-replay recovery (JSON: `ok/repaired/refused/issues/warnings`). `--accept-policy` re-pins the policy baseline and needs `HARNESS_ACCEPT_POLICY=1` — the user runs it |
 
-`harness`엔 `--help`가 없다 — 이 표가 유일한 명령 출처다. 훅 이벤트(`harness hook <session-start\|pre-tool\|post-tool\|stop>`)는 **플러그인이 자동 호출**한다 — 직접 칠 일 없다(항상 exit 0).
+Hook events (`harness hook <session-start|pre-tool|post-tool|stop>`) are **invoked by the plugin
+automatically** — you never type them (they always exit 0).
 
-## 페이즈 모델
+## Phase model
 
-| 트랙 | 페이즈 | 성격 |
+| Track | Phases | Character |
 |---|---|---|
-| 설계 | **P0–P6** | 소스 쓰기·배포성 Bash 차단. 허용: `.harness/`·config 허용 프리픽스·루트 `*.md` |
-| 구축 | **P7–P9** | 소스 자유. 단 설계 문서 직접 수정은 backtrack 필요 |
-| 출하 | **P10–P12** | 구축과 동일 규율 |
+| Design | **P0–P6** | Implementation code and deploy-ish Bash are blocked. Writable: documents, assets, configuration, files *named* as tests, plus `.harness/`, the configured allow prefixes, and root `*.md` |
+| Build | **P7–P9** | Source is free. Editing design documents directly still requires a backtrack |
+| Ship | **P10–P12** | Same discipline as build, plus: no deploying without an approved gate |
 
-## 훅 deny/block 대처
+## Handling a hook deny / block
 
-| 만난 것 | 뜻 | 할 일 |
+| What you hit | Meaning | What to do |
 |---|---|---|
-| `deny: … 소스 코드를 쓸 수 없다 (설계 트랙)` | P0–P6에서 소스 편집 시도 | 설계 산출물(`docs/`·루트 `*.md`)을 먼저 완성, 또는 구축 페이즈면 `harness phase set P7` |
-| `deny: … harness 명령으로만 변경할 수 있다` | 코어 3파일 손편집 시도 | 손편집 말고 해당 `harness` 명령으로 상태 변경 |
-| `deny: … 설계 문서를 직접 수정할 수 없다` | 구축·출하 트랙에서 `.harness/design/` 편집 | `harness backtrack <페이즈> --reason "<사유>"`로 공식 역행 후 수정 |
-| `deny: 배포성 명령(…)` | 설계 트랙에서 배포성 Bash | 구축 트랙으로 전환 후 실행 |
-| `block: 턴 로그가 … 갱신되지 않았다` (종료 막힘) | 활성 웨이브에 작업했는데 미정산 | `harness wave update "<한 일, 다음 할 일>"` 후 종료. 정말 사소한 턴이면 사유 한 줄 보고하고 종료 가능 |
+| `deny: Implementation code cannot be written in the design track` | You tried to edit implementation in P0–P6 | Finish the design artifacts first (documents, `docs/`, root `*.md`), or if you really are in the build phase, get the gate approved and move to P7 |
+| `deny: … can only be changed by harness commands` | You tried to hand-edit one of the core files | Do not hand-edit — change the state with the matching `harness` command |
+| `deny: Design documents cannot be edited directly in the build/ship track` | You edited `.harness/design/` from the build or ship track | Backtrack formally first: `harness backtrack <phase> --reason "<reason>"` |
+| `deny: Deploy-ish commands (…) cannot run in …` | A deploy-ish Bash command in the design or build track | Move to the ship track with an approved gate, then run it |
+| `deny: \`phase set --force\` …` / `deny: \`doctor --accept-policy\` …` | An agent tried to open one of the human-only escape hatches | Report it to the user with the exact command; they run it themselves in their terminal |
+| `block: The turn log for active wave … has not been updated` (the session cannot end) | You worked on the active wave but never settled it | `harness wave update "<what you did, what is next>"` and then end. If the turn really was trivial, report one line of reasoning and end |
 
-## 함정
+## Pitfalls
 
-- **`wave create --refs`의 id는 원장에 먼저 있어야 한다** — 없으면 거부. `harness node upsert`로 선등록. 여러 개는 쉼표 구분(`--refs F-1,F-2`, 공백 없이).
-- **UX 게이트**: `UX-` 프리픽스 노드를 참조하는 웨이브는 `.harness/evidence/<wave-id>/`에 **size>0 파일**(디렉토리는 무시)이 있어야 `complete`된다. 증적을 넣는 harness 명령은 없다 — 그 경로에 **직접 파일**(스크린샷 등)을 만들어라. 손편집 금지는 코어 3파일뿐이라 증적 추가는 규율 위반이 아니다.
-- **훅 실패는 전부 exit 0으로 흡수된다** — 하네스가 조용히 꺼진 걸 알려면 `.harness/.runtime/hook-errors.log`와 `harness doctor`를 보라.
-- **state.json 손상 감지 시** 훅이 저널 재생으로 동작하며 경고를 낸다 → `harness doctor --repair`로 정산.
-- **소스 파이프 뒤 `$?`는 파이프 마지막 명령의 코드다** — CLI 종료코드를 볼 땐 파이프 없이 실행.
+- **The ids in `wave create --refs` must already exist in the ledger** — otherwise it is rejected.
+  Register them first with `harness node upsert`. Separate several with commas and no spaces
+  (`--refs F-1,F-2`).
+- **The UX gate**: a wave that references a `UX-` prefixed node needs a **file of size > 0**
+  (directories are ignored) in `.harness/evidence/<wave-id>/` before it will `complete`. No harness
+  command puts evidence there — create the file (a screenshot, say) **directly** in that path. The
+  hand-edit ban covers the core and policy files only, so adding evidence is not a breach of discipline.
+- **A gate needs real artifacts.** `gate submit` rejects empty or placeholder files, a submission set
+  under 80 non-whitespace characters in total, and content that already opened another gate.
+- **All hook failures are absorbed as exit 0** — to notice that the harness has quietly gone dark,
+  read `.harness/.runtime/hook-errors.log` and run `harness doctor`.
+- **If state.json is detected as damaged**, the hook keeps working by replaying the journal and warns
+  you → settle it with `harness doctor --repair`.
+- **`$?` after a pipe is the last command's code** — check a CLI exit code without a pipe.
 
-## 검증
+## Verification
 
-king-wjang-harness **자체를 개발**하며 변경을 검증할 때는 `verify` 스킬(샌드박스 init·훅 stdin 구동 레시피)을 쓴다.
+When you are **developing king-wjang-harness itself** and need to verify a change, use the `verify`
+skill (sandbox init and the hook-over-stdin recipe).

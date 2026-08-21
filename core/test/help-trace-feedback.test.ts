@@ -188,6 +188,53 @@ describe('FEAT-23: harness gate feedback', () => {
   });
 });
 
+/**
+ * [API-80] 도움말이 광고하는 인자 형태가 구현과 갈리면, 도움말을 그대로 따라 친 사람이
+ * 실패한다 — `doc url` 은 위치인자만 받는데 도움말은 `--url <주소>` 를 적고 있어서
+ * 「artifact URL 이 https 가 아니다: "--url"」이 나왔다. API-30 과 같은 처방: **둘 다 받는다.**
+ */
+describe('API-80: doc url 은 도움말대로 쳐도 먹는다', () => {
+  const seed = (root: string) => {
+    run(['init'], root);
+    fs.writeFileSync(path.join(root, 'c.md'), '# concept\n');
+    run(['doc', 'upsert', '--id', 'DOC-P0', '--path', 'c.md', '--phase', 'P0'], root);
+  };
+  const URL_A = 'https://claude.ai/public/artifacts/aaaa';
+  const URL_B = 'https://claude.ai/public/artifacts/bbbb';
+
+  it('위치인자 형태', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0', URL_A], root);
+    c.restore();
+    expect(code).toBe(0);
+    expect(c.text()).toContain(URL_A);
+  });
+
+  it('--url 플래그 형태 — 도움말이 오래 광고해 온 쪽', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0', '--url', URL_B], root);
+    c.restore();
+    expect(code).toBe(0);
+    expect(c.text()).toContain(URL_B);
+  });
+
+  it('도움말이 실제로 먹는 형태를 적는다', () => {
+    const doc = COMMANDS.find(x => x.name === 'doc')!;
+    const sub = doc.subs!.find(x => x.name === 'url')!;
+    expect(sub.args).toBe('<DOC-x> <artifact-url>');
+  });
+
+  it('URL 이 없으면 침묵 성공하지 않는다', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0'], root);
+    c.restore();
+    expect(code).toBe(1);
+  });
+});
+
 describe('API-29: 침묵 성공이 없다', () => {
   it('wave create 는 목표 없이 성공하지 않는다', () => {
     const root = tmp();

@@ -546,3 +546,27 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
   [의도된 대가]  `test/helpers/factory.ts` 처럼 이름 없는 보조 파일은 막힌다.
     사유가 이유와 다음 수를 말하고, 이름을 관례에 맞추면 통과한다. 접두사 하나로 강제가
     통째로 꺼지는 것보다 낫다 — 테스트로 고정했다.
+
+## §14 I18N-72 + API-80 (라운드 3-D, 메인)
+
+  [I18N-72 — 배포되는 지시 계층 영문화]
+    한글 문자 수  15,569 → 6  (남은 것은 저자 이름 「장욱」 2곳뿐 — 고유명사)
+    파일          skills 11 · agents 5 · .claude-plugin 2 = 16개 전량
+    회귀 가드     core/test/i18n-en-default.test.ts:199 — 목록이 아니라 디렉토리 전체를 훑는다
+    무는지 확인   agents/researcher.md 에 한글 1줄 주입 → RED(offenders=[agents/researcher.md]) → 복구 후 GREEN
+
+  [번역하면서 실측으로 교정한 낡은 서술 — 거짓 문서는 없는 문서보다 나쁘다]
+    · 「harness 엔 --help 가 없다」        → UX-24 로 생겼다(전 명령군 --help 동작)
+    · 「캔버스 URL 필드가 코어에 없다」     → harness design link/sync/baseline 이 있다
+    · 「게이트 피드백 명령이 아직 없다」    → FEAT-23 이 harness gate feedback 을 넣었다
+    · 설계 트랙 「허용: .harness/·docs/·루트 *.md」 → UX-71 로 deny-list 2단이 됐다
+    · 옛 한국어 deny 문구 인용             → 현재 영문 문구로 교체
+
+  [API-80 — 도움말이 광고하는 인자 형태가 먹지 않았다]
+    발견: P0 스킬의 `harness doc url DOC-P0 <URL>` 절차를 실측하다, 도움말은
+          `--url <주소>` 를 광고하는데 구현은 위치인자만 받는 것을 확인.
+    전:  doc url DOC-P0 --url https://…  → exit 1 「artifact URL 이 https 가 아니다: "--url"」
+    후:  위치인자 exit 0 · --url exit 0 · 둘 다 없으면 exit 1(침묵 성공 없음)
+    처방: API-30 과 같다 — 도움말과 구현이 갈리면 「사람이 친 것이 먹게」 만든다 + 도움말 정정
+
+  790 → 796 tests green · tsc 0

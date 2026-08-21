@@ -4,14 +4,14 @@
     "name": "장욱"
   },
   "metadata": {
-    "description": "king-wjang-harness 로컬 마켓플레이스 — 설계→구축→출하 규율 하네스",
+    "description": "Local marketplace for king-wjang-harness \u2014 the design \u2192 build \u2192 ship discipline harness",
     "version": "0.0.1"
   },
   "plugins": [
     {
       "name": "king-wjang-harness",
       "source": "./",
-      "description": "설계→구축→출하 프로세스 규율을 강제하는 훅·CLI 하네스. .harness/ 없는 프로젝트에서는 완전 침묵(비간섭).",
+      "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. Completely silent in projects without a .harness/ directory.",
       "version": "0.0.1",
       "author": {
         "name": "장욱"

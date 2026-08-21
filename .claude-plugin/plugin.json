@@ -1,7 +1,7 @@
 {
   "name": "king-wjang-harness",
   "version": "0.0.1",
-  "description": "설계→구축→출하 프로세스 규율을 강제하는 훅·CLI 하네스. 이벤트 저널을 진실의 원천으로 페이즈·웨이브·설계 원장 상태를 관리하고, PreToolUse/Stop 훅으로 설계 트랙에서의 소스 쓰기·미정산 종료를 차단한다. .harness/ 가 없는 프로젝트에서는 완전 침묵(비간섭).",
+  "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. The event journal is the source of truth for phase, wave, and design-ledger state; PreToolUse/Stop hooks block source writes in the design track and unsettled session ends. Completely silent in projects without a .harness/ directory.",
   "author": {
     "name": "장욱"
   },

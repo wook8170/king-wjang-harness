@@ -187,6 +187,35 @@ describe('i18n — 기본 언어(en) 출력에 한국어가 없다', () => {
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * [I18N-72] **모델에게 지시를 내리는 계층**이 빠져 있었다. CLI·코어·프로파일만 재고
+   * 「i18n 완료」라 불렀는데, 실제로 배포되어 모델을 움직이는 것은 `skills/`·`agents/`·
+   * 마켓플레이스 매니페스트다 — 거기에 한글 15,569자가 그대로 있었다. 라운드 2의
+   * 「부분 측정을 전수 측정이라 부른 것」이 **같은 뿌리로 한 번 더** 나온 것이라,
+   * 이 가드도 목록이 아니라 **디렉토리 전체**를 훑는다(새 스킬이 자동으로 사정권에 든다).
+   *
+   * 저자 이름(고유명사)만 예외다 — 사람 이름을 번역하는 것은 i18n 이 아니다.
+   */
+  it('배포되는 지시 계층 — skills/ · agents/ · 플러그인 매니페스트', () => {
+    const repo = path.resolve(__dirname, '../..');
+    const AUTHOR = '장욱';
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      if (!fs.existsSync(dir)) return;
+      for (const name of fs.readdirSync(dir)) {
+        const p = path.join(dir, name);
+        if (fs.statSync(p).isDirectory()) { walk(p); continue; }
+        if (!/\.(md|json|ya?ml)$/.test(name)) continue;
+        const body = fs.readFileSync(p, 'utf8').split(AUTHOR).join('');
+        if (HANGUL.test(body)) offenders.push(path.relative(repo, p));
+      }
+    };
+    walk(path.join(repo, 'skills'));
+    walk(path.join(repo, 'agents'));
+    walk(path.join(repo, '.claude-plugin'));
+    expect(offenders).toEqual([]);
+  });
+
   it('번들 프로파일 — 배포에 실리는 데이터 파일', () => {
     const offenders: string[] = [];
     const profilesDir = path.resolve(__dirname, '../../profiles');

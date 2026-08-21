@@ -94,7 +94,7 @@ export const COMMANDS: CommandGroup[] = [
     summary: M('Document registry — the artifacts a gate reviews.', '문서 레지스트리 — 게이트가 심사하는 산출물.'),
     subs: [
       { name: 'upsert', args: '--id <DOC-x> --path <p> --phase <P>', summary: M('Register or update a document.', '문서를 등록·수정한다.') },
-      { name: 'url', args: '<DOC-x> --url <artifact-url>', summary: M('Attach a published artifact URL to a document.', '문서에 게시된 아티팩트 URL 을 붙인다.') },
+      { name: 'url', args: '<DOC-x> <artifact-url>', summary: M('Attach a published artifact URL to a document.', '문서에 게시된 아티팩트 URL 을 붙인다.') },
       { name: 'submit', args: '<DOC-x>', summary: M('Submit a document for review (pins its hash).', '문서를 심사에 올린다(해시 고정).') },
       { name: 'approve', args: '<DOC-x>', summary: M('Approve a submitted document.', '제출된 문서를 승인한다.') },
       { name: 'revise', args: '<DOC-x> [--path <p>]', summary: M('Revise an approved document (supersedes the old version).', '승인 문서를 개정한다(이전 버전 supersede).') },
