@@ -10,6 +10,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { scanBashWrites, mentionsPath } from '../src/bashwrite';
 import { initHarness, readState, writeState } from '../src/state';
+import { submitGate, approveGate, invalidateStaleGates } from '../src/gate';
+import { replayState, readJournal, readJournalForReplay, appendEvent, EVENT_TYPES } from '../src/events';
+import { runDoctor } from '../src/doctor';
 import { handleHook } from '../src/hook';
 import type { Phase } from '../src/types';
 
@@ -149,5 +152,30 @@ describe('SHIP-52: --force 자기해제 경로 차단', () => {
   it('doctor --repair --force 는 페이즈 탈출구가 아니라 통과', () => {
     const root = setup('P0');
     expect(bash(root, 'harness doctor --repair --force')).toBeNull();
+  });
+});
+
+describe('DET-54: 이벤트 타입 드리프트 — 무효화가 복구로 되살아나지 않는다', () => {
+  it('gate-invalidated 가 재생에 반영된다 (복구가 무효화를 되돌리면 안 된다)', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const doc = path.join(root, 'docs/a.md');
+    fs.writeFileSync(doc, 'v1');
+    submitGate(root, 'P0', { paths: ['docs/a.md'], evidence: 'claimed' });
+    approveGate(root, 'P0');
+    fs.writeFileSync(doc, 'v2');                 // 승인 후 산출물이 바뀌었다
+    expect(invalidateStaleGates(root)).toContain('P0');
+    expect(readState(root).gates.P0?.status).toBe('invalidated');
+
+    // 저널만으로 재구성해도 invalidated 여야 한다 — 아니면 `doctor --repair` 가 되살린다.
+    expect(replayState(readJournal(root).events).gates.P0?.status).toBe('invalidated');
+    expect(replayState(readJournalForReplay(root).events).gates.P0?.status).toBe('invalidated');
+  });
+
+  it('하네스가 쓰는 이벤트 타입은 전부 doctor 가 안다 (컴파일 강제 + 실측)', () => {
+    const root = setup('P0');
+    for (const t of EVENT_TYPES) appendEvent(root, t, {});
+    const r = runDoctor(root, {});
+    expect(r.warnings.join(' ')).not.toMatch(/미지 이벤트|Unknown event/);
   });
 });

@@ -93,7 +93,9 @@ describe('doctor', () => {
 
   it('미지 이벤트 타입은 warnings 로 보고하고 복구는 거부한다', () => {
     const root = setup();
-    appendEvent(root, 'gate-invalidated', { phase: 'P0' }); // 미래 이벤트
+    // 하네스가 실제로 쓰는 타입은 이제 전부 EVENT_TYPES 에 있다(컴파일 강제) — 여기서
+    // 시험하는 것은 «미래 버전이 남긴 진짜 미지 타입»이므로 타입 가드를 의도적으로 우회한다.
+    appendEvent(root, 'from-a-future-version' as any, { phase: 'P0' });
     fs.writeFileSync(statePath(root), '{corrupted');
     const r = runDoctor(root, { repair: true });
     expect(r.refused).toBe(true);

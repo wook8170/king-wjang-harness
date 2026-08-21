@@ -1,0 +1,16 @@
+=== 수정 후 재측정 Fri Aug 21 14:39:43 KST 2026 load=13.63 17.78 14.52 ===
+--- G1 테스트 ×3 ---
+ Test Files  27 passed (27)
+      Tests  624 passed (624)
+ Test Files  27 passed (27)
+      Tests  624 passed (624)
+ Test Files  27 passed (27)
+      Tests  624 passed (624)
+--- G2 tsc ---
+exit=0
+--- G7 빌드 재현성 ---
+(빈 줄 = 바이트 동일)
+--- G8 공급망 ---
+found 0 vulnerabilities
+--- G10 비밀 ---
+[90m2:40PM[0m [32mINF[0m [1mno leaks found[0m

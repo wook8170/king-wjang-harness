@@ -38,7 +38,7 @@ describe('events', () => {
 
   it('알 수 없는 이벤트 타입은 무시하고 진행 (전방 호환)', () => {
     const root = setup();
-    appendEvent(root, 'future-event', { x: 1 });
+    appendEvent(root, 'future-event' as any, { x: 1 });
     appendEvent(root, 'phase-set', { phase: 'P2' });
     expect(replayState(readEvents(root)).phase).toBe('P2');
   });
@@ -154,10 +154,10 @@ describe('PERF-26: 빠른 재생이 전체 재생과 같은 상태를 낸다', (
       'doctor-repaired': {},
     };
     for (const t of KNOWN_EVENT_TYPES) {
-      appendEvent(root, t, sample[t] ?? {});
+      appendEvent(root, t as any, sample[t] ?? {});
     }
     // 미지 타입도 섞는다 — 전방 호환 계약이 두 경로에서 같아야 한다.
-    appendEvent(root, 'future-event-type', { x: 1 });
+    appendEvent(root, 'future-event-type' as any, { x: 1 });
     expect(replayState(readJournalForReplay(root).events))
       .toEqual(replayState(readJournal(root).events));
   });

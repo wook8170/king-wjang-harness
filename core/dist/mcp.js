@@ -7503,7 +7503,7 @@ var DOC_STATUSES = ["draft", "submitted", "approved", "superseded"];
 var isDocStatus = (v) => DOC_STATUSES.includes(v);
 
 // core/src/events.ts
-var KNOWN_EVENT_TYPES = /* @__PURE__ */ new Set([
+var EVENT_TYPES = [
   "init",
   "phase-set",
   "wave-created",
@@ -7511,16 +7511,35 @@ var KNOWN_EVENT_TYPES = /* @__PURE__ */ new Set([
   "wave-turn-logged",
   "wave-completed",
   "wave-stale",
+  "wave-attempt",
   "node-upserted",
   "node-bumped",
   "gate-submitted",
   "gate-approved",
+  "gate-invalidated",
   "gate-feedback",
+  "doc-upserted",
+  "doc-submitted",
+  "doc-approved",
+  "doc-revised",
+  "doc-artifact-url-set",
+  "adr-proposed",
+  "adr-decided",
+  "adr-revised",
+  "canvas-linked",
+  "canvas-synced",
+  "baseline-recorded",
+  "critical-raised",
+  "critical-cleared",
+  "defect-added",
+  "defect-updated",
+  "deployment-recorded",
   "backtrack-started",
   "backtrack-cleared",
   "doctor-repaired"
   // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
-]);
+];
+var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
 function appendEvent(root, type, data) {
   const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
   fs3.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
@@ -7562,6 +7581,7 @@ var REPLAY_TYPES = /* @__PURE__ */ new Set([
   "wave-stale",
   "gate-submitted",
   "gate-approved",
+  "gate-invalidated",
   "backtrack-started",
   "backtrack-cleared"
 ]);
@@ -7602,6 +7622,15 @@ function replayState(events) {
             artifactHash: typeof d.artifactHash === "string" ? d.artifactHash : s.gates[d.phase]?.artifactHash,
             evidence: isEvidenceGrade(d.evidence) ? d.evidence : s.gates[d.phase]?.evidence,
             approvedAt: ev.ts
+          };
+        }
+        break;
+      case "gate-invalidated":
+        if (isPhase(d.phase)) {
+          s.gates[d.phase] = {
+            ...s.gates[d.phase],
+            status: "invalidated",
+            invalidatedReason: typeof d.reason === "string" ? d.reason : void 0
           };
         }
         break;

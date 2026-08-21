@@ -1,0 +1,77 @@
+### sandbox=/tmp/hx.0ZeNyE  Fri Aug 21 14:40:43 KST 2026
+
+== 페르소나 A: 신규 사용자 (미초기화 프로젝트) ==
+  PASS  미초기화 status 는 명확히 실패 (exit 1)
+  PASS  미초기화 hook session-start 완전침묵 (exit0, 0바이트)
+  PASS  미초기화 hook pre-tool 완전침묵 (exit0, 0바이트)
+  PASS  미초기화 hook post-tool 완전침묵 (exit0, 0바이트)
+  PASS  미초기화 hook stop 완전침묵 (exit0, 0바이트)
+  PASS  비간섭: 훅이 .harness 를 만들지 않음
+
+== 훅 무해: 깨진/빈/미지 입력 ==
+  PASS  init (exit 0)
+  PASS  깨진 stdin exit0
+  PASS  빈 stdin exit0
+  PASS  미지 이벤트 exit0
+  PASS  null 필드 exit0
+  PASS  초장문 경로 exit0
+  PASS  유니코드 경로 exit0
+  PASS  hook-errors.log 에 흔적 기록(관측성)
+
+== 훅 강제력 (설계 트랙 P0) ==
+  PASS  설계트랙 소스쓰기 deny
+  PASS  docs 쓰기 허용(무출력)
+  PASS  코어파일 직접편집 deny
+  PASS  경로우회(docs/../src) deny
+  PASS  배포 Bash deny
+  PASS  일반 Bash 허용
+  PASS  심링크 우회 deny
+
+== 페르소나 B: 설계자 — 게이트 ==
+  PASS  node upsert C-1 (exit 0)
+  PASS  gate submit P0 (exit 0)
+  PASS  제출 후 상태 submitted
+  PASS  리뷰 패킷 생성
+  PASS  미승인 상태에서 phase set P1 거부 (exit 1)
+  PASS  gate approve P0 (사람 경로) (exit 0)
+  PASS  승인 후 phase set P1 (exit 0)
+
+== 🔴 G6 안전 속성: MCP 로 게이트 승인 불가 ==
+  PASS  gate submit P1 (exit 0)
+  PASS  MCP approve 는 isError 로 거절
+  PASS  🔴 MCP approve 후에도 게이트 불변 (��submitted)
+  PASS  우회시도 'harness_gate_approve' 거절
+  PASS  우회시도 'HARNESS_GATE_APPROVE' 거절
+  PASS  우회시도 'harness_gate_approve ' 거절
+  PASS  우회 3종 후에도 게이트 불변
+  PASS  tools/list 16종
+  PASS  MCP harness_status 동작
+  PASS  MCP 파손 입력 → Parse error(서버 생존)
+
+== 페르소나 C: 구현자 — 웨이브 ==
+  PASS  node upsert UX-1 (exit 0)
+  PASS  유령 참조 웨이브 거부 (exit 1)
+  PASS  wave create → wave-001
+  PASS  wave activate (exit 0)
+  PASS  wave update (exit 0)
+  FAIL  빈 turn log 거부  || expected exit 1 got 0 :: Turn log recorded 
+  PASS  🔴 증적 없는 UX 웨이브 complete 거부 (exit 1)
+  PASS  증적 있으면 complete 통과 (exit 0)
+  PASS  두 웨이브 동시 활성 방지 (exit 1)
+
+== 페르소나 D: 출하 트랙 ==
+  PASS  ship verdict 는 미승인 게이트로 NO-GO (exit 1)
+  PASS  결함 등록 (exit 0)
+  PASS  open blocker 있으면 NO-GO (exit 1)
+  PASS  checklist 렌더 (exit 0)
+  PASS  report rtm (exit 0)
+  PASS  report hub (exit 0)
+  PASS  doctor (exit 0)
+
+== 축⑧ 상태 복원력 ==
+  PASS  state.json 삭제 후에도 훅 exit0
+  PASS  형태손상 state.json 도 exit0
+  FAIL  doctor --repair 로 복구  || expected exit 0 got 1 :: {   "ok": false, 
+  PASS  저널 손상 시 doctor 는 거부/실패로 알린다 (exit 1)
+
+### PASS=56 FAIL=2 sandbox=/tmp/hx.0ZeNyE

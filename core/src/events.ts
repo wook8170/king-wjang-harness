@@ -11,16 +11,39 @@ import { defaultState } from './state';
 import { isPhase, isEvidenceGrade } from './types';
 import type { HarnessEvent, HarnessState } from './types';
 
-/** doctor가 아는 이벤트 타입 — 이 밖의 타입이 저널에 있으면 재생 신뢰도 하락 신호. */
-export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set([
-  'init', 'phase-set', 'wave-created', 'wave-activated', 'wave-turn-logged',
-  'wave-completed', 'wave-stale', 'node-upserted', 'node-bumped',
-  'gate-submitted', 'gate-approved', 'gate-feedback', 'backtrack-started', 'backtrack-cleared',
+/**
+ * **이벤트 타입의 단일 정의.** `appendEvent` 가 이 유니온만 받으므로, 새 이벤트를 만들면서
+ * 여기에 등록하지 않는 것이 **컴파일 에러**가 된다.
+ *
+ * 왜 이렇게까지 하나: 예전에는 목록이 손으로 관리돼 18종이 빠져 있었고
+ * (`adr-*`·`doc-*`·`defect-*`·`canvas-*`·`critical-*`·`deployment-recorded`·`gate-invalidated`·
+ * `wave-attempt`·`baseline-recorded`), 그 결과 ADR·문서·출하를 쓰는 순간 doctor 가 저널을
+ * 「미지 이벤트 → 재생 불신」으로 판정해 **`doctor --repair` 가 복구를 거부**했다.
+ * 유일한 복구 경로가 정상 사용만으로 잠기는 상태였다. 소스 주석 두 곳이 "배선 시 등록해야
+ * 한다"고 적어 두었지만 사람이 기억해야 하는 목록은 결국 갈린다 — 타입으로 강제한다.
+ */
+export const EVENT_TYPES = [
+  'init', 'phase-set',
+  'wave-created', 'wave-activated', 'wave-turn-logged', 'wave-completed', 'wave-stale',
+  'wave-attempt',
+  'node-upserted', 'node-bumped',
+  'gate-submitted', 'gate-approved', 'gate-invalidated', 'gate-feedback',
+  'doc-upserted', 'doc-submitted', 'doc-approved', 'doc-revised', 'doc-artifact-url-set',
+  'adr-proposed', 'adr-decided', 'adr-revised',
+  'canvas-linked', 'canvas-synced', 'baseline-recorded',
+  'critical-raised', 'critical-cleared',
+  'defect-added', 'defect-updated', 'deployment-recorded',
+  'backtrack-started', 'backtrack-cleared',
   'doctor-repaired', // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
-]);
+] as const;
+
+export type EventType = (typeof EVENT_TYPES)[number];
+
+/** doctor가 아는 이벤트 타입. 위 목록에서 파생된다 — 두 벌로 두지 않는다. */
+export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set(EVENT_TYPES);
 
 export function appendEvent(
-  root: string, type: string, data: Record<string, unknown>,
+  root: string, type: EventType, data: Record<string, unknown>,
 ): HarnessEvent {
   const ev: HarnessEvent = { ts: new Date().toISOString(), type, data };
   fs.appendFileSync(eventsPath(root), JSON.stringify(ev) + '\n');
@@ -64,7 +87,8 @@ export function readEvents(root: string): HarnessEvent[] {
  */
 export const REPLAY_TYPES: ReadonlySet<string> = new Set([
   'phase-set', 'wave-activated', 'wave-completed', 'wave-stale',
-  'gate-submitted', 'gate-approved', 'backtrack-started', 'backtrack-cleared',
+  'gate-submitted', 'gate-approved', 'gate-invalidated',
+  'backtrack-started', 'backtrack-cleared',
 ]);
 
 /** 줄에서 타입만 싸게 뽑는다 — JSON.parse 없이. 못 뽑으면 undefined. */
@@ -142,6 +166,18 @@ export function replayState(events: HarnessEvent[]): HarnessState {
           };
         }
         break;
+      case 'gate-invalidated':
+        // 폴드하지 않으면 `doctor --repair` 가 **무효화를 되돌려** 승인 상태로 되살린다 —
+        // 산출물이 바뀌어 무효가 된 게이트가 복구 한 번으로 다시 열리는 셈이다.
+        if (isPhase(d.phase)) {
+          s.gates[d.phase] = {
+            ...s.gates[d.phase],
+            status: 'invalidated',
+            invalidatedReason: typeof d.reason === 'string' ? d.reason : undefined,
+          };
+        }
+        break;
+
       case 'backtrack-started':
         if (isPhase(d.to)) s.backtrack = { to: d.to, reason: String(d.reason ?? '') };
         break;
