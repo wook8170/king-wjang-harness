@@ -210,6 +210,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - **No skills for P7–P9** (the build track) — the agents cover it, the phase manuals do not.
 - A gate accepts filler documents: content **quality** is outside a deterministic local core, so human approval is the defence.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
+- The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a 4-level script chain is not followed.
 
 ---
 

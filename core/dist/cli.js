@@ -8871,10 +8871,49 @@ function scanBashWrites(cmd) {
           patchesWorkingTree = true;
           mutating = true;
         }
+        const RESTORE = ["checkout", "restore", "stash", "reset", "revert"];
+        const verb = operands.find((a) => RESTORE.includes(a));
+        if (verb !== void 0) {
+          const dashdash = args.indexOf("--");
+          if (dashdash >= 0 && dashdash + 1 < args.length) {
+            targets.push(...args.slice(dashdash + 1).filter((a) => !isFlag(a)));
+            mutating = true;
+          } else if (verb === "restore") {
+            targets.push(...operands.filter((a) => a !== "restore"));
+            mutating = true;
+          } else if (verb !== "stash" || operands.includes("pop") || operands.includes("apply")) {
+            patchesWorkingTree = true;
+            mutating = true;
+          }
+        }
         const ci = operands.indexOf("clone");
         if (ci >= 0) {
           const rest = operands.slice(ci + 1).filter((a) => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes("@"));
           if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+        }
+        break;
+      }
+      case "sh":
+      case "bash":
+      case "zsh":
+      case "dash":
+      case "ksh":
+      case "eval": {
+        const inner = [];
+        if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
+        else {
+          for (let i = 0; i < args.length; i++) {
+            if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) {
+              inner.push(args[i + 1]);
+              i++;
+            }
+          }
+        }
+        for (const chunk of inner) {
+          const sub = scanBashWrites(chunk);
+          targets.push(...sub.targets);
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
         }
         break;
       }
@@ -9912,9 +9951,9 @@ function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path11.sep}`) || path11.isAbsolute(rel);
 }
 var SCRIPT_MAX_BYTES = 64 * 1024;
-function invokedScriptBodies(root, cmd) {
+function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Set()) {
   const out = [];
-  const seen = /* @__PURE__ */ new Set();
+  if (depth >= 3) return out;
   const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
   let m;
   while ((m = re.exec(cmd)) !== null) {
@@ -9928,7 +9967,22 @@ function invokedScriptBodies(root, cmd) {
       const abs = path11.resolve(root, candidate);
       const st = fs12.statSync(abs);
       if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
-      out.push(fs12.readFileSync(abs, "utf8"));
+      const body = fs12.readFileSync(abs, "utf8");
+      out.push(body);
+      out.push(...invokedScriptBodies(root, body, depth + 1, seen));
+    } catch {
+    }
+  }
+  const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
+  if (npmRun && depth < 3) {
+    try {
+      const pkg = JSON.parse(fs12.readFileSync(path11.join(root, "package.json"), "utf8"));
+      const script = pkg.scripts?.[npmRun[1]];
+      if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
+        seen.add(`npm:${npmRun[1]}`);
+        out.push(script);
+        out.push(...invokedScriptBodies(root, script, depth + 1, seen));
+      }
     } catch {
     }
   }

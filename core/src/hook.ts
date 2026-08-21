@@ -586,9 +586,13 @@ function isOutsideRoot(rel: string): boolean {
 const SCRIPT_RUNNERS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
 const SCRIPT_MAX_BYTES = 64 * 1024;
 
-function invokedScriptBodies(root: string, cmd: string): string[] {
+function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Set<string>()): string[] {
   const out: string[] = [];
-  const seen = new Set<string>();
+  // [SEC-97] **깊이 1 로는 부족했다.** 스크립트가 스크립트를 부르면(`a.sh` → `b.sh`) 그대로
+  // 통과해 `P0 → P7` 강제가 성립했다(실측). 사슬을 따라가되 상한을 둔다 — 순환은 `seen` 이,
+  // 비용은 깊이 3 과 64KB 상한이 막는다. 완전하지는 않다(깊이 4 는 열려 있다). 그러나
+  // **한 겹 늘릴 때마다 공격자의 비용은 늘고 방어의 비용은 파일 두어 개 읽기뿐**이다.
+  if (depth >= 3) return out;
   // 러너 + 파일, 그리고 `./x.sh`·`scripts/x.sh` 처럼 직접 실행하는 형태를 함께 본다.
   const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
   let m: RegExpExecArray | null;
@@ -603,8 +607,26 @@ function invokedScriptBodies(root: string, cmd: string): string[] {
       const abs = path.resolve(root, candidate);
       const st = fs.statSync(abs);
       if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
-      out.push(fs.readFileSync(abs, 'utf8'));
+      const body = fs.readFileSync(abs, 'utf8');
+      out.push(body);
+      out.push(...invokedScriptBodies(root, body, depth + 1, seen));   // 스크립트가 부르는 스크립트
     } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
+  }
+  // `npm run <script>` 는 `package.json` 이 정의한 명령을 실행한다 — 그 정의를 읽어 같은 규칙으로
+  // 본다. `make <target>` 도 같은 부류지만 Makefile 문법 해석은 범위를 넘어 **한계로 남긴다**
+  // (README 「알려진 한계」에 적었다).
+  const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
+  if (npmRun && depth < 3) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as
+        { scripts?: Record<string, string> };
+      const script = pkg.scripts?.[npmRun[1]];
+      if (typeof script === 'string' && !seen.has(`npm:${npmRun[1]}`)) {
+        seen.add(`npm:${npmRun[1]}`);
+        out.push(script);
+        out.push(...invokedScriptBodies(root, script, depth + 1, seen));
+      }
+    } catch { /* package.json 없음·손상 — 판정할 것이 없다 */ }
   }
   return out;
 }

@@ -709,3 +709,29 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
     후: commands.yaml 만 있어도 최소 프로파일로 이어 간다 → profile cmd deploy 정상.
 
   847 → 854 tests green · tsc 0
+
+## §24 실효성 재측정(2.5 → 3.0)과 SEC-97 (라운드 3-D 종반)
+
+  BLOCKER 3건(SEC-90/91/92)을 닫은 뒤 실효성 축만 다시 돌렸다. 닫혔다는 5건은 전부 유지로
+  확인됐고, **그 재측정이 새 계열을 찾았다** — 「닫으면 다음이 보인다」(Iron Rule 4) 세 번째.
+
+  [SEC-97 고치기 전]
+    sh -c "cp /tmp/x src/app.ts"        ALLOW   ← 가장 기본 래퍼인데 안쪽을 안 봤다
+    sh -c "tee .harness/events.jsonl"   ALLOW
+    sh -c "cp /tmp/x .harness/config.yaml" ALLOW
+    git checkout HEAD~1 -- .harness     ALLOW   ← 「되돌리기」가 곧 덮어쓰기다
+    git restore src/app.ts              ALLOW
+    sh a.sh (안에서 sh b.sh)             ALLOW   ← 깊이 2 로 P0→P7 강제 성립
+    ※ bash -c "echo x > src/app.ts" 는 DENY 였다 — 리다이렉트는 원문을 훑기 때문.
+       그래서 「래퍼를 씌우면 열린다」가 명령 계열에서만 조용히 성립했다(SEC-90 과 같은 모양).
+
+  [고친 뒤]  우회 15/15 DENY · 과차단 0/14
+    처방: xargs·find 와 같다 — 감싸인 것을 꺼내 같은 스캐너로 다시 판정.
+    스크립트는 깊이 3까지(순환 seen · 64KB 상한), npm run 은 package.json 정의를 읽는다.
+    유지: bash -c "npm test" · git status/add/commit · git checkout -- docs · npm run test
+
+  [남긴 한계 — README 4개 언어에 적었다]
+    make <target> 은 Makefile 문법 해석이 범위 밖이라 열려 있다.
+    스크립트 깊이 4 이상도 따라가지 않는다. **닫지 못한 것을 닫았다고 쓰지 않는다.**
+
+  854 → 859 tests green · tsc 0

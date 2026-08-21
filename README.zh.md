@@ -209,6 +209,7 @@ npm install          # prepare hook builds core/dist via tsup
 - **没有 P7–P9（构建轨道）技能** —— 智能体有，阶段手册没有。
 - 关卡会放行填充文档 —— 内容**质量**的判定超出确定性本地核心的范围，人工审批才是防线。
 - 人工手改 `.harness/events.jsonl` **不在威胁模型内** —— 钩子拦的是智能体，不是项目主人。
+- 钩子只看 **它能解析的部分** —— `sh -c`、最多 3 层的脚本、`npm run` 脚本。**不解析 `make <target>`**（解析 Makefile 超出范围），也不追踪 4 层以上的脚本链。
 
 ---
 

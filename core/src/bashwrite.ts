@@ -259,11 +259,58 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         // `git apply`·`git am` 은 **패치 파일 안**에 대상이 있어 정적으로 못 뽑는다.
         // 경로가 아니라 「작업트리를 패치한다」는 사실을 올려 호출측이 페이즈로 판정하게 한다.
         if (args.some(a => a === 'apply' || a === 'am')) { patchesWorkingTree = true; mutating = true; }
+        // [SEC-97] **복원 계열도 작업트리에 쓴다.** `git checkout -- src`·`git restore src/app.ts`·
+        // `git checkout HEAD~1 -- .harness`·`git stash pop` 은 파일을 되돌려 놓는 쓰기다 —
+        // 「되돌리기」라는 이름 때문에 쓰기로 안 보이지만, 결과는 덮어쓰기와 같다.
+        // pathspec(`--` 뒤)이 있으면 그것이 대상이고, 없으면 어디에 쓸지 정적으로 모른다
+        // → `git apply` 와 같은 처리(경로가 아니라 «작업트리를 건드린다»는 사실을 올린다).
+        const RESTORE = ['checkout', 'restore', 'stash', 'reset', 'revert'];
+        const verb = operands.find(a => RESTORE.includes(a));
+        if (verb !== undefined) {
+          const dashdash = args.indexOf('--');
+          if (dashdash >= 0 && dashdash + 1 < args.length) {
+            targets.push(...args.slice(dashdash + 1).filter(a => !isFlag(a)));
+            mutating = true;
+          } else if (verb === 'restore') {
+            // `git restore <paths>` 는 `--` 없이도 경로를 받는다.
+            targets.push(...operands.filter(a => a !== 'restore'));
+            mutating = true;
+          } else if (verb !== 'stash' || operands.includes('pop') || operands.includes('apply')) {
+            patchesWorkingTree = true; mutating = true;
+          }
+        }
         // `git clone <url> <dir>` 은 저장소를 통째로 그 자리에 푼다. URL 은 대상이 아니다.
         const ci = operands.indexOf('clone');
         if (ci >= 0) {
           const rest = operands.slice(ci + 1).filter(a => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes('@'));
           if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+        }
+        break;
+      }
+      case 'sh':
+      case 'bash':
+      case 'zsh':
+      case 'dash':
+      case 'ksh':
+      case 'eval': {
+        // [SEC-97] `sh -c "cp /tmp/x src/app.ts"` — **가장 기본 래퍼**인데 안쪽을 안 봤다.
+        // 리다이렉트 형태(`bash -c "echo x > src/app.ts"`)만 우연히 막혔다: 리다이렉트는 원문
+        // 전체를 훑기 때문이다. 그래서 「래퍼를 씌우면 열린다」가 명령 계열에서만 조용히 성립했다
+        // (SEC-90 과 정확히 같은 모양의 사고다).
+        // xargs·find 와 같은 처방: 감싸인 문자열을 꺼내 **같은 스캐너로 다시 판정**한다.
+        const inner: string[] = [];
+        if (name === 'eval') inner.push(...args.filter(a => !isFlag(a)));
+        else {
+          for (let i = 0; i < args.length; i++) {
+            // `-c`·`-lc`·`-xc` 처럼 c 가 섞인 플래그 다음이 명령 문자열이다.
+            if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
+          }
+        }
+        for (const chunk of inner) {
+          const sub = scanBashWrites(chunk);
+          targets.push(...sub.targets);
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
         }
         break;
       }

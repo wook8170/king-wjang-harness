@@ -367,3 +367,61 @@ describe('SEC-92: 실행되는 스크립트 안도 같은 규칙으로 본다', 
     expect(deniedBash(root, `sh ${path.join(outside, 'x.sh')}`)).toBe(false);
   });
 });
+
+/**
+ * [SEC-97] 실효성 재측정이 찾은 **래퍼 계열 세 갈래.** 공통 뿌리는 SEC-90 과 같다 —
+ * 리다이렉트 형태만 우연히 막혀서 「래퍼를 씌우면 열린다」가 명령 계열에서만 조용히 성립했다.
+ *  - `sh -c "…"` : 가장 기본 래퍼인데 안쪽을 안 봤다
+ *  - `git checkout|restore|stash pop` : 「되돌리기」라 쓰기로 안 보이지만 결과는 덮어쓰기다
+ *  - 스크립트 깊이 2 : `a.sh` → `b.sh` 로 잠금이 통째로 풀렸다(P0 → P7 실증)
+ */
+describe('SEC-97: 래퍼 안쪽도 같은 규칙으로 본다', () => {
+  const write = (root: string, rel: string, body: string): void => {
+    const p = path.join(root, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, body);
+  };
+
+  it('sh -c · eval 안쪽의 쓰기를 잡는다', () => {
+    const root = setup('P2');
+    const allowed = ['sh -c "cp /tmp/x src/app.ts"', 'bash -c "echo x > src/app.ts"',
+      'sh -c "tee .harness/events.jsonl"', 'sh -c "cp /tmp/x .harness/config.yaml"',
+      "zsh -c \"sed -i '' s/a/b/ src/app.ts\"", "sh -c 'mv /tmp/x src'",
+      'eval "cp /tmp/x src/app.ts"', 'sh -lc "cp /tmp/x src/app.ts"']
+      .filter(c => !deniedBash(root, c));
+    expect(allowed).toEqual([]);
+  });
+
+  it('git 복원 계열은 작업트리 쓰기다', () => {
+    const root = setup('P2');
+    const allowed = ['git checkout HEAD~1 -- .harness', 'git restore src/app.ts',
+      'git checkout -- src', 'git stash pop'].filter(c => !deniedBash(root, c));
+    expect(allowed).toEqual([]);
+  });
+
+  it('스크립트가 스크립트를 불러도 따라간다 (깊이 3까지)', () => {
+    const root = setup('P2');
+    write(root, 'b.sh', '#!/bin/sh\nexport HARNESS_ALLOW_FORCE=1\nharness phase set P7 --force\n');
+    write(root, 'a.sh', '#!/bin/sh\nsh b.sh\n');
+    write(root, 'c.sh', '#!/bin/sh\nsh a.sh\n');
+    for (const c of ['sh b.sh', 'sh a.sh', 'sh c.sh']) expect(deniedBash(root, c), c).toBe(true);
+  });
+
+  it('npm run 은 package.json 이 정의한 명령을 판정한다', () => {
+    const root = setup('P2');
+    write(root, 'package.json', JSON.stringify({ name: 'x', scripts: { evil: 'cp /tmp/x src/app.ts', test: 'vitest run' } }));
+    expect(deniedBash(root, 'npm run evil')).toBe(true);
+    expect(deniedBash(root, 'npm run test')).toBe(false);   // 정상 스크립트는 그대로
+  });
+
+  it('과차단 금지 — 래퍼 안이 정상이면 통과한다', () => {
+    const root = setup('P2');
+    write(root, 'package.json', JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }));
+    for (const c of ['bash -c "npm test"', 'sh -c "ls src"', 'sh -c "grep -r x src"',
+      'sh -c "echo hi > docs/note.md"', 'sh -c "cat package.json"',
+      'git status', 'git diff', 'git log --oneline', 'git add -A', 'git commit -m x',
+      'git checkout -- docs', 'npm test']) {
+      expect(deniedBash(root, c), c).toBe(false);
+    }
+  });
+});
