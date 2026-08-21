@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -47,8 +47,21 @@ const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
  * `# harness 로 정산` 같은 주석이나 `git commit -m "harness"` 의 인자를 자기호출로
  * 오판하면, 진짜 작업 턴이 활동 집계에서 빠져 stop 가드가 조용히 뚫린다.
  */
-const HARNESS_CMD_RE =
-  /(^|[;&|\n`]\s*|\$\(\s*|\(\s*)((?:env|sudo|nohup|time|command|exec|nice|xargs|doas)\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(\S*\/)?harness(\s|$)/;
+const HARNESS_CMD_RE = new RegExp(
+  `(^|[;&|\n\`]\\s*|\\$\\(\\s*|\\(\\s*)`
+  // [LOGIC-94] 접두 명령 목록은 **`bashwrite.ts` 한 곳이 정본**이다. 예전에는 여기에
+  // 9종을 인라인으로 박아 두어 두 목록이 이미 갈려 있었다 — `timeout 30 harness wave update "x"`·
+  // `stdbuf`·`setsid`·`ionice`·`unbuffer` 가 자기호출로 인식되지 않아, 정산한 턴이 활동으로
+  // 집계되고 stop 가드가 **정산 직후에도 다시 차단**했다(로그 → 활동 → 또 로그 요구 루프).
+  // 목록을 두 벌 두면 한쪽을 넓힐 때 다른 쪽이 조용히 뒤처진다.
+  // 접두 명령은 자기 플래그·값을 데리고 온다(`timeout 30`·`stdbuf -oL`·`nice -n 10`·`sudo -u me`) —
+  // 그것까지 건너뛰지 않으면 목록만 맞춰 놓고도 인식이 계속 실패한다. 다만 **맨 단어는
+  // 건너뛰지 않는다** — 한 번 그렇게 넓혔더니 `time make harness`·`sudo apt-get install harness`·
+  // `nice cargo build harness` 가 전부 자기호출로 잡혔다(실측). 이 패턴은 **좁게 틀려야 안전**하다:
+  // 넓히면 진짜 작업 턴이 활동 집계에서 빠져 **정산 강제가 조용히 풀린다**(SEC-78 의 교훈).
+  + `((?:${[...PREFIX_COMMANDS, 'xargs'].join('|')})(?:\\s+(?:-\\S+(?:\\s+[A-Za-z_][\\w.-]*)?|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*`
+  + `((?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*)(\\S*\\/)?harness(\\s|$)`,
+);
 
 /**
  * `phase set --force` 자기해제 **탐지 전용** 패턴. `HARNESS_CMD_RE` 와 **일부러 분리**했다.
@@ -959,16 +972,11 @@ function preTool(
     }
   }
 
-  if (!inDesign && isWrite) {
-    if ((rel.startsWith('.harness/design/') || realRel.startsWith('.harness/design/')) && !state.backtrack) {
-      return deny(L(
-        'Design documents cannot be edited directly in the build/ship track. If the design must '
-        + 'change, go back officially: `harness backtrack <phase> --reason "<why>"`.',
-        '구축·출하 트랙에서 설계 문서를 직접 수정할 수 없다. '
-        + '설계 변경이 필요하면 `harness backtrack <페이즈> --reason "<사유>"` 로 공식 역행하라.',
-      ), degraded, lang);
-    }
-  }
+  // [LOGIC-95] 여기 있던 「구축·출하 트랙 설계 문서 보호」 두 번째 벌을 지웠다.
+  // 같은 조건(비설계 트랙 ∧ !backtrack ∧ `.harness/design/` 접두)을 `judgeWritePath` 가 이미
+  // 보고 있고 그쪽이 항상 먼저 반환해서 **도달 불가능한 코드**였다 — 문구만 서로 달랐다.
+  // 죽은 두 번째 벌은 「고쳤는데 안 고쳐지는」 함정이다: 여기를 고친 사람은 동작이 안 바뀐 이유를
+  // 못 찾는다. 규칙은 `judgeWritePath` 한 곳에 둔다.
   return null;
 }
 

@@ -124,6 +124,15 @@ export function createWave(
   opts: { milestone: string; design_refs: string[]; acceptance: string[]; goal: string },
 ): WaveMeta {
   const lang = langFor(root);
+  // [API-92] 목표 필수도 **여기**에 산다 — CLI 만 막고 MCP 는 `goal ?? UNSPECIFIED` 로
+  // 빈 껍데기 웨이브를 만들었다(독립 감정이 실측). 목표 없는 지시서는 다음 세션이
+  // 이어받을 수 없으므로 [API-29] 가 CLI 에서 막은 것인데, 표면 하나가 그대로 열려 있었다.
+  if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
+    throw new Error(tr(root, {
+      en: 'A wave needs a goal — an instruction sheet without one cannot be picked up by the next session',
+      ko: '웨이브 목표가 필요하다 — 목표 없는 지시서는 다음 세션이 이어받을 수 없다',
+    }));
+  }
   const id = nextWaveId(root);
   // 디스크·저널 최댓값을 모두 반영하므로 정상 경로에서는 도달 불가능한 분기다.
   // 두 프로세스가 같은 순간에 같은 번호를 발급받은 TOCTOU 상황의 안전망 —

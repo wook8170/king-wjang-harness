@@ -29,6 +29,26 @@ export function getNode(root: string, id: string): LedgerNode | undefined {
 
 export function upsertNode(root: string, node: LedgerNode): void {
   const nodes = loadLedger(root);
+  // [LOGIC-93] 부모 검증은 **여기**에 산다 — CLI 에만 두었더니 MCP 표면으로 댕글링 부모가
+  // 그대로 들어왔다(독립 감정이 실측). SEC-50 이 정확히 같은 사고였다: Write 만 막고 Bash 는
+  // 비어 있었다. **규칙을 도메인에 두면 표면이 몇 개든 함께 상속한다.**
+  const parent = node.parent;
+  if (parent !== undefined && parent !== '') {
+    if (parent === node.id) {
+      throw new Error(tr(root, {
+        en: `A node cannot be its own parent: ${node.id}`,
+        ko: `자기 자신을 부모로 둘 수 없다: ${node.id}`,
+      }));
+    }
+    if (!nodes.some(n => n.id === parent)) {
+      throw new Error(tr(root, {
+        en: `Parent ${parent} is not in the design ledger — register it first `
+          + `(node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
+        ko: `부모 ${parent} 가 설계 원장에 없다 — 먼저 등록하라 `
+          + `(node upsert --id ${parent} --title "<제목>"). 끊긴 사슬은 RTM 의 뼈대를 깬다.`,
+      }));
+    }
+  }
   const i = nodes.findIndex(n => n.id === node.id);
   if (i >= 0) nodes[i] = node; else nodes.push(node);
   saveLedger(root, nodes);

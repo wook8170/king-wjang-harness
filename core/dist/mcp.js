@@ -8199,6 +8199,12 @@ function nextWaveId(root) {
 }
 function createWave(root, opts) {
   const lang = langFor(root);
+  if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
+    throw new Error(tr(root, {
+      en: "A wave needs a goal \u2014 an instruction sheet without one cannot be picked up by the next session",
+      ko: "\uC6E8\uC774\uBE0C \uBAA9\uD45C\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 \uBAA9\uD45C \uC5C6\uB294 \uC9C0\uC2DC\uC11C\uB294 \uB2E4\uC74C \uC138\uC158\uC774 \uC774\uC5B4\uBC1B\uC744 \uC218 \uC5C6\uB2E4"
+    }));
+  }
   const id = nextWaveId(root);
   if (fs8.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
@@ -8324,6 +8330,21 @@ function getNode(root, id) {
 }
 function upsertNode(root, node) {
   const nodes = loadLedger(root);
+  const parent = node.parent;
+  if (parent !== void 0 && parent !== "") {
+    if (parent === node.id) {
+      throw new Error(tr(root, {
+        en: `A node cannot be its own parent: ${node.id}`,
+        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
+      }));
+    }
+    if (!nodes.some((n) => n.id === parent)) {
+      throw new Error(tr(root, {
+        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
+        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
+      }));
+    }
+  }
   const i = nodes.findIndex((n) => n.id === node.id);
   if (i >= 0) nodes[i] = node;
   else nodes.push(node);

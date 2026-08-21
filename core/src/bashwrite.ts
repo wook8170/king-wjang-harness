@@ -67,7 +67,7 @@ const looksLikePath = (t: string): boolean =>
  * 값을 받는 플래그를 함께 건너뛰는 이유는 `xargs` 와 같다 — `nice -n 10 cp a b` 에서 `10` 을
  * 명령으로 오인하면 엉뚱한 것을 판정한다. `timeout 5 cp a b` 처럼 **숫자 인자**를 받는 것도 있다.
  */
-const PREFIX_COMMANDS = new Set([
+export const PREFIX_COMMANDS = new Set([
   'sudo', 'doas', 'env', 'nohup', 'time', 'command', 'exec', 'nice', 'ionice',
   'stdbuf', 'setsid', 'timeout', 'unbuffer', 'script', 'proxychains', 'chroot',
 ]);

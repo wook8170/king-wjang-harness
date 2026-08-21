@@ -650,3 +650,31 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
           **루트 밖 스크립트**(/etc/profile) · 없는 파일
 
   경계: 루트 안 · 64KB 상한 · 깊이 1 · 읽기 실패 무시
+
+## §22 표면 비대칭 3건 + 죽은 중복 1건 (라운드 3-D, 엔지니어링 축 발견)
+
+  [LOGIC-93 · API-92 — MCP 표면에 도메인 검증이 없었다]
+    전: callTool(root,"harness_node_upsert",{id:"X-1",title:"t",parent:"NOPE-9"}) → ok:true
+        ledger.yaml 에 `parent: NOPE-9` 가 실제로 기록됨 (CLI 는 exit 1 로 거부)
+        callTool(root,"harness_wave_create",{}) → ok:true, wave-001 생성 (CLI 는 거부)
+    후: 검증을 도메인(upsertNode·createWave)으로 내려 두 표면이 상속
+        MCP·CLI 같은 입력 → 같은 판정 · 있는 부모/목표는 양쪽 통과(과차단 0)
+
+  [LOGIC-94 — 접두 명령 목록이 두 벌, 이미 갈려 있었다]
+    전: timeout 30 harness wave update "x" → 자기호출 인식 실패 → stop 가드가 정산 직후 재차단
+        (stdbuf · setsid · ionice · unbuffer 도 동일)
+    후: 목록을 bashwrite.ts 한 곳으로, 정규식을 거기서 생성. 접두 플래그·값도 건너뜀
+        자기호출 인식 15/15 · 작업 턴 오판 0/12
+    ※ 넓히다 오판을 만들었다가 되돌린 기록: 맨 단어까지 건너뛰게 했더니
+       `time make harness` · `sudo apt-get install harness` 가 자기호출로 잡혔다.
+       이 패턴은 **좁게 틀려야 안전**하다 — 넓히면 정산 강제가 조용히 풀린다(SEC-78).
+
+  [LOGIC-95 — 죽은 중복]  설계 문서 보호 두 번째 벌이 도달 불가였다(문구만 달랐다).
+    제거 후에도 P8 에서 Write·Edit·MultiEdit·Bash 4표면 전건 DENY — 보호 불변.
+
+  [재현 안 된 것 — 정직 고지]
+    감정자가 D4 로 「대소문자·공백 우회」를 지적했으나 실측은 6종 전건 DENY 였다
+    (VERCEL DEPLOY · vercel  deploy · npm  publish 포함). 프로파일 층이 메우고 있다 —
+    로컬 프로파일이 deploy_commands 를 재정의할 때만 잠재 위험이므로 결함으로 올리지 않았다.
+
+  837 → 847 tests green · tsc 0

@@ -7841,6 +7841,12 @@ function nextWaveId(root) {
 }
 function createWave(root, opts) {
   const lang = langFor(root);
+  if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
+    throw new Error(tr(root, {
+      en: "A wave needs a goal \u2014 an instruction sheet without one cannot be picked up by the next session",
+      ko: "\uC6E8\uC774\uBE0C \uBAA9\uD45C\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 \uBAA9\uD45C \uC5C6\uB294 \uC9C0\uC2DC\uC11C\uB294 \uB2E4\uC74C \uC138\uC158\uC774 \uC774\uC5B4\uBC1B\uC744 \uC218 \uC5C6\uB2E4"
+    }));
+  }
   const id = nextWaveId(root);
   if (fs5.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
@@ -7966,6 +7972,21 @@ function getNode(root, id) {
 }
 function upsertNode(root, node) {
   const nodes = loadLedger(root);
+  const parent = node.parent;
+  if (parent !== void 0 && parent !== "") {
+    if (parent === node.id) {
+      throw new Error(tr(root, {
+        en: `A node cannot be its own parent: ${node.id}`,
+        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
+      }));
+    }
+    if (!nodes.some((n) => n.id === parent)) {
+      throw new Error(tr(root, {
+        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
+        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
+      }));
+    }
+  }
   const i = nodes.findIndex((n) => n.id === node.id);
   if (i >= 0) nodes[i] = node;
   else nodes.push(node);
@@ -9625,7 +9646,10 @@ function commandFor(profile, key) {
 
 // core/src/hook.ts
 var WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
-var HARNESS_CMD_RE = /(^|[;&|\n`]\s*|\$\(\s*|\(\s*)((?:env|sudo|nohup|time|command|exec|nice|xargs|doas)\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(\S*\/)?harness(\s|$)/;
+var HARNESS_CMD_RE = new RegExp(
+  `(^|[;&|
+\`]\\s*|\\$\\(\\s*|\\(\\s*)((?:${[...PREFIX_COMMANDS, "xargs"].join("|")})(?:\\s+(?:-\\S+(?:\\s+[A-Za-z_][\\w.-]*)?|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*)(\\S*\\/)?harness(\\s|$)`
+);
 var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 var STATE_FILES = [".harness/state.json", ".harness/events.jsonl", ".harness/design/ledger.yaml"];
 var CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
@@ -10107,14 +10131,6 @@ function preTool(root, state, config, input, degraded) {
           `raw \uAC12 \uB9AC\uD130\uB7F4\uC740 \uAE30\uB2A5 \uCF54\uB4DC\uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 ${shown}${hits.length > 3 ? ` \uC678 ${hits.length - 3}\uAC74` : ""}. \uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC744 \uCC38\uC870\uD558\uB77C(text.primary \uB294 \uB418\uACE0 blue.500 \uC740 \uC548 \uB41C\uB2E4). \uD314\uB808\uD2B8\u2192\uC2DC\uB9E8\uD2F1 \uB9E4\uD551\uC740 \uD1A0\uD070 \uD30C\uC77C \uB0B4\uBD80 \uC0AC\uC815\uC774\uB2E4.`
         ), degraded, lang);
       }
-    }
-  }
-  if (!inDesign && isWrite) {
-    if ((rel.startsWith(".harness/design/") || realRel.startsWith(".harness/design/")) && !state.backtrack) {
-      return deny(L(
-        'Design documents cannot be edited directly in the build/ship track. If the design must change, go back officially: `harness backtrack <phase> --reason "<why>"`.',
-        '\uAD6C\uCD95\xB7\uCD9C\uD558 \uD2B8\uB799\uC5D0\uC11C \uC124\uACC4 \uBB38\uC11C\uB97C \uC9C1\uC811 \uC218\uC815\uD560 \uC218 \uC5C6\uB2E4. \uC124\uACC4 \uBCC0\uACBD\uC774 \uD544\uC694\uD558\uBA74 `harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>"` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD558\uB77C.'
-      ), degraded, lang);
     }
   }
   return null;
