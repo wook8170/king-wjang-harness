@@ -1,8 +1,14 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 (라운드 3 완료) · **판정** 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 0 (+ deferred 1)
+**갱신** 2026-08-21 (라운드 3 — **판정 철회**) · **판정** 출하 불가 · **open BLOCKER** 2 · **open 전체** 6 · **fixed(재측정 대기)** 0 (+ deferred 1)
 
-라운드 2까지의 「조건부 출하 가능」에서 승격했다 — 명시했던 조건(PERF-26 절대 p95 재측정)이 충족돼 **남은 출하 조건이 0건**이다. CI·리모트·main 병합은 출하 조건이 아니라 **출시 결정**이라 판정 밖이다.
+🔴 **라운드 3 중반에 낸 「출하 가능」 판정을 철회한다.** 42 에이전트 독립 적대 감사가
+**BLOCKER 2건**을 찾았고 전건 재현했다: 판정 정책 파일이 피판정자 쓰기 영역 안에 있어
+**한 줄로 자기 무장해제**가 되고([SEC-69]), 구축·출하 트랙 P7~P12 에 **강제가 아예 없다**([SEC-70]).
+
+철회 사유는 새 결함이 아니라 **측정 범위**다 — 라운드 3의 「우회 60/60 deny · 과차단 0」은
+*막힐 거라 예상한 목록*만 담았고, 정책 파일 자체·설계 트랙 밖 페이즈·과차단 여부가 빠져 있었다.
+라운드 2 과다 주장과 같은 뿌리다([OPS-74]).
 
 라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
 라운드 2(생성 문서 i18n + CLI 플래그 정합성) — 상세는 `fixes-round2.md`, 닫은 증거는 `evidence/round2-verify.log`.
@@ -64,3 +70,9 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | SEC-66 | HIGH | 06 | 변형 명령 안전망이 **비대칭** — `python3 -c "open('x','w')"` 류가 `.harness/` 코어 파일에는 막히는데 **설계 트랙 소스에는 통과**했다. 방어가 대칭이 아니면 뚫리는 쪽이 정본이 된다 | verified | measured | `core/src/hook.ts:487` | `fixes-round3.md` · `evidence/round3-verify.log` §7 — `pathLikeMentions` 안전망을 소스에도 적용, 과차단 0(조회·루트밖 쓰기 전건 allow) |
 | SEC-67 | HIGH | 06 | **받아쓰기·간접 실행이 판정 자체를 비껴간다** — `curl -o src/app.ts <url>` (참조 구현을 소스로 받아오기)는 리다이렉트도 알려진 쓰기 명령도 아니라 대상 추출이 없었다. `wget -O` · `xargs` 로 감싼 cp · `prettier --write` · `eslint --fix` 도 같은 이유로 통과 | verified | measured | `core/src/bashwrite.ts:154` | `fixes-round3.md` · `evidence/round3-verify.log` §8 — 수정 전 19종 중 9건 통과 → 후 전건 기대대로(과차단 0: 조회·복원·루트밖 6종 allow 유지), 회귀 테스트 7건 |
 | SEC-68 | HIGH | 06 | **위치가 경로임을 말해 주는 자리에서 경로 판별을 요구해 생긴 구멍** — `cp -r /tmp/x src` 의 `src` 는 슬래시·확장자가 없어 대상에서 빠졌다(rubric 이 명시적으로 덮는다고 한 cp/mv 규칙의 구멍). 디렉토리 이름 하나로 소스 트리를 통째로 덮어쓸 수 있었다. `git clone <url> src` · `rsync` · `sponge` · 배치 편집기 · `tar -C` · `unzip -d` · `patch` · `git apply` 도 같은 라운드에서 닫음 | verified | measured | `core/src/bashwrite.ts:141` | `fixes-round3.md` · `evidence/round3-verify.log` §9 — 우회 10계열 **60/60 deny**, 의도적 허용 **18/18 allow**(과차단 0), 회귀 테스트 23건 |
+| SEC-69 | BLOCKER | 06 | 🔴 **자기 무장해제** — 판정 정책 파일 `.harness/config.yaml` 이 훅에서 allow 다(코어 보호는 state/events/ledger 3종뿐). 설계 트랙은 그 파일의 `design_allowed_prefixes` **allow-list** 로 판정하므로 빈 문자열 접두사 한 줄이면 모든 경로에 매치돼 **강제가 통째로 꺼진다**. `doctor` 도 exit 0 · issues 0 이라 사후 탐지 불가 | open | measured | `core/src/hook.ts:178` | — 재현: Write src/app.ts deny → config 심은 뒤 allow(셸 리다이렉트·curl 도 allow). **판정기의 정책이 피판정자 쓰기 영역 안에 있는 신뢰 경계 설계 오류** |
+| SEC-70 | BLOCKER | 06 | 🔴 **구축·출하 트랙(P7~P12) 강제가 0** — 스펙 §4-2 매트릭스 2·3행 미구현. P12 에서 `vercel deploy` · `docker push` · `kubectl apply` · `npm publish` · `git push --force` · `Write src/new.ts` **전건 allow**. 「Design→Build→Ship 물리 강제」가 실측상 설계 트랙 경로 화이트리스트 하나로 축소된다 | open | measured | `core/src/hook.ts:190` | — 재현: `phase set P12 --force` 후 6종 전건 allow |
+| UX-71 | HIGH | 03 | **과차단이 광범위하고 사유 문구가 사실과 다르다** — 설계 트랙에서 `notes.txt` · `.gitignore` · `.env.example` · `assets/logo.svg` · `package.json` · `test/a.test.ts` 가 전부 deny 되고 사유는 "Source code cannot be written". 허용은 `.harness/` · `docs/` · 루트 `*.md` 뿐이라 **소스가 아닌 파일도 막힌다** — 사용자가 하네스를 끄게 만드는 방향 | open | measured | `core/src/hook.ts:186` | — 재현: 8종 중 6종 deny |
+| I18N-72 | HIGH | 04 | **i18n 이 절반이었다** — CLI·코어만 영문화했고 실제 배포되어 모델에게 지시를 내리는 계층(skills 11 · agents 5 · marketplace.json · plugin.json)에 **한글 15,569자**가 남아 있다. 비한국어 사용자에게 워크플로 지침 계층이 통째로 불가용 | open | measured | `skills/king-wjang-harness/SKILL.md:1` | — 재현: 정규식 문자 수 집계 |
+| FEAT-73 | MED | 01 | SessionStart 첫 지시가 **패키지에 없는 명령**을 가리킨다 — `remote_control` 기본 on 이라 매 세션 `/remote-control` 실행을 지시하는데 `commands/` 디렉토리 자체가 없다 | open | measured | `core/src/hook.ts:215` | — 재현: `os.path.isdir('commands')` False |
+| OPS-74 | HIGH | 11 | **자기 채점의 구조적 한계가 실증됐다** — 라운드 3의 「우회 60/60 deny · 과차단 0」 보고는 *내가 막힐 거라 예상한 목록*만 담았다. 정책 파일 쓰기 · 설계 트랙 밖 페이즈 · 「막지 말아야 할 것을 막는지」가 목록에 없었다. 42 에이전트 독립 적대 감사가 BLOCKER 2건을 찾았다 | open | measured | `docs/release-readiness/2026-08-21/fixes-round3.md:1` | — 라운드 2 과다 주장과 같은 뿌리(부분 측정을 전수라 부름). 독립 감사를 절차에 넣어야 한다 |
