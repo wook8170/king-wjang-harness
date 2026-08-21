@@ -9455,6 +9455,48 @@ function inspectProfile(root, name) {
 function loadProfile(root, name) {
   return inspectProfile(root, name).profile;
 }
+function globToRegExp(pattern) {
+  let re = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        i++;
+        if (pattern[i + 1] === "/") {
+          i++;
+          re += "(?:[^/]*/)*";
+        } else {
+          re += ".*";
+        }
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else {
+      re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+function normRel(p) {
+  if (typeof p !== "string") return "";
+  let s = p.replace(/\\/g, "/").trim().replace(/\/{2,}/g, "/");
+  while (s.startsWith("./")) s = s.slice(2);
+  return s.replace(/^\/+/, "");
+}
+function isSourcePath(profile, relPath2) {
+  try {
+    const rel = normRel(relPath2);
+    if (!rel) return false;
+    return (profile.sourceGlobs ?? []).some((g) => {
+      const pat = normRel(g);
+      return pat ? globToRegExp(pat).test(rel) : false;
+    });
+  } catch {
+    return false;
+  }
+}
 var normCmd = (s) => typeof s === "string" ? s.replace(/\s+/g, " ").trim().toLowerCase() : "";
 function isDeployCommand(profile, command) {
   try {
@@ -9548,6 +9590,78 @@ ${more}`;
 function allowList(config) {
   return [".harness/", ...config.design_allowed_prefixes.filter((p) => p !== ".harness/")];
 }
+var SOURCE_EXTS = /* @__PURE__ */ new Set([
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "py",
+  "go",
+  "rs",
+  "rb",
+  "php",
+  "java",
+  "kt",
+  "kts",
+  "scala",
+  "groovy",
+  "c",
+  "h",
+  "cc",
+  "cpp",
+  "cxx",
+  "hpp",
+  "hh",
+  "m",
+  "mm",
+  "cs",
+  "swift",
+  "ex",
+  "exs",
+  "erl",
+  "clj",
+  "cljs",
+  "dart",
+  "vue",
+  "svelte",
+  "lua",
+  "pl",
+  "sql",
+  "zig",
+  "hs"
+]);
+var TEST_FILE_RE = /(^|[.\-_])(test|spec)s?\.[^.]+$|^(test|spec)_[^/]+$|[A-Za-z0-9](Test|Tests|Spec)\.[^.]+$|^conftest\.py$/i;
+function looksLikeTestPath(rel) {
+  return TEST_FILE_RE.test(rel.split("/").pop() ?? "");
+}
+var CONFIG_FILE_RE = /(^|[.\-_])(config|conf)\.[^.]+$|^\.?[a-z0-9-]*rc\.[cm]?[jt]s$|^(gulpfile|gruntfile|knexfile)\.[^.]+$/i;
+function looksLikeConfigPath(rel) {
+  return CONFIG_FILE_RE.test(rel.split("/").pop() ?? "");
+}
+function implementationReason(profile, rel) {
+  if (isSourcePath(profile, rel)) {
+    const globs = (profile.sourceGlobs ?? []).join(", ");
+    return {
+      en: `it matches the source paths this project's profile declares (profile ${profile.name}, source_globs: ${globs})`,
+      ko: `\uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uAC78\uB9B0\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${globs})`
+    };
+  }
+  if (looksLikeTestPath(rel) || looksLikeConfigPath(rel)) return null;
+  const base = rel.split("/").pop() ?? "";
+  const dot = base.lastIndexOf(".");
+  const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : "";
+  if (ext && SOURCE_EXTS.has(ext)) {
+    return {
+      en: `a .${ext} file is source code`,
+      ko: `.${ext} \uD30C\uC77C\uC740 \uC18C\uC2A4 \uCF54\uB4DC\uB2E4`
+    };
+  }
+  return null;
+}
 function sessionStart(root, state, config, degraded, input) {
   if (input.source === "startup" || input.source === "clear") clearActivity(root);
   const lang = config.lang;
@@ -9563,8 +9677,8 @@ function sessionStart(root, state, config, degraded, input) {
   if (degraded) lines.push(degradedNote(degraded, lang));
   if (inDesign) {
     lines.push(L(
-      `Design track \u2014 writing source code and deploy-ish commands are blocked (allowed: ${allowList(config).join(", ")}, root *.md).`,
-      `\uD604\uC7AC \uC124\uACC4 \uD2B8\uB799 \u2014 \uC18C\uC2A4 \uCF54\uB4DC \uC4F0\uAE30\xB7\uBC30\uD3EC\uC131 \uBA85\uB839\uC774 \uCC28\uB2E8\uB41C\uB2E4 (\uD5C8\uC6A9: ${allowList(config).join(", ")}, \uB8E8\uD2B8 *.md).`
+      `Design track \u2014 writing implementation code (the profile's source paths, or source-code file extensions) and deploy-ish commands are blocked. Writable: documents, assets, configuration (including \`*.config.js|ts\`, \`.eslintrc.js\`), and test files **named as tests** (\`*.test.*\`, \`*_test.*\`, \`test_*\`, \`conftest.py\`) \u2014 a \`test/\` directory alone is not enough, and the profile's source paths win over all of these. Anything under ${allowList(config).join(", ")} or a root *.md is always writable.`,
+      `\uD604\uC7AC \uC124\uACC4 \uD2B8\uB799 \u2014 \uAD6C\uD604 \uCF54\uB4DC \uC4F0\uAE30(\uD504\uB85C\uD30C\uC77C\uC758 \uC18C\uC2A4 \uACBD\uB85C \uB610\uB294 \uC18C\uC2A4 \uCF54\uB4DC \uD655\uC7A5\uC790)\uC640 \uBC30\uD3EC\uC131 \uBA85\uB839\uC774 \uCC28\uB2E8\uB41C\uB2E4. \uC4F8 \uC218 \uC788\uB294 \uAC83: \uBB38\uC11C\xB7\uC790\uC0B0\xB7\uC124\uC815(\`*.config.js|ts\`\xB7\`.eslintrc.js\` \uD3EC\uD568)\uACFC **\uC774\uB984\uC774 \uD14C\uC2A4\uD2B8\uC778** \uD14C\uC2A4\uD2B8 \uD30C\uC77C(\`*.test.*\`\xB7\`*_test.*\`\xB7\`test_*\`\xB7\`conftest.py\`) \u2014 \`test/\` \uB514\uB809\uD1A0\uB9AC\uC5D0 \uB123\uB294 \uAC83\uB9CC\uC73C\uB85C\uB294 \uBD80\uC871\uD558\uACE0, \uD504\uB85C\uD30C\uC77C\uC758 \uC18C\uC2A4 \uACBD\uB85C\uAC00 \uC774 \uBAA8\uB450\uBCF4\uB2E4 \uC6B0\uC120\uD55C\uB2E4. ${allowList(config).join(", ")} \uC544\uB798\uC640 \uB8E8\uD2B8 *.md \uB294 \uC5B8\uC81C\uB098 \uD5C8\uC6A9\uB41C\uB2E4.`
     ));
   }
   let n = 0;
@@ -9659,7 +9773,7 @@ function realRelPath(root, p) {
 function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path11.sep}`) || path11.isAbsolute(rel);
 }
-function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
+function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
   const raw = rawPath.trim();
@@ -9723,10 +9837,15 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash) {
       `\uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C\uB294 \uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C \uC4F8 \uC218 \uC5C6\uB2E4: ${sanitizeUntrusted(raw)}`
     ), degraded, lang);
   }
+  const profile = getProfile();
+  const hit = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).map((r) => ({ r, why: implementationReason(profile, r) })).find((x) => x.why !== null);
+  if (!hit) return null;
+  const why = hit.why;
+  const via = hit.r !== rel ? ` \u2192 ${sanitizeUntrusted(hit.r)}` : "";
   return deny(
     L(
-      `Source code cannot be written in the design track (${state.phase}) \u2014 no implementation before the P6 design approval. Allowed: ${allowList(config).join(", ")}, root *.md. Finish the design artifacts first.` + (fromBash ? ` (shell write target: ${sanitizeUntrusted(raw)})` : ""),
-      `\uC124\uACC4 \uD2B8\uB799(${state.phase})\uC5D0\uC11C\uB294 \uC18C\uC2A4 \uCF54\uB4DC\uB97C \uC4F8 \uC218 \uC5C6\uB2E4 (P6 \uC124\uACC4 \uC2B9\uC778 \uC804 \uAD6C\uD604 \uAE08\uC9C0). \uD5C8\uC6A9: ${allowList(config).join(", ")}, \uB8E8\uD2B8 *.md. \uC124\uACC4 \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC644\uC131\uD558\uB77C.` + (fromBash ? ` (\uC178 \uC4F0\uAE30 \uB300\uC0C1: ${sanitizeUntrusted(raw)})` : "")
+      `Implementation code cannot be written in the design track (${state.phase}) \u2014 ${sanitizeUntrusted(raw)}${via} is blocked because ${why.en}. No implementation before the P6 design approval. Writable: documents, assets, configuration (\`*.config.js|ts\` included), and files **named** as tests (\`*.test.*\`, \`*_test.*\`, \`test_*\`) \u2014 a \`test/\` directory alone is not enough. Finish the design artifacts first.` + (fromBash ? " (shell write target)" : ""),
+      `\uC124\uACC4 \uD2B8\uB799(${state.phase})\uC5D0\uC11C\uB294 \uAD6C\uD604 \uCF54\uB4DC\uB97C \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 ${sanitizeUntrusted(raw)}${via} \uC740(\uB294) ${why.ko} \uC774\uC720\uB85C \uB9C9\uD78C\uB2E4. P6 \uC124\uACC4 \uC2B9\uC778 \uC804 \uAD6C\uD604 \uAE08\uC9C0\uB2E4. \uC4F8 \uC218 \uC788\uB294 \uAC83: \uBB38\uC11C\xB7\uC790\uC0B0\xB7\uC124\uC815(\`*.config.js|ts\` \uD3EC\uD568)\uACFC **\uC774\uB984\uC774 \uD14C\uC2A4\uD2B8\uC778** \uD30C\uC77C (\`*.test.*\`\xB7\`*_test.*\`\xB7\`test_*\`) \u2014 \`test/\` \uB514\uB809\uD1A0\uB9AC\uC5D0 \uB123\uB294 \uAC83\uB9CC\uC73C\uB85C\uB294 \uBD80\uC871\uD558\uB2E4. \uC124\uACC4 \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC644\uC131\uD558\uB77C.` + (fromBash ? " (\uC178 \uC4F0\uAE30 \uB300\uC0C1)" : "")
     ),
     degraded,
     lang
@@ -9741,6 +9860,8 @@ function preTool(root, state, config, input, degraded) {
   const raw = String(input.tool_input?.file_path ?? "");
   const rel = raw ? relPath(root, raw) : "";
   const realRel = raw ? realRelPath(root, raw) : "";
+  let profileCache = null;
+  const getProfile = () => profileCache ??= loadProfile(root);
   if (isWrite) {
     if (inDesign && !raw.trim()) {
       return deny(L(
@@ -9748,14 +9869,14 @@ function preTool(root, state, config, input, degraded) {
         "\uB3C4\uAD6C \uC785\uB825\uC5D0 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC5C6\uB2E4 \u2014 \uCC28\uB2E8(\uC548\uC804 \uAE30\uBCF8\uAC12)."
       ), degraded, lang);
     }
-    const verdict = judgeWritePath(root, state, config, raw, degraded, false);
+    const verdict = judgeWritePath(root, state, config, raw, degraded, false, getProfile);
     if (verdict) return verdict;
   }
   if (tool === "Bash") {
     const cmd = String(input.tool_input?.command ?? "");
     const scan = scanBashWrites(cmd);
     for (const target of scan.targets) {
-      const verdict = judgeWritePath(root, state, config, target, degraded, true);
+      const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
       if (verdict) return verdict;
     }
     if (scan.patchesWorkingTree && DESIGN_PHASES.includes(state.phase)) {
@@ -9767,7 +9888,7 @@ function preTool(root, state, config, input, degraded) {
     if (scan.mutating) {
       for (const target of pathLikeMentions(cmd)) {
         if (scan.targets.includes(target)) continue;
-        const verdict = judgeWritePath(root, state, config, target, degraded, true);
+        const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
       }
       const named = mentionsPath(cmd, CORE_FILES);
@@ -10215,12 +10336,12 @@ function assertDistinct(root, phase, hash, contentHash, gates) {
     );
   }
 }
-var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel2 = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
-  const want = new Set(paths.map(normRel));
-  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
+  const want = new Set(paths.map(normRel2));
+  const known = loadRegistry(root).docs.filter((d) => want.has(normRel2(d.path)));
   if (known.length === 0) return;
-  if (new Set(known.map((d) => normRel(d.path))).size < want.size) return;
+  if (new Set(known.map((d) => normRel2(d.path))).size < want.size) return;
   if (known.some((d) => d.phase === phase)) return;
   const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
   throw new Error(
