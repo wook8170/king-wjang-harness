@@ -539,6 +539,48 @@ function isOutsideRoot(rel: string): boolean {
  *    디스크 전체가 아니므로, 루트 밖 Bash 대상은 통과시킨다.
  * 코어 파일 보호는 두 표면 모두에서 페이즈와 무관하게 동일하다.
  */
+/**
+ * [SEC-92] **에이전트가 쓴 스크립트를 실행하면 훅이 그 안을 못 본다.**
+ *
+ * 설계 트랙에서 `.sh` 는 정당하게 허용된다(셋업 스크립트는 구현이 아니다 — UX-71). 그래서
+ * 에이전트가 `run.sh` 를 쓰고 `sh run.sh` 로 실행하면, 훅에 보이는 것은 `sh run.sh` 한 줄뿐이라
+ * 그 안의 `export HARNESS_ALLOW_FORCE=1; harness phase set P7 --force` 가 통째로 통과한다.
+ * 실측에서 **P0 → P7 이 실제로 열렸다** — 요구 2(승인 전 구현 금지)를 직접 깬다.
+ *
+ * 훅은 파일시스템을 볼 수 있으므로, **실행되는 스크립트를 읽어 같은 규칙으로 판정한다.**
+ * 경계:
+ *  - 루트 **안**의 파일만 읽는다(루트 밖 시스템 스크립트를 읽어 판정하면 과차단이 폭발한다).
+ *  - 크기를 제한한다(64KB) — 큰 데이터 파일을 통째로 정규식에 태우면 훅 지연이 튄다.
+ *  - 깊이 1까지만 본다. 스크립트가 스크립트를 부르는 사슬을 끝까지 따라가면 순환·비용 문제가
+ *    생기고, **한 겹만 봐도 「쓰고 바로 실행」이라는 실제 경로는 닫힌다.**
+ *  - 읽기 실패는 조용히 무시한다 — 없는 파일을 실행하는 것은 어차피 셸이 실패시킨다.
+ */
+const SCRIPT_RUNNERS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
+const SCRIPT_MAX_BYTES = 64 * 1024;
+
+function invokedScriptBodies(root: string, cmd: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  // 러너 + 파일, 그리고 `./x.sh`·`scripts/x.sh` 처럼 직접 실행하는 형태를 함께 본다.
+  const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cmd)) !== null) {
+    const candidate = (m[1] !== undefined ? m[2] : m[3]) ?? '';
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (m[1] === undefined && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue; // 직접 실행은 셸 스크립트만
+    try {
+      const rel = relPath(root, candidate);
+      if (isOutsideRoot(rel)) continue;
+      const abs = path.resolve(root, candidate);
+      const st = fs.statSync(abs);
+      if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
+      out.push(fs.readFileSync(abs, 'utf8'));
+    } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
+  }
+  return out;
+}
+
 function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
@@ -737,7 +779,10 @@ function preTool(
   }
 
   if (tool === 'Bash') {
-    const cmd = String(input.tool_input?.command ?? '');
+    const rawCmd = String(input.tool_input?.command ?? '');
+    // [SEC-92] 실행되는 스크립트의 본문을 이어 붙여 **같은 규칙 한 벌**로 판정한다.
+    // 사유 문구에는 원문(`rawCmd`)을 쓴다 — 사람이 자기가 친 것을 봐야 한다.
+    const cmd = [rawCmd, ...invokedScriptBodies(root, rawCmd)].join('\n');
 
     // (SEC-49·SEC-50·SEC-51) 셸 쓰기를 Write 와 **같은 판정 함수**로 보낸다.
     // 여기가 비어 있던 것이 출하 검증의 차단 결함 2건이었다: `echo x > src/app.ts` 로 설계

@@ -9881,6 +9881,29 @@ function realRelPath(root, p) {
 function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path11.sep}`) || path11.isAbsolute(rel);
 }
+var SCRIPT_MAX_BYTES = 64 * 1024;
+function invokedScriptBodies(root, cmd) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const candidate = (m[1] !== void 0 ? m[2] : m[3]) ?? "";
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    if (m[1] === void 0 && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue;
+    try {
+      const rel = relPath(root, candidate);
+      if (isOutsideRoot(rel)) continue;
+      const abs = path11.resolve(root, candidate);
+      const st = fs12.statSync(abs);
+      if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
+      out.push(fs12.readFileSync(abs, "utf8"));
+    } catch {
+    }
+  }
+  return out;
+}
 function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
@@ -9986,7 +10009,8 @@ function preTool(root, state, config, input, degraded) {
     if (verdict) return verdict;
   }
   if (tool === "Bash") {
-    const cmd = String(input.tool_input?.command ?? "");
+    const rawCmd = String(input.tool_input?.command ?? "");
+    const cmd = [rawCmd, ...invokedScriptBodies(root, rawCmd)].join("\n");
     const scan = scanBashWrites(cmd);
     for (const target of scan.targets) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);

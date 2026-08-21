@@ -635,3 +635,18 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
              (P8 에서 `mv /tmp/x src` ALLOW, `.harness` 는 계속 DENY)
 
   829 → 834 tests green · tsc 0
+
+## §21 SEC-92 — 에이전트가 쓴 스크립트 실행 (라운드 3-D, 메인)
+
+  [고치기 전 — 끝까지 실행해 확인했다]
+    Write run.sh   → ALLOW  (설계 트랙에서 .sh 는 정당하게 허용된다)
+    sh run.sh      → ALLOW  (훅에는 이 한 줄만 보인다)
+    실행 결과      → "Phase → P7 (--force: gate check skipped)"
+    phase 전 P0 → 후 **P7**   ← 요구 2(승인 전 구현 금지)가 실제로 깨졌다
+
+  [고친 뒤]  래퍼 9/9 DENY  ·  과차단 0/8  ·  비용 p50 63→63ms · p95 66→68ms
+    막은 것: sh · bash · zsh · ./run.sh · source · . (그리고 안의 쓰기·잠금 전부)
+    통과: 정상 스크립트(npm test) · npm run build 스크립트 · cat run.sh ·
+          **루트 밖 스크립트**(/etc/profile) · 없는 파일
+
+  경계: 루트 안 · 64KB 상한 · 깊이 1 · 읽기 실패 무시

@@ -323,3 +323,47 @@ describe('SEC-91: 디렉토리를 대상으로 준 쓰기도 같은 판정을 �
     expect(deniedBash(root, 'cp -r /tmp/x .harness')).toBe(true);
   });
 });
+
+/**
+ * [SEC-92] 에이전트가 **쓴 스크립트를 실행**하면 훅이 그 안을 못 봤다.
+ *
+ * 설계 트랙에서 `.sh` 는 정당하게 허용되므로(셋업 스크립트는 구현이 아니다), `run.sh` 를 쓰고
+ * `sh run.sh` 로 실행하면 훅에는 한 줄만 보였다. 실측에서 **P0 → P7 이 실제로 열렸다**.
+ * 훅은 파일시스템을 볼 수 있으니 실행되는 스크립트를 읽어 **같은 규칙 한 벌**로 판정한다.
+ */
+describe('SEC-92: 실행되는 스크립트 안도 같은 규칙으로 본다', () => {
+  const write = (root: string, rel: string, body: string): void => {
+    const p = path.join(root, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, body);
+  };
+
+  it('잠금·쓰기를 감싼 스크립트 실행은 deny', () => {
+    const root = setup('P2');
+    write(root, 'run.sh', '#!/bin/sh\nexport HARNESS_ALLOW_FORCE=1\nharness phase set P7 --force\n');
+    write(root, 'pol.sh', '#!/bin/sh\nharness doctor --accept-policy\n');
+    write(root, 'wr.sh', '#!/bin/sh\necho x > src/app.ts\n');
+    write(root, 'mv.sh', '#!/bin/sh\nmv /tmp/gen src\n');
+    const allowed = ['sh run.sh', 'bash run.sh', './run.sh', 'source run.sh', '. run.sh',
+      'zsh run.sh', 'sh pol.sh', 'sh wr.sh', 'sh mv.sh'].filter(c => !deniedBash(root, c));
+    expect(allowed).toEqual([]);
+  });
+
+  it('과차단 금지 — 정상 스크립트·루트 밖·없는 파일은 통과한다', () => {
+    const root = setup('P2');
+    write(root, 'ok.sh', '#!/bin/sh\nnpm test\n');
+    write(root, 'docs.sh', '#!/bin/sh\necho "# note" > docs/note.md\n');
+    write(root, 'scripts/build.sh', '#!/bin/sh\nnpm run build\n');
+    for (const c of ['sh ok.sh', 'sh docs.sh', 'sh scripts/build.sh', 'cat run.sh',
+      'sh /etc/profile', 'sh missing.sh', 'npm test']) {
+      expect(deniedBash(root, c), c).toBe(false);
+    }
+  });
+
+  it('루트 밖 스크립트는 읽지 않는다 — 시스템 스크립트를 판정하면 과차단이 폭발한다', () => {
+    const root = setup('P2');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-outside-'));
+    fs.writeFileSync(path.join(outside, 'x.sh'), '#!/bin/sh\nharness phase set P7 --force\n');
+    expect(deniedBash(root, `sh ${path.join(outside, 'x.sh')}`)).toBe(false);
+  });
+});
