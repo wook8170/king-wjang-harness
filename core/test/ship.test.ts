@@ -29,7 +29,13 @@ const writeDoc = (root: string, rel: string, body: string) => {
 
 /** 게이트 하나를 measured 근거로 승인 상태까지 올린다. */
 const approveShipGate = (root: string, phase: 'P10' | 'P11', rel: string) => {
-  writeDoc(root, rel, `${phase} 산출물`);
+  // SEC-75: 게이트는 실질 내용이 있는 산출물만 받고, 같은 산출물로 두 게이트를 열 수 없다 —
+  // 페이즈를 본문에 박아 픽스처가 우연히 같은 해시를 만들지 않게 한다.
+  writeDoc(root, rel, `# ${phase} 산출물\n\n`
+    + `${phase} 트랙의 심사 대상이다. 측정 조건과 결과, 남은 위험, 그리고 이 판정이 무엇을 `
+    + '보장하고 무엇을 보장하지 않는지를 담는다. 재현 절차는 증적 디렉토리의 로그를 그대로 '
+    + '다시 실행하는 것이고, 부하 상태에서 잰 수치는 창 자체가 무효라 채택하지 않는다. '
+    + '판정에 쓰인 임계값과 그 임계를 그렇게 잡은 근거도 함께 남긴다.\n');
   submitGate(root, phase, { paths: [rel], evidence: 'measured' });
   approveGate(root, phase);
 };
@@ -261,7 +267,9 @@ describe('출하 판정 (P12 go/no-go)', () => {
 
   it('출하 게이트 근거가 code 면 NO-GO — measured 를 요구한다', () => {
     const root = shipReadyRoot();
-    writeDoc(root, 'docs/ship.md', 'P12 체크리스트');
+    writeDoc(root, 'docs/ship.md', '# P12 체크리스트\n\n'
+      + '최종 go/no-go 재판정 대상이다. 결함 대장 잔여, 배포 기록, 증적 링크를 한 장에 모은다. '
+      + '판정 어휘는 고정이며, 근거 없는 「고쳤다」는 통과 사유가 되지 못한다.\n');
     submitGate(root, 'P12', { paths: ['docs/ship.md'], evidence: 'code' });
     const v = shipVerdict(root);
 

@@ -29,6 +29,14 @@ import { handleHook } from '../src/hook';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-pol-'));
 
+/** SEC-75 이후 게이트는 실질 분량(공백 제외 80자)을 요구한다 — 픽스처도 실제 문서여야 한다. */
+const SUBSTANTIVE = [
+  '# P0 컨셉',
+  '',
+  '정책 무결 장치가 무엇을 지키는지 적는다. 정책 파일이 바뀌면 훅이 무엇을 막을지가 바뀌므로,',
+  '변경 사실 자체가 판정의 입력이다. 이 문서는 그 전제를 게이트 심사 대상으로 올리기 위한 것이다.',
+].join('\n');
+
 /** CLI 경로로 초기화한다 — 베이스라인 고정은 init 의 일부다. */
 const initViaCli = (): string => {
   const root = tmp();
@@ -243,7 +251,7 @@ describe('gate: 승인은 그 시점의 정책을 함께 기록한다', () => {
    */
   it('gate-approved 이벤트가 policyHash 를 싣는다', () => {
     const root = initViaCli();
-    fs.writeFileSync(path.join(root, 'a.md'), 'x');
+    fs.writeFileSync(path.join(root, 'a.md'), SUBSTANTIVE);
     submitGate(root, 'P0', { paths: ['a.md'], evidence: 'claimed' });
     approveGate(root, 'P0');
     const ev = readEvents(root).at(-1)!;
@@ -253,7 +261,7 @@ describe('gate: 승인은 그 시점의 정책을 함께 기록한다', () => {
 
   it('승인이 베이스라인을 재고정하지는 않는다 — 드리프트는 계속 보여야 한다', () => {
     const root = initViaCli();
-    fs.writeFileSync(path.join(root, 'a.md'), 'x');
+    fs.writeFileSync(path.join(root, 'a.md'), SUBSTANTIVE);
     humanEditsPolicy(root, 'profile: generic\ndesign_allowed_prefixes: [""]\n');
     submitGate(root, 'P0', { paths: ['a.md'], evidence: 'claimed' });
     approveGate(root, 'P0');

@@ -8325,7 +8325,7 @@ var COMMANDS = [
     name: "gate",
     summary: M("Phase gates \u2014 submit artifacts, then a human approves.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8 \u2014 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uACE0 \uC0AC\uB78C\uC774 \uC2B9\uC778\uD55C\uB2E4."),
     subs: [
-      { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M("Submit artifacts for review; pins their hash and writes a review packet.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4.") },
+      { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M("Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4. \uBE48 \uBB38\uC11C\xB7\uC790\uB9AC\uD45C\uC2DC\uC790\uC640 \uC774\uBBF8 \uB2E4\uB978 \uAC8C\uC774\uD2B8\uB97C \uC5F0 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uD55C\uB2E4.") },
       { name: "approve", args: "<P>", summary: M("Approve a submitted gate. Humans only \u2014 never an agent.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uBABB \uD55C\uB2E4.") },
       { name: "verify", args: "<P>", summary: M("Re-check that submitted artifacts still match their pinned hash.", "\uC81C\uCD9C \uB2F9\uC2DC \uD574\uC2DC\uC640 \uD604\uC7AC \uC0B0\uCD9C\uBB3C\uC774 \uAC19\uC740\uC9C0 \uB2E4\uC2DC \uD655\uC778\uD55C\uB2E4.") },
       { name: "sweep", summary: M("Invalidate gates whose artifacts changed after approval.", "\uC2B9\uC778 \uD6C4 \uC0B0\uCD9C\uBB3C\uC774 \uBC14\uB010 \uAC8C\uC774\uD2B8\uB97C \uBB34\uD6A8\uD654\uD55C\uB2E4.") },
@@ -9886,266 +9886,14 @@ function stopGuard(root, state, input, lang) {
 }
 
 // core/src/gate.ts
-var crypto2 = __toESM(require("crypto"));
-var fs13 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
-function normalizePaths(relPaths) {
-  return [...new Set(relPaths.map((p) => p.trim()).filter(Boolean))].sort();
-}
-function assertInsideRoot(root, paths) {
-  const real = (p) => {
-    try {
-      return fs13.realpathSync(p);
-    } catch {
-      return p;
-    }
-  };
-  const base = real(root);
-  const outside = paths.filter((p) => {
-    const rel = path12.relative(base, real(path12.resolve(root, p)));
-    return rel === ".." || rel.startsWith(`..${path12.sep}`) || path12.isAbsolute(rel);
-  });
-  if (outside.length > 0) {
-    throw new Error(
-      tr(root, {
-        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
-      })
-    );
-  }
-}
-function computeArtifactHash(root, relPaths) {
-  const h = crypto2.createHash("sha256");
-  for (const rel of normalizePaths(relPaths)) {
-    let content;
-    try {
-      content = fs13.readFileSync(path12.resolve(root, rel));
-    } catch {
-      throw new Error(
-        tr(root, {
-          en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
-          ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
-        })
-      );
-    }
-    h.update(`${rel}\0${content.length}\0`);
-    h.update(content);
-  }
-  return h.digest("hex");
-}
-function recordedPaths(root, phase) {
-  const events = readEvents(root);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.type !== "gate-submitted" || ev.data.phase !== phase) continue;
-    const raw = ev.data.paths;
-    if (!Array.isArray(raw)) return null;
-    const paths = raw.filter((p) => typeof p === "string");
-    return paths.length > 0 ? paths : null;
-  }
-  return null;
-}
-function submitGate(root, phase, opts) {
-  const paths = normalizePaths(opts.paths);
-  if (paths.length === 0) {
-    throw new Error(
-      tr(root, {
-        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
-      })
-    );
-  }
-  if (!isEvidenceGrade(opts.evidence)) {
-    throw new Error(
-      tr(root, {
-        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
-        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
-      })
-    );
-  }
-  assertInsideRoot(root, paths);
-  const artifactHash = computeArtifactHash(root, paths);
-  const state = readState(root);
-  const prevStatus = state.gates[phase]?.status ?? "pending";
-  const ev = appendEvent(root, "gate-submitted", { phase, artifactHash, evidence: opts.evidence, paths, prevStatus });
-  const record = {
-    status: "submitted",
-    artifactHash,
-    evidence: opts.evidence,
-    submittedAt: ev.ts
-  };
-  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
-  return record;
-}
-function approveGate(root, phase) {
-  const state = readState(root);
-  const current = state.gates[phase];
-  if (!current || current.status !== "submitted") {
-    throw new Error(
-      tr(root, {
-        en: `Gate ${phase} is not in an approvable state (currently: ${current?.status ?? "pending"}) \u2014 submit artifacts first with \`harness gate submit ${phase}\``,
-        ko: `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uC2B9\uC778\uD560 \uC218 \uC788\uB294 \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${current?.status ?? "pending"}) \u2014 \`harness gate submit ${phase}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`
-      })
-    );
-  }
-  if (SHIP_PHASES.includes(phase) && current.evidence !== "measured") {
-    throw new Error(
-      tr(root, {
-        en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${current.evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
-        ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${current.evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
-      })
-    );
-  }
-  const paths = recordedPaths(root, phase);
-  if (!paths) {
-    throw new Error(
-      tr(root, {
-        en: `No submission history for gate ${phase} in the journal \u2014 submit again with \`harness gate submit ${phase}\``,
-        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase}\` \uB85C \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
-      })
-    );
-  }
-  const artifactHash = computeArtifactHash(root, paths);
-  if (artifactHash !== current.artifactHash) {
-    throw new Error(
-      tr(root, {
-        en: `Artifacts for gate ${phase} changed after submission \u2014 what was reviewed is not what would be approved. Resubmit with \`harness gate submit ${phase}\`, then approve`,
-        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC0B0\uCD9C\uBB3C\uC774 \uC81C\uCD9C \uC774\uD6C4 \uBCC0\uACBD\uB410\uB2E4 \u2014 \uC2EC\uC0AC\uD55C \uB0B4\uC6A9\uACFC \uC2B9\uC778\uD560 \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4. \`harness gate submit ${phase}\` \uB85C \uC7AC\uC81C\uCD9C\uD55C \uB4A4 \uC2B9\uC778\uD558\uB77C`
-      })
-    );
-  }
-  const ev = appendEvent(root, "gate-approved", {
-    phase,
-    artifactHash,
-    evidence: current.evidence,
-    paths,
-    policyHash: computePolicyHash(root).hash
-  });
-  const record = { ...current, status: "approved", approvedAt: ev.ts };
-  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
-  return record;
-}
-function feedbackPath(root, phase) {
-  return path12.join(packetsDir(root), `${phase}.feedback.md`);
-}
-function recordGateFeedback(root, phase, raw) {
-  const lines = raw.split("\n").map((l) => sanitizeUntrusted(l)).filter((l) => l.trim());
-  if (lines.length === 0) {
-    throw new Error(
-      tr(root, {
-        en: `Nothing to collect \u2014 put the review comments in the file you pass to \`harness gate feedback ${phase} --from <file>\`. Empty feedback is not revision grounds`,
-        ko: `\uC218\uC9D1\uD560 \uD53C\uB4DC\uBC31\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uD30C\uC77C>\` \uC758 \uD30C\uC77C\uC5D0 \uB9AC\uBDF0 \uCF54\uBA58\uD2B8\uB97C \uB2F4\uC544\uB77C. \uBE48 \uD53C\uB4DC\uBC31\uC740 \uAC1C\uC815 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
-      })
-    );
-  }
-  const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs13.mkdirSync(packetsDir(root), { recursive: true });
-  fs13.appendFileSync(
-    feedbackPath(root, phase),
-    `
-## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
-
-${lines.map((l) => `- ${l}`).join("\n")}
-`
-  );
-  return lines.length;
-}
-function readGateFeedback(root, phase) {
-  try {
-    return fs13.readFileSync(feedbackPath(root, phase), "utf8");
-  } catch {
-    return "";
-  }
-}
-function verifyGate(root, phase) {
-  const t = (m) => tr(root, m);
-  const g = readState(root).gates[phase];
-  if (!g || g.status === "pending") {
-    return { ok: false, reason: t({
-      en: `there is no record for gate ${phase} \u2014 it has not been submitted`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4`
-    }) };
-  }
-  if (g.status === "invalidated") {
-    return { ok: false, reason: g.invalidatedReason ?? t({
-      en: `gate ${phase} is invalidated`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4`
-    }) };
-  }
-  if (!g.artifactHash) {
-    return { ok: false, reason: t({
-      en: `gate ${phase} has no pinned artifact hash`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4`
-    }) };
-  }
-  const paths = recordedPaths(root, phase);
-  if (!paths) {
-    return { ok: false, reason: t({
-      en: `the submission history for gate ${phase} is not in the journal \u2014 resubmit`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694`
-    }) };
-  }
-  let hash;
-  try {
-    hash = computeArtifactHash(root, paths);
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
-  }
-  if (hash !== g.artifactHash) {
-    return {
-      ok: false,
-      reason: t({
-        en: `artifact hash mismatch \u2014 pinned ${g.artifactHash.slice(0, 12)} \u2260 current ${hash.slice(0, 12)} (paths: ${paths.join(", ")})`,
-        ko: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
-      })
-    };
-  }
-  return { ok: true };
-}
-function invalidateStaleGates(root) {
-  const state = readState(root);
-  const invalidated = [];
-  for (const phase of PHASES) {
-    const g = state.gates[phase];
-    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
-    const verdict = verifyGate(root, phase);
-    if (verdict.ok) continue;
-    const reason = verdict.reason ?? tr(root, {
-      en: "artifact verification failed",
-      ko: "\uC0B0\uCD9C\uBB3C \uAC80\uC99D \uC2E4\uD328"
-    });
-    appendEvent(root, "gate-invalidated", { phase, prevStatus: g.status, reason });
-    state.gates[phase] = { ...g, status: "invalidated", invalidatedReason: reason };
-    invalidated.push(phase);
-  }
-  if (invalidated.length > 0) writeState(root, state);
-  return invalidated;
-}
-function canEnterPhase(root, phase) {
-  const i = PHASES.indexOf(phase);
-  if (i <= 0) return { ok: true };
-  const prev = PHASES[i - 1];
-  const g = readState(root).gates[prev];
-  if (g?.status === "approved") return { ok: true };
-  return {
-    ok: false,
-    reason: tr(root, {
-      en: `Cannot move to ${phase} \u2014 the gate for the previous phase ${prev} is not approved (currently: ${g?.status ?? "pending"}). Approve the artifacts: \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72)`,
-      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
-    })
-  };
-}
-function setPhaseViaGate(root, phase) {
-  const verdict = canEnterPhase(root, phase);
-  if (!verdict.ok) throw new Error(verdict.reason);
-  appendEvent(root, "phase-set", { phase, via: "gate" });
-  writeState(root, { ...readState(root), phase });
-}
-
-// core/src/registry.ts
+var crypto3 = __toESM(require("crypto"));
 var fs14 = __toESM(require("fs"));
 var path13 = __toESM(require("path"));
-var crypto3 = __toESM(require("crypto"));
+
+// core/src/registry.ts
+var fs13 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
+var crypto2 = __toESM(require("crypto"));
 var YAML5 = __toESM(require_dist());
 function toDocNode(v) {
   if (typeof v !== "object" || v === null) return null;
@@ -10167,10 +9915,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs14.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs13.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML5.parse(fs14.readFileSync(registryPath(root), "utf8"));
+    doc = YAML5.parse(fs13.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -10180,8 +9928,8 @@ function readEntries(root) {
 function writeEntries(root, entries) {
   const target = registryPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs14.writeFileSync(tmp, YAML5.stringify({ docs: entries }));
-  fs14.renameSync(tmp, target);
+  fs13.writeFileSync(tmp, YAML5.stringify({ docs: entries }));
+  fs13.renameSync(tmp, target);
 }
 function inspectRegistry(root) {
   const { entries, parseError } = readEntries(root);
@@ -10216,10 +9964,10 @@ function upsertDoc(root, node) {
   writeEntries(root, entries);
 }
 function computeDocHash(root, doc) {
-  const abs = path13.join(root, doc.path);
+  const abs = path12.join(root, doc.path);
   let buf;
   try {
-    buf = fs14.readFileSync(abs);
+    buf = fs13.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -10228,7 +9976,7 @@ function computeDocHash(root, doc) {
       })
     );
   }
-  return crypto3.createHash("sha256").update(buf).digest("hex");
+  return crypto2.createHash("sha256").update(buf).digest("hex");
 }
 function require_(root, id) {
   const doc = getDoc(root, id);
@@ -10357,6 +10105,372 @@ function docsForPhase(root, phase) {
     if (!cur || d.version > cur.version) latest.set(d.id, d);
   }
   return [...latest.values()];
+}
+
+// core/src/gate.ts
+function canonicalRel(root, rel) {
+  try {
+    const real = fs14.realpathSync(path13.resolve(root, rel));
+    const r = path13.relative(fs14.realpathSync(root), real);
+    return r && !r.startsWith(`..${path13.sep}`) && r !== ".." && !path13.isAbsolute(r) ? r : rel;
+  } catch {
+    return rel;
+  }
+}
+function normalizePaths(root, relPaths) {
+  const canon = relPaths.map((p) => p.trim()).filter(Boolean).map((p) => canonicalRel(root, p));
+  return [...new Set(canon)].sort();
+}
+var MIN_SUBSTANCE_CHARS = 80;
+var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
+var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
+function readArtifact(root, rel) {
+  try {
+    return fs14.readFileSync(path13.resolve(root, rel));
+  } catch {
+    throw new Error(
+      tr(root, {
+        en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+      })
+    );
+  }
+}
+function readArtifacts(root, relPaths) {
+  return relPaths.map((rel) => {
+    const text = readArtifact(root, rel).toString("utf8");
+    return {
+      rel,
+      text,
+      substance: text.replace(/\s+/gu, "").length,
+      binary: text.includes("\uFFFD") || text.includes("\0")
+    };
+  });
+}
+function assertSubstantive(root, arts) {
+  const blank2 = arts.filter((a) => a.substance === 0).map((a) => a.rel);
+  if (blank2.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Empty artifact under review: ${blank2.join(", ")} \u2014 a gate approves content, not filenames. Write the document, or drop the path from --paths`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uBE44\uC5B4 \uC788\uB2E4: ${blank2.join(", ")} \u2014 \uAC8C\uC774\uD2B8\uB294 \uD30C\uC77C \uC774\uB984\uC774 \uC544\uB2C8\uB77C \uB0B4\uC6A9\uC744 \uC2B9\uC778\uD55C\uB2E4. \uBB38\uC11C\uB97C \uCC44\uC6B0\uAC70\uB098 --paths \uC5D0\uC11C \uADF8 \uACBD\uB85C\uB97C \uBE7C\uB77C`
+      })
+    );
+  }
+  const total = arts.reduce((n, a) => n + a.substance, 0);
+  if (total < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review carry ${total} non-whitespace characters, below the ${MIN_SUBSTANCE_CHARS} minimum (paths: ${arts.map((a) => a.rel).join(", ")}). A gate is a review, not a ceremony \u2014 submit the document that was actually written`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC758 \uACF5\uBC31 \uC81C\uC678 \uBB38\uC790\uAC00 ${total}\uC790\uB85C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4 (\uB300\uC0C1: ${arts.map((a) => a.rel).join(", ")}). \uAC8C\uC774\uD2B8\uB294 \uC758\uC2DD\uC774 \uC544\uB2C8\uB77C \uC2EC\uC0AC\uB2E4 \u2014 \uC2E4\uC81C\uB85C \uC791\uC131\uB41C \uBB38\uC11C\uB97C \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+  const textual = arts.filter((a) => !a.binary);
+  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(/[^\p{L}\p{N}]/gu, "");
+  if (textual.length > 0 && residual.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review are placeholders only (TODO/TBD and the like): ${textual.map((a) => a.rel).join(", ")} \u2014 a placeholder is not grounds for approval`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC790\uB9AC\uD45C\uC2DC\uC790\uBFD0\uC774\uB2E4(TODO\xB7TBD\xB7\uBBF8\uC9C0\uC815 \uB530\uC704): ${textual.map((a) => a.rel).join(", ")} \u2014 \uC790\uB9AC\uD45C\uC2DC\uC790\uB294 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      })
+    );
+  }
+}
+function contentDigest(root, relPaths) {
+  const each = relPaths.map((rel) => crypto3.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
+  const h = crypto3.createHash("sha256");
+  for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
+  return h.digest("hex");
+}
+function latestSubmissions(root) {
+  const out = /* @__PURE__ */ new Map();
+  const events = readEvents(root);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type !== "gate-submitted") continue;
+    const phase = ev.data.phase;
+    if (!PHASES.includes(phase) || out.has(phase)) continue;
+    const raw = ev.data.paths;
+    const paths = Array.isArray(raw) ? raw.filter((p) => typeof p === "string") : [];
+    out.set(phase, typeof ev.data.contentHash === "string" ? { paths, contentHash: ev.data.contentHash } : { paths });
+  }
+  return out;
+}
+function assertDistinct(root, phase, hash, contentHash, gates) {
+  const prior = latestSubmissions(root);
+  const clash = PHASES.filter((p) => {
+    if (p === phase) return false;
+    const g = gates[p];
+    if (!g || g.status !== "submitted" && g.status !== "approved") return false;
+    const prev = prior.get(p);
+    return prev?.contentHash ? prev.contentHash === contentHash : g.artifactHash === hash;
+  });
+  if (clash.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `The same artifacts already opened gate ${clash.join(", ")} \u2014 byte-identical content cannot stand in for ${phase} as well. Each gate reviews what that phase actually produced; submit the revised or new artifact`,
+        ko: `\uAC19\uC740 \uC0B0\uCD9C\uBB3C\uC774 \uC774\uBBF8 \uAC8C\uC774\uD2B8 ${clash.join(", ")} \uB97C \uC5F4\uC5C8\uB2E4 \u2014 \uBC14\uC774\uD2B8\uAC00 \uAC19\uC740 \uB0B4\uC6A9\uC774 ${phase} \uAE4C\uC9C0 \uB300\uC2E0\uD560 \uC218\uB294 \uC5C6\uB2E4. \uAC8C\uC774\uD2B8\uB9C8\uB2E4 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC774\uB098 \uC0C8 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+}
+var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
+function assertPhaseFit(root, phase, paths) {
+  const want = new Set(paths.map(normRel));
+  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
+  if (known.length === 0) return;
+  if (new Set(known.map((d) => normRel(d.path))).size < want.size) return;
+  if (known.some((d) => d.phase === phase)) return;
+  const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
+  throw new Error(
+    tr(root, {
+      en: `None of the artifacts under review is registered to ${phase} \u2014 the registry has them as ${where}. A document belonging to another phase cannot open this gate. Register the ${phase} artifact with \`harness doc upsert --id <DOC-x> --path <p> --phase ${phase}\``,
+      ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC911 ${phase} \uB85C \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uD558\uB098\uB3C4 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0\uB294 ${where} \uB85C \uC788\uB2E4. \uB2E4\uB978 \uD398\uC774\uC988\uC758 \uBB38\uC11C\uB85C \uC774 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218\uB294 \uC5C6\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase ${phase}\` \uB85C ${phase} \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uB77C`
+    })
+  );
+}
+function assertInsideRoot(root, paths) {
+  const real = (p) => {
+    try {
+      return fs14.realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  const base = real(root);
+  const outside = paths.filter((p) => {
+    const rel = path13.relative(base, real(path13.resolve(root, p)));
+    return rel === ".." || rel.startsWith(`..${path13.sep}`) || path13.isAbsolute(rel);
+  });
+  if (outside.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      })
+    );
+  }
+}
+function computeArtifactHash(root, relPaths) {
+  const h = crypto3.createHash("sha256");
+  for (const rel of normalizePaths(root, relPaths)) {
+    const content = readArtifact(root, rel);
+    h.update(`${rel}\0${content.length}\0`);
+    h.update(content);
+  }
+  return h.digest("hex");
+}
+function recordedPaths(root, phase) {
+  const s = latestSubmissions(root).get(phase);
+  return s && s.paths.length > 0 ? s.paths : null;
+}
+function submitGate(root, phase, opts) {
+  const paths = normalizePaths(root, opts.paths);
+  if (paths.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      })
+    );
+  }
+  if (!isEvidenceGrade(opts.evidence)) {
+    throw new Error(
+      tr(root, {
+        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
+        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      })
+    );
+  }
+  assertInsideRoot(root, paths);
+  assertSubstantive(root, readArtifacts(root, paths));
+  assertPhaseFit(root, phase, paths);
+  const artifactHash = computeArtifactHash(root, paths);
+  const contentHash = contentDigest(root, paths);
+  const state = readState(root);
+  assertDistinct(root, phase, artifactHash, contentHash, state.gates);
+  const prevStatus = state.gates[phase]?.status ?? "pending";
+  const ev = appendEvent(root, "gate-submitted", {
+    phase,
+    artifactHash,
+    contentHash,
+    evidence: opts.evidence,
+    paths,
+    prevStatus
+  });
+  const record = {
+    status: "submitted",
+    artifactHash,
+    evidence: opts.evidence,
+    submittedAt: ev.ts
+  };
+  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
+  return record;
+}
+function approveGate(root, phase) {
+  const state = readState(root);
+  const current = state.gates[phase];
+  if (!current || current.status !== "submitted") {
+    throw new Error(
+      tr(root, {
+        en: `Gate ${phase} is not in an approvable state (currently: ${current?.status ?? "pending"}) \u2014 submit artifacts first with \`harness gate submit ${phase}\``,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uC2B9\uC778\uD560 \uC218 \uC788\uB294 \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${current?.status ?? "pending"}) \u2014 \`harness gate submit ${phase}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uBA3C\uC800 \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+  if (SHIP_PHASES.includes(phase) && current.evidence !== "measured") {
+    throw new Error(
+      tr(root, {
+        en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${current.evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
+        ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${current.evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+      })
+    );
+  }
+  const paths = recordedPaths(root, phase);
+  if (!paths) {
+    throw new Error(
+      tr(root, {
+        en: `No submission history for gate ${phase} in the journal \u2014 submit again with \`harness gate submit ${phase}\``,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase}\` \uB85C \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+  const artifactHash = computeArtifactHash(root, paths);
+  if (artifactHash !== current.artifactHash) {
+    throw new Error(
+      tr(root, {
+        en: `Artifacts for gate ${phase} changed after submission \u2014 what was reviewed is not what would be approved. Resubmit with \`harness gate submit ${phase}\`, then approve`,
+        ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC0B0\uCD9C\uBB3C\uC774 \uC81C\uCD9C \uC774\uD6C4 \uBCC0\uACBD\uB410\uB2E4 \u2014 \uC2EC\uC0AC\uD55C \uB0B4\uC6A9\uACFC \uC2B9\uC778\uD560 \uB0B4\uC6A9\uC774 \uB2E4\uB974\uB2E4. \`harness gate submit ${phase}\` \uB85C \uC7AC\uC81C\uCD9C\uD55C \uB4A4 \uC2B9\uC778\uD558\uB77C`
+      })
+    );
+  }
+  const ev = appendEvent(root, "gate-approved", {
+    phase,
+    artifactHash,
+    evidence: current.evidence,
+    paths,
+    policyHash: computePolicyHash(root).hash
+  });
+  const record = { ...current, status: "approved", approvedAt: ev.ts };
+  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
+  return record;
+}
+function feedbackPath(root, phase) {
+  return path13.join(packetsDir(root), `${phase}.feedback.md`);
+}
+function recordGateFeedback(root, phase, raw) {
+  const lines = raw.split("\n").map((l) => sanitizeUntrusted(l)).filter((l) => l.trim());
+  if (lines.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `Nothing to collect \u2014 put the review comments in the file you pass to \`harness gate feedback ${phase} --from <file>\`. Empty feedback is not revision grounds`,
+        ko: `\uC218\uC9D1\uD560 \uD53C\uB4DC\uBC31\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uD30C\uC77C>\` \uC758 \uD30C\uC77C\uC5D0 \uB9AC\uBDF0 \uCF54\uBA58\uD2B8\uB97C \uB2F4\uC544\uB77C. \uBE48 \uD53C\uB4DC\uBC31\uC740 \uAC1C\uC815 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      })
+    );
+  }
+  const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
+  fs14.mkdirSync(packetsDir(root), { recursive: true });
+  fs14.appendFileSync(
+    feedbackPath(root, phase),
+    `
+## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
+
+${lines.map((l) => `- ${l}`).join("\n")}
+`
+  );
+  return lines.length;
+}
+function readGateFeedback(root, phase) {
+  try {
+    return fs14.readFileSync(feedbackPath(root, phase), "utf8");
+  } catch {
+    return "";
+  }
+}
+function verifyGate(root, phase) {
+  const t = (m) => tr(root, m);
+  const g = readState(root).gates[phase];
+  if (!g || g.status === "pending") {
+    return { ok: false, reason: t({
+      en: `there is no record for gate ${phase} \u2014 it has not been submitted`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4`
+    }) };
+  }
+  if (g.status === "invalidated") {
+    return { ok: false, reason: g.invalidatedReason ?? t({
+      en: `gate ${phase} is invalidated`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4`
+    }) };
+  }
+  if (!g.artifactHash) {
+    return { ok: false, reason: t({
+      en: `gate ${phase} has no pinned artifact hash`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4`
+    }) };
+  }
+  const paths = recordedPaths(root, phase);
+  if (!paths) {
+    return { ok: false, reason: t({
+      en: `the submission history for gate ${phase} is not in the journal \u2014 resubmit`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694`
+    }) };
+  }
+  let hash;
+  try {
+    hash = computeArtifactHash(root, paths);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  if (hash !== g.artifactHash) {
+    return {
+      ok: false,
+      reason: t({
+        en: `artifact hash mismatch \u2014 pinned ${g.artifactHash.slice(0, 12)} \u2260 current ${hash.slice(0, 12)} (paths: ${paths.join(", ")})`,
+        ko: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
+      })
+    };
+  }
+  return { ok: true };
+}
+function invalidateStaleGates(root) {
+  const state = readState(root);
+  const invalidated = [];
+  for (const phase of PHASES) {
+    const g = state.gates[phase];
+    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
+    const verdict = verifyGate(root, phase);
+    if (verdict.ok) continue;
+    const reason = verdict.reason ?? tr(root, {
+      en: "artifact verification failed",
+      ko: "\uC0B0\uCD9C\uBB3C \uAC80\uC99D \uC2E4\uD328"
+    });
+    appendEvent(root, "gate-invalidated", { phase, prevStatus: g.status, reason });
+    state.gates[phase] = { ...g, status: "invalidated", invalidatedReason: reason };
+    invalidated.push(phase);
+  }
+  if (invalidated.length > 0) writeState(root, state);
+  return invalidated;
+}
+function canEnterPhase(root, phase) {
+  const i = PHASES.indexOf(phase);
+  if (i <= 0) return { ok: true };
+  const prev = PHASES[i - 1];
+  const g = readState(root).gates[prev];
+  if (g?.status === "approved") return { ok: true };
+  return {
+    ok: false,
+    reason: tr(root, {
+      en: `Cannot move to ${phase} \u2014 the gate for the previous phase ${prev} is not approved (currently: ${g?.status ?? "pending"}). Approve the artifacts: \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72)`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
+    })
+  };
+}
+function setPhaseViaGate(root, phase) {
+  const verdict = canEnterPhase(root, phase);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  appendEvent(root, "phase-set", { phase, via: "gate" });
+  writeState(root, { ...readState(root), phase });
 }
 
 // core/src/report.ts

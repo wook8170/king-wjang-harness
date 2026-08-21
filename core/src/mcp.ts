@@ -95,7 +95,10 @@ export function toolDefinitions(): McpToolDef[] {
       name: 'harness_gate_submit',
       description:
         'Submit artifacts to a phase gate for review. Pins the artifact hash and writes a review '
-        + 'packet under .harness/packets/. Approval is separate and only a human can do it.',
+        + 'packet under .harness/packets/. Approval is separate and only a human can do it. '
+        + 'The submission is refused when the artifacts are empty or placeholders only, when the '
+        + 'same content already opened another gate, or when the registry lists those paths under a '
+        + 'different phase.',
       inputSchema: {
         type: 'object',
         properties: {

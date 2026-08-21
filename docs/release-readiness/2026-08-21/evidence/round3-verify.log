@@ -487,3 +487,30 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
     `echo "run harness doctor --accept-policy" >> README.md` 는 DENY 다. 탐지가 인용부호 안까지 보므로
     「실행하는 문장」과 「적는 문장」을 구별하지 못한다 — `--force` 잠금이 이미 같은 값을 치르고 있고
     (SEC-78), 좁히면 `bash -c "…"` 가 열린다. 하네스 명령이 없으면 문구만으로는 막지 않는다.
+
+## §12 SEC-75 머지 + 과차단 수정 재실측 (라운드 3-D, 메인)
+
+워크플로 산출(`worktree-wf_28bae004-b27-3` `4162cbd`)을 머지하되, 적대적 검증자가 반증한 두 가지를
+메인에서 재현했다 — ② 과차단은 고쳤고, ① 잔존 부류는 **닫지 않고 [SEC-79] 로 분리**했다.
+
+  === ② 과차단 재현 (검증자 지적) ===
+  A 미등록 P6 리포트 + 등록 P0~P2 동반 : ALLOW
+  B 미등록 P3 계획 + 등록 P1 스펙 동반   : ALLOW
+  C 전부 등록 · P3 산출물 0개 (막아야 함) : DENY  None of the artifacts under review is registered to P3 — the registry 
+  
+  === ① 헤드라인 공격 부류 잔존 여부 ===
+  2바이트 1장 → P0        : DENY  The artifacts under review carry 2 non-whitespace characters
+  필러 80자 13장 → 게이트 : 13/13 개통
+  ship verdict            : GO
+  doctor                  : issues 0 · ok True
+  훅: `harness gate approve P0` → allow(무출력)
+
+  [고친 것 — assertPhaseFit 부분 등록 과차단]
+    전: `known.length === 0` 일 때만 면제 → 레지스트리를 **부분적으로** 쓰는 프로젝트가 막혔다
+        (가장 흔한 이행 중 상태: 아직 등록 안 한 P6 리포트 + 등록된 P0~P5 동반).
+    후: 미등록 경로가 하나라도 섞이면 면제. 남는 차단은 「제출 전부가 등록됐고 이 페이즈가 0개」뿐.
+
+  [닫지 않은 것 — SEC-79 로 분리]
+    필러 13장으로 13게이트 + GO 가 그대로 재현된다. 내용의 질 판정은 코어 밖이므로
+    **닫았다고 쓰지 않는다.** 코드 머리말의 경계 서술을 「한 글자 덧붙이기」에서
+    「실 산출물 0장으로도 열린다」로 실측대로 정정했다.

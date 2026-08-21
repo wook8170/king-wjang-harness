@@ -31,7 +31,10 @@ const doc = (over: Partial<DocNode> = {}): DocNode => ({
 /** 파일까지 만들어 등록한다. url 을 주면 아티팩트 URL 도 박는다. */
 const register = (root: string, over: Partial<DocNode> = {}, url?: string) => {
   const d = doc(over);
-  writeFile(root, d.path, `# ${d.id}\n`);
+  // SEC-75: 게이트는 실질 내용이 있는 산출물만 받는다 — 픽스처도 실제 문서여야 한다.
+  writeFile(root, d.path, `# ${d.id}\n\nThis document is the artifact under review for `
+    + `${d.phase}. It states what was decided, why the alternatives were rejected, and what the `
+    + 'team accepts as a consequence.\n');
   upsertDoc(root, d);
   if (url) setDocArtifactUrl(root, d.id, url);
   return d;
