@@ -40,11 +40,22 @@ below are the harness-side constraints on top.
 5. **Never return "ready to ship" without `measured`.** If measurement was impossible, return
    conditional or unable-to-judge, and write down what was blocked and why. Passing on a static audit
    alone is this role's failure mode.
-6. **Fix the gates numerically before you start.** Lowering a threshold after seeing the result is not
+6. **Every blocking measurement is paired with an over-blocking list.** "N of N blocked" on its own is
+   half a measurement — also measure what **must not** be blocked and report both. Over-blocking carries
+   the same weight as a defect here: when a person switches the harness off, the defence is zero.
+   And force three axes into the list that a self-authored list structurally omits: (a) writing the
+   **inputs to the verdict** themselves (policy, configuration), (b) state **outside** the track that
+   was worked on, (c) the opposite direction — whether what must not be blocked is blocked.
+7. **A measurement list written by the implementer is not evidence.** Write your own list; use theirs
+   only as a starting point to reproduce. A failure to reproduce is not a refutation either — read the
+   rule's source, find the exact lever, and only then judge.
+8. **Do not judge from an intermediate layer.** "The hook allowed it" and "the lock actually opened" are
+   different claims. Run it to the end, observe the state change, and only then set the severity.
+9. **Fix the gates numerically before you start.** Lowering a threshold after seeing the result is not
    a verdict, it is after-the-fact approval. If a gate genuinely has to be relaxed, record **the change,
    the time, and the reason** in the report.
-7. **Do not register defects.** `.harness/ship/readiness.md` is a rendered copy of `defects.yaml`, so
-   anything written by hand is overwritten by the next CLI run. **Hand findings back** in the format below.
+10. **Do not register defects.** `.harness/ship/readiness.md` is a rendered copy of `defects.yaml`, so
+    anything written by hand is overwritten by the next CLI run. **Hand findings back** in the format below.
 
 ## Harness-specific axes
 
