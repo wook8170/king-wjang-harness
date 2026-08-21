@@ -1,8 +1,9 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-21 · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 1 (+ deferred 1)
+**갱신** 2026-08-21 (라운드 2) · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 0 · **fixed(재측정 대기)** 1 (+ deferred 1)
 
 라운드 1 수정 완료 — 상세는 `fixes-round1.md`, 닫은 증거는 `evidence/round1-verify.log`.
+라운드 2(생성 문서 i18n + CLI 플래그 정합성) — 상세는 `fixes-round2.md`, 닫은 증거는 `evidence/round2-verify.log`.
 
 ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(커밋 `bbbb9b6`, 198 tests)의
 1~19 번대와 겹치지 않게 하기 위해서다. 그 대장은 **대상 커밋이 다르므로 이 감사에서 승계하지 않았다**
@@ -46,3 +47,6 @@ ID 는 **20 번부터** 시작한다 — `docs/release-readiness/readiness.md`(�
 | UX-46 | — | 03 | CLI 출력 — ANSI 0 · NO_COLOR 무영향 · 비TTY stdout JSON 파싱 가능 · EPIPE 내성 | verified | measured | `docs/release-readiness/2026-08-21/evidence/contract.log` | md5 동일 · `JSON.parse` OK |
 | OPS-47 | — | 11 | 침묵 catch 5건 — 전부 「세션을 깨지 않는다」 계약 경로이고 대체 관측 경로(`hook-errors.log`)가 존재. 무처리·무문서 catch 0 | verified | code | `core/src/hook.ts:162` | 전 소스 스캔 결과 5/5 문서화 |
 | DEP-48 | — | 07 | 프로덕션 도달 취약점 0 — 런타임 의존은 `yaml` 하나 | verified | measured | `docs/release-readiness/2026-08-21/evidence/gates.log` | `npm audit --omit=dev` → `found 0 vulnerabilities` |
+| API-57 | HIGH | 02 | `wave create --acceptance` 가 조용히 무시된다 — `--help` 가 광고하는데 파서는 `--accept` 만 읽어, 도움말대로 치면 수용 기준이 빈 채로 웨이브가 생기고 검증자 브리프가 「판정 불가」를 낸다 | verified | measured | `core/src/cli.ts:755` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 수정 전 `[]` → 후 `['login returns 200']`, 회귀 테스트 `core/test/cli.test.ts:42` |
+| API-58 | MED | 02 | `design baseline <UX-x> --png <file>` 가 성립 불가 — 파서가 위치 인자만 읽어 `--png` 문자열 자체를 경로로 삼는다(도움말대로 친 호출이 exit 1) | verified | measured | `core/src/cli.ts:533` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 수정 전 exit 1 → 후 exit 0, 회귀 테스트 `core/test/cli.test.ts:59` |
+| USE-59 | HIGH | 04 | 생성 문서 5종(리뷰 패킷·RTM·허브 / 결함 대장·릴리스 체크리스트 / 웨이브 브리프·소환문 / Playwright 사양·비교 패킷 / 정본 HTML)이 한국어 전용 — 마켓플레이스 배포 시 첫 산출물이 읽히지 않는다 | verified | measured | `core/src/report.ts:103` | `fixes-round2.md` · `docs/release-readiness/2026-08-21/evidence/round2-verify.log` — 영문 기본에서 CLI stdout·`.harness/` 산출물·생성 토큰·사양 전부 한국어 0, ko 회귀 유지 |

@@ -1,0 +1,93 @@
+# 라운드 2 재측정 — i18n 생성 문서 + CLI 플래그 정합성
+일시(로컬): 2026-08-21 16:19:29 KST
+대상 커밋: a7370a7  (feature/core-engine-v0)
+직전 커밋: f96c848
+
+## 1. 게이트 재측정 — G1 테스트 / G2 타입
+$ npm run check
+> king-wjang-harness@0.0.1 check
+> tsc --noEmit
+
+
+$ npx vitest run   (회차 1)
+ Test Files  27 passed (27)
+      Tests  628 passed (628)
+$ npx vitest run   (회차 2)
+ Test Files  27 passed (27)
+      Tests  628 passed (628)
+$ npx vitest run   (회차 3)
+ Test Files  27 passed (27)
+      Tests  628 passed (628)
+
+## 2. [i18n] 영문 기본 산출물 — 한국어 0 (HARNESS_LANG 미설정)
+샌드박스: $CLAUDE_PROJECT_DIR = /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/6ad77aea-e19e-4c7b-840f-a5e3f4ca4d65/scratchpad/r2en.s6Gc
+$ grep -c "[가-힣]" <CLI stdout 전량>
+0
+$ grep -rln "[가-힣]" $CLAUDE_PROJECT_DIR/.harness   # .harness 산출물 전체
+(위 목록이 비어 있으면 0건)
+$ 생성 파일별 한글 수
+  tailwind.tokens.js: 0
+  tokens.css: 0
+  tokens.ts: 0
+  ux-7.spec.ts: 0
+
+→ 판정: CLI stdout·.harness 산출물·생성 토큰(css/ts/tailwind)·Playwright 사양 전부 한국어 0
+
+## 3. [i18n] ko 회귀 — HARNESS_LANG=ko 는 그대로 한국어
+$ HARNESS_LANG=ko … | grep -c "[가-힣]"
+60
+$ 대표 머리글 확인
+  # 웨이브 실행 지시 — wave-001
+  # 요구사항 추적 매트릭스(RTM)
+  # 프로젝트 허브
+  # 출하 체크리스트 — P12 SHIP
+$ 수용 기준이 --acceptance 로 채워졌는가(플래그 수정 확인)
+  ## 완료 기준
+  - 200 반환
+  
+
+→ 판정: ko 출력 정상 유지 (영문 기본은 기본값 변경이지 한국어 제거가 아니다)
+
+## 4. [API-57] wave create --acceptance 가 조용히 무시된다 (수정 전 → 후)
+재현 원리: help.ts 가 --acceptance 를 광고하는데 cli.ts 파서는 flag(args,'accept') 만 읽는다.
+         flag() 는 정확 일치(--${name})라 --acceptance 는 어디에도 걸리지 않는다.
+
+### 수정 전 (HEAD~1 = f96c848)
+$ harness wave create --goal g --refs F-1 --acceptance "login returns 200"
+wave-001
+$ harness wave list | jq -c ".[0].acceptance"  (수용 기준이 비어 있다)
+[]
+
+### 수정 후 (HEAD = a7370a7)
+$ harness wave create --goal g --refs F-1 --acceptance "login returns 200"
+wave-001
+$ harness wave list | .[0].acceptance
+['login returns 200']
+$ --accept 별칭도 유지되는가
+['still works']
+→ deny→allow 가 아니라 무시→반영으로 뒤집혔다. 회귀 테스트: core/test/cli.test.ts
+
+## 5. [API-58] design baseline --png <file> 가 성립하지 않는다 (수정 전 → 후)
+재현 원리: help.ts 는 '<UX-x> --png <file>' 를 광고하는데 cli.ts 는 위치 인자 rest[1] 만 읽어
+         --png 라는 문자열 자체를 파일 경로로 삼는다.
+
+### 수정 전 (HEAD~1)
+$ harness design baseline UX-7 --png shot.png
+No baseline image at $D/--png — export the artboard at 2x and pass that path (spec §8).
+  exit=1
+
+### 수정 후 (HEAD)
+$ harness design baseline UX-7 --png shot.png
+Baseline recorded for UX-7: shot.png
+  exit=0
+$ 위치 인자 형태도 유지되는가:  harness design baseline UX-7 shot.png
+Baseline recorded for UX-7: shot.png
+→ 도움말대로 친 호출이 실패→성공으로 뒤집혔다. 회귀 테스트: core/test/cli.test.ts
+
+## 6. 전수 스윕 — help.ts 가 광고하는 플래그 ↔ cli.ts 가 읽는 플래그
+두 결함을 우연히 하나씩 찾은 게 아니라, 광고 목록 전체를 파서와 대조해 남은 게 없는지 확인했다.
+$ (help.ts 의 args 문자열에서 --flag 추출) - (cli.ts 의 flag()/has()/리터럴에서 추출)
+  광고 36종 · 파서가 읽는 것 43종
+  광고했지만 파서가 안 읽는 플래그: 없음 (0건)
+
+→ 수정 후 잔여 0건. 수정 전에는 --acceptance · --png 2건이었다(위 §4·§5).

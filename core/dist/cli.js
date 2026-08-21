@@ -12957,8 +12957,9 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             return 0;
           }
           case "baseline": {
-            recordBaseline(root, rest[0], rest[1] ?? "");
-            console.log(L(`Baseline recorded for ${rest[0]}: ${rest[1]}`, `${rest[0]} \uAE30\uC900 \uC774\uBBF8\uC9C0 \uB4F1\uB85D: ${rest[1]}`));
+            const png = flag(args, "png") ?? rest[1] ?? "";
+            recordBaseline(root, rest[0], png);
+            console.log(L(`Baseline recorded for ${rest[0]}: ${png}`, `${rest[0]} \uAE30\uC900 \uC774\uBBF8\uC9C0 \uB4F1\uB85D: ${png}`));
             return 0;
           }
           case "html": {
@@ -13194,7 +13195,8 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               milestone: flag(args, "milestone") ?? pick(UNSPECIFIED, lang),
               goal,
               design_refs: refs,
-              acceptance: csv(flag(args, "accept"))
+              // `--help` 가 광고하는 이름이 정본이다. `--accept` 는 기존 호출을 깨지 않으려 남긴 별칭.
+              acceptance: csv(flag(args, "acceptance") ?? flag(args, "accept"))
             });
             console.log(meta.id);
             return 0;
