@@ -236,10 +236,13 @@ function sessionStart(
   const label = lang === 'ko' ? '지시' : 'INSTRUCTION';
   const inst = (s: string): void => { lines.push(`${label}(${++n}): ${s}`); };
 
-  if (config.remote_control) {
-    inst(L('Run /remote-control first to enable mobile supervision.',
-      '첫 행동으로 /remote-control 을 실행해 모바일 관제를 활성화하라.'));
-  }
+  // Remote Control 은 **여기 없다** — 지시 목록 뒤의 선택 안내로 뺐다(FEAT-73). 이 플러그인은
+  // `/remote-control` 을 제공하지 않고(commands/ 없음) 그 명령의 존재 여부는 훅이 알 수 없다:
+  // 슬래시 명령은 클라이언트 내장·사용자 디렉토리·다른 플러그인에서 오므로 파일시스템 탐침은
+  // 거짓 음성(있는데 없다고 판정)을 낳는다. 「무조건 첫 행동으로 실행하라」는 없는 환경에서
+  // 매 세션의 첫 행동을 실패로 만들고, 하네스가 실제로 보장하는 일을 뒤로 민다.
+  // 번호 붙은 지시는 **하네스가 보장하는 것만** — 아래 목록의 불변식이다.
+  //
   // 사용량 티어 (스펙 §10 token-guard 흡수). 원본 훅은 상승할 때만 주입했지만, **새 세션에는
   // 상승 이력이 없다** — 95% 에서 세션이 갈리면 새 세션은 자기가 임계 근처인 줄 모른 채
   // 평소처럼 크게 벌인다. 그래서 SessionStart 에서는 상승이 아니라 **현재 서 있는 티어**를
@@ -300,6 +303,21 @@ function sessionStart(
     lines.push(L(
       `⚠ Backtrack in progress → ${state.backtrack.to} (reason: ${sanitizeUntrusted(state.backtrack.reason)})`,
       `⚠ 역행 진행 중 → ${state.backtrack.to} (사유: ${sanitizeUntrusted(state.backtrack.reason)})`,
+    ));
+  }
+  // 모바일 관제(스펙 §3-6a·요구 15). **선택 안내**로 맨 뒤에 둔다 — 스펙이 「첫 행동으로 지시」라
+  // 적었지만 그건 이 플러그인이 `/remote-control` 을 제공한다는 전제 위에서만 옳다. 제공하지
+  // 않는 지금, 첫 지시로 내리면 없는 환경에서 매 세션이 실패로 시작한다(FEAT-73). 기능을 끄지
+  // (기본값 off) 않는 이유도 같다 — 있는 환경에서는 실제로 동작하고, 훅은 어느 쪽인지 모른다.
+  // 그래서 조건부 + 건너뛰기 경로로 남긴다. 폴백 채널은 스펙 §3-6a 열화 경로 그대로다.
+  if (config.remote_control) {
+    lines.push(L(
+      'Optional: if this environment provides /remote-control, run it to enable mobile supervision; '
+      + 'if not, skip it — push notifications and artifacts are the fallback channel. '
+      + '(Silence this with `remote_control: false` in `.harness/config.yaml`.)',
+      '선택: 이 환경에 /remote-control 이 있으면 실행해 모바일 관제를 켜라. 없으면 건너뛴다 — '
+      + '푸시 알림·아티팩트가 폴백 채널이다. '
+      + '(끄려면 `.harness/config.yaml` 에 `remote_control: false`.)',
     ));
   }
   return {
