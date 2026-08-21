@@ -145,3 +145,70 @@ describe('LOGIC-95: 설계 문서 보호는 한 곳에만 있고 전 표면에�
     expect(bash?.hookSpecificOutput?.permissionDecision).toBe('deny');
   });
 });
+
+/**
+ * [SEC-96] **잠금은 「무엇을 실행하는가」로 판정한다** — 어떤 이름으로 부르는지가 아니라.
+ *
+ * 독립 감정이 실측: `node <repo>/core/dist/cli.js doctor --accept-policy` 가 훅을 통과해
+ * **정책 드리프트 경고가 1 → 0 으로 사라졌다.** `--force` 쪽이 우연히 막힌 것은 그 가드에만
+ * `HARNESS_ALLOW_FORCE` 리터럴 절이 있어서였지 형태를 인식해서가 아니었다.
+ */
+describe('SEC-96: 코어를 직접 부르는 형태도 harness 호출이다', () => {
+  const repoCli = path.resolve(__dirname, '../dist/cli.js');
+  const deniedBash = (root: string, command: string): boolean => {
+    const out = handleHook(root, 'pre-tool', { tool_name: 'Bash', tool_input: { command } }) as any;
+    return out?.hookSpecificOutput?.permissionDecision === 'deny';
+  };
+
+  it('node 로 코어를 직접 불러도 두 잠금이 모두 산다', () => {
+    const root = init();
+    const allowed = [
+      `node ${repoCli} doctor --accept-policy`,
+      `HARNESS_ACCEPT_POLICY=1 node ${repoCli} doctor --accept-policy`,
+      `node ${repoCli} phase set P7 --force`,
+      `HARNESS_ALLOW_FORCE=1 node ${repoCli} phase set P7 --force`,
+      `sudo node ${repoCli} doctor --accept-policy`,
+      'harness doctor --accept-policy',
+      'harness phase set P7 --force',
+    ].filter(c => !deniedBash(root, c));
+    expect(allowed).toEqual([]);
+  });
+
+  it('진단·조회는 그대로 열려 있다 — 막는 것은 수용과 강제뿐', () => {
+    const root = init();
+    for (const c of [`node ${repoCli} status`, `node ${repoCli} doctor`, `node ${repoCli} doctor --repair`,
+      'harness doctor', 'node build.js', 'npm test', 'cat core/dist/cli.js']) {
+      expect(deniedBash(root, c), c).toBe(false);
+    }
+  });
+});
+
+/**
+ * [UTIL-A] **문서가 시킨 대로 하면 먹어야 한다.** `commands.yaml` 헤더는 그 파일만 복사하라고
+ * 하는데 `profile.yaml` 이 없다고 디렉토리를 통째로 건너뛰면, 채운 값이 조용히 무시되고
+ * `profile cmd deploy` 는 다시 「commands.yaml 을 채우라」고 답해 **순환**한다.
+ */
+describe('UTIL-A: 로컬 프로파일은 commands.yaml 만으로도 먹는다', () => {
+  it('문서가 시킨 그대로 복사하면 명령이 반영된다', () => {
+    const root = init();
+    const dir = path.join(root, '.harness/profile');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'commands.yaml'), "test: 'npm test'\ndeploy: 'vercel deploy --prod'\n");
+    const { text } = ((): { text: string } => {
+      const out: string[] = [];
+      const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
+      try { run(['profile', 'cmd', 'deploy'], root); } finally { l.mockRestore(); }
+      return { text: out.join('\n') };
+    })();
+    expect(text).toContain('vercel deploy --prod');
+  });
+
+  it('commands.yaml 도 profile.yaml 도 없으면 기존대로 건너뛴다 — 조용한 오작동 금지', () => {
+    const root = init();
+    fs.mkdirSync(path.join(root, '.harness/profile'), { recursive: true });
+    const out: string[] = [];
+    const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
+    try { run(['profile', 'show'], root); } finally { l.mockRestore(); }
+    expect(out.join('\n')).toContain('generic');
+  });
+});

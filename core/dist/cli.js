@@ -7495,8 +7495,8 @@ function defaultState() {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
-function isInitialized(root) {
-  return fs2.existsSync(statePath(root));
+function hasHarness(root) {
+  return fs2.existsSync(harnessDir(root));
 }
 function readState(root) {
   return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
@@ -9454,11 +9454,15 @@ function readProfileDir(dir, origin, problems, t) {
   try {
     text = fs11.readFileSync(yamlPath, "utf8");
   } catch (e) {
-    problems.push(t({
-      en: `cannot read ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
-      ko: `${yamlPath} \uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
-    }));
-    return null;
+    if (fs11.existsSync(path10.join(dir, "commands.yaml"))) {
+      text = "name: local";
+    } else {
+      problems.push(t({
+        en: `cannot read ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
+        ko: `${yamlPath} \uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
+      }));
+      return null;
+    }
   }
   let raw;
   try {
@@ -9651,6 +9655,8 @@ var HARNESS_CMD_RE = new RegExp(
 \`]\\s*|\\$\\(\\s*|\\(\\s*)((?:${[...PREFIX_COMMANDS, "xargs"].join("|")})(?:\\s+(?:-\\S+(?:\\s+[A-Za-z_][\\w.-]*)?|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*)(\\S*\\/)?harness(\\s|$)`
 );
 var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
+var CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
+var invokesHarness = (cmd) => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
 var STATE_FILES = [".harness/state.json", ".harness/events.jsonl", ".harness/design/ledger.yaml"];
 var CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 var TURN_LOG_HEADING = /^## (?:Turn log|턴 로그)[ \t]*$/m;
@@ -10060,13 +10066,13 @@ function preTool(root, state, config, input, degraded) {
         ), degraded, lang);
       }
     }
-    if (/HARNESS_ALLOW_FORCE/.test(cmd) || FORCE_ESCAPE_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd)) {
+    if (/HARNESS_ALLOW_FORCE/.test(cmd) || invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd)) {
       return deny(L(
         "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.",
         "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
       ), degraded, lang);
     }
-    if (FORCE_ESCAPE_RE.test(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd)) {
+    if (/HARNESS_ACCEPT_POLICY/.test(cmd) || invokesHarness(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd)) {
       return deny(L(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing the diff: `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`. Diagnosis is open to you: `harness doctor` reports the drift.',
         "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
@@ -13501,7 +13507,7 @@ function run(argv, root) {
   };
   try {
     const PRE_INIT_OK = /* @__PURE__ */ new Set(["init", "migrate", "--version", "hook"]);
-    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== void 0 && !isInitialized(root)) {
+    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== void 0 && !hasHarness(root)) {
       throw new Error(L("No .harness/ here \u2014 run `harness init` first.", ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C"));
     }
     switch (cmd) {

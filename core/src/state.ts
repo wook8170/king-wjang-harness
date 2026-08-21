@@ -21,6 +21,21 @@ export function isInitialized(root: string): boolean {
   return fs.existsSync(statePath(root));
 }
 
+/**
+ * [OPS-94] **하네스가 걸려 있는가** — `state.json` 이 아니라 `.harness/` 디렉토리로 판정한다.
+ *
+ * `isInitialized`(state.json 존재)를 「초기화됐는가」로 쓰면 **복구 경로가 막힌다**: state.json 만
+ * 지운 상태에서 모든 명령이 「`harness init` 을 먼저 실행하라」고 하고, `init` 은 「이미 있다」고
+ * 거부한다. 정작 저널은 멀쩡하고 `doctor --repair` 가 그걸 재생해 복구할 수 있는데, 그 명령까지
+ * 같은 가드에 막혀 **막다른 길**이 된다(독립 감정이 실측).
+ *
+ * 그래서 둘을 나눈다: 「.harness/ 가 있는가」(= 이 프로젝트가 하네스를 쓴다)와
+ * 「state.json 이 있는가」(= 파생 상태가 성하다). 앞은 가드가, 뒤는 복구가 본다.
+ */
+export function hasHarness(root: string): boolean {
+  return fs.existsSync(harnessDir(root));
+}
+
 export function readState(root: string): HarnessState {
   return JSON.parse(fs.readFileSync(statePath(root), 'utf8')) as HarnessState;
 }

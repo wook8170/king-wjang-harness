@@ -113,9 +113,9 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 
 | 指标 | 数值 |
 |---|---|
-| 钩子延迟（p95） | **< 150 ms**（实测约 57–104 ms） |
-| 测试套件 | **198 项通过** |
-| 每会话新增上下文 | **约 0 令牌** |
+| 钩子延迟（p95） | **< 150 ms**（实测 62 ms；10 万条日志重放回退路径为 102 ms） |
+| 测试套件 | **850 项通过**（33 个文件） |
+| 每会话新增上下文 | 启用时 **约 240 令牌**；没有 `.harness/` 的项目为 **0** |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
 
@@ -173,7 +173,7 @@ npm install          # prepare hook builds core/dist via tsup
 |---|---|
 | `harness init` | 创建 `.harness/` 状态存储（在此激活钩子） |
 | `harness status` | 以 JSON 形式输出当前状态 |
-| `harness phase set <P0..P12>` | 切换阶段 *(v0 临时方案 —— 审批关卡即将推出)* |
+| `harness phase set <P0..P12>` | 切换阶段 —— **只有通过审批的关卡才能开启下一个阶段** |
 | `harness node upsert --id <id> --title <t> [--status …]` | 新增或更新一个设计台账节点 |
 | `harness node bump <id>` | 修订一个节点 → `version++`，向引用它的波次传播 STALE |
 | `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | 开启一个波次 → 打印其 id |
@@ -189,17 +189,26 @@ npm install          # prepare hook builds core/dist via tsup
 
 ## 状态与路线图
 
-**v0 —— 核心引擎已完成并通过验证**（198 项测试，针对 v0 范围的出货就绪审计已通过）。
+**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（850 项测试）。但出货就绪审计的判定
+仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
 
 - ✅ 事件日志、状态重放、doctor 恢复
 - ✅ 四个钩子：会话注入、设计轨道拒绝、活动追踪、停止结算
 - ✅ 波次生命周期、带 STALE 传播的设计台账、UX 证据关卡
 - ✅ 注入加固、互不干扰与无害不变量、已提交的自包含 dist
-- 🔜 审批**关卡**（submit / approve / invalidate + 制品注册表 + RTM），用以取代 `phase set` 这一临时方案
-- 🔜 **设计轨道技能**（P0–P6）+ researcher / design-auditor 智能体 + ADR 决策点
-- 🔜 **设计子系统** —— Claude Design 同步、作为唯一真相源的交互式 HTML、以及单一令牌管线（参见"设计系统与 Claude Design"一节）
-- 🔜 **构建与出货轨道** —— 技术栈画像（stack profiles）、带 executor/verifier 的波次循环、视觉证据 + 令牌替换演练、以及就绪度审计
-- 🔜 已吸收的工具（token-guard、auto-retry）、terse 模式、trace
+- ✅ 审批**关卡**（`gate submit/approve/verify/sweep/feedback`）+ 制品注册表（`doc`）+ RTM（`report rtm`）
+- ✅ **设计轨道技能**（P0–P6、P10–P12）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）
+- ✅ **设计子系统** —— `design link/sync/baseline/html`、作为唯一真相源的交互式 HTML、令牌管线（`tokens gen/lint/swap`）
+- ✅ **构建与出货轨道** —— 技术栈画像（`profile`）、波次循环（`loop`）、视觉证据（`evidence`）、出货台账与判定（`ship`）
+
+### 已知限制（实测，仍未关闭）
+
+- `verifying-production-readiness` 技能 **被调用但未随插件打包** —— 需要单独安装。
+- **布局模板声明没有在核心中强制** —— 设计系统只检查令牌与冻结路径。
+- `/remote-control` **不由本插件提供** —— 会话提示是条件性说明，不是指令。
+- **没有 P7–P9（构建轨道）技能** —— 智能体有，阶段手册没有。
+- 关卡会放行填充文档 —— 内容**质量**的判定超出确定性本地核心的范围，人工审批才是防线。
+- 人工手改 `.harness/events.jsonl` **不在威胁模型内** —— 钩子拦的是智能体，不是项目主人。
 
 ---
 

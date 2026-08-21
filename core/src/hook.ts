@@ -76,6 +76,21 @@ const HARNESS_CMD_RE = new RegExp(
  */
 const FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 
+/**
+ * [SEC-96] **코어를 직접 부르는 형태**도 harness 호출이다 — `node <경로>/core/dist/cli.js`.
+ *
+ * `FORCE_ESCAPE_RE` 는 `harness` 라는 낱말을 찾으므로 이 형태를 못 본다. 독립 감정이 실측했다:
+ * `node <repo>/core/dist/cli.js doctor --accept-policy` 가 훅을 통과해 **정책 드리프트 경고가
+ * 1 → 0 으로 사라졌다**(탐지 장치가 꺼졌다). `--force` 쪽이 우연히 막힌 것은 그 가드에만
+ * `HARNESS_ALLOW_FORCE` 리터럴 절이 있어서였지, 형태를 인식해서가 아니다.
+ *
+ * 잠금은 **무엇을 실행하는가**로 판정해야 한다 — 어떤 이름으로 부르는지가 아니라.
+ */
+const CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
+
+/** 이 명령이 하네스를 실행하려 하는가 — 이름으로든(harness) 코어 파일로든(cli.js). */
+const invokesHarness = (cmd: string): boolean => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
+
 /** 하네스가 스스로만 고쳐야 하는 파일 — 손편집하면 저널과 상태가 어긋나 전부 거짓이 된다. */
 const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/design/ledger.yaml'];
 
@@ -847,7 +862,7 @@ function preTool(
     // 한 줄로 풀린다(감정서 「구멍 1」이 이름만 바뀐 것). env 를 명령에 인라인으로 붙여
     // 우회하는 것도 같이 막는다: 인라인으로 켤 수 있으면 그건 잠금이 아니다.
     if (/HARNESS_ALLOW_FORCE/.test(cmd)
-        || (FORCE_ESCAPE_RE.test(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd))) {
+        || (invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd))) {
       return deny(L(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
         + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '
@@ -869,7 +884,10 @@ function preTool(
     // 명령·`bash -c` 래퍼로 잠금이 풀린다(SEC-78 이 `--force` 쪽에서 실증했고, 이 잠금도 원래
     // 같은 정규식을 썼다). 꼬리는 `\b` 가 아니라 `(?![\w-])` 여야 `--accept-policy"`·
     // `--accept-policy)` 를 놓치지 않는다 — SEC-78 에서 구멍의 절반이 이 경계 검사였다.
-    if (FORCE_ESCAPE_RE.test(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd)) {
+    // `--force` 쪽과 **같은 두 절**을 둔다: env 리터럴 언급 + 실행 형태. 예전에는 뒤엣것만 있어
+    // `node …/cli.js doctor --accept-policy` 가 통과했다(감정이 E2E 로 탐지 정지를 실증).
+    if (/HARNESS_ACCEPT_POLICY/.test(cmd)
+        || (invokesHarness(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd))) {
       return deny(L(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning — '
         + 'so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to '

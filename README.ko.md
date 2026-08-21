@@ -113,9 +113,9 @@ flowchart LR
 
 | 지표 | 값 |
 |---|---|
-| 훅 지연 (p95) | **< 150 ms** (실측 ~57–104 ms) |
-| 테스트 스위트 | **198 passing** |
-| 세션당 추가 컨텍스트 | **~0 토큰** |
+| 훅 지연 (p95) | **< 150 ms** (실측 62 ms · 10만 건 저널 재생 폴백에서 102 ms) |
+| 테스트 스위트 | **850 passing** (33 파일) |
+| 세션당 추가 컨텍스트 | 하네스가 켜졌을 때 **~240 토큰** · `.harness/` 없는 프로젝트는 **0** |
 | 런타임 의존성 | **1** (`yaml`, 번들) |
 | 결정성 | 3× 실행 동일 판정 |
 
@@ -173,7 +173,7 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 |---|---|
 | `harness init` | `.harness/` 상태 저장소 생성 (여기서 훅 활성화) |
 | `harness status` | 현재 상태 JSON |
-| `harness phase set <P0..P12>` | 페이즈 전환 *(v0 임시 — 승인 게이트로 대체 예정)* |
+| `harness phase set <P0..P12>` | 페이즈 전환 — **승인된 게이트만 다음 페이즈를 연다** |
 | `harness node upsert --id <id> --title <t> [--status …]` | 설계 원장 노드 upsert |
 | `harness node bump <id>` | 노드 개정 → `version++`, 참조 웨이브에 STALE 전파 |
 | `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | 웨이브 생성 → id 출력 |
@@ -189,17 +189,26 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 
 ## 상태 & 로드맵
 
-**v0 — 코어 엔진 구현 완료·검증** (198 tests, v0 범위 출하 검증 통과).
+**v0 — 코어 엔진·게이트·구축/출하 트랙까지 구현·실측 완료** (850 tests). 다만 출하 검증 판정은
+아직 **출하 불가**다 — 무엇이 열려 있는지는 아래 「알려진 한계」를 보라.
 
 - ✅ 이벤트 저널, 상태 재생, doctor 복구
 - ✅ 훅 4종: 세션 주입, 설계 트랙 거부, 활동 추적, stop 정산
 - ✅ 웨이브 수명주기, STALE 전파 설계 원장, UX 증적 게이트
 - ✅ 주입 방어, 비간섭·무해 불변식, 커밋된 자체완결 dist
-- 🔜 승인 **게이트** (submit / approve / invalidate + 산출물 레지스트리 + RTM) — `phase set` 임시 대체
-- 🔜 **설계 트랙 스킬** (P0–P6) + researcher / design-auditor 에이전트 + ADR 결정 포인트
-- 🔜 **디자인 서브시스템** — Claude Design 연동, 인터랙티브 HTML 정본, 단일 토큰 파이프라인 (§ "디자인 시스템 & Claude Design")
-- 🔜 **구축·출하 트랙** — 스택 프로파일, executor/verifier 웨이브 루프, 시각 증적 + 토큰 스왑 드릴, readiness 감사
-- 🔜 흡수 도구 (token-guard, auto-retry), terse 모드, trace
+- ✅ 승인 **게이트** (`gate submit/approve/verify/sweep/feedback`) + 산출물 레지스트리 (`doc`) + RTM (`report rtm`)
+- ✅ **설계 트랙 스킬** (P0–P6, P10–P12) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`)
+- ✅ **디자인 서브시스템** — `design link/sync/baseline/html`, 인터랙티브 HTML 정본, 토큰 파이프라인 (`tokens gen/lint/swap`)
+- ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`)
+
+### 알려진 한계 (실측 · 아직 열려 있음)
+
+- `verifying-production-readiness` 스킬은 **부르지만 동봉하지 않는다** — 따로 설치해야 한다.
+- **레이아웃 템플릿 선언 강제가 코어에 없다** — 디자인 시스템은 토큰·동결 경로만 본다.
+- `/remote-control` 은 **이 플러그인이 제공하지 않는다** — 세션 안내는 지시가 아니라 조건부 안내다.
+- **P7~P9(구축 트랙) 스킬이 없다** — 에이전트는 있고 페이즈 매뉴얼만 없다.
+- 게이트는 필러 문서를 통과시킨다 — 내용의 **질** 판정은 결정적 로컬 코어 밖이라 사람 승인이 방어다.
+- 사람이 `.harness/events.jsonl` 을 손으로 고치는 것은 **위협 모델 밖**이다 — 훅은 에이전트를 막지 주인을 막지 않는다.
 
 ---
 

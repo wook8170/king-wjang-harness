@@ -63,6 +63,45 @@ describe('UX-85: 미초기화 안내는 한 곳에서, 아는 명령에만', () 
   });
 });
 
+/**
+ * [OPS-94] **복구 경로가 막다른 길이 되면 안 된다.**
+ *
+ * 미초기화 가드([UX-85])를 `state.json` 존재로 재던 탓에, 그 파일만 사라진 순간 모든 명령이
+ * 「`harness init` 을 먼저 실행하라」고 하고 `init` 은 「이미 있다」로 거부했다 — **저널은
+ * 멀쩡하고 `doctor --repair` 가 재생할 수 있는데 그 명령까지 같이 막혔다.**
+ * 가드는 「.harness/ 가 있는가」를, 복구는 「state.json 이 성한가」를 본다. 둘은 다른 질문이다.
+ */
+describe('OPS-94: state.json 이 사라져도 복구가 막히지 않는다', () => {
+  const brokenState = (): string => {
+    const root = init();
+    capture(() => run(['wave', 'create', '--goal', 'g'], root));
+    fs.rmSync(path.join(root, '.harness/state.json'));
+    return root;
+  };
+
+  it('doctor --repair 가 저널로 상태를 되살린다', () => {
+    const root = brokenState();
+    const { code } = capture(() => run(['doctor', '--repair'], root));
+    expect(code).toBe(0);
+    expect(fs.existsSync(path.join(root, '.harness/state.json'))).toBe(true);
+  });
+
+  it('진단·조회도 막히지 않는다 — 안내가 실행 가능해야 한다', () => {
+    const root = brokenState();
+    expect(capture(() => run(['doctor'], root)).text).not.toContain('harness init');
+    capture(() => run(['doctor', '--repair'], root));
+    expect(capture(() => run(['status'], root)).code).toBe(0);
+    expect(capture(() => run(['wave', 'list'], root)).code).toBe(0);
+  });
+
+  it('.harness/ 자체가 없으면 init 안내는 그대로다', () => {
+    const root = tmp();
+    const { code, text } = capture(() => run(['doctor'], root));
+    expect(code).toBe(1);
+    expect(text).toContain('harness init');
+  });
+});
+
 describe('USE-82: backtrack 은 사유 없이 성공하지 않는다', () => {
   it('--reason 이 없으면 exit 1 이고 상태가 바뀌지 않는다', () => {
     const root = init();

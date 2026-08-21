@@ -11,7 +11,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initHarness, isInitialized, readState, writeState } from './state';
+import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { getNode, upsertNode, bumpNode } from './ledger';
@@ -173,8 +173,11 @@ export function run(argv: string[], root: string): number {
     // **아는 명령에만 건다.** 미지 명령은 UX-24 계약대로 「알 수 없는 명령 + 명령군 목록」이
     // 먼저다 — 오타를 친 사람에게 init 을 시키면 원인과 다른 곳을 가리킨다. 그리고 이 가드는
     // try **안**에 있어야 exit 1 + 안내가 되지, 밖이면 그대로 던져 스택이 노출된다.
+    // [OPS-94] 가드는 **`.harness/` 존재**로 판정한다. `state.json` 존재로 재면 그 파일만
+    // 지운 순간 `doctor --repair`(저널 재생 복구) 까지 막혀 **복구가 막다른 길**이 된다 —
+    // 안내문이 `init` 을 가리키는데 `init` 은 「이미 있다」로 거부하므로 사람이 빠져나갈 수 없다.
     const PRE_INIT_OK = new Set(['init', 'migrate', '--version', 'hook']);
-    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== undefined && !isInitialized(root)) {
+    if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== undefined && !hasHarness(root)) {
       throw new Error(L('No .harness/ here — run `harness init` first.', '.harness/ 가 없다 — `harness init` 을 먼저 실행하라'));
     }
     switch (cmd) {

@@ -251,11 +251,20 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
   try {
     text = fs.readFileSync(yamlPath, 'utf8');
   } catch (e) {
-    problems.push(t({
-      en: `cannot read ${yamlPath} (${errMsg(e)}) — skipping this profile`,
-      ko: `${yamlPath} 를 읽을 수 없다(${errMsg(e)}) — 이 프로파일을 건너뛴다`,
-    }));
-    return null;
+    // [UTIL-A] **문서가 시킨 대로 하면 먹어야 한다.** `commands.yaml` 헤더는 「이 파일을
+    // `.harness/profile/` 로 복사해 값을 채우라」고 하는데, `profile.yaml` 이 없다는 이유로
+    // 디렉토리 전체를 건너뛰면 조용히 generic 으로 되돌아간다 — 사람은 채운 값이 왜 안 먹는지
+    // 알 수 없고, `profile cmd deploy` 는 다시 「commands.yaml 을 채우라」고 답해 **순환**한다.
+    // 명령 매핑만 덮어쓰는 것은 정당한 사용법이므로, 그때는 이름 없는 최소 프로파일로 계속한다.
+    if (fs.existsSync(path.join(dir, 'commands.yaml'))) {
+      text = 'name: local';
+    } else {
+      problems.push(t({
+        en: `cannot read ${yamlPath} (${errMsg(e)}) — skipping this profile`,
+        ko: `${yamlPath} 를 읽을 수 없다(${errMsg(e)}) — 이 프로파일을 건너뛴다`,
+      }));
+      return null;
+    }
   }
 
   let raw: unknown;

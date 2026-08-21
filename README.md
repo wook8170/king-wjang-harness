@@ -113,9 +113,9 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 
 | Metric | Value |
 |---|---|
-| Hook latency (p95) | **< 150 ms** (measured ~57–104 ms) |
-| Test suite | **198 passing** |
-| Added context per session | **~0 tokens** |
+| Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
+| Test suite | **850 passing** (33 files) |
+| Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
 
@@ -174,7 +174,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 |---|---|
 | `harness init` | Create the `.harness/` state store (activates the hooks here) |
 | `harness status` | Current state as JSON |
-| `harness phase set <P0..P12>` | Switch phase *(v0 stopgap — approval gates coming)* |
+| `harness phase set <P0..P12>` | Switch phase — **only an approved gate opens the next one** |
 | `harness node upsert --id <id> --title <t> [--status …]` | Upsert a design-ledger node |
 | `harness node bump <id>` | Revise a node → `version++`, propagate STALE to referencing waves |
 | `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | Open a wave → prints its id |
@@ -190,17 +190,26 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ## Status & roadmap
 
-**v0 — core engine complete and verified** (198 tests, release-readiness audit passed for the v0 scope).
+**v0 — core engine, gates, and both later tracks are implemented and measured** (850 tests). The
+release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
 - ✅ Four hooks: session injection, design-track denial, activity tracking, stop settlement
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
-- 🔜 Approval **gates** (submit / approve / invalidate + artifact registry + RTM) replacing the `phase set` stopgap
-- 🔜 **Design track skills** (P0–P6) + researcher / design-auditor agents + ADR decision points
-- 🔜 **Design subsystem** — Claude Design sync, the interactive HTML source-of-truth, and the single-token pipeline (§ "Design system & Claude Design")
-- 🔜 **Build & ship tracks** — stack profiles, the wave loop with executor/verifier, visual-evidence + token-swap drills, and readiness auditing
-- 🔜 Absorbed tooling (token-guard, auto-retry), terse-mode, trace
+- ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
+- ✅ **Design track skills** (P0–P6, P10–P12) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`)
+- ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
+- ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
+
+### Known limits (measured, still open)
+
+- The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed separately.
+- **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.
+- `/remote-control` is **not provided by this plugin**; the session hint is conditional guidance, not an instruction.
+- **No skills for P7–P9** (the build track) — the agents cover it, the phase manuals do not.
+- A gate accepts filler documents: content **quality** is outside a deterministic local core, so human approval is the defence.
+- A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 
 ---
 

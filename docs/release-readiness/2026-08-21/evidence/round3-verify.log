@@ -678,3 +678,34 @@ phase 는 P0 그대로였다(끝까지 실행해 확인). 그래도 고친 이�
     로컬 프로파일이 deploy_commands 를 재정의할 때만 잠재 위험이므로 결함으로 올리지 않았다.
 
   837 → 847 tests green · tsc 0
+
+## §23 재감정 7축 완료 + 마지막 4건 봉인 (라운드 3-D, 2026-08-22)
+
+  [7축 점수]  효용성 4.7 · 실효성 2.5* · 가치 4.3 · 가성비 4.6 · 사용성 4.5 · 상품성 4.5 · 엔지니어링 4.5
+              * 실효성은 SEC-90/91/92 를 닫기 **전** 상태의 점수 — 재측정 대상
+              전 축 4.8 미달. 미달 사유는 대부분 「잔여 감점 LOW 이하」 조건이다.
+
+  [SEC-96 — 잠금이 이름으로 판정했다]
+    전: node <repo>/core/dist/cli.js doctor --accept-policy → ALLOW
+        실행하면 drift warnings 1 → 0 (탐지 장치 정지, E2E 확인)
+    후: 우회 9/9 DENY · 과차단 0/9 (node cli.js status·doctor·--repair 는 열려 있다)
+
+  [OPS-94 — 내가 만든 회귀]
+    UX-85 중앙 가드가 isInitialized(state.json 존재)를 썼다 → 그 파일만 지우면
+    doctor·status·wave·ship 전부 「init 하라」, init 은 「이미 있다」 → 막다른 길.
+    후: hasHarness(.harness/ 존재)와 isInitialized(state.json 성함)를 분리.
+        doctor --repair exit 0 + state.json 재생 확인.
+
+  [PROD-A — README 4개 언어가 출하된 기능을 「🔜 예정」이라 적었다]
+    승인 게이트·설계 스킬·디자인 서브시스템·구축/출하 트랙 4줄이 전부 실재.
+    phase set 은 「v0 임시」라 적혔으나 게이트 승인 없이 못 넘어간다.
+    198 tests(실측 850) · ~0 토큰(실측 ~240) 도 낡음.
+    후: 4개 언어 동시 정정 + **「알려진 한계」 절 신설**(미동봉 스킬·레이아웃 미강제·
+        remote-control 미제공·P7~P9 스킬 부재·필러 문서·저널 손편집은 위협 모델 밖).
+    측정: 4개 언어 🔜 0건 · 198 0건
+
+  [UTIL-A — 문서대로 하면 안 먹는다]
+    commands.yaml 만 복사하라는 헤더대로 하면 profile.yaml 부재로 디렉토리 전체 skip.
+    후: commands.yaml 만 있어도 최소 프로파일로 이어 간다 → profile cmd deploy 정상.
+
+  847 → 854 tests green · tsc 0
