@@ -47,7 +47,28 @@ const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 const HARNESS_CMD_RE = /(^|[;&|]\s*|\(\s*)(\S*\/)?harness(\s|$)/;
 
 /** 하네스가 스스로만 고쳐야 하는 파일 — 손편집하면 저널과 상태가 어긋나 전부 거짓이 된다. */
-const CORE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/design/ledger.yaml'];
+const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/design/ledger.yaml'];
+
+/**
+ * [SEC-69] **판정의 입력이 되는 정책 파일.**
+ *
+ * 설계 트랙 차단은 `config.yaml` 의 `design_allowed_prefixes` **allow-list** 로 하고, 소스 경로·
+ * 배포 명령의 정의는 프로파일이 준다(스펙 §4-2 마지막 줄). 그 파일들이 쓰기 허용이면
+ * **피판정자가 판정 규칙을 고쳐 스스로를 무죄로 만들 수 있다** — 실제로 빈 문자열 접두사
+ * 한 줄이면 모든 경로가 allow-list 에 매치돼 강제가 통째로 꺼졌고, `doctor` 도 깨끗하다고 답했다.
+ *
+ * 그래서 상태 파일과 **같은 등급**으로 올린다. 개별 우회 경로를 하나 더 막는 게 아니라
+ * 신뢰 경계를 원위치시키는 것이다: 판정기의 정책은 피판정자의 쓰기 영역 밖에 있어야 한다.
+ *
+ * 정책을 바꿀 길은 남는다 — 사람이 터미널에서 직접 편집하거나(훅은 에이전트 호출만 본다),
+ * 하네스 명령을 거친다. 막는 것은 **에이전트가 스스로 푸는 경로**다.
+ */
+const POLICY_FILES = ['.harness/config.yaml'];
+
+/** 프로젝트 로컬 프로파일 디렉토리 — 번들 프로파일보다 우선하므로 정책과 같은 무게다. */
+const POLICY_PREFIXES = ['.harness/profile/'];
+
+const CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 
 /**
  * 턴 로그 헤딩은 **파싱 앵커**다 — 표시 문자열이 아니다. 지시서 본문은 생성 시점의 `lang` 을
@@ -385,13 +406,32 @@ function judgeWritePath(
   const rel = relPath(root, raw);
   const realRel = realRelPath(root, raw);
 
-  const core = [rel, realRel].find(r => CORE_FILES.includes(r));
-  if (core) {
+  // 상태 파일과 정책 파일은 **바꾸는 방법이 다르다** — 한 문장으로 뭉뚱그리면 둘 다 틀린 안내가 된다.
+  const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r));
+  if (stateFile) {
     return deny(
       L(
-        `${core} can only be changed by harness commands — editing it by hand desynchronises the `
+        `${stateFile} can only be changed by harness commands — editing it by hand desynchronises the `
         + 'journal from the state.' + (fromBash ? ' (shell redirects, tee, sed -i follow the same rule)' : ''),
-        `${core} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`
+        `${stateFile} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`
+        + (fromBash ? ' (셸 리다이렉트·tee·sed -i 등도 같은 규칙이다)' : ''),
+      ),
+      degraded, lang,
+    );
+  }
+  const policyFile = [rel, realRel].find(
+    r => POLICY_FILES.includes(r) || POLICY_PREFIXES.some(pre => r !== '' && r.startsWith(pre)),
+  );
+  if (policyFile) {
+    return deny(
+      L(
+        `${policyFile} decides what this hook blocks, so an agent cannot write it — otherwise the harness `
+        + 'could disarm itself in one line. If the policy genuinely needs to change, **the user edits it '
+        + 'directly in their terminal**; the hook only sees agent tool calls.'
+        + (fromBash ? ' (shell redirects, tee, sed -i follow the same rule)' : ''),
+        `${policyFile} 은(는) 이 훅이 무엇을 막을지 정하는 파일이라 에이전트가 쓸 수 없다 — `
+        + '열어 두면 하네스가 한 줄로 스스로를 해제할 수 있다. 정책을 정말 바꿔야 하면 '
+        + '**사용자가 터미널에서 직접 편집**한다(훅은 에이전트의 도구 호출만 본다).'
         + (fromBash ? ' (셸 리다이렉트·tee·sed -i 등도 같은 규칙이다)' : ''),
       ),
       degraded, lang,

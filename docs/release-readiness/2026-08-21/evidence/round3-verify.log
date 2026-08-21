@@ -293,3 +293,55 @@ rubric 이 명시적으로 덮는다고 한 cp/mv 규칙에 난 구멍이고, �
   → 여전히 열려 있고 **의도적으로 두는 것**: `git checkout -- <path>` · `git restore` ·
      `git stash pop`(복원이지 구현이 아니다) · `mkdir`(디렉토리 생성) · `npx tsc --outDir`
      (빌드 도구를 막으면 과차단) · `eval`·변수 동적 조립·사용자 스크립트 실행(정적 판정 불가).
+
+## 10. [SEC-69] 자기 무장해제 — 판정기의 정책이 피판정자 쓰기 영역 안에 있었다
+
+42 에이전트 독립 적대 감사가 찾았고 내가 재현했다. 설계 트랙 차단은 `config.yaml` 의
+`design_allowed_prefixes` **allow-list** 로 하는데 그 파일이 훅에서 allow 였다. 빈 문자열
+접두사 한 줄이면 모든 경로에 매치돼 **강제가 통째로 꺼졌고**, `doctor` 도 깨끗하다고 답했다.
+
+개별 우회 경로를 하나 더 막는 문제가 아니라 **신뢰 경계**의 문제다: 판정기의 정책은
+피판정자의 쓰기 영역 밖에 있어야 한다. 정책 파일(`config.yaml` + `.harness/profile/`)을
+상태 파일과 같은 등급으로 올렸다.
+
+### 수정 전
+  [에이전트가 정책 파일을 쓸 수 있나 — 전건 deny 여야 한다]
+    allow  Write config.yaml
+    allow  Write profile/profile.yaml
+    allow  Write profile/commands.yaml
+    allow  Bash  > config.yaml
+    deny   Bash  sed -i config.yaml
+    allow  Bash  cp → profile.yaml
+    allow  Bash  curl -o config.yaml
+  [과차단 확인 — 전건 allow 여야 한다]
+    allow  Write .harness/design/x.md
+    allow  Write .harness/packets/P0.md
+    allow  Write .harness/waves/wave-001.md
+    allow  Write docs/a.md
+    allow  Write README.md
+  [무장해제 재현 — 정책이 안 바뀌므로 소스는 계속 deny]
+    deny   Write src/app.ts
+
+### 수정 후 (HEAD)
+  [에이전트가 정책 파일을 쓸 수 있나 — 전건 deny 여야 한다]
+    deny   Write config.yaml
+    deny   Write profile/profile.yaml
+    deny   Write profile/commands.yaml
+    deny   Bash  > config.yaml
+    deny   Bash  sed -i config.yaml
+    deny   Bash  cp → profile.yaml
+    deny   Bash  curl -o config.yaml
+  [과차단 확인 — 전건 allow 여야 한다]
+    allow  Write .harness/design/x.md
+    allow  Write .harness/packets/P0.md
+    allow  Write .harness/waves/wave-001.md
+    allow  Write docs/a.md
+    allow  Write README.md
+  [무장해제 재현 — 정책이 안 바뀌므로 소스는 계속 deny]
+    deny   Write src/app.ts
+
+  → 정책 쓰기 7종 전건 deny · **과차단 0**(설계 산출물·문서 전건 allow).
+  → 상태 파일과 정책 파일은 **바꾸는 방법이 다르므로** deny 사유를 분리했다:
+     상태는 「harness 명령으로만」, 정책은 「사용자가 터미널에서 직접」(훅은 에이전트 호출만 본다).
+  → **남은 구멍은 탐지다**: 사람이 직접 고치는 건 의도된 탈출구지만 `doctor` 가 그 사실을
+     보고하지 않는다 → [OPS-76] 로 open.
