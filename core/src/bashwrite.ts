@@ -57,10 +57,48 @@ const isFlag = (t: string): boolean => t.startsWith('-');
 const looksLikePath = (t: string): boolean =>
   t !== '' && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes('/') || /\.[A-Za-z0-9]+$/.test(t));
 
-/** 명령 이름에서 경로·env 접두를 벗긴다 (`/usr/bin/tee` → `tee`). */
+/**
+ * **접두 명령** — 뒤에 오는 진짜 명령을 감싸기만 하는 것들. 독립 감정이 실증한 구멍의
+ * 원인이다: `sudo tee src/app.ts` 는 명령 이름이 `sudo` 로 잡혀 `tee` 규칙을 타지 않았고,
+ * 그래서 **소스·코어·정책 파일 쓰기가 전 페이즈에서 열렸다**(`sudo tee .harness/events.jsonl`
+ * 까지 ALLOW). 리다이렉트(`sudo echo x > f`)는 원문 스캔이 따로 잡아 막혀 있었기 때문에
+ * 「접두를 붙이면 열린다」가 명령 계열에서만 조용히 성립했다.
+ *
+ * 값을 받는 플래그를 함께 건너뛰는 이유는 `xargs` 와 같다 — `nice -n 10 cp a b` 에서 `10` 을
+ * 명령으로 오인하면 엉뚱한 것을 판정한다. `timeout 5 cp a b` 처럼 **숫자 인자**를 받는 것도 있다.
+ */
+const PREFIX_COMMANDS = new Set([
+  'sudo', 'doas', 'env', 'nohup', 'time', 'command', 'exec', 'nice', 'ionice',
+  'stdbuf', 'setsid', 'timeout', 'unbuffer', 'script', 'proxychains', 'chroot',
+]);
+
+/** 접두 명령이 값으로 받는 플래그. 여기 없는 플래그는 값을 안 받는 것으로 본다. */
+const PREFIX_FLAG_TAKES_VALUE = new Set([
+  '-u', '-g', '-n', '-C', '-S', '-k', '-i', '-o', '--user', '--group', '--chdir',
+  '--signal', '--kill-after', '--adjustment',
+]);
+
+/**
+ * 명령 이름에서 경로·env 접두·**접두 명령**을 벗긴다 (`sudo -u x /usr/bin/tee` → `tee`).
+ * 벗기다가 남는 것이 없으면 이름은 빈 문자열이다 — 그건 판정 대상이 아니다.
+ */
 function commandName(tokens: string[]): { name: string; args: string[] } {
   let i = 0;
-  while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++; // env 접두
+  for (;;) {
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;   // env 대입
+    const head = (tokens[i] ?? '').split('/').pop() ?? '';
+    if (!PREFIX_COMMANDS.has(head)) break;
+    i++;                                                                           // 접두 명령 자체
+    while (i < tokens.length) {                                                    // 그 플래그·값
+      const t = tokens[i];
+      if (isFlag(t)) {
+        i += PREFIX_FLAG_TAKES_VALUE.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
+        continue;
+      }
+      if (/^\d+(\.\d+)?[smhd]?$/.test(t)) { i++; continue; }                       // `timeout 5`
+      break;
+    }
+  }
   const raw = tokens[i] ?? '';
   return { name: raw.split('/').pop() ?? '', args: tokens.slice(i + 1) };
 }

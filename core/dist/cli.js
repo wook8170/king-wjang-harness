@@ -8673,9 +8673,60 @@ function tokenize(segment) {
 }
 var isFlag = (t) => t.startsWith("-");
 var looksLikePath = (t) => t !== "" && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes("/") || /\.[A-Za-z0-9]+$/.test(t));
+var PREFIX_COMMANDS = /* @__PURE__ */ new Set([
+  "sudo",
+  "doas",
+  "env",
+  "nohup",
+  "time",
+  "command",
+  "exec",
+  "nice",
+  "ionice",
+  "stdbuf",
+  "setsid",
+  "timeout",
+  "unbuffer",
+  "script",
+  "proxychains",
+  "chroot"
+]);
+var PREFIX_FLAG_TAKES_VALUE = /* @__PURE__ */ new Set([
+  "-u",
+  "-g",
+  "-n",
+  "-C",
+  "-S",
+  "-k",
+  "-i",
+  "-o",
+  "--user",
+  "--group",
+  "--chdir",
+  "--signal",
+  "--kill-after",
+  "--adjustment"
+]);
 function commandName(tokens) {
   let i = 0;
-  while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
+  for (; ; ) {
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
+    const head = (tokens[i] ?? "").split("/").pop() ?? "";
+    if (!PREFIX_COMMANDS.has(head)) break;
+    i++;
+    while (i < tokens.length) {
+      const t = tokens[i];
+      if (isFlag(t)) {
+        i += PREFIX_FLAG_TAKES_VALUE.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
+        continue;
+      }
+      if (/^\d+(\.\d+)?[smhd]?$/.test(t)) {
+        i++;
+        continue;
+      }
+      break;
+    }
+  }
   const raw = tokens[i] ?? "";
   return { name: raw.split("/").pop() ?? "", args: tokens.slice(i + 1) };
 }
