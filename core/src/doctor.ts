@@ -3,8 +3,9 @@
  *
  * 두 축을 분리한다:
  *   issues   = state.json 이 이벤트 재생과 발산한 것. 복구(repair) 대상이자 ok 판정 기준.
- *   warnings = 저널 건강·환경 진단. 복구로 고쳐지지 않으므로 ok 를 내리지 않는다 —
- *              버전 스큐로 정상 발생하는 미지 이벤트가 영구 red 를 만들면 경보가 죽는다.
+ *   warnings = 저널 건강·환경 진단 + 정책 드리프트(OPS-76). 복구로 고쳐지지 않으므로 ok 를
+ *              내리지 않는다 — 버전 스큐로 정상 발생하는 미지 이벤트나, 사람이 정당하게 바꾼
+ *              정책이 영구 red 를 만들면 경보가 죽는다.
  *
  * 재생 신뢰도(trustworthy)는 복구 게이트일 뿐 ok 와 무관하다. 손상뿐 아니라 저널 부재·
  * 절단 의심도 불신으로 친다 — "증거 없음"은 "아무 일 없었다는 증거"가 아니다.
@@ -18,6 +19,7 @@ import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './even
 import { tr } from './tr';
 import type { Msg } from './i18n';
 import { readState, writeState, defaultState } from './state';
+import { computePolicyHash, pinnedPolicy, pinPolicy } from './policy';
 import type { HarnessState } from './types';
 
 export interface DoctorReport {
@@ -80,7 +82,7 @@ const isPristine = (s: HarnessState): boolean => {
 };
 
 export function runDoctor(
-  root: string, opts: { repair?: boolean; force?: boolean } = {},
+  root: string, opts: { repair?: boolean; force?: boolean; acceptPolicy?: boolean } = {},
 ): DoctorReport {
   // 진단 문자열은 사용자가 읽는 출력이다 — 줄마다 config 를 다시 읽지 않도록 한 번만 해석한다.
   const t = (m: Msg): string => tr(root, m);
@@ -201,6 +203,66 @@ export function runDoctor(
       en: `${hookErrors} hook decision failure(s) recorded — find out why`,
       ko: `훅 판정 실패 ${hookErrors}건 기록됨 — 원인 확인 필요`,
     }));
+  }
+
+  // 7b. 정책 무결(OPS-76) — 게이트 산출물 해시와 같은 패턴으로 정책 변경을 관측 가능하게 한다.
+  //
+  //   **왜 issue 가 아니라 warning 인가.** issues 는 이 파일의 정의상 「state 가 이벤트 재생과
+  //   발산한 것 = repair 대상」이다. 정책 드리프트는 재생으로 고칠 수 없고, 고쳐서도 안 된다 —
+  //   `doctor --repair` 가 사용자의 config.yaml 을 되돌리면 SEC-69 가 남긴 «사람의 탈출구»를
+  //   하네스가 도로 빼앗는 셈이다. issue 로 올리면 사용자가 파일을 되돌릴 때까지 ok=false 가
+  //   영구히 박히는데, 이 파일 머리말이 적은 그대로 **영구 red 는 경보를 죽인다.**
+  //   그리고 정책 변경은 정당할 수 있다. 목표는 「금지」가 아니라 「보이게」다.
+  //
+  //   비간섭: `.harness/` 가 없으면 손대지 않는다(하네스 미사용 프로젝트에 파일을 만들지 않는다).
+  if (fs.existsSync(harnessDir(root))) {
+    if (opts.acceptPolicy) {
+      const pin = pinPolicy(root, 'accept');
+      notes.push(
+        pin.changed
+          ? t({
+            en: `policy baseline re-pinned: ${(pin.prevHash ?? 'none').slice(0, 12)} → ${pin.hash.slice(0, 12)} `
+              + `(${pin.files.join(', ') || 'no policy files'})`,
+            ko: `정책 베이스라인 재고정: ${(pin.prevHash ?? '없음').slice(0, 12)} → ${pin.hash.slice(0, 12)} `
+              + `(${pin.files.join(', ') || '정책 파일 없음'})`,
+          })
+          : t({
+            en: 'the policy baseline already matches the files — nothing to accept',
+            ko: '정책 베이스라인이 이미 현재 파일과 같다 — 수용할 변경이 없다',
+          }),
+      );
+    }
+    const pinned = pinnedPolicy(root);
+    const current = computePolicyHash(root);
+    if (!pinned) {
+      // 베이스라인이 없는 것은 «고장»이 아니라 «장치가 아직 꺼져 있음»이다 — 이 하나로
+      // 구 프로젝트 전부가 상시 경고를 달면 진짜 드리프트 경고가 묻힌다. note 로 안내만 한다.
+      notes.push(t({
+        en: 'the policy baseline is not pinned yet — pin it with `harness doctor --accept-policy` so that '
+          + 'later changes to the policy files become visible',
+        ko: '정책 베이스라인이 아직 고정되지 않았다 — `harness doctor --accept-policy` 로 고정해야 '
+          + '이후의 정책 파일 변경이 보인다',
+      }));
+    } else if (pinned.hash !== current.hash) {
+      const added = current.files.filter(f => !pinned.files.includes(f));
+      const removed = pinned.files.filter(f => !current.files.includes(f));
+      const delta = [
+        added.length ? t({ en: `added: ${added.join(', ')}`, ko: `추가: ${added.join(', ')}` }) : '',
+        removed.length ? t({ en: `removed: ${removed.join(', ')}`, ko: `삭제: ${removed.join(', ')}` }) : '',
+      ].filter(Boolean).join('; ');
+      warnings.push(t({
+        en: `the policy files differ from the pinned baseline — pinned ${pinned.hash.slice(0, 12)} `
+          + `(${pinned.ts}) ≠ current ${current.hash.slice(0, 12)}`
+          + (delta ? ` [${delta}]` : '') + `. Files: ${current.files.join(', ') || 'none'}. `
+          + 'These files decide what the hook blocks, so a change to them changes the enforcement itself. '
+          + 'The change may well be legitimate — review it, then re-pin with `harness doctor --accept-policy`',
+        ko: `정책 파일이 고정된 베이스라인과 다르다 — 고정 ${pinned.hash.slice(0, 12)} `
+          + `(${pinned.ts}) ≠ 현재 ${current.hash.slice(0, 12)}`
+          + (delta ? ` [${delta}]` : '') + `. 대상: ${current.files.join(', ') || '없음'}. `
+          + '이 파일들이 훅이 무엇을 막을지 정하므로, 여기가 바뀌면 강제 자체가 바뀐 것이다. '
+          + '정당한 변경일 수 있다 — 내용을 확인한 뒤 `harness doctor --accept-policy` 로 재고정하라',
+      }));
+    }
   }
 
   // 8. repair — 고칠 발산이 있을 때만 움직인다. 저널이 손상이어도 발산이 없으면 할 일이 없다.
