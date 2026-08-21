@@ -181,9 +181,9 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness wave update "<做了什么 / 下一步>"` | 结算轮次日志 |
 | `harness wave complete` | 完成一个波次（引用 UX 的波次需要视觉证据） |
 | `harness backtrack <phase> --reason "…"` | 从后续轨道正式退回设计阶段 |
-| `harness doctor [--repair [--force]]` | 完整性检查 · 日志重放恢复 |
+| `harness doctor [--repair [--force]] [--accept-policy]` | 完整性检查 · 日志重放恢复 · 策略变更检测（`--accept-policy` 需要 `HARNESS_ACCEPT_POLICY=1` — 仅限人工） |
 
-没有 `--help`；这张表就是参考文档。钩子事件（`harness hook …`）由插件调用，从不需要手动调用。
+`harness --help` 会打印命令地图，`harness <命令组> --help` 会列出该组的子命令；这张表是简要参考。钩子事件（`harness hook …`）由插件调用，从不需要手动调用。
 
 ---
 

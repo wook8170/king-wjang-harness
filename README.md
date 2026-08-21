@@ -182,9 +182,9 @@ Your active role is at the **decision points**: approve the design, decide when 
 | `harness wave update "<did / next>"` | Settle the turn log |
 | `harness wave complete` | Complete a wave (UX-referencing waves require visual evidence) |
 | `harness backtrack <phase> --reason "…"` | Officially return to design from a later track |
-| `harness doctor [--repair [--force]]` | Integrity check · journal-replay recovery |
+| `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check · journal-replay recovery · policy-drift check (`--accept-policy` needs `HARNESS_ACCEPT_POLICY=1`, humans only) |
 
-There is no `--help`; this table is the reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
+`harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
 
 ---
 

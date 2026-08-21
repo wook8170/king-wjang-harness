@@ -182,9 +182,9 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness wave update "<did / next>"` | ターンログを決着させる |
 | `harness wave complete` | ウェーブを完了する（UXを参照するウェーブは視覚的エビデンスが必須） |
 | `harness backtrack <phase> --reason "…"` | 後続トラックから設計へ正式に差し戻す |
-| `harness doctor [--repair [--force]]` | 整合性チェック ・ ジャーナル再生による復旧 |
+| `harness doctor [--repair [--force]] [--accept-policy]` | 整合性チェック ・ ジャーナル再生による復旧 ・ ポリシー変更の検知（`--accept-policy` は `HARNESS_ACCEPT_POLICY=1` が必要 — 人間のみ） |
 
-`--help` は存在しない。このテーブルがリファレンスだ。フックイベント（`harness hook …`）はプラグインが呼び出すものであり、手で呼ぶことはない。
+`harness --help` がコマンドマップを、`harness <グループ> --help` がそのグループのサブコマンドを表示する。このテーブルは簡易リファレンスだ。フックイベント（`harness hook …`）はプラグインが呼び出すものであり、手で呼ぶことはない。
 
 ---
 

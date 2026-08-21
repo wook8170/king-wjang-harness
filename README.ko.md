@@ -181,9 +181,9 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 | `harness wave update "<한 일 / 다음>"` | 턴 로그 정산 |
 | `harness wave complete` | 웨이브 완료 (UX 참조 웨이브는 시각 증적 필요) |
 | `harness backtrack <phase> --reason "…"` | 나중 트랙에서 설계로 공식 역행 |
-| `harness doctor [--repair [--force]]` | 무결성 검사 · 저널 재생 복구 |
+| `harness doctor [--repair [--force]] [--accept-policy]` | 무결성 검사 · 저널 재생 복구 · 정책 변경 탐지 (`--accept-policy` 는 `HARNESS_ACCEPT_POLICY=1` 필요 — 사람만) |
 
-`--help`는 없다; 이 표가 레퍼런스다. 훅 이벤트(`harness hook …`)는 플러그인이 호출하며, 손으로 칠 일 없다.
+`harness --help`가 명령 지도를, `harness <군> --help`가 그 군의 하위명령을 보여준다; 이 표는 짧은 레퍼런스다. 훅 이벤트(`harness hook …`)는 플러그인이 호출하며, 손으로 칠 일 없다.
 
 ---
 
