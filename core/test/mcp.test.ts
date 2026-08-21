@@ -95,7 +95,11 @@ describe('mcp: gate approve 안전 장치 (§4-3)', () => {
   it('도구는 노출되지만 절대 승인하지 않고 CLI 경로로 되돌린다', () => {
     const root = setup();
     // 승인 가능한 상태를 만들어 둔다 — 그래도 승인되면 안 된다
-    fs.writeFileSync(path.join(root, 'design.md'), '# 설계\n');
+    // SEC-75: 게이트는 실질 내용이 있는 산출물만 받는다 — 픽스처도 실제 문서여야 한다.
+    fs.writeFileSync(path.join(root, 'design.md'), '# 설계\n\n'
+      + '모듈 경계와 의존 그래프를 여기서 확정한다. 각 모듈은 인터페이스로만 서로를 알고, '
+      + '공유 상태는 두지 않는다. 이 결정의 대가는 초기 배선 비용이며, 그 대신 한 모듈의 '
+      + '변경이 다른 모듈의 테스트를 깨지 않는다.\n');
     expect(callTool(root, 'harness_gate_submit', {
       phase: 'P0', paths: ['design.md'], evidence: 'claimed',
     }).ok).toBe(true);
@@ -212,7 +216,10 @@ describe('mcp: 코어 위임', () => {
 
   it('gate submit 은 산출물 해시를 고정하고 리뷰 패킷을 남긴다 (§4-3)', () => {
     const root = setup();
-    fs.writeFileSync(path.join(root, 'concept.md'), '# 컨셉\n');
+    fs.writeFileSync(path.join(root, 'concept.md'), '# 컨셉\n\n'
+      + '설계 규율을 훅으로 물리 강제하는 플러그인이다. 타깃은 혼자 여러 프로젝트를 모는 개발자이고, '
+      + '성공 지표는 게이트를 우회하지 않고 출하까지 가는 비율이다. 경쟁 대안은 사람의 선의에 '
+      + '기대는 체크리스트이며, 그것이 실패하는 지점이 이 제품의 존재 이유다.\n');
     const r = callTool(root, 'harness_gate_submit', { phase: 'P0', paths: ['concept.md'] });
     expect(r.ok).toBe(true);
     expect(readState(root).gates.P0?.status).toBe('submitted');

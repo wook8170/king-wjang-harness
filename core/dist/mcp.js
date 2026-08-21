@@ -7678,29 +7678,231 @@ function replayState(events) {
 }
 
 // core/src/gate.ts
-var crypto = __toESM(require("crypto"));
-var fs4 = __toESM(require("fs"));
-var path3 = __toESM(require("path"));
+var crypto2 = __toESM(require("crypto"));
+var fs5 = __toESM(require("fs"));
+var path4 = __toESM(require("path"));
 
 // core/src/untrusted.ts
 var import_node_crypto = require("crypto");
 
+// core/src/registry.ts
+var fs4 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
+var crypto = __toESM(require("crypto"));
+var YAML2 = __toESM(require_dist());
+function toDocNode(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.path !== "string" || !o.path) return null;
+  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
+  if (!isPhase(o.phase) || !isDocStatus(o.status)) return null;
+  const node = {
+    id: o.id,
+    phase: o.phase,
+    path: o.path,
+    version: o.version,
+    status: o.status,
+    linkedNodes: Array.isArray(o.linkedNodes) ? o.linkedNodes.map(String) : []
+  };
+  if (typeof o.hash === "string" && o.hash) node.hash = o.hash;
+  if (typeof o.artifactUrl === "string" && o.artifactUrl) node.artifactUrl = o.artifactUrl;
+  return node;
+}
+function readEntries(root) {
+  if (!fs4.existsSync(registryPath(root))) return { entries: [] };
+  let doc;
+  try {
+    doc = YAML2.parse(fs4.readFileSync(registryPath(root), "utf8"));
+  } catch (e) {
+    return { entries: [], parseError: e.message };
+  }
+  const docs = doc?.docs;
+  return { entries: Array.isArray(docs) ? docs : [] };
+}
+function inspectRegistry(root) {
+  const { entries, parseError } = readEntries(root);
+  const docs = [];
+  const invalid = [];
+  for (const e of entries) {
+    const n = toDocNode(e);
+    if (n) docs.push(n);
+    else invalid.push(e);
+  }
+  return parseError ? { docs, invalid, parseError } : { docs, invalid };
+}
+function loadRegistry(root) {
+  return { docs: inspectRegistry(root).docs };
+}
+function computeDocHash(root, doc) {
+  const abs = path3.join(root, doc.path);
+  let buf;
+  try {
+    buf = fs4.readFileSync(abs);
+  } catch {
+    throw new Error(
+      tr(root, {
+        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
+        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      })
+    );
+  }
+  return crypto.createHash("sha256").update(buf).digest("hex");
+}
+function staleDocs(root) {
+  return loadRegistry(root).docs.filter((d) => {
+    if (d.status !== "approved" || !d.hash) return false;
+    try {
+      return computeDocHash(root, d) !== d.hash;
+    } catch {
+      return true;
+    }
+  });
+}
+function docsForPhase(root, phase) {
+  const latest = /* @__PURE__ */ new Map();
+  for (const d of loadRegistry(root).docs) {
+    if (d.phase !== phase || d.status === "superseded") continue;
+    const cur = latest.get(d.id);
+    if (!cur || d.version > cur.version) latest.set(d.id, d);
+  }
+  return [...latest.values()];
+}
+
 // core/src/gate.ts
-function normalizePaths(relPaths) {
-  return [...new Set(relPaths.map((p) => p.trim()).filter(Boolean))].sort();
+function canonicalRel(root, rel) {
+  try {
+    const real = fs5.realpathSync(path4.resolve(root, rel));
+    const r = path4.relative(fs5.realpathSync(root), real);
+    return r && !r.startsWith(`..${path4.sep}`) && r !== ".." && !path4.isAbsolute(r) ? r : rel;
+  } catch {
+    return rel;
+  }
+}
+function normalizePaths(root, relPaths) {
+  const canon = relPaths.map((p) => p.trim()).filter(Boolean).map((p) => canonicalRel(root, p));
+  return [...new Set(canon)].sort();
+}
+var MIN_SUBSTANCE_CHARS = 80;
+var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
+var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
+function readArtifact(root, rel) {
+  try {
+    return fs5.readFileSync(path4.resolve(root, rel));
+  } catch {
+    throw new Error(
+      tr(root, {
+        en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+      })
+    );
+  }
+}
+function readArtifacts(root, relPaths) {
+  return relPaths.map((rel) => {
+    const text = readArtifact(root, rel).toString("utf8");
+    return {
+      rel,
+      text,
+      substance: text.replace(/\s+/gu, "").length,
+      binary: text.includes("\uFFFD") || text.includes("\0")
+    };
+  });
+}
+function assertSubstantive(root, arts) {
+  const blank = arts.filter((a) => a.substance === 0).map((a) => a.rel);
+  if (blank.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Empty artifact under review: ${blank.join(", ")} \u2014 a gate approves content, not filenames. Write the document, or drop the path from --paths`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uBE44\uC5B4 \uC788\uB2E4: ${blank.join(", ")} \u2014 \uAC8C\uC774\uD2B8\uB294 \uD30C\uC77C \uC774\uB984\uC774 \uC544\uB2C8\uB77C \uB0B4\uC6A9\uC744 \uC2B9\uC778\uD55C\uB2E4. \uBB38\uC11C\uB97C \uCC44\uC6B0\uAC70\uB098 --paths \uC5D0\uC11C \uADF8 \uACBD\uB85C\uB97C \uBE7C\uB77C`
+      })
+    );
+  }
+  const total = arts.reduce((n, a) => n + a.substance, 0);
+  if (total < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review carry ${total} non-whitespace characters, below the ${MIN_SUBSTANCE_CHARS} minimum (paths: ${arts.map((a) => a.rel).join(", ")}). A gate is a review, not a ceremony \u2014 submit the document that was actually written`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC758 \uACF5\uBC31 \uC81C\uC678 \uBB38\uC790\uAC00 ${total}\uC790\uB85C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4 (\uB300\uC0C1: ${arts.map((a) => a.rel).join(", ")}). \uAC8C\uC774\uD2B8\uB294 \uC758\uC2DD\uC774 \uC544\uB2C8\uB77C \uC2EC\uC0AC\uB2E4 \u2014 \uC2E4\uC81C\uB85C \uC791\uC131\uB41C \uBB38\uC11C\uB97C \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+  const textual = arts.filter((a) => !a.binary);
+  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(/[^\p{L}\p{N}]/gu, "");
+  if (textual.length > 0 && residual.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review are placeholders only (TODO/TBD and the like): ${textual.map((a) => a.rel).join(", ")} \u2014 a placeholder is not grounds for approval`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC790\uB9AC\uD45C\uC2DC\uC790\uBFD0\uC774\uB2E4(TODO\xB7TBD\xB7\uBBF8\uC9C0\uC815 \uB530\uC704): ${textual.map((a) => a.rel).join(", ")} \u2014 \uC790\uB9AC\uD45C\uC2DC\uC790\uB294 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      })
+    );
+  }
+}
+function contentDigest(root, relPaths) {
+  const each = relPaths.map((rel) => crypto2.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
+  const h = crypto2.createHash("sha256");
+  for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
+  return h.digest("hex");
+}
+function latestSubmissions(root) {
+  const out = /* @__PURE__ */ new Map();
+  const events = readEvents(root);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type !== "gate-submitted") continue;
+    const phase = ev.data.phase;
+    if (!PHASES.includes(phase) || out.has(phase)) continue;
+    const raw = ev.data.paths;
+    const paths = Array.isArray(raw) ? raw.filter((p) => typeof p === "string") : [];
+    out.set(phase, typeof ev.data.contentHash === "string" ? { paths, contentHash: ev.data.contentHash } : { paths });
+  }
+  return out;
+}
+function assertDistinct(root, phase, hash, contentHash, gates) {
+  const prior = latestSubmissions(root);
+  const clash = PHASES.filter((p) => {
+    if (p === phase) return false;
+    const g = gates[p];
+    if (!g || g.status !== "submitted" && g.status !== "approved") return false;
+    const prev = prior.get(p);
+    return prev?.contentHash ? prev.contentHash === contentHash : g.artifactHash === hash;
+  });
+  if (clash.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `The same artifacts already opened gate ${clash.join(", ")} \u2014 byte-identical content cannot stand in for ${phase} as well. Each gate reviews what that phase actually produced; submit the revised or new artifact`,
+        ko: `\uAC19\uC740 \uC0B0\uCD9C\uBB3C\uC774 \uC774\uBBF8 \uAC8C\uC774\uD2B8 ${clash.join(", ")} \uB97C \uC5F4\uC5C8\uB2E4 \u2014 \uBC14\uC774\uD2B8\uAC00 \uAC19\uC740 \uB0B4\uC6A9\uC774 ${phase} \uAE4C\uC9C0 \uB300\uC2E0\uD560 \uC218\uB294 \uC5C6\uB2E4. \uAC8C\uC774\uD2B8\uB9C8\uB2E4 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC774\uB098 \uC0C8 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+}
+var normRel = (p) => path4.normalize(p).replace(/^(?:\.[\\/])+/, "");
+function assertPhaseFit(root, phase, paths) {
+  const want = new Set(paths.map(normRel));
+  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
+  if (known.length === 0) return;
+  if (known.some((d) => d.phase === phase)) return;
+  const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
+  throw new Error(
+    tr(root, {
+      en: `None of the artifacts under review is registered to ${phase} \u2014 the registry has them as ${where}. A document belonging to another phase cannot open this gate. Register the ${phase} artifact with \`harness doc upsert --id <DOC-x> --path <p> --phase ${phase}\``,
+      ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC911 ${phase} \uB85C \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uD558\uB098\uB3C4 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0\uB294 ${where} \uB85C \uC788\uB2E4. \uB2E4\uB978 \uD398\uC774\uC988\uC758 \uBB38\uC11C\uB85C \uC774 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218\uB294 \uC5C6\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase ${phase}\` \uB85C ${phase} \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uB77C`
+    })
+  );
 }
 function assertInsideRoot(root, paths) {
   const real = (p) => {
     try {
-      return fs4.realpathSync(p);
+      return fs5.realpathSync(p);
     } catch {
       return p;
     }
   };
   const base = real(root);
   const outside = paths.filter((p) => {
-    const rel = path3.relative(base, real(path3.resolve(root, p)));
-    return rel === ".." || rel.startsWith(`..${path3.sep}`) || path3.isAbsolute(rel);
+    const rel = path4.relative(base, real(path4.resolve(root, p)));
+    return rel === ".." || rel.startsWith(`..${path4.sep}`) || path4.isAbsolute(rel);
   });
   if (outside.length > 0) {
     throw new Error(
@@ -7712,38 +7914,20 @@ function assertInsideRoot(root, paths) {
   }
 }
 function computeArtifactHash(root, relPaths) {
-  const h = crypto.createHash("sha256");
-  for (const rel of normalizePaths(relPaths)) {
-    let content;
-    try {
-      content = fs4.readFileSync(path3.resolve(root, rel));
-    } catch {
-      throw new Error(
-        tr(root, {
-          en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
-          ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
-        })
-      );
-    }
+  const h = crypto2.createHash("sha256");
+  for (const rel of normalizePaths(root, relPaths)) {
+    const content = readArtifact(root, rel);
     h.update(`${rel}\0${content.length}\0`);
     h.update(content);
   }
   return h.digest("hex");
 }
 function recordedPaths(root, phase) {
-  const events = readEvents(root);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.type !== "gate-submitted" || ev.data.phase !== phase) continue;
-    const raw = ev.data.paths;
-    if (!Array.isArray(raw)) return null;
-    const paths = raw.filter((p) => typeof p === "string");
-    return paths.length > 0 ? paths : null;
-  }
-  return null;
+  const s = latestSubmissions(root).get(phase);
+  return s && s.paths.length > 0 ? s.paths : null;
 }
 function submitGate(root, phase, opts) {
-  const paths = normalizePaths(opts.paths);
+  const paths = normalizePaths(root, opts.paths);
   if (paths.length === 0) {
     throw new Error(
       tr(root, {
@@ -7761,10 +7945,21 @@ function submitGate(root, phase, opts) {
     );
   }
   assertInsideRoot(root, paths);
+  assertSubstantive(root, readArtifacts(root, paths));
+  assertPhaseFit(root, phase, paths);
   const artifactHash = computeArtifactHash(root, paths);
+  const contentHash = contentDigest(root, paths);
   const state = readState(root);
+  assertDistinct(root, phase, artifactHash, contentHash, state.gates);
   const prevStatus = state.gates[phase]?.status ?? "pending";
-  const ev = appendEvent(root, "gate-submitted", { phase, artifactHash, evidence: opts.evidence, paths, prevStatus });
+  const ev = appendEvent(root, "gate-submitted", {
+    phase,
+    artifactHash,
+    contentHash,
+    evidence: opts.evidence,
+    paths,
+    prevStatus
+  });
   const record = {
     status: "submitted",
     artifactHash,
@@ -7775,11 +7970,11 @@ function submitGate(root, phase, opts) {
   return record;
 }
 function feedbackPath(root, phase) {
-  return path3.join(packetsDir(root), `${phase}.feedback.md`);
+  return path4.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs4.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs5.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -7831,17 +8026,17 @@ function verifyGate(root, phase) {
 }
 
 // core/src/wave.ts
-var fs6 = __toESM(require("fs"));
-var path5 = __toESM(require("path"));
-var YAML2 = __toESM(require_dist());
+var fs7 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
+var YAML3 = __toESM(require_dist());
 
 // core/src/runtime.ts
-var fs5 = __toESM(require("fs"));
-var path4 = __toESM(require("path"));
-var f = (root, name) => path4.join(runtimeDir(root), name);
+var fs6 = __toESM(require("fs"));
+var path5 = __toESM(require("path"));
+var f = (root, name) => path5.join(runtimeDir(root), name);
 function noteTurnLogged(root) {
-  fs5.mkdirSync(runtimeDir(root), { recursive: true });
-  fs5.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs6.mkdirSync(runtimeDir(root), { recursive: true });
+  fs6.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 
 // core/src/wave.ts
@@ -7850,7 +8045,7 @@ function parseWave(txt, lang = DEFAULT_LANG) {
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML2.parse(m[1]);
+    raw = YAML3.parse(m[1]);
   } catch {
     raw = null;
   }
@@ -7870,19 +8065,19 @@ function parseWave(txt, lang = DEFAULT_LANG) {
 var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
 function serializeWave(meta, body) {
   return `---
-${YAML2.stringify(meta).trimEnd()}
+${YAML3.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs6.readFileSync(wavePath(root, id), "utf8"), langFor(root));
+  return parseWave(fs7.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs6.existsSync(wavesDir(root))) return [];
+  if (!fs7.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs7.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     try {
-      out.push(parseWave(fs6.readFileSync(path5.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
+      out.push(parseWave(fs7.readFileSync(path6.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -7892,22 +8087,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs6.writeFileSync(tmp, serializeWave(meta, body));
-  fs6.renameSync(tmp, target);
+  fs7.writeFileSync(tmp, serializeWave(meta, body));
+  fs7.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs6.existsSync(dir)) return [];
-  return fs6.readdirSync(dir).filter((f2) => {
+  if (!fs7.existsSync(dir)) return [];
+  return fs7.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs6.statSync(path5.join(dir, f2));
+    const st = fs7.statSync(path6.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs6.existsSync(wavesDir(root))) {
-    for (const f2 of fs6.readdirSync(wavesDir(root))) {
+  if (fs7.existsSync(wavesDir(root))) {
+    for (const f2 of fs7.readdirSync(wavesDir(root))) {
       const m = /^wave-(\d+)\.md$/.exec(f2);
       if (m) nums.push(parseInt(m[1], 10));
     }
@@ -7924,7 +8119,7 @@ function nextWaveId(root) {
 function createWave(root, opts) {
   const lang = langFor(root);
   const id = nextWaveId(root);
-  if (fs6.existsSync(wavePath(root, id))) {
+  if (fs7.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -8028,20 +8223,20 @@ function markStale(root, id) {
 }
 
 // core/src/ledger.ts
-var fs7 = __toESM(require("fs"));
-var path6 = __toESM(require("path"));
-var YAML3 = __toESM(require_dist());
+var fs8 = __toESM(require("fs"));
+var path7 = __toESM(require("path"));
+var YAML4 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs7.existsSync(ledgerPath(root))) return [];
-  const doc = YAML3.parse(fs7.readFileSync(ledgerPath(root), "utf8"));
+  if (!fs8.existsSync(ledgerPath(root))) return [];
+  const doc = YAML4.parse(fs8.readFileSync(ledgerPath(root), "utf8"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs7.writeFileSync(tmp, YAML3.stringify({ nodes }));
-  fs7.renameSync(tmp, target);
+  fs8.writeFileSync(tmp, YAML4.stringify({ nodes }));
+  fs8.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -8062,12 +8257,12 @@ function bumpNode(root, id) {
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs7.existsSync(wavesDir(root))) {
-    for (const f2 of fs7.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  if (fs8.existsSync(wavesDir(root))) {
+    for (const f2 of fs8.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs7.readFileSync(path6.join(wavesDir(root), f2), "utf8");
+        txt = fs8.readFileSync(path7.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -8090,92 +8285,6 @@ function bumpNode(root, id) {
 // core/src/report.ts
 var fs9 = __toESM(require("fs"));
 var path8 = __toESM(require("path"));
-
-// core/src/registry.ts
-var fs8 = __toESM(require("fs"));
-var path7 = __toESM(require("path"));
-var crypto2 = __toESM(require("crypto"));
-var YAML4 = __toESM(require_dist());
-function toDocNode(v) {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v;
-  if (typeof o.id !== "string" || !o.id) return null;
-  if (typeof o.path !== "string" || !o.path) return null;
-  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
-  if (!isPhase(o.phase) || !isDocStatus(o.status)) return null;
-  const node = {
-    id: o.id,
-    phase: o.phase,
-    path: o.path,
-    version: o.version,
-    status: o.status,
-    linkedNodes: Array.isArray(o.linkedNodes) ? o.linkedNodes.map(String) : []
-  };
-  if (typeof o.hash === "string" && o.hash) node.hash = o.hash;
-  if (typeof o.artifactUrl === "string" && o.artifactUrl) node.artifactUrl = o.artifactUrl;
-  return node;
-}
-function readEntries(root) {
-  if (!fs8.existsSync(registryPath(root))) return { entries: [] };
-  let doc;
-  try {
-    doc = YAML4.parse(fs8.readFileSync(registryPath(root), "utf8"));
-  } catch (e) {
-    return { entries: [], parseError: e.message };
-  }
-  const docs = doc?.docs;
-  return { entries: Array.isArray(docs) ? docs : [] };
-}
-function inspectRegistry(root) {
-  const { entries, parseError } = readEntries(root);
-  const docs = [];
-  const invalid = [];
-  for (const e of entries) {
-    const n = toDocNode(e);
-    if (n) docs.push(n);
-    else invalid.push(e);
-  }
-  return parseError ? { docs, invalid, parseError } : { docs, invalid };
-}
-function loadRegistry(root) {
-  return { docs: inspectRegistry(root).docs };
-}
-function computeDocHash(root, doc) {
-  const abs = path7.join(root, doc.path);
-  let buf;
-  try {
-    buf = fs8.readFileSync(abs);
-  } catch {
-    throw new Error(
-      tr(root, {
-        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
-        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
-      })
-    );
-  }
-  return crypto2.createHash("sha256").update(buf).digest("hex");
-}
-function staleDocs(root) {
-  return loadRegistry(root).docs.filter((d) => {
-    if (d.status !== "approved" || !d.hash) return false;
-    try {
-      return computeDocHash(root, d) !== d.hash;
-    } catch {
-      return true;
-    }
-  });
-}
-function docsForPhase(root, phase) {
-  const latest = /* @__PURE__ */ new Map();
-  for (const d of loadRegistry(root).docs) {
-    if (d.phase !== phase || d.status === "superseded") continue;
-    const cur = latest.get(d.id);
-    if (!cur || d.version > cur.version) latest.set(d.id, d);
-  }
-  return [...latest.values()];
-}
-
-// core/src/report.ts
 var trFor = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -9132,7 +9241,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_gate_submit",
-      description: "Submit artifacts to a phase gate for review. Pins the artifact hash and writes a review packet under .harness/packets/. Approval is separate and only a human can do it.",
+      description: "Submit artifacts to a phase gate for review. Pins the artifact hash and writes a review packet under .harness/packets/. Approval is separate and only a human can do it. The submission is refused when the artifacts are empty or placeholders only, when the same content already opened another gate, or when the registry lists those paths under a different phase.",
       inputSchema: {
         type: "object",
         properties: {

@@ -160,7 +160,10 @@ describe('DET-54: 이벤트 타입 드리프트 — 무효화가 복구로 되�
     const root = setup('P0');
     fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
     const doc = path.join(root, 'docs/a.md');
-    fs.writeFileSync(doc, 'v1');
+    // SEC-75: 게이트는 실질 내용이 있는 산출물만 받는다 — 픽스처도 실제 문서여야 한다.
+    fs.writeFileSync(doc, '# Concept v1\n\nThe product turns design discipline into a '
+      + 'hook-enforced pipeline, so a phase opens on approved artifacts and never on a claim. '
+      + 'Success is measured as the share of projects that reach ship without bypassing a gate.\n');
     submitGate(root, 'P0', { paths: ['docs/a.md'], evidence: 'claimed' });
     approveGate(root, 'P0');
     fs.writeFileSync(doc, 'v2');                 // 승인 후 산출물이 바뀌었다
