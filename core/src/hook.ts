@@ -713,12 +713,18 @@ export interface InvokedScripts {
   unread: string[];
   /** [SEC-175] 깊이 캡을 넘어 **따라가지 않은** 스크립트. 같은 이유로 통과가 아니다. */
   tooDeep: string[];
+  /**
+   * [SEC-219] **루트 밖** 스크립트 본문. 전 규칙으로 판정하면 과차단이 폭발하므로
+   * 호출측이 **하네스 소유 파일을 건드리는지 하나만** 본다.
+   */
+  outside: string[];
 }
 
 function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Set<string>()): InvokedScripts {
   const out: string[] = [];
   const unread: string[] = [];
   const tooDeep: string[] = [];
+  const outside: string[] = [];        // [SEC-219] 루트 밖 스크립트 본문 — 판정 범위를 좁혀 본다
   // [SEC-97] **깊이 1 로는 부족했다.** 스크립트가 스크립트를 부르면(`a.sh` → `b.sh`) 그대로
   // 통과해 `P0 → P7` 강제가 성립했다(실측). 사슬을 따라가되 상한을 둔다 — 순환은 `seen` 이,
   // 비용은 깊이 3 과 64KB 상한이 막는다. 완전하지는 않다(깊이 4 는 열려 있다). 그러나
@@ -745,7 +751,28 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
     if (m[1] === undefined && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue; // 직접 실행은 셸 스크립트만
     try {
       const rel = relPath(root, candidate);
-      if (isOutsideRoot(rel)) continue;
+      /**
+       * [SEC-219] **루트 밖 스크립트를 「안 읽었다」로 통과시키면 그것이 곧 구멍이다.**
+       *
+       * 에이전트는 프로젝트 밖(`/tmp` 등)에 파일을 쓸 수 있다 — 그건 하네스 소관이 아니다.
+       * 그런데 거기에 쓴 스크립트를 실행하면 본문 검사가 **조용히 건너뛰어졌다**:
+       * `echo '… >> .harness/events.jsonl' > /tmp/x.sh; sh /tmp/x.sh` 로 저널 위조가 통과했다.
+       *
+       * 원래 건너뛴 이유는 타당했다 — 루트 밖 시스템 스크립트를 **전 규칙으로 판정**하면
+       * 과차단이 폭발한다. 그래서 판정 범위를 좁힌다: 읽기는 하되 **하네스 소유 파일을 건드리는
+       * 지 하나만** 본다. `sh /opt/tools/setup.sh` 같은 정상 실행은 그대로 통과하고,
+       * 저널·정책·상태를 건드리는 스크립트만 걸린다.
+       */
+      if (isOutsideRoot(rel)) {
+        if (atLimit) { tooDeep.push(candidate); continue; }
+        try {
+          const st0 = fs.statSync(path.resolve(root, candidate));
+          if (!st0.isFile()) continue;
+          if (st0.size > SCRIPT_MAX_BYTES) { unread.push(candidate); continue; }
+          outside.push(fs.readFileSync(path.resolve(root, candidate), 'utf8'));
+        } catch { /* 없는 파일 — 셸이 알아서 실패한다 */ }
+        continue;
+      }
       const abs = path.resolve(root, candidate);
       const st = fs.statSync(abs);
       if (!st.isFile()) continue;
@@ -755,6 +782,7 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);            // 스크립트가 부르는 스크립트
       out.push(...sub.bodies); unread.push(...sub.unread); tooDeep.push(...sub.tooDeep);
+      outside.push(...sub.outside);
     } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
   }
   // `npm run <script>` 는 `package.json` 이 정의한 명령을 실행한다 — 그 정의를 읽어 같은 규칙으로
@@ -774,11 +802,12 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
           out.push(script);
           const sub = invokedScriptBodies(root, script, depth + 1, seen);
           out.push(...sub.bodies); unread.push(...sub.unread); tooDeep.push(...sub.tooDeep);
+          outside.push(...sub.outside);
         }
       }
     } catch { /* package.json 없음·손상 — 판정할 것이 없다 */ }
   }
-  return { bodies: out, unread, tooDeep };
+  return { bodies: out, unread, tooDeep, outside };
 }
 
 /**
@@ -1275,6 +1304,30 @@ function preTool(
      * **파일을 한 겹 더 겹치는 것**으로 되살아난다 — 실측으로 그랬다(a→b→c→d 의 d 가 저널을
      * 써도 ALLOW). 사유는 크기와 다르므로 문구도 나눈다: 사람이 무엇을 고쳐야 할지 달라진다.
      */
+    /**
+     * [SEC-219] 루트 밖 스크립트는 **하네스 소유 파일을 건드리는지 하나만** 본다.
+     * 전 규칙으로 판정하면 `sh /opt/tools/setup.sh` 같은 정상 실행까지 막혀 과차단이 폭발한다 —
+     * 그러나 「안 읽었다」로 통과시키면 `/tmp` 에 쓴 스크립트 한 줄로 저널이 위조된다.
+     * 좁게 보고 정확히 막는다.
+     */
+    for (const body of scripts.outside) {
+      const sub = scanBashWrites(body, process.env);
+      const hit = [...sub.targets, ...sub.unresolvedTargets]
+        .find(t => CORE_FILES.some(f => t === f || t.endsWith(`/${f}`))
+          || OWNED_BASENAMES.has(t.split('/').pop() ?? ''));
+      const namedHit = hit ?? mentionsPath(body, CORE_FILES);
+      if (namedHit) {
+        return deny(L(
+          `This runs a script from outside the project that writes \`${namedHit}\` — a harness-owned `
+          + 'file. Scripts outside the project are otherwise none of the harness\'s business, but this '
+          + 'one reaches into it. Use harness commands for that file.',
+          `프로젝트 밖 스크립트를 실행하는데, 그 안에서 \`${namedHit}\` 을(를) 쓴다 — 하네스 소유 `
+          + '파일이다. 프로젝트 밖 스크립트는 원래 하네스 소관이 아니지만 이것은 안쪽을 건드린다. '
+          + '그 파일은 harness 명령으로 바꿔라.',
+        ), degraded, lang);
+      }
+    }
+
     if (scripts.tooDeep.length > 0) {
       return deny(L(
         `This runs a script chain deeper than ${SCRIPT_MAX_DEPTH} levels `

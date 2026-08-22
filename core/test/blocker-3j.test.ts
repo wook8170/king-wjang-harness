@@ -416,3 +416,35 @@ describe('[SEC-216] 볼 수 없는 쓰기는 통과가 아니다 — 여덟 번�
     expect(denied(bash(setup('P0'), 'D=.harness; echo x >> $D/events.jsonl'))).toBe(true);
   });
 });
+
+describe('[SEC-219] 루트 밖 스크립트를 「안 읽었다」로 통과시키지 않는다', () => {
+  const outside = (body: string): string => {
+    const f = path.join(os.tmpdir(), `kwh-out-${Math.floor(process.hrtime()[1])}.sh`);
+    fs.writeFileSync(f, body);
+    return f;
+  };
+
+  it('프로젝트 밖 스크립트가 하네스 소유 파일을 쓰면 막힌다', () => {
+    const root = setup('P0');
+    const f = outside('echo "{}" >> .harness/events.jsonl\n');
+    try {
+      for (const cmd of [`sh ${f}`, `bash ${f}`]) {
+        expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+      }
+    } finally { fs.rmSync(f, { force: true }); }
+  });
+
+  it('하네스를 안 건드리는 밖 스크립트는 그대로 통과한다 — 밖은 원래 소관이 아니다', () => {
+    const root = setup('P0');
+    const f = outside('echo hello\nmkdir -p /tmp/whatever\n');
+    try {
+      const out = bash(root, `sh ${f}`);
+      expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+    } finally { fs.rmSync(f, { force: true }); }
+  });
+
+  it('없는 스크립트는 조용히 넘어간다 — 셸이 알아서 실패한다', () => {
+    const out = bash(setup('P0'), 'sh /tmp/kwh-does-not-exist-xyz.sh');
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});

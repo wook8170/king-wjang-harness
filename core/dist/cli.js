@@ -11444,6 +11444,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const out = [];
   const unread = [];
   const tooDeep = [];
+  const outside = [];
   const atLimit = depth >= SCRIPT_MAX_DEPTH;
   const runners = [...SCRIPT_RUNNERS].map((r) => r.replace(/[.]/g, "\\.")).join("|");
   const prefixes = [...PREFIX_COMMANDS].join("|");
@@ -11460,7 +11461,23 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
     if (m[1] === void 0 && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue;
     try {
       const rel = relPath(root, candidate);
-      if (isOutsideRoot(rel)) continue;
+      if (isOutsideRoot(rel)) {
+        if (atLimit) {
+          tooDeep.push(candidate);
+          continue;
+        }
+        try {
+          const st0 = fs14.statSync(path13.resolve(root, candidate));
+          if (!st0.isFile()) continue;
+          if (st0.size > SCRIPT_MAX_BYTES) {
+            unread.push(candidate);
+            continue;
+          }
+          outside.push(fs14.readFileSync(path13.resolve(root, candidate), "utf8"));
+        } catch {
+        }
+        continue;
+      }
       const abs = path13.resolve(root, candidate);
       const st = fs14.statSync(abs);
       if (!st.isFile()) continue;
@@ -11478,6 +11495,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
       out.push(...sub.bodies);
       unread.push(...sub.unread);
       tooDeep.push(...sub.tooDeep);
+      outside.push(...sub.outside);
     } catch {
     }
   }
@@ -11496,12 +11514,13 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
           out.push(...sub.bodies);
           unread.push(...sub.unread);
           tooDeep.push(...sub.tooDeep);
+          outside.push(...sub.outside);
         }
       }
     } catch {
     }
   }
-  return { bodies: out, unread, tooDeep };
+  return { bodies: out, unread, tooDeep, outside };
 }
 var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
@@ -11763,6 +11782,17 @@ function preTool(root, state, config, input, degraded) {
         `This runs a script the harness could not read (${scripts.unread.join(", ")} \u2014 over ${SCRIPT_MAX_BYTES / 1024}KB), so there is no way to tell what it writes, including the event journal that decides whether a gate is approved. Split it, or run it yourself in your terminal.`,
         `\uC2E4\uD589\uD558\uB824\uB294 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uD558\uB124\uC2A4\uAC00 \uC77D\uC9C0 \uBABB\uD588\uB2E4(${scripts.unread.join(", ")} \u2014 ${SCRIPT_MAX_BYTES / 1024}KB \uCD08\uACFC). \uBB34\uC5C7\uC744 \uC4F0\uB294\uC9C0 \uC54C \uAE38\uC774 \uC5C6\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4. \uD30C\uC77C\uC744 \uB098\uB204\uAC70\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C.`
       ), degraded, lang);
+    }
+    for (const body of scripts.outside) {
+      const sub = scanBashWrites(body, process.env);
+      const hit = [...sub.targets, ...sub.unresolvedTargets].find((t) => CORE_FILES.some((f2) => t === f2 || t.endsWith(`/${f2}`)) || OWNED_BASENAMES.has(t.split("/").pop() ?? ""));
+      const namedHit = hit ?? mentionsPath(body, CORE_FILES);
+      if (namedHit) {
+        return deny(L(
+          `This runs a script from outside the project that writes \`${namedHit}\` \u2014 a harness-owned file. Scripts outside the project are otherwise none of the harness's business, but this one reaches into it. Use harness commands for that file.`,
+          `\uD504\uB85C\uC81D\uD2B8 \uBC16 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC2E4\uD589\uD558\uB294\uB370, \uADF8 \uC548\uC5D0\uC11C \`${namedHit}\` \uC744(\uB97C) \uC4F4\uB2E4 \u2014 \uD558\uB124\uC2A4 \uC18C\uC720 \uD30C\uC77C\uC774\uB2E4. \uD504\uB85C\uC81D\uD2B8 \uBC16 \uC2A4\uD06C\uB9BD\uD2B8\uB294 \uC6D0\uB798 \uD558\uB124\uC2A4 \uC18C\uAD00\uC774 \uC544\uB2C8\uC9C0\uB9CC \uC774\uAC83\uC740 \uC548\uCABD\uC744 \uAC74\uB4DC\uB9B0\uB2E4. \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
+        ), degraded, lang);
+      }
     }
     if (scripts.tooDeep.length > 0) {
       return deny(L(
