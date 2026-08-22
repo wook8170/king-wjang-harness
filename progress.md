@@ -2,7 +2,7 @@
 
 ## 2026-08-22 (라운드 3-G 완료) — ★ 7축 재감정 2회차 · **BLOCKER 2 부활** · 전 축 4.8 미달
 
-**정본.** 메인 `<이 커밋>` · **982 tests green · tsc 0 · 대장 lint 통과** · 워킹트리 clean
+**정본.** 메인 `afba989` · **982 tests green · tsc 0 · 대장 lint 통과** · 워킹트리 clean
 (대장 **157행** · verified **105** · **open 49 = BLOCKER 2 · HIGH 1 · MED 16 · LOW 30** · deferred 3).
 **판정 출하 불가.** 여섯 축이 올랐는데 **판정은 더 나빠졌다.**
 
