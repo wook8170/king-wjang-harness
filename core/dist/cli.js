@@ -7360,8 +7360,11 @@ var require_dist = __commonJS({
 // core/src/cli.ts
 var cli_exports = {};
 __export(cli_exports, {
+  BOOL_FLAGS: () => BOOL_FLAGS,
+  VALUE_FLAGS: () => VALUE_FLAGS,
   main: () => main,
-  run: () => run
+  run: () => run,
+  unknownFlags: () => unknownFlags
 });
 module.exports = __toCommonJS(cli_exports);
 var fs22 = __toESM(require("fs"));
@@ -8323,6 +8326,415 @@ function runDoctor(root, opts = {}) {
   return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
 }
 
+// core/src/tokens.ts
+var fs9 = __toESM(require("fs"));
+var path8 = __toESM(require("path"));
+var FLAT_CATEGORIES = ["space", "radius", "shadow", "breakpoint"];
+var TYPE_GROUPS = ["family", "size", "weight", "lineHeight"];
+var MOTION_GROUPS = ["duration", "easing"];
+var TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "color",
+  "space",
+  "type",
+  "radius",
+  "shadow",
+  "motion",
+  "breakpoint"
+];
+var TOKEN_DOC_SKELETON = `{
+  "schemaVersion": 1,
+  "color":      { "text.primary": { "light": "#111111", "dark": "#f5f5f5" } },
+  "space":      { "md": "16px" },
+  "type":       { "family": { "sans": "Inter, system-ui, sans-serif" },
+                  "size":   { "md": "16px" },
+                  "weight": { "regular": "400" },
+                  "lineHeight": { "normal": "1.5" } },
+  "radius":     { "md": "8px" },
+  "shadow":     { "md": "0 1px 2px rgba(0,0,0,.08)" },
+  "motion":     { "duration": { "fast": "120ms" }, "easing": { "standard": "cubic-bezier(.2,0,0,1)" } },
+  "breakpoint": { "md": "768px" }
+}`;
+var TOKEN_DOC_SHAPE_HINT = "schemaVersion: 1 \xB7 color.<name> = { light, dark? } \xB7 space/radius/shadow/breakpoint = name \u2192 string \xB7 type = family/size/weight/lineHeight \xB7 motion = duration/easing. A value that is entirely `{other.token.path}` is an alias.";
+var TOKENS_REL = "design/tokens/design-tokens.json";
+var tokensPath = (root) => path8.join(designDir(root), "tokens", "design-tokens.json");
+var aliasTarget = (v) => {
+  const m = /^\{([^}]+)\}$/.exec(v.trim());
+  return m ? m[1].trim() : null;
+};
+function rawAt(doc, tokenPath, mode) {
+  const parts = tokenPath.split(".");
+  const cat = parts[0];
+  const rest = parts.slice(1).join(".");
+  if (cat === "color") {
+    const tok = doc.color?.[rest];
+    if (!tok) return void 0;
+    return mode === "dark" ? tok.dark ?? tok.light : tok.light;
+  }
+  if (cat === "type") {
+    const group = parts[1];
+    if (!TYPE_GROUPS.includes(group)) return void 0;
+    return doc.type?.[group]?.[parts.slice(2).join(".")];
+  }
+  if (cat === "motion") {
+    const group = parts[1];
+    if (!MOTION_GROUPS.includes(group)) return void 0;
+    return doc.motion?.[group]?.[parts.slice(2).join(".")];
+  }
+  if (FLAT_CATEGORIES.includes(cat)) {
+    return doc[cat]?.[rest];
+  }
+  return void 0;
+}
+function resolve(doc, tokenPath, mode, seen = []) {
+  if (seen.includes(tokenPath)) {
+    throw new Error(
+      `Token aliases form a cycle: ${[...seen, tokenPath].join(" \u2192 ")}. Break the chain somewhere with a real value (${tokensPath("<root>")}).`
+    );
+  }
+  const raw = rawAt(doc, tokenPath, mode);
+  if (raw === void 0) {
+    const from = seen.length ? ` (referenced from ${seen[seen.length - 1]})` : "";
+    throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
+  }
+  const next = aliasTarget(raw);
+  return next === null ? raw : resolve(doc, next, mode, [...seen, tokenPath]);
+}
+function tokenPaths(doc) {
+  const out = [];
+  for (const name of Object.keys(doc.color ?? {}).sort()) out.push(`color.${name}`);
+  out.push(...Object.keys(doc.space ?? {}).sort().map((n) => `space.${n}`));
+  for (const g of TYPE_GROUPS) {
+    out.push(...Object.keys(doc.type?.[g] ?? {}).sort().map((n) => `type.${g}.${n}`));
+  }
+  out.push(...Object.keys(doc.radius ?? {}).sort().map((n) => `radius.${n}`));
+  out.push(...Object.keys(doc.shadow ?? {}).sort().map((n) => `shadow.${n}`));
+  for (const g of MOTION_GROUPS) {
+    out.push(...Object.keys(doc.motion?.[g] ?? {}).sort().map((n) => `motion.${g}.${n}`));
+  }
+  out.push(...Object.keys(doc.breakpoint ?? {}).sort().map((n) => `breakpoint.${n}`));
+  return out;
+}
+var cssVar = (tokenPath) => `--${tokenPath.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}`;
+var isStrMap = (v) => typeof v === "object" && v !== null && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
+function checkGroups(v, groups, label) {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new Error(`${label} in the token document must be an object.`);
+  }
+  const unknownKeys = Object.keys(v).filter((k) => !groups.includes(k));
+  if (unknownKeys.length) {
+    throw new Error(
+      `Unknown subgroup in token document ${label}: ${unknownKeys.join(", ")}. Allowed: ${groups.join(", ")}. A new group is a schema revision (= a design revision), not a silent addition.`
+    );
+  }
+  for (const g of groups) {
+    if (!isStrMap(v[g] ?? {})) {
+      throw new Error(`Every value under ${label}.${g} must be a string.`);
+    }
+  }
+}
+function validateTokens(input) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("The token document is not an object. design-tokens.json must have an object at the top level.");
+  }
+  const o = input;
+  const unknownTop = Object.keys(o).filter((k) => !TOP_LEVEL_KEYS.includes(k));
+  if (unknownTop.length) {
+    throw new Error(
+      `Unknown top-level category in the token document: ${unknownTop.join(", ")}. Allowed: ${TOP_LEVEL_KEYS.filter((k) => k !== "schemaVersion").join(", ")}. If you were adding a separate palette, that is a new layer, not the token file's internal business \u2014 spec \xA77 rule 2.`
+    );
+  }
+  if (o.schemaVersion !== 1) {
+    throw new Error(`Token document schemaVersion is ${String(o.schemaVersion)}. Supported version: 1.`);
+  }
+  if (typeof o.color !== "object" || o.color === null || Array.isArray(o.color)) {
+    throw new Error("`color` in the token document must be an object.");
+  }
+  for (const [name, tok] of Object.entries(o.color)) {
+    const t = tok;
+    if (typeof t !== "object" || t === null || typeof t.light !== "string") {
+      throw new Error(`Colour token color.${name} has no light value (string).`);
+    }
+    if (t.dark !== void 0 && typeof t.dark !== "string") {
+      throw new Error(`The dark value of colour token color.${name} is not a string.`);
+    }
+    const extra = Object.keys(t).filter((k) => k !== "light" && k !== "dark");
+    if (extra.length) {
+      throw new Error(`Unknown mode on colour token color.${name}: ${extra.join(", ")}. Allowed: light, dark.`);
+    }
+  }
+  for (const cat of FLAT_CATEGORIES) {
+    if (!isStrMap(o[cat] ?? {})) {
+      throw new Error(`Every value under ${cat} must be a string.`);
+    }
+  }
+  checkGroups(o.type ?? {}, TYPE_GROUPS, "type");
+  checkGroups(o.motion ?? {}, MOTION_GROUPS, "motion");
+  const doc = input;
+  for (const p of tokenPaths(doc)) {
+    resolve(doc, p, "light");
+    resolve(doc, p, "dark");
+  }
+  return doc;
+}
+function loadTokens(root) {
+  const p = tokensPath(root);
+  if (!fs9.existsSync(p)) {
+    throw new Error(
+      `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent defaults \u2014 export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec \xA77).
+The document shape: ${TOKEN_DOC_SHAPE_HINT}
+A minimal valid document:
+${TOKEN_DOC_SKELETON}`
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(fs9.readFileSync(p, "utf8"));
+  } catch (e) {
+    throw new Error(`Cannot read the token file: ${p} \u2014 ${e.message}`);
+  }
+  return validateTokens(parsed);
+}
+var BANNER = {
+  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
+  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
+};
+var TW_NOTE = {
+  en: "Values point at CSS variables (runtime theme switching). Only screens are literal \u2014 media queries cannot resolve var().",
+  ko: "\uAC12\uC740 CSS \uBCC0\uC218\uB97C \uAC00\uB9AC\uD0A8\uB2E4(\uB7F0\uD0C0\uC784 \uD14C\uB9C8 \uC804\uD658). screens \uB9CC \uB9AC\uD130\uB7F4 \u2014 \uBBF8\uB514\uC5B4 \uCFFC\uB9AC\uB294 var() \uB97C \uBABB \uD47C\uB2E4."
+};
+function generateCss(doc, lang = DEFAULT_LANG) {
+  const paths = tokenPaths(doc);
+  const light = paths.map((p) => `  ${cssVar(p)}: ${resolve(doc, p, "light")};`);
+  const dark = paths.filter((p) => p.startsWith("color.") && resolve(doc, p, "dark") !== resolve(doc, p, "light")).map((p) => `    ${cssVar(p)}: ${resolve(doc, p, "dark")};`);
+  const out = [`/* ${pick(BANNER, lang)} */`, ":root {", ...light, "}"];
+  if (dark.length) {
+    out.push("", "@media (prefers-color-scheme: dark) {", "  :root {", ...dark, "  }", "}");
+  }
+  return `${out.join("\n")}
+`;
+}
+var q = (s) => JSON.stringify(s);
+var tsEntries = (doc, prefix, indent) => tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `${indent}${q(p.slice(prefix.length + 1))}: ${q(resolve(doc, p, "light"))},`);
+var tsBlock = (doc, key, prefix, indent) => {
+  const rows = tsEntries(doc, prefix, `${indent}  `);
+  return rows.length ? [`${indent}${key}: {`, ...rows, `${indent}},`] : [`${indent}${key}: {},`];
+};
+function generateTs(doc, lang = DEFAULT_LANG) {
+  const out = [`// ${pick(BANNER, lang)}`, "export const tokens = {"];
+  const colors = tokenPaths(doc).filter((p) => p.startsWith("color."));
+  out.push("  color: {");
+  for (const p of colors) {
+    const name = p.slice("color.".length);
+    out.push(`    ${q(name)}: { light: ${q(resolve(doc, p, "light"))}, dark: ${q(resolve(doc, p, "dark"))} },`);
+  }
+  out.push("  },");
+  out.push(...tsBlock(doc, "space", "space", "  "));
+  out.push("  type: {");
+  for (const g of TYPE_GROUPS) out.push(...tsBlock(doc, g, `type.${g}`, "    "));
+  out.push("  },");
+  out.push(...tsBlock(doc, "radius", "radius", "  "));
+  out.push(...tsBlock(doc, "shadow", "shadow", "  "));
+  out.push("  motion: {");
+  for (const g of MOTION_GROUPS) out.push(...tsBlock(doc, g, `motion.${g}`, "    "));
+  out.push("  },");
+  out.push(...tsBlock(doc, "breakpoint", "breakpoint", "  "));
+  out.push("} as const;", "", "export type Tokens = typeof tokens;");
+  return `${out.join("\n")}
+`;
+}
+var twKey = (name) => name.replace(/\./g, "-");
+var twBlock = (doc, key, prefix, literal = false) => {
+  const rows = tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `        ${q(twKey(p.slice(prefix.length + 1)))}: ${literal ? q(resolve(doc, p, "light")) : q(`var(${cssVar(p)})`)},`);
+  return rows.length ? [`      ${key}: {`, ...rows, "      },"] : [`      ${key}: {},`];
+};
+function generateTailwind(doc, lang = DEFAULT_LANG) {
+  const out = [
+    `// ${pick(BANNER, lang)}`,
+    `// ${pick(TW_NOTE, lang)}`,
+    "module.exports = {",
+    "  theme: {",
+    "    extend: {",
+    ...twBlock(doc, "colors", "color"),
+    ...twBlock(doc, "spacing", "space"),
+    ...twBlock(doc, "fontFamily", "type.family"),
+    ...twBlock(doc, "fontSize", "type.size"),
+    ...twBlock(doc, "fontWeight", "type.weight"),
+    ...twBlock(doc, "lineHeight", "type.lineHeight"),
+    ...twBlock(doc, "borderRadius", "radius"),
+    ...twBlock(doc, "boxShadow", "shadow"),
+    ...twBlock(doc, "transitionDuration", "motion.duration"),
+    ...twBlock(doc, "transitionTimingFunction", "motion.easing"),
+    ...twBlock(doc, "screens", "breakpoint", true),
+    "    },",
+    "  },",
+    "};"
+  ];
+  return `${out.join("\n")}
+`;
+}
+var SPACING_PROPS = /* @__PURE__ */ new Set([
+  "margin",
+  "margin-top",
+  "margin-right",
+  "margin-bottom",
+  "margin-left",
+  "margin-inline",
+  "margin-inline-start",
+  "margin-inline-end",
+  "margin-block",
+  "padding",
+  "padding-top",
+  "padding-right",
+  "padding-bottom",
+  "padding-left",
+  "padding-inline",
+  "padding-inline-start",
+  "padding-inline-end",
+  "padding-block",
+  "gap",
+  "row-gap",
+  "column-gap",
+  "grid-gap",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "inset",
+  "width",
+  "min-width",
+  "max-width",
+  "height",
+  "min-height",
+  "max-height",
+  "flex-basis"
+]);
+var FONT_PROPS = /* @__PURE__ */ new Set(["font-family", "font"]);
+var ALLOWED_LENGTHS = /* @__PURE__ */ new Set(["0px", "0rem", "0em", "1px", "-1px"]);
+var GLOBAL_KEYWORDS = /* @__PURE__ */ new Set(["inherit", "initial", "unset", "revert", "none", "auto"]);
+var blank = (m) => m.replace(/[^\n]/g, " ");
+function maskComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/<!--[\s\S]*?-->/g, blank).replace(/(^|[^:])\/\/[^\n]*/gm, (m, p1) => p1 + blank(m.slice(p1.length)));
+}
+var normProp = (p) => p.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+function findRawValues(source) {
+  try {
+    if (typeof source !== "string" || source.length === 0) return [];
+    const hits = [];
+    const lines = maskComments(source).split(/\r?\n/);
+    lines.forEach((line, i) => {
+      const ln = i + 1;
+      for (const m of line.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
+        const len = m[0].length - 1;
+        if (len === 3 || len === 4 || len === 6 || len === 8) {
+          hits.push({ line: ln, column: m.index + 1, value: m[0], kind: "color" });
+        }
+      }
+      for (const m of line.matchAll(/\b(?:rgba?|hsla?)\s*\([^)]*\)/g)) {
+        hits.push({ line: ln, column: m.index + 1, value: m[0], kind: "color" });
+      }
+      for (const m of line.matchAll(/([A-Za-z][A-Za-z0-9_-]*)\s*[:=]\s*([^;{}\n]*)/g)) {
+        const prop = normProp(m[1]);
+        const value = m[2];
+        const valueAt = m.index + m[0].length - value.length;
+        if (SPACING_PROPS.has(prop)) {
+          for (const u of value.matchAll(/-?\d+(?:\.\d+)?(?:px|rem|em)\b/g)) {
+            if (ALLOWED_LENGTHS.has(u[0])) continue;
+            if (Number.parseFloat(u[0]) === 0) continue;
+            hits.push({ line: ln, column: valueAt + u.index + 1, value: u[0], kind: "space" });
+          }
+        }
+        if (FONT_PROPS.has(prop)) {
+          const v = value.trim();
+          const first = v.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
+          const isRef = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(v);
+          if (first && !v.includes("var(") && !isRef && !GLOBAL_KEYWORDS.has(first.toLowerCase())) {
+            hits.push({
+              line: ln,
+              column: valueAt + value.indexOf(first) + 1,
+              value: first,
+              kind: "font"
+            });
+          }
+        }
+      }
+    });
+    return hits.sort((a, b) => a.line - b.line || a.column - b.column);
+  } catch {
+    return [];
+  }
+}
+function relFromRoot(root, p) {
+  if (typeof p !== "string" || p.length === 0) return null;
+  const rel = path8.isAbsolute(p) ? path8.relative(root, p) : path8.normalize(p);
+  const posix = rel.split(path8.sep).join("/");
+  if (posix === "" || posix === ".." || posix.startsWith("../")) return null;
+  return posix;
+}
+function isTokenFile(root, filePath) {
+  return relFromRoot(root, filePath) === `.harness/${TOKENS_REL}`;
+}
+function isFrozenPath(root, relPath2, opts) {
+  const target = relFromRoot(root, relPath2);
+  if (target === null) return false;
+  return (opts?.frozenRoots ?? []).some((fr) => {
+    const base = String(fr).split(path8.sep).join("/").replace(/^\.\//, "").replace(/\/+$/, "");
+    if (!base) return false;
+    return target === base || target.startsWith(`${base}/`);
+  });
+}
+var clone = (v) => JSON.parse(JSON.stringify(v));
+var mergeFlat = (base, over) => ({ ...base, ...over ?? {} });
+function swapTokens(doc, overrides) {
+  const next = clone(doc);
+  const o = overrides ?? {};
+  for (const [name, patch] of Object.entries(o.color ?? {})) {
+    next.color[name] = { ...next.color[name] ?? { light: "" }, ...clone(patch) };
+  }
+  next.space = mergeFlat(next.space, o.space);
+  next.radius = mergeFlat(next.radius, o.radius);
+  next.shadow = mergeFlat(next.shadow, o.shadow);
+  next.breakpoint = mergeFlat(next.breakpoint, o.breakpoint);
+  for (const g of TYPE_GROUPS) next.type[g] = mergeFlat(next.type[g], o.type?.[g]);
+  for (const g of MOTION_GROUPS) next.motion[g] = mergeFlat(next.motion[g], o.motion?.[g]);
+  return next;
+}
+function flatDeclared(doc) {
+  const out = /* @__PURE__ */ new Map();
+  for (const [name, tok] of Object.entries(doc.color ?? {})) {
+    out.set(`color.${name}.light`, tok.light);
+    if (tok.dark !== void 0) out.set(`color.${name}.dark`, tok.dark);
+  }
+  for (const p of tokenPaths(doc)) {
+    if (p.startsWith("color.")) continue;
+    out.set(p, rawAt(doc, p, "light") ?? "");
+  }
+  return out;
+}
+function diffTokens(a, b) {
+  const fa = flatDeclared(a);
+  const fb = flatDeclared(b);
+  return [.../* @__PURE__ */ new Set([...fa.keys(), ...fb.keys()])].filter((k) => fa.get(k) !== fb.get(k)).sort();
+}
+var SWAP_DRILL_MIN_COLOR_RATIO = 0.5;
+function assertSwapIsMeaningful(before, after, minColorRatio = SWAP_DRILL_MIN_COLOR_RATIO) {
+  const changed = diffTokens(before, after);
+  if (changed.length === 0) {
+    throw new Error(
+      "The swap drill is empty: not a single token changed. A no-op theme cannot tell a hard-coded screen apart from a correct one \u2014 supply a real alternative palette."
+    );
+  }
+  const colorPaths = [...flatDeclared(before).keys()].filter((k) => k.startsWith("color."));
+  const changedColors = changed.filter((k) => k.startsWith("color.")).length;
+  const need = Math.ceil(colorPaths.length * minColorRatio);
+  if (changedColors < need) {
+    throw new Error(
+      `The swap drill is too shallow: only ${changedColors} of ${colorPaths.length} colour tokens changed (need at least ${need}). The palette must be replaced wholesale so that whatever does not change becomes evidence of hard-coding (spec \xA77).`
+    );
+  }
+  return changed;
+}
+
 // core/src/help.ts
 var M = (en, ko) => ({ en, ko });
 var COMMANDS = [
@@ -8430,7 +8842,21 @@ var COMMANDS = [
       { name: "gen", args: "[--out <dir>]", summary: M("Generate CSS/TS token files from the token source.", "\uD1A0\uD070 \uC6D0\uBCF8\uC5D0\uC11C CSS/TS \uD1A0\uD070 \uD30C\uC77C\uC744 \uC0DD\uC131\uD55C\uB2E4.") },
       { name: "lint", args: "<files...>", summary: M("Find raw colour/size literals that should be semantic tokens.", "\uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC774\uC5B4\uC57C \uD560 raw \uC0C9\xB7\uD06C\uAE30 \uB9AC\uD130\uB7F4\uC744 \uCC3E\uB294\uB2E4.") },
       { name: "swap", args: "--with <theme.json> [--out <dir>]", summary: M("Regenerate tokens with an override theme.", "\uB300\uCCB4 \uD14C\uB9C8\uB85C \uD1A0\uD070\uC744 \uB2E4\uC2DC \uC0DD\uC131\uD55C\uB2E4.") }
-    ]
+    ],
+    // [UTIL-B] 원천 파일의 형태를 여기 적지 않으면 첫 시도가 반드시 실패한다 — 코어는
+    // 기본값을 발명하지 않으므로(§7) 사람이 빈 화면에서 스키마를 알아맞혀야 했다.
+    note: M(
+      `Token source: .harness/design/tokens/design-tokens.json
+${TOKEN_DOC_SHAPE_HINT}
+
+A minimal valid document:
+${TOKEN_DOC_SKELETON}`,
+      `\uD1A0\uD070 \uC6D0\uCC9C: .harness/design/tokens/design-tokens.json
+${TOKEN_DOC_SHAPE_HINT}
+
+\uCD5C\uC18C\uD55C\uC758 \uC720\uD6A8 \uBB38\uC11C:
+${TOKEN_DOC_SKELETON}`
+    )
   },
   {
     name: "evidence",
@@ -8538,6 +8964,7 @@ function renderGroupHelp(g, lang) {
       summary: pick(s.summary, lang)
     }))));
   }
+  if (g.note) out.push("", pick(g.note, lang));
   return out.join("\n");
 }
 function unknownSub(group, sub, lang) {
@@ -8593,10 +9020,10 @@ var fs12 = __toESM(require("fs"));
 var path11 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs9 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
+var fs10 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
-var tierFile = (root) => path8.join(runtimeDir(root), "usage-tier");
+var tierFile = (root) => path9.join(runtimeDir(root), "usage-tier");
 function tierFor(percent) {
   if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
   if (percent >= 99) return "final-handoff";
@@ -8629,12 +9056,12 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs9.mkdirSync(runtimeDir(root), { recursive: true });
-  fs9.writeFileSync(tierFile(root), tier + "\n");
+  fs10.mkdirSync(runtimeDir(root), { recursive: true });
+  fs10.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs9.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs10.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
@@ -8964,398 +9391,6 @@ function sanitizeUntrusted(s, max = UNTRUSTED_MAX_LINE) {
 }
 function contentNonce(body) {
   return (0, import_node_crypto.createHash)("sha256").update(body).digest("hex").slice(0, 8);
-}
-
-// core/src/tokens.ts
-var fs10 = __toESM(require("fs"));
-var path9 = __toESM(require("path"));
-var FLAT_CATEGORIES = ["space", "radius", "shadow", "breakpoint"];
-var TYPE_GROUPS = ["family", "size", "weight", "lineHeight"];
-var MOTION_GROUPS = ["duration", "easing"];
-var TOP_LEVEL_KEYS = [
-  "schemaVersion",
-  "color",
-  "space",
-  "type",
-  "radius",
-  "shadow",
-  "motion",
-  "breakpoint"
-];
-var TOKENS_REL = "design/tokens/design-tokens.json";
-var tokensPath = (root) => path9.join(designDir(root), "tokens", "design-tokens.json");
-var aliasTarget = (v) => {
-  const m = /^\{([^}]+)\}$/.exec(v.trim());
-  return m ? m[1].trim() : null;
-};
-function rawAt(doc, tokenPath, mode) {
-  const parts = tokenPath.split(".");
-  const cat = parts[0];
-  const rest = parts.slice(1).join(".");
-  if (cat === "color") {
-    const tok = doc.color?.[rest];
-    if (!tok) return void 0;
-    return mode === "dark" ? tok.dark ?? tok.light : tok.light;
-  }
-  if (cat === "type") {
-    const group = parts[1];
-    if (!TYPE_GROUPS.includes(group)) return void 0;
-    return doc.type?.[group]?.[parts.slice(2).join(".")];
-  }
-  if (cat === "motion") {
-    const group = parts[1];
-    if (!MOTION_GROUPS.includes(group)) return void 0;
-    return doc.motion?.[group]?.[parts.slice(2).join(".")];
-  }
-  if (FLAT_CATEGORIES.includes(cat)) {
-    return doc[cat]?.[rest];
-  }
-  return void 0;
-}
-function resolve(doc, tokenPath, mode, seen = []) {
-  if (seen.includes(tokenPath)) {
-    throw new Error(
-      `Token aliases form a cycle: ${[...seen, tokenPath].join(" \u2192 ")}. Break the chain somewhere with a real value (${tokensPath("<root>")}).`
-    );
-  }
-  const raw = rawAt(doc, tokenPath, mode);
-  if (raw === void 0) {
-    const from = seen.length ? ` (referenced from ${seen[seen.length - 1]})` : "";
-    throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
-  }
-  const next = aliasTarget(raw);
-  return next === null ? raw : resolve(doc, next, mode, [...seen, tokenPath]);
-}
-function tokenPaths(doc) {
-  const out = [];
-  for (const name of Object.keys(doc.color ?? {}).sort()) out.push(`color.${name}`);
-  out.push(...Object.keys(doc.space ?? {}).sort().map((n) => `space.${n}`));
-  for (const g of TYPE_GROUPS) {
-    out.push(...Object.keys(doc.type?.[g] ?? {}).sort().map((n) => `type.${g}.${n}`));
-  }
-  out.push(...Object.keys(doc.radius ?? {}).sort().map((n) => `radius.${n}`));
-  out.push(...Object.keys(doc.shadow ?? {}).sort().map((n) => `shadow.${n}`));
-  for (const g of MOTION_GROUPS) {
-    out.push(...Object.keys(doc.motion?.[g] ?? {}).sort().map((n) => `motion.${g}.${n}`));
-  }
-  out.push(...Object.keys(doc.breakpoint ?? {}).sort().map((n) => `breakpoint.${n}`));
-  return out;
-}
-var cssVar = (tokenPath) => `--${tokenPath.replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}`;
-var isStrMap = (v) => typeof v === "object" && v !== null && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
-function checkGroups(v, groups, label) {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) {
-    throw new Error(`${label} in the token document must be an object.`);
-  }
-  const unknownKeys = Object.keys(v).filter((k) => !groups.includes(k));
-  if (unknownKeys.length) {
-    throw new Error(
-      `Unknown subgroup in token document ${label}: ${unknownKeys.join(", ")}. Allowed: ${groups.join(", ")}. A new group is a schema revision (= a design revision), not a silent addition.`
-    );
-  }
-  for (const g of groups) {
-    if (!isStrMap(v[g] ?? {})) {
-      throw new Error(`Every value under ${label}.${g} must be a string.`);
-    }
-  }
-}
-function validateTokens(input) {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new Error("The token document is not an object. design-tokens.json must have an object at the top level.");
-  }
-  const o = input;
-  const unknownTop = Object.keys(o).filter((k) => !TOP_LEVEL_KEYS.includes(k));
-  if (unknownTop.length) {
-    throw new Error(
-      `Unknown top-level category in the token document: ${unknownTop.join(", ")}. Allowed: ${TOP_LEVEL_KEYS.filter((k) => k !== "schemaVersion").join(", ")}. If you were adding a separate palette, that is a new layer, not the token file's internal business \u2014 spec \xA77 rule 2.`
-    );
-  }
-  if (o.schemaVersion !== 1) {
-    throw new Error(`Token document schemaVersion is ${String(o.schemaVersion)}. Supported version: 1.`);
-  }
-  if (typeof o.color !== "object" || o.color === null || Array.isArray(o.color)) {
-    throw new Error("`color` in the token document must be an object.");
-  }
-  for (const [name, tok] of Object.entries(o.color)) {
-    const t = tok;
-    if (typeof t !== "object" || t === null || typeof t.light !== "string") {
-      throw new Error(`Colour token color.${name} has no light value (string).`);
-    }
-    if (t.dark !== void 0 && typeof t.dark !== "string") {
-      throw new Error(`The dark value of colour token color.${name} is not a string.`);
-    }
-    const extra = Object.keys(t).filter((k) => k !== "light" && k !== "dark");
-    if (extra.length) {
-      throw new Error(`Unknown mode on colour token color.${name}: ${extra.join(", ")}. Allowed: light, dark.`);
-    }
-  }
-  for (const cat of FLAT_CATEGORIES) {
-    if (!isStrMap(o[cat] ?? {})) {
-      throw new Error(`Every value under ${cat} must be a string.`);
-    }
-  }
-  checkGroups(o.type ?? {}, TYPE_GROUPS, "type");
-  checkGroups(o.motion ?? {}, MOTION_GROUPS, "motion");
-  const doc = input;
-  for (const p of tokenPaths(doc)) {
-    resolve(doc, p, "light");
-    resolve(doc, p, "dark");
-  }
-  return doc;
-}
-function loadTokens(root) {
-  const p = tokensPath(root);
-  if (!fs10.existsSync(p)) {
-    throw new Error(
-      `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent defaults \u2014 export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec \xA77).`
-    );
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(fs10.readFileSync(p, "utf8"));
-  } catch (e) {
-    throw new Error(`Cannot read the token file: ${p} \u2014 ${e.message}`);
-  }
-  return validateTokens(parsed);
-}
-var BANNER = {
-  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
-  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
-};
-var TW_NOTE = {
-  en: "Values point at CSS variables (runtime theme switching). Only screens are literal \u2014 media queries cannot resolve var().",
-  ko: "\uAC12\uC740 CSS \uBCC0\uC218\uB97C \uAC00\uB9AC\uD0A8\uB2E4(\uB7F0\uD0C0\uC784 \uD14C\uB9C8 \uC804\uD658). screens \uB9CC \uB9AC\uD130\uB7F4 \u2014 \uBBF8\uB514\uC5B4 \uCFFC\uB9AC\uB294 var() \uB97C \uBABB \uD47C\uB2E4."
-};
-function generateCss(doc, lang = DEFAULT_LANG) {
-  const paths = tokenPaths(doc);
-  const light = paths.map((p) => `  ${cssVar(p)}: ${resolve(doc, p, "light")};`);
-  const dark = paths.filter((p) => p.startsWith("color.") && resolve(doc, p, "dark") !== resolve(doc, p, "light")).map((p) => `    ${cssVar(p)}: ${resolve(doc, p, "dark")};`);
-  const out = [`/* ${pick(BANNER, lang)} */`, ":root {", ...light, "}"];
-  if (dark.length) {
-    out.push("", "@media (prefers-color-scheme: dark) {", "  :root {", ...dark, "  }", "}");
-  }
-  return `${out.join("\n")}
-`;
-}
-var q = (s) => JSON.stringify(s);
-var tsEntries = (doc, prefix, indent) => tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `${indent}${q(p.slice(prefix.length + 1))}: ${q(resolve(doc, p, "light"))},`);
-var tsBlock = (doc, key, prefix, indent) => {
-  const rows = tsEntries(doc, prefix, `${indent}  `);
-  return rows.length ? [`${indent}${key}: {`, ...rows, `${indent}},`] : [`${indent}${key}: {},`];
-};
-function generateTs(doc, lang = DEFAULT_LANG) {
-  const out = [`// ${pick(BANNER, lang)}`, "export const tokens = {"];
-  const colors = tokenPaths(doc).filter((p) => p.startsWith("color."));
-  out.push("  color: {");
-  for (const p of colors) {
-    const name = p.slice("color.".length);
-    out.push(`    ${q(name)}: { light: ${q(resolve(doc, p, "light"))}, dark: ${q(resolve(doc, p, "dark"))} },`);
-  }
-  out.push("  },");
-  out.push(...tsBlock(doc, "space", "space", "  "));
-  out.push("  type: {");
-  for (const g of TYPE_GROUPS) out.push(...tsBlock(doc, g, `type.${g}`, "    "));
-  out.push("  },");
-  out.push(...tsBlock(doc, "radius", "radius", "  "));
-  out.push(...tsBlock(doc, "shadow", "shadow", "  "));
-  out.push("  motion: {");
-  for (const g of MOTION_GROUPS) out.push(...tsBlock(doc, g, `motion.${g}`, "    "));
-  out.push("  },");
-  out.push(...tsBlock(doc, "breakpoint", "breakpoint", "  "));
-  out.push("} as const;", "", "export type Tokens = typeof tokens;");
-  return `${out.join("\n")}
-`;
-}
-var twKey = (name) => name.replace(/\./g, "-");
-var twBlock = (doc, key, prefix, literal = false) => {
-  const rows = tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `        ${q(twKey(p.slice(prefix.length + 1)))}: ${literal ? q(resolve(doc, p, "light")) : q(`var(${cssVar(p)})`)},`);
-  return rows.length ? [`      ${key}: {`, ...rows, "      },"] : [`      ${key}: {},`];
-};
-function generateTailwind(doc, lang = DEFAULT_LANG) {
-  const out = [
-    `// ${pick(BANNER, lang)}`,
-    `// ${pick(TW_NOTE, lang)}`,
-    "module.exports = {",
-    "  theme: {",
-    "    extend: {",
-    ...twBlock(doc, "colors", "color"),
-    ...twBlock(doc, "spacing", "space"),
-    ...twBlock(doc, "fontFamily", "type.family"),
-    ...twBlock(doc, "fontSize", "type.size"),
-    ...twBlock(doc, "fontWeight", "type.weight"),
-    ...twBlock(doc, "lineHeight", "type.lineHeight"),
-    ...twBlock(doc, "borderRadius", "radius"),
-    ...twBlock(doc, "boxShadow", "shadow"),
-    ...twBlock(doc, "transitionDuration", "motion.duration"),
-    ...twBlock(doc, "transitionTimingFunction", "motion.easing"),
-    ...twBlock(doc, "screens", "breakpoint", true),
-    "    },",
-    "  },",
-    "};"
-  ];
-  return `${out.join("\n")}
-`;
-}
-var SPACING_PROPS = /* @__PURE__ */ new Set([
-  "margin",
-  "margin-top",
-  "margin-right",
-  "margin-bottom",
-  "margin-left",
-  "margin-inline",
-  "margin-inline-start",
-  "margin-inline-end",
-  "margin-block",
-  "padding",
-  "padding-top",
-  "padding-right",
-  "padding-bottom",
-  "padding-left",
-  "padding-inline",
-  "padding-inline-start",
-  "padding-inline-end",
-  "padding-block",
-  "gap",
-  "row-gap",
-  "column-gap",
-  "grid-gap",
-  "top",
-  "right",
-  "bottom",
-  "left",
-  "inset",
-  "width",
-  "min-width",
-  "max-width",
-  "height",
-  "min-height",
-  "max-height",
-  "flex-basis"
-]);
-var FONT_PROPS = /* @__PURE__ */ new Set(["font-family", "font"]);
-var ALLOWED_LENGTHS = /* @__PURE__ */ new Set(["0px", "0rem", "0em", "1px", "-1px"]);
-var GLOBAL_KEYWORDS = /* @__PURE__ */ new Set(["inherit", "initial", "unset", "revert", "none", "auto"]);
-var blank = (m) => m.replace(/[^\n]/g, " ");
-function maskComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/<!--[\s\S]*?-->/g, blank).replace(/(^|[^:])\/\/[^\n]*/gm, (m, p1) => p1 + blank(m.slice(p1.length)));
-}
-var normProp = (p) => p.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-function findRawValues(source) {
-  try {
-    if (typeof source !== "string" || source.length === 0) return [];
-    const hits = [];
-    const lines = maskComments(source).split(/\r?\n/);
-    lines.forEach((line, i) => {
-      const ln = i + 1;
-      for (const m of line.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
-        const len = m[0].length - 1;
-        if (len === 3 || len === 4 || len === 6 || len === 8) {
-          hits.push({ line: ln, column: m.index + 1, value: m[0], kind: "color" });
-        }
-      }
-      for (const m of line.matchAll(/\b(?:rgba?|hsla?)\s*\([^)]*\)/g)) {
-        hits.push({ line: ln, column: m.index + 1, value: m[0], kind: "color" });
-      }
-      for (const m of line.matchAll(/([A-Za-z][A-Za-z0-9_-]*)\s*[:=]\s*([^;{}\n]*)/g)) {
-        const prop = normProp(m[1]);
-        const value = m[2];
-        const valueAt = m.index + m[0].length - value.length;
-        if (SPACING_PROPS.has(prop)) {
-          for (const u of value.matchAll(/-?\d+(?:\.\d+)?(?:px|rem|em)\b/g)) {
-            if (ALLOWED_LENGTHS.has(u[0])) continue;
-            if (Number.parseFloat(u[0]) === 0) continue;
-            hits.push({ line: ln, column: valueAt + u.index + 1, value: u[0], kind: "space" });
-          }
-        }
-        if (FONT_PROPS.has(prop)) {
-          const v = value.trim();
-          const first = v.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
-          const isRef = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(v);
-          if (first && !v.includes("var(") && !isRef && !GLOBAL_KEYWORDS.has(first.toLowerCase())) {
-            hits.push({
-              line: ln,
-              column: valueAt + value.indexOf(first) + 1,
-              value: first,
-              kind: "font"
-            });
-          }
-        }
-      }
-    });
-    return hits.sort((a, b) => a.line - b.line || a.column - b.column);
-  } catch {
-    return [];
-  }
-}
-function relFromRoot(root, p) {
-  if (typeof p !== "string" || p.length === 0) return null;
-  const rel = path9.isAbsolute(p) ? path9.relative(root, p) : path9.normalize(p);
-  const posix = rel.split(path9.sep).join("/");
-  if (posix === "" || posix === ".." || posix.startsWith("../")) return null;
-  return posix;
-}
-function isTokenFile(root, filePath) {
-  return relFromRoot(root, filePath) === `.harness/${TOKENS_REL}`;
-}
-function isFrozenPath(root, relPath2, opts) {
-  const target = relFromRoot(root, relPath2);
-  if (target === null) return false;
-  return (opts?.frozenRoots ?? []).some((fr) => {
-    const base = String(fr).split(path9.sep).join("/").replace(/^\.\//, "").replace(/\/+$/, "");
-    if (!base) return false;
-    return target === base || target.startsWith(`${base}/`);
-  });
-}
-var clone = (v) => JSON.parse(JSON.stringify(v));
-var mergeFlat = (base, over) => ({ ...base, ...over ?? {} });
-function swapTokens(doc, overrides) {
-  const next = clone(doc);
-  const o = overrides ?? {};
-  for (const [name, patch] of Object.entries(o.color ?? {})) {
-    next.color[name] = { ...next.color[name] ?? { light: "" }, ...clone(patch) };
-  }
-  next.space = mergeFlat(next.space, o.space);
-  next.radius = mergeFlat(next.radius, o.radius);
-  next.shadow = mergeFlat(next.shadow, o.shadow);
-  next.breakpoint = mergeFlat(next.breakpoint, o.breakpoint);
-  for (const g of TYPE_GROUPS) next.type[g] = mergeFlat(next.type[g], o.type?.[g]);
-  for (const g of MOTION_GROUPS) next.motion[g] = mergeFlat(next.motion[g], o.motion?.[g]);
-  return next;
-}
-function flatDeclared(doc) {
-  const out = /* @__PURE__ */ new Map();
-  for (const [name, tok] of Object.entries(doc.color ?? {})) {
-    out.set(`color.${name}.light`, tok.light);
-    if (tok.dark !== void 0) out.set(`color.${name}.dark`, tok.dark);
-  }
-  for (const p of tokenPaths(doc)) {
-    if (p.startsWith("color.")) continue;
-    out.set(p, rawAt(doc, p, "light") ?? "");
-  }
-  return out;
-}
-function diffTokens(a, b) {
-  const fa = flatDeclared(a);
-  const fb = flatDeclared(b);
-  return [.../* @__PURE__ */ new Set([...fa.keys(), ...fb.keys()])].filter((k) => fa.get(k) !== fb.get(k)).sort();
-}
-var SWAP_DRILL_MIN_COLOR_RATIO = 0.5;
-function assertSwapIsMeaningful(before, after, minColorRatio = SWAP_DRILL_MIN_COLOR_RATIO) {
-  const changed = diffTokens(before, after);
-  if (changed.length === 0) {
-    throw new Error(
-      "The swap drill is empty: not a single token changed. A no-op theme cannot tell a hard-coded screen apart from a correct one \u2014 supply a real alternative palette."
-    );
-  }
-  const colorPaths = [...flatDeclared(before).keys()].filter((k) => k.startsWith("color."));
-  const changedColors = changed.filter((k) => k.startsWith("color.")).length;
-  const need = Math.ceil(colorPaths.length * minColorRatio);
-  if (changedColors < need) {
-    throw new Error(
-      `The swap drill is too shallow: only ${changedColors} of ${colorPaths.length} colour tokens changed (need at least ${need}). The palette must be replaced wholesale so that whatever does not change becomes evidence of hard-coding (spec \xA77).`
-    );
-  }
-  return changed;
 }
 
 // core/src/profile.ts
@@ -10412,6 +10447,13 @@ function setDocArtifactUrl(root, id, url) {
   if (parsed.protocol !== "https:" || !parsed.hostname) {
     throw new Error(tr(root, { en: `The artifact URL must be https: "${url}" \u2014 paste the claude.ai artifact address as-is`, ko: `\uC544\uD2F0\uD329\uD2B8 URL \uC740 https \uC5EC\uC57C \uD55C\uB2E4: "${url}" \u2014 claude.ai \uC544\uD2F0\uD329\uD2B8 \uC8FC\uC18C\uB97C \uADF8\uB300\uB85C \uB123\uC5B4\uB77C` }));
   }
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "claude.ai" && !host.endsWith(".claude.ai")) {
+    throw new Error(tr(root, {
+      en: `The artifact URL must be a claude.ai address \u2014 got host "${host}". Publish the document as a claude.ai artifact and paste that URL (https://claude.ai/public/artifacts/<id>)`,
+      ko: `\uC544\uD2F0\uD329\uD2B8 URL \uC740 claude.ai \uC8FC\uC18C\uC5EC\uC57C \uD55C\uB2E4 \u2014 \uBC1B\uC740 \uD638\uC2A4\uD2B8\uB294 "${host}" \uB2E4. \uBB38\uC11C\uB97C claude.ai \uC544\uD2F0\uD329\uD2B8\uB85C \uBC1C\uD589\uD558\uACE0 \uADF8 URL \uC744 \uB123\uC5B4\uB77C (https://claude.ai/public/artifacts/<id>)`
+    }));
+  }
   const next = { ...doc, artifactUrl: parsed.toString() };
   appendEvent(root, "doc-artifact-url-set", {
     id,
@@ -10694,7 +10736,8 @@ function feedbackPath(root, phase) {
   return path13.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function recordGateFeedback(root, phase, raw) {
-  const lines = raw.split("\n").map((l) => sanitizeUntrusted(l)).filter((l) => l.trim());
+  const stripBullet = (l) => l.replace(/^\s*[-*+]\s+/, "");
+  const lines = raw.split("\n").map((l) => stripBullet(sanitizeUntrusted(l))).filter((l) => l.trim());
   if (lines.length === 0) {
     throw new Error(
       tr(root, {
@@ -13499,6 +13542,108 @@ function flag(argv, name) {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : void 0;
 }
+var VALUE_FLAGS = /* @__PURE__ */ new Set([
+  "accept",
+  "acceptance",
+  "anchor",
+  "artboard",
+  "choose",
+  "defer-reason",
+  "detail",
+  "env",
+  "evidence",
+  "for",
+  "from",
+  "goal",
+  "id",
+  "limit",
+  "milestone",
+  "name",
+  "option",
+  "out",
+  "outcome",
+  "parent",
+  "path",
+  "paths",
+  "percent",
+  "phase",
+  "png",
+  "question",
+  "rationale",
+  "reason",
+  "recommend",
+  "refs",
+  "reject",
+  "severity",
+  "sha",
+  "status",
+  "text",
+  "title",
+  "url",
+  "ux",
+  "version",
+  "wave",
+  "with"
+]);
+var BOOL_FLAGS = /* @__PURE__ */ new Set([
+  "accept-policy",
+  "force",
+  "help",
+  "repair"
+]);
+function editDistance2(a, b) {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(
+        prev[j] + 1,
+        prev[j - 1] + 1,
+        diag + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
+}
+function nearestFlag(name) {
+  let best;
+  let bestD = 3;
+  for (const cand of [...VALUE_FLAGS, ...BOOL_FLAGS]) {
+    const d = editDistance2(name, cand);
+    if (d < bestD) {
+      bestD = d;
+      best = cand;
+    }
+  }
+  return best;
+}
+function unknownFlags(argv) {
+  const out = [];
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (typeof tok !== "string" || !tok.startsWith("--") || tok === "--") continue;
+    const name = tok.slice(2);
+    if (VALUE_FLAGS.has(name)) {
+      i++;
+      continue;
+    }
+    if (BOOL_FLAGS.has(name)) continue;
+    out.push(tok);
+  }
+  return out;
+}
+function explainUnknownFlag(tok) {
+  const eq = tok.indexOf("=");
+  if (eq > 2) {
+    const base = tok.slice(2, eq);
+    if (VALUE_FLAGS.has(base)) return `${tok} (values take a space: \`--${base} <value>\`)`;
+  }
+  const near = nearestFlag(tok.slice(2));
+  return near ? `${tok} (did you mean --${near}?)` : tok;
+}
 function logHookIssue(root, msg) {
   try {
     if (!fs22.existsSync(harnessDir(root))) return;
@@ -13563,6 +13708,16 @@ function run(argv, root) {
     const PRE_INIT_OK = /* @__PURE__ */ new Set(["init", "migrate", "--version", "hook"]);
     if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== void 0 && !hasHarness(root)) {
       throw new Error(L("No .harness/ here \u2014 run `harness init` first.", ".harness/ \uAC00 \uC5C6\uB2E4 \u2014 `harness init` \uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uB77C"));
+    }
+    if (findGroup(cmd) !== void 0) {
+      const bad = unknownFlags(argv);
+      if (bad.length > 0) {
+        const what = bad.map(explainUnknownFlag).join(" \xB7 ");
+        throw new Error(L(
+          `Unknown flag: ${what}. An unknown flag is never applied \u2014 accepting it silently would record something other than what you asked for. Run \`harness ${cmd} --help\` to see what this group takes.`,
+          `\uC54C \uC218 \uC5C6\uB294 \uD50C\uB798\uADF8: ${what}. \uBAA8\uB974\uB294 \uD50C\uB798\uADF8\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uC870\uC6A9\uD788 \uBC1B\uC73C\uBA74 \uC694\uCCAD\uACFC \uB2E4\uB978 \uAC83\uC774 \uAE30\uB85D\uB41C\uB2E4. \`harness ${cmd} --help\` \uB85C \uC774 \uBA85\uB839\uAD70\uC774 \uBC1B\uB294 \uAC83\uC744 \uD655\uC778\uD558\uB77C.`
+        ));
+      }
     }
     switch (cmd) {
       case "init":
@@ -14338,6 +14493,9 @@ function main(argv) {
 if (require.main === module) main(process.argv.slice(2));
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  BOOL_FLAGS,
+  VALUE_FLAGS,
   main,
-  run
+  run,
+  unknownFlags
 });

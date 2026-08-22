@@ -18,6 +18,7 @@ import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
 import { handleHook } from '../src/hook';
 import { initHarness } from '../src/state';
+import { execFileSync } from 'node:child_process';
 
 const init = (): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-parity-'));
@@ -210,5 +211,60 @@ describe('UTIL-A: 로컬 프로파일은 commands.yaml 만으로도 먹는다', 
     const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
     try { run(['profile', 'show'], root); } finally { l.mockRestore(); }
     expect(out.join('\n')).toContain('generic');
+  });
+});
+
+/**
+ * [PERF-95] 훅 배선이 셸 가드 래퍼(`bin/harness-hook`)를 탄다 — 비간섭 프로젝트에서 node 를
+ * 띄우지 않기 위해서다. **이 가드가 틀리면 방어가 조용히 꺼진다**(이 제품 최악의 실패).
+ * 그래서 여기서 고정하는 것은 속도가 아니라 **판정 동치**다: 래퍼의 조건과 코어의 루트
+ * 해석이 같은 것을 가리켜야 한다.
+ */
+describe('PERF-95: 훅 가드 래퍼가 코어와 같은 판정을 한다', () => {
+  const repo = path.resolve(__dirname, '../..');
+  const wrapper = path.join(repo, 'bin', 'harness-hook');
+  const WRITE = (p: string) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p } });
+  const runWrapper = (event: string, cwd: string, env: NodeJS.ProcessEnv, input: string) =>
+    execFileSync(wrapper, [event], { cwd, env, input, encoding: 'utf8' });
+
+  it('배선이 전부 래퍼를 가리킨다 — 한 이벤트라도 빠지면 그 표면만 비싸다', () => {
+    const wiring = JSON.parse(fs.readFileSync(path.join(repo, 'hooks', 'hooks.json'), 'utf8'));
+    const cmds: string[] = [];
+    for (const entries of Object.values(wiring.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>>)) {
+      for (const e of entries) for (const h of e.hooks) cmds.push(h.command);
+    }
+    expect(cmds.length).toBe(4);
+    for (const c of cmds) expect(c).toContain('/bin/harness-hook');
+  });
+
+  it('래퍼의 루트 판정이 코어(cli.ts main)와 같은 식이다', () => {
+    const sh = fs.readFileSync(wrapper, 'utf8');
+    const cli = fs.readFileSync(path.join(repo, 'core', 'src', 'cli.ts'), 'utf8');
+    // 코어: CLAUDE_PROJECT_DIR ?? process.cwd() — 부모를 거슬러 올라가지 않는다.
+    expect(cli).toContain('process.env.CLAUDE_PROJECT_DIR ?? process.cwd()');
+    expect(sh).toContain('"${CLAUDE_PROJECT_DIR:-.}/.harness"');
+  });
+
+  it('하네스가 걸린 프로젝트에서는 방어가 그대로 산다 — deny 가 나온다', () => {
+    const root = init();
+    const out = runWrapper('pre-tool', root, { ...process.env, CLAUDE_PROJECT_DIR: root },
+      WRITE(path.join(root, '.harness', 'state.json')));
+    expect(out).toContain('"permissionDecision":"deny"');
+  });
+
+  it('CLAUDE_PROJECT_DIR 이 없어도 cwd 로 판정해 방어가 산다', () => {
+    const root = init();
+    const env = { ...process.env };
+    delete env.CLAUDE_PROJECT_DIR;
+    const out = runWrapper('pre-tool', root, env, WRITE('.harness/state.json'));
+    expect(out).toContain('"permissionDecision":"deny"');
+  });
+
+  it('하네스 없는 프로젝트에서는 출력도 부작용도 없다 (비간섭 불변식)', () => {
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-plain-'));
+    const before = fs.readdirSync(plain);
+    const out = runWrapper('pre-tool', plain, { ...process.env, CLAUDE_PROJECT_DIR: plain }, WRITE('a.ts'));
+    expect(out).toBe('');
+    expect(fs.readdirSync(plain)).toEqual(before);
   });
 });

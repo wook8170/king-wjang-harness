@@ -10,6 +10,7 @@
  * 「알 수 없는 하위 명령」 안내가 전부 여기서 나온다 — 새 명령을 추가하면 세 곳이 함께 갱신된다.
  */
 import { pick, type Lang, type Msg } from './i18n';
+import { TOKEN_DOC_SKELETON, TOKEN_DOC_SHAPE_HINT } from './tokens';
 
 export interface SubCommand {
   name: string;
@@ -24,6 +25,11 @@ export interface CommandGroup {
   /** 하위명령이 없는 단일 명령(init·status·doctor 등)은 비운다. */
   subs?: SubCommand[];
   args?: string;
+  /**
+   * [UTIL-B] 하위명령 표로는 못 말하는 것 — **입력 파일의 형태** 같은 것을 여기 적는다.
+   * 요약 한 줄에 욱여넣으면 표가 깨지고, 적지 않으면 첫 시도가 반드시 실패한다.
+   */
+  note?: Msg;
 }
 
 const M = (en: string, ko: string): Msg => ({ en, ko });
@@ -133,6 +139,12 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'lint', args: '<files...>', summary: M('Find raw colour/size literals that should be semantic tokens.', '시맨틱 토큰이어야 할 raw 색·크기 리터럴을 찾는다.') },
       { name: 'swap', args: '--with <theme.json> [--out <dir>]', summary: M('Regenerate tokens with an override theme.', '대체 테마로 토큰을 다시 생성한다.') },
     ],
+    // [UTIL-B] 원천 파일의 형태를 여기 적지 않으면 첫 시도가 반드시 실패한다 — 코어는
+    // 기본값을 발명하지 않으므로(§7) 사람이 빈 화면에서 스키마를 알아맞혀야 했다.
+    note: M(
+      `Token source: .harness/design/tokens/design-tokens.json\n${TOKEN_DOC_SHAPE_HINT}\n\nA minimal valid document:\n${TOKEN_DOC_SKELETON}`,
+      `토큰 원천: .harness/design/tokens/design-tokens.json\n${TOKEN_DOC_SHAPE_HINT}\n\n최소한의 유효 문서:\n${TOKEN_DOC_SKELETON}`,
+    ),
   },
   {
     name: 'evidence',
@@ -256,6 +268,7 @@ export function renderGroupHelp(g: CommandGroup, lang: Lang): string {
       summary: pick(s.summary, lang),
     }))));
   }
+  if (g.note) out.push('', pick(g.note, lang));
   return out.join('\n');
 }
 

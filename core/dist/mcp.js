@@ -7494,6 +7494,9 @@ function defaultState() {
 function isInitialized(root) {
   return fs2.existsSync(statePath(root));
 }
+function hasHarness(root) {
+  return fs2.existsSync(harnessDir(root));
+}
 function readState(root) {
   return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
 }
@@ -9521,6 +9524,7 @@ var fail = (content) => ({ ok: false, content });
 var json = (v) => ok(JSON.stringify(v, null, 2));
 var NEEDS_INIT_EXEMPT = /* @__PURE__ */ new Set(["harness_doctor", "harness_gate_approve"]);
 var INIT_GUIDANCE = "No .harness/ here \u2014 this project is not managed by the harness yet. Run `harness init` in the terminal first.";
+var REPAIR_GUIDANCE = ".harness/ is here but state.json is missing \u2014 the state store is derived, so the event journal can rebuild it. Call harness_doctor with repair: true (or run `harness doctor --repair` in the terminal). Do not run `harness init`: it refuses while .harness/ exists.";
 function refuseApprove(o) {
   const phase = str(o, "phase");
   const target = isPhase(phase) ? phase : "<P0..P12>";
@@ -9533,13 +9537,21 @@ You can still submit: use \`harness_gate_submit\` to build a review packet and h
 function callTool(root, name, args) {
   const o = asObject(args);
   if (name === "harness_gate_approve") return refuseApprove(o);
-  const known = toolDefinitions().some((d) => d.name === name);
-  if (!known) {
+  const def = toolDefinitions().find((d) => d.name === name);
+  if (!def) {
     return fail(
       `Unknown tool: ${name} \u2014 available tools: ` + toolDefinitions().map((d) => d.name).join(", ")
     );
   }
-  if (!NEEDS_INIT_EXEMPT.has(name) && !isInitialized(root)) return fail(INIT_GUIDANCE);
+  const allowed = Object.keys(def.inputSchema.properties);
+  const unknownKeys = Object.keys(o).filter((k) => !allowed.includes(k));
+  if (unknownKeys.length > 0) {
+    return fail(
+      `Unknown input for ${name}: ${unknownKeys.join(", ")} \u2014 this tool takes ${allowed.length > 0 ? allowed.join(", ") : "no arguments"}. An unknown key is never applied, so it would have recorded something other than what was asked.`
+    );
+  }
+  if (!hasHarness(root)) return fail(INIT_GUIDANCE);
+  if (!NEEDS_INIT_EXEMPT.has(name) && !isInitialized(root)) return fail(REPAIR_GUIDANCE);
   try {
     return dispatch(root, name, o);
   } catch (e) {

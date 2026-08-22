@@ -17,8 +17,13 @@ const DIR = path.resolve(__dirname, '../../docs/release-readiness/2026-08-21');
 const LEDGER = path.join(DIR, 'ledger.md');
 const SUMMARY = path.join(DIR, '00-summary.md');
 
-/** 대장 데이터 행. ID 에 숫자가 섞여도 잡아야 한다 — `[A-Z]+-\d+` 는 `I18N-72` 를 놓쳤다. */
-const ROW = /^\| ([A-Z][A-Z0-9]*-\d+) \|/;
+/**
+ * 대장 데이터 행. ID 에 숫자가 섞여도(`I18N-72`), **글자로 끝나도**(`UTIL-B`·`PROD-A` —
+ * 독립 감정자가 쓰는 번호 체계다) 잡아야 한다. 숫자 접미만 세던 규칙은 그 8행을 통째로
+ * 집계 밖에 두었고, **집계 밖의 행은 open 이어도 헤더가 0 이라고 말한다** — 이 가드가
+ * 막으려던 바로 그 사고를 가드 자신이 만들고 있었다.
+ */
+const ROW = /^\| ([A-Z][A-Z0-9]*-[A-Z0-9]+) \|/;
 
 interface Counts { verified: number; open: number; deferred: number; openHigh: number; openBlocker: number; openIds: string[] }
 

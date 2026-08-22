@@ -98,6 +98,36 @@ const TOP_LEVEL_KEYS = [
   'schemaVersion', 'color', 'space', 'type', 'radius', 'shadow', 'motion', 'breakpoint',
 ] as const;
 
+/**
+ * [UTIL-B] **입력 스키마를 어디에도 적어 두지 않았다** — 스킬은 이 파일이 단일 원천이라며
+ * `tokens gen` 을 시키는데, 형태(schemaVersion·color 의 light/dark·type/motion 하위 그룹)는
+ * 스킬에도 README 에도 `--help` 에도 없었다. 그래서 첫 시도는 반드시 실패하고, 검증기가
+ * 한 번에 한 항목씩 알려 주므로 **연쇄 오류**로 더듬어 올라가야 했다.
+ *
+ * 골격을 코드에 두는 이유는 **드리프트 방지**다. 문서에만 적으면 스키마가 바뀔 때 예시가
+ * 조용히 거짓이 된다 — 여기 두면 테스트가 `validateTokens(JSON.parse(SKELETON))` 로
+ * 예시 자체의 유효성을 매번 잰다. 오류문·도움말·스킬이 전부 이 하나를 가리킨다.
+ */
+export const TOKEN_DOC_SKELETON = `{
+  "schemaVersion": 1,
+  "color":      { "text.primary": { "light": "#111111", "dark": "#f5f5f5" } },
+  "space":      { "md": "16px" },
+  "type":       { "family": { "sans": "Inter, system-ui, sans-serif" },
+                  "size":   { "md": "16px" },
+                  "weight": { "regular": "400" },
+                  "lineHeight": { "normal": "1.5" } },
+  "radius":     { "md": "8px" },
+  "shadow":     { "md": "0 1px 2px rgba(0,0,0,.08)" },
+  "motion":     { "duration": { "fast": "120ms" }, "easing": { "standard": "cubic-bezier(.2,0,0,1)" } },
+  "breakpoint": { "md": "768px" }
+}`;
+
+/** 한 줄 요약 — 도움말·오류문이 함께 쓴다. 항목이 늘면 여기 한 곳만 고친다. */
+export const TOKEN_DOC_SHAPE_HINT =
+  'schemaVersion: 1 · color.<name> = { light, dark? } · space/radius/shadow/breakpoint = name → string · '
+  + 'type = family/size/weight/lineHeight · motion = duration/easing. '
+  + 'A value that is entirely `{other.token.path}` is an alias.';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 경로
 // ─────────────────────────────────────────────────────────────────────────────
@@ -282,7 +312,8 @@ export function loadTokens(root: string): TokenDoc {
   if (!fs.existsSync(p)) {
     throw new Error(
       `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent `
-      + 'defaults — export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec §7).',
+      + 'defaults — export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec §7).\n'
+      + `The document shape: ${TOKEN_DOC_SHAPE_HINT}\nA minimal valid document:\n${TOKEN_DOC_SKELETON}`,
     );
   }
   let parsed: unknown;

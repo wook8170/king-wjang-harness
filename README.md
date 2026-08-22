@@ -114,7 +114,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **850 passing** (33 files) |
+| Test suite | **893 passing** (33 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -190,7 +190,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (850 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (893 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -211,6 +211,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - A gate accepts filler documents: content **quality** is outside a deterministic local core, so human approval is the defence.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a 4-level script chain is not followed.
+- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events (decades of use) measured p95 ≈ 101ms, and only while the state store is degraded — `doctor --repair` ends it.
 
 ---
 

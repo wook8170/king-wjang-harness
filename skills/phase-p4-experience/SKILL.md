@@ -65,6 +65,29 @@ expression of it).
 What the gate reviews is not a picture but **self-contained HTML you can click**. It contains:
 
 - The token CSS-variable block — this block *is* the origin of `design-tokens.json` (the same thing)
+
+### The shape of `design-tokens.json`
+
+The core never invents defaults, so this file must exist before `harness tokens gen` runs.
+`harness tokens --help` prints the same shape — copy it, then replace the values.
+
+```json
+{
+  "schemaVersion": 1,
+  "color":      { "text.primary": { "light": "#111111", "dark": "#f5f5f5" } },
+  "space":      { "md": "16px" },
+  "type":       { "family": { "sans": "Inter, system-ui, sans-serif" },
+                  "size":   { "md": "16px" },
+                  "weight": { "regular": "400" },
+                  "lineHeight": { "normal": "1.5" } },
+  "radius":     { "md": "8px" },
+  "shadow":     { "md": "0 1px 2px rgba(0,0,0,.08)" },
+  "motion":     { "duration": { "fast": "120ms" }, "easing": { "standard": "cubic-bezier(.2,0,0,1)" } },
+  "breakpoint": { "md": "768px" }
+}
+```
+
+schemaVersion: 1 · color.<name> = { light, dark? } · space/radius/shadow/breakpoint = name → string · type = family/size/weight/lineHeight · motion = duration/easing. A value that is entirely `{other.token.path}` is an alias.
 - A gallery of **every component state** (default/hover/focus/active/disabled/error)
 - Two or three representative screens as page demos (on an approved layout template)
 - Working interactions: modal, tabs, form validation states, light/dark toggle

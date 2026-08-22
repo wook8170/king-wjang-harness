@@ -9,7 +9,9 @@ import {
   generateCss, generateTs, generateTailwind,
   findRawValues, isTokenFile, isFrozenPath,
   swapTokens, diffTokens, assertSwapIsMeaningful,
+  TOKEN_DOC_SKELETON, TOKEN_DOC_SHAPE_HINT,
 } from '../src/tokens';
+import { renderGroupHelp, findGroup } from '../src/help';
 import type { TokenDoc } from '../src/tokens';
 
 const setup = () => {
@@ -348,5 +350,46 @@ describe('tokens · 스왑 드릴', () => {
     const changed = assertSwapIsMeaningful(a, b);
     expect(changed.length).toBeGreaterThanOrEqual(6);
     expect(changed).toContain('color.text.primary.light');
+  });
+});
+
+/**
+ * [UTIL-B] 스키마를 어디에도 적어 두지 않아 첫 시도가 반드시 실패했다. 이제 골격이 코드에
+ * 있고 오류문·도움말·P4 스킬이 **같은 하나**를 가리킨다 — 예시를 문서에만 두면 스키마가
+ * 바뀔 때 조용히 거짓이 되므로, 여기서 예시 자체의 유효성과 사본의 일치를 매번 잰다.
+ */
+describe('UTIL-B: 토큰 문서 스키마가 문서화돼 있고 그 예시가 실제로 유효하다', () => {
+  it('문서화된 골격은 그대로 통과한다 — 복사해 넣으면 첫 시도가 된다', () => {
+    const doc = validateTokens(JSON.parse(TOKEN_DOC_SKELETON));
+    expect(doc.schemaVersion).toBe(1);
+    expect(generateCss(doc)).toContain('--color-text-primary');
+  });
+
+  it('골격이 최상위 항목을 하나도 빠뜨리지 않는다', () => {
+    const o = JSON.parse(TOKEN_DOC_SKELETON) as Record<string, unknown>;
+    for (const k of ['schemaVersion', 'color', 'space', 'type', 'radius', 'shadow', 'motion', 'breakpoint']) {
+      expect(Object.keys(o)).toContain(k);
+    }
+  });
+
+  it('원천이 없을 때의 오류문이 형태와 최소 예시를 함께 준다', () => {
+    const root = setup();
+    expect(() => loadTokens(root)).toThrow(/schemaVersion/);
+  });
+
+  it('`tokens --help` 가 같은 골격을 인쇄한다', () => {
+    const g = findGroup('tokens')!;
+    for (const lang of ['en', 'ko'] as const) {
+      const text = renderGroupHelp(g, lang);
+      expect(text).toContain(TOKEN_DOC_SKELETON);
+      expect(text).toContain(TOKEN_DOC_SHAPE_HINT);
+    }
+  });
+
+  it('P4 스킬의 사본이 코드와 갈리지 않는다', () => {
+    const skill = fs.readFileSync(
+      path.resolve(__dirname, '../../skills/phase-p4-experience/SKILL.md'), 'utf8',
+    );
+    expect(skill).toContain(TOKEN_DOC_SKELETON);
   });
 });

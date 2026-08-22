@@ -31,7 +31,7 @@ try {
 } catch (e) {
   loadError = String((e && e.message) || e);
   console.error(
-    `${SERVER_NAME}: core/dist 빌드본이 없다 — \`npm install\`(prepare) 또는 \`npm run build\` 로 빌드하라. (${loadError})`,
+    `${SERVER_NAME}: no build in core/dist — run \`npm install\` (prepare) or \`npm run build\` to build it. (${loadError})`,
   );
 }
 
