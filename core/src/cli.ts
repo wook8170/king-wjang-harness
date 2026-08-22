@@ -471,8 +471,22 @@ export function run(argv: string[], root: string): number {
          * 새 강제를 만들지 않는다. 역행을 위한 명령은 **이미 있다**(`harness backtrack`) —
          * 사유를 받고 저널에 남기고 STALE 전파를 건다(§5). 여기서는 그 문으로 보낸다.
          */
-        const cur = readState(root).phase;
-        if (PHASES.indexOf(phase) < PHASES.indexOf(cur)) {
+        const st0 = readState(root);
+        const cur = st0.phase;
+        /**
+         * [UTIL-189] **문을 옮겼는데 그 문이 안 열렸다.** [UTIL-176] 이 후진을 `harness backtrack`
+         * 으로 보냈는데, 여기서 **마커를 조회하지 않아** `backtrack` → `phase set` 왕복이
+         * 영영 완성되지 않았다: `backtrack` 은 마커를 세우고 「`phase set` 을 실행하라」고
+         * 안내하는데 `phase set` 은 다시 「`backtrack` 을 쓰라」고 거부한다. 지시를 따를수록
+         * 루프를 돈다 — 훅 거부문·SKILL·README 가 전부 이 흐름을 권하므로 파급이 넓었다.
+         *
+         * 마커가 **이 페이즈를 가리키고 있으면** 그것이 곧 「사유가 기록된 역행」이다 — 통과시킨다.
+         * 마커는 여기서 지우지 않는다: 동결된 디자인 시스템을 고칠 수 있게 하는 것도 이 마커이고
+         * (`hook.ts` 의 `!state.backtrack`), 역행의 목적은 도착이 아니라 **개정**이기 때문이다.
+         * 끝나면 사람이 `harness backtrack` 을 인자 없이 불러 닫는다.
+         */
+        const backtracking = st0.backtrack?.to === phase;
+        if (!backtracking && PHASES.indexOf(phase) < PHASES.indexOf(cur)) {
           throw new Error(L(
             `Going back from ${cur} to ${phase} is a backtrack, not a phase change — approved gates `
             + 'stay approved, so a silent step back lets the design be revised and re-entered with no '
@@ -1290,6 +1304,17 @@ export function run(argv: string[], root: string): number {
           writeState(root, { ...readState(root), backtrack: null });
           console.log(L('Backtrack ended', '역행 종료'));
           return 0;
+        }
+        // [UX-193] **끝내는 문이 안 보이면 시작하는 문만 있는 것과 같다.**
+        // 인자 없이 부르면 「어느 페이즈인가?」만 답했고, 마커를 닫는 `clear` 는
+        // 어느 메시지에도 없었다 — 역행을 시작한 사람이 끝내는 법을 못 찾는다.
+        if (sub === undefined || String(sub).trim() === '') {
+          throw new Error(L(
+            `Which phase? Usage: \`harness backtrack <phase> --reason "<why>"\` — one of ${PHASES.join(', ')}. `
+            + 'When the revision is done, close it with `harness backtrack clear`.',
+            `어느 페이즈인가? 사용법: \`harness backtrack <페이즈> --reason "<사유>"\` — ${PHASES.join(', ')} 중 하나. `
+            + '개정이 끝나면 `harness backtrack clear` 로 닫는다.',
+          ));
         }
         const target = requirePhase(sub, 'harness backtrack', lang);
         // [USE-90] 사유는 **필수다.** 예전에는 빠지면 `(미기재)` 를 넣고 exit 0 으로 기록했다 —

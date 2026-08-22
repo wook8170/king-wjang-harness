@@ -238,3 +238,44 @@ describe('[ENG-186] 해시 규율은 한 벌이고, 그 한 벌에 테스트가 
     expect(digest([['f', 'x'], ['g', 'y']])).toBe(digest([['f', 'x'], ['g', 'y']]));
   });
 });
+
+describe('[UTIL-189] 역행 왕복이 실제로 완성된다 — 문을 옮겼으면 그 문이 열려야 한다', () => {
+  it('`backtrack` → `phase set` 왕복이 끝난다', () => {
+    const root = setup('P12');
+    const st = readState(root);
+    writeState(root, {
+      ...st,
+      gates: { ...st.gates, P0: { status: 'approved', evidence: 'measured' } as any,
+        P1: { status: 'approved', evidence: 'measured' } as any,
+        P2: { status: 'approved', evidence: 'measured' } as any },
+    });
+    expect(run(['backtrack', 'P2', '--reason', '설계 재검토'], root)).toBe(0);
+    expect(run(['phase', 'set', 'P2'], root)).toBe(0);
+    // 두 명령이 서로를 가리키기만 하면 지시를 따를수록 루프를 돈다.
+    expect(readState(root).phase, '왕복이 완성되지 않았다').toBe('P2');
+  });
+
+  it('마커는 도착해도 남는다 — 역행의 목적은 도착이 아니라 개정이다', () => {
+    const root = setup('P12');
+    const st = readState(root);
+    writeState(root, { ...st, gates: { ...st.gates, P0: { status: 'approved', evidence: 'measured' } as any } });
+    run(['backtrack', 'P1', '--reason', 'x'], root);
+    run(['phase', 'set', 'P1'], root);
+    // 동결된 디자인 시스템을 고칠 수 있게 하는 것도 이 마커다(hook 의 `!state.backtrack`).
+    expect(readState(root).backtrack).toEqual({ to: 'P1', reason: 'x' });
+    expect(run(['backtrack', 'clear'], root)).toBe(0);
+    expect(readState(root).backtrack).toBeNull();
+  });
+
+  it('마커가 가리키지 않는 페이즈로는 여전히 후진할 수 없다 — 문은 하나만 열렸다', () => {
+    const root = setup('P12');
+    const captured: string[] = [];
+    const orig = console.error;
+    console.error = (...a: unknown[]) => { captured.push(a.map(String).join(' ')); };
+    let code = 0;
+    try { run(['backtrack', 'P5', '--reason', 'x'], root); code = run(['phase', 'set', 'P2'], root); }
+    finally { console.error = orig; }
+    expect(code).not.toBe(0);
+    expect(readState(root).phase).toBe('P12');
+  });
+});

@@ -11,7 +11,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 203 · **open** 1 (MED 0 · LOW 1) · deferred 5 ·
+> 대장 집계: **verified** 203 · **open** 1 (MED 0 · LOW 1) · deferred 4 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -335,7 +335,7 @@ p95 < 150ms 확인 → 대장 PERF-26 을 `fixed` → `verified` 로 올린다.
 
 | 게이트 | 목표 | 최종 실측 | 판정 |
 |---|---|---|---|
-| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1233 passed ×3, 53 파일** (라운드 3-J 재측정) | ✅ |
+| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1236 passed ×3, 53 파일** (라운드 3-J 재측정) | ✅ |
 | G2 타입 | 오류 0 | `tsc --noEmit` exit 0 | ✅ |
 | G3 빌드·자체완결 | 맨 클론서 `--version`·`init`·`status` exit 0 | 전부 exit 0 (+`doctor`) | ✅ |
 | G4 훅 무해 | 4이벤트 × 4입력 exit 0 · 미초기화 0바이트 | **12/12 exit 0**, 0바이트 확인 | ✅ |

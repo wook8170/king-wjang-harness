@@ -14617,8 +14617,10 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
           console.log(L(`Phase \u2192 ${phase} (--force: gate check skipped)`, `\uD398\uC774\uC988 \u2192 ${phase} (--force: \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uC5C8\uB2E4)`));
           return 0;
         }
-        const cur = readState(root).phase;
-        if (PHASES.indexOf(phase) < PHASES.indexOf(cur)) {
+        const st0 = readState(root);
+        const cur = st0.phase;
+        const backtracking = st0.backtrack?.to === phase;
+        if (!backtracking && PHASES.indexOf(phase) < PHASES.indexOf(cur)) {
           throw new Error(L(
             `Going back from ${cur} to ${phase} is a backtrack, not a phase change \u2014 approved gates stay approved, so a silent step back lets the design be revised and re-entered with no record. Use \`harness backtrack ${phase} --reason "<why>"\`, which records it and marks what went stale.`,
             `${cur} \uC5D0\uC11C ${phase} \uB85C \uB3CC\uC544\uAC00\uB294 \uAC83\uC740 \uD398\uC774\uC988 \uBCC0\uACBD\uC774 \uC544\uB2C8\uB77C \uC5ED\uD589\uC774\uB2E4 \u2014 \uC2B9\uC778\uB41C \uAC8C\uC774\uD2B8\uB294 \uADF8\uB300\uB85C \uB0A8\uC73C\uBBC0\uB85C, \uC870\uC6A9\uD788 \uB4A4\uB85C \uAC00\uBA74 \uC124\uACC4\uB97C \uACE0\uCE58\uACE0 \uC544\uBB34 \uAE30\uB85D \uC5C6\uC774 \uB418\uB3CC\uC544\uC62C \uC218 \uC788\uB2E4. \`harness backtrack ${phase} --reason "<\uC0AC\uC720>"\` \uB97C \uC4F0\uB77C \u2014 \uAE30\uB85D\uC774 \uB0A8\uACE0 \uBB34\uC5C7\uC774 \uB0A1\uC558\uB294\uC9C0 \uD45C\uC2DC\uB41C\uB2E4.`
@@ -15327,6 +15329,12 @@ Next: publish it as a claude.ai artifact, then \`harness doc url ${id} <url>\``,
           writeState(root, { ...readState(root), backtrack: null });
           console.log(L("Backtrack ended", "\uC5ED\uD589 \uC885\uB8CC"));
           return 0;
+        }
+        if (sub === void 0 || String(sub).trim() === "") {
+          throw new Error(L(
+            `Which phase? Usage: \`harness backtrack <phase> --reason "<why>"\` \u2014 one of ${PHASES.join(", ")}. When the revision is done, close it with \`harness backtrack clear\`.`,
+            `\uC5B4\uB290 \uD398\uC774\uC988\uC778\uAC00? \uC0AC\uC6A9\uBC95: \`harness backtrack <\uD398\uC774\uC988> --reason "<\uC0AC\uC720>"\` \u2014 ${PHASES.join(", ")} \uC911 \uD558\uB098. \uAC1C\uC815\uC774 \uB05D\uB098\uBA74 \`harness backtrack clear\` \uB85C \uB2EB\uB294\uB2E4.`
+          ));
         }
         const target = requirePhase(sub, "harness backtrack", lang);
         const reason = (flag(rest, "reason") ?? "").trim();
