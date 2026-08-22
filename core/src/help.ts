@@ -67,7 +67,7 @@ export const COMMANDS: CommandGroup[] = [
     name: 'wave',
     summary: M('Waves — the unit of build work, with a written instruction sheet.', '웨이브 — 지시서를 가진 구축 작업 단위.'),
     subs: [
-      { name: 'create', args: '--goal <text> [--milestone <m>] [--refs <ids>] [--acceptance <list>]', summary: M('Create a wave instruction sheet (pending). Design refs must exist in the ledger.', '웨이브 지시서를 만든다(pending). 설계 참조는 원장에 있어야 한다.') },
+      { name: 'create', args: '--goal <text> [--milestone <m>] [--refs <ids>] [--acceptance|--accept <list>]', summary: M('Create a wave instruction sheet (pending). Design refs must exist in the ledger.', '웨이브 지시서를 만든다(pending). 설계 참조는 원장에 있어야 한다.') },
       { name: 'activate', args: '<wave-id>', summary: M('Activate a wave. Only one can be active.', '웨이브를 활성화한다. 동시에 하나만 가능하다.') },
       { name: 'update', args: '<text>', summary: M('Append one turn-log line (what you did / what is next).', '턴 로그를 한 줄 남긴다(한 일 / 다음 할 일).') },
       { name: 'complete', summary: M('Complete the active wave. UX waves need visual evidence.', '활성 웨이브를 완료한다. UX 웨이브는 시각 증적이 필요하다.') },

@@ -83,9 +83,12 @@ export interface EvidenceReport {
    */
   entries: number;
   /**
-   * **게이트를 열 수 있는 파일** — 「그 파일이 자기가 주장하는 것이 아니다」라는 치명 문제가
-   * 붙지 않은 것들. 크기가 수상하다는 **의심**은 여기서 빼지 않는다(그건 사람이 볼 일이고,
-   * 의심만으로 막으면 정상 캡처가 걸려 과차단이 된다).
+   * **게이트를 열 수 있는 파일.** 세 조건을 전부 만족해야 한다 — 헤더가 읽히고, 빈 화면
+   * 의심 크기가 아니고, 실제 화면 치수다.
+   *
+   * [QUAL-140] 예전에는 「크기가 수상하다는 **의심**은 여기서 빼지 않는다」였고, 그 절충으로
+   * 1×1 PNG 가 게이트를 열었다. 과차단이 걱정이면 문턱을 **실주행이면 반드시 넘는 값**으로
+   * 잡을 일이지(각 변 200px — 가장 좁은 뷰포트도 375px), 판정을 무르게 할 일이 아니다.
    */
   usable: EvidenceFile[];
   /** 세지 않은 것과 그 사유 + 셌지만 의심스러운 것. 조용히 버리는 항목은 하나도 없다. */
@@ -320,9 +323,10 @@ function resolveWaveId(root: string, given?: string): string {
     throw new Error(
       tr(root, {
         en: 'Cannot tell which wave the captures belong to — there is no active wave. Activate one with '
-          + '`harness wave activate <id>`, or pass waveId explicitly.',
+          // [UX-165] 「명시적으로 넘겨라」면서 **플래그명을 안 썼다** — 사람이 무엇을 칠지 모른다.
+          + '`harness wave activate <id>`, or pass it explicitly with `--wave <wave-id>`.',
         ko: '캡처를 떨어뜨릴 웨이브를 알 수 없다 — 활성 웨이브가 없다. '
-          + '`harness wave activate <id>` 로 활성화하거나 waveId 를 직접 지정하라.',
+          + '`harness wave activate <id>` 로 활성화하거나 `--wave <wave-id>` 로 직접 넘겨라.',
       }),
     );
   }

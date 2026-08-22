@@ -57,3 +57,28 @@ export function loadConfig(root: string): HarnessConfig {
     block_raw_values: raw.block_raw_values === true,
   };
 }
+
+/**
+ * [UX-151] **조용한 폴백을 관측 가능하게 만든다.**
+ *
+ * `loadConfig` 는 파스 실패를 삼키고 기본값으로 간다 — 훅이 절대 죽으면 안 되기 때문이고,
+ * 그 계약은 옳다. 문제는 **아무도 그 사실을 모른다**는 것이었다: 사용자는 자기가 적어 둔
+ * 정책이 걸려 있다고 믿는데 실제로는 기본값으로 돌고 있다. 강제가 사라진 것보다
+ * **사라진 줄 모르는 것**이 나쁘다.
+ *
+ * 그래서 판정 경로(훅)는 그대로 조용히 두고, **진단 경로(doctor)** 가 이 함수로 사실을 본다.
+ * 프로파일 쪽이 `inspectProfile` 로 이미 쓰는 것과 같은 형태다(표면마다 다른 말을 하지 않게).
+ */
+export function inspectConfig(root: string): { problems: string[] } {
+  const p = configPath(root);
+  if (!fs.existsSync(p)) return { problems: [] };
+  try {
+    const parsed = YAML.parse(fs.readFileSync(p, 'utf8'));
+    if (parsed !== null && parsed !== undefined && typeof parsed !== 'object') {
+      return { problems: [`${p}: not a mapping — every key is ignored and defaults are in effect`] };
+    }
+    return { problems: [] };
+  } catch (e) {
+    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`] };
+  }
+}

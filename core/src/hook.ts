@@ -828,11 +828,17 @@ function judgeWritePath(
     // `.harness/` 산출물(패킷·웨이브·증적)은 출하 트랙에서 계속 생겨야 한다.
     if (isNew && !target.startsWith('.harness/') && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
-        `New files cannot be created in the ship track (${state.phase}) — this track only changes what the `
-        + `defect ledger lists. New feature code belongs in the build track: go back with `
-        + '`harness backtrack P7 --reason "<why>"`, or register it as a defect first '
-        + `(\`harness ship defect add\`). Target: ${sanitizeUntrusted(raw)}`,
-        `출하 트랙(${state.phase})에서는 새 파일을 만들 수 없다 — 이 구간은 결함 대장에 오른 것만 고친다. `
+        // [UTIL-149] **강제하지 않는 것을 강제한다고 말하지 않는다.** 예전 문구는 「이 구간은
+        // 결함 대장에 오른 것만 고친다」였는데, 실제 강제는 **신규 파일 생성 금지 하나뿐**이다 —
+        // 기존 파일 편집은 대장이 비어 있어도 통과한다. 사람이 그 문장을 믿으면 있지도 않은
+        // 강제에 맞춰 절차를 늘리거나(과잉), 대장 스코프가 지켜진다고 오신뢰한다.
+        `New files cannot be created in the ship track (${state.phase}) — this track is for fixing what `
+        + `already exists. (Editing existing files is not blocked here; keeping changes to the defect `
+        + `ledger's scope is a convention this hook does not enforce.) New feature code belongs in the `
+        + 'build track: go back with `harness backtrack P7 --reason "<why>"`, or register it as a defect '
+        + `first (\`harness ship defect add\`). Target: ${sanitizeUntrusted(raw)}`,
+        `출하 트랙(${state.phase})에서는 새 파일을 만들 수 없다 — 이 구간은 이미 있는 것을 고치는 자리다. `
+        + '(기존 파일 편집은 여기서 막지 않는다. 결함 대장 스코프를 지키는 것은 이 훅이 강제하지 않는 규율이다.) '
         + '신규 기능 코드는 구축 트랙의 일이다: `harness backtrack P7 --reason "<사유>"` 로 역행하거나, '
         + `먼저 결함으로 등록하라(\`harness ship defect add\`). 대상: ${sanitizeUntrusted(raw)}`,
       ), degraded, lang);
@@ -1172,10 +1178,16 @@ function preTool(
         : inBuild
           ? L('the build track', '구축 트랙')
           : L(`the ship track without an approved ${state.phase} gate`, `${state.phase} 게이트 승인 없이 출하 트랙`);
+      // [UX-164] 탈출 경로 없는 deny 는 이 제품의 다른 거부와 비대칭이다 — 어느 페이즈가
+      // 열어 주는지 말하지 않으면 사람은 「영영 못 한다」로 읽고 강제를 끄려 든다.
+      // 출하 트랙은 게이트가, 그 앞 트랙들은 **P10 진입**이 연다.
       const next = inShip
         ? L(` Submit and get it approved first: \`harness gate submit ${state.phase} --evidence measured --paths <artifacts>\`.`,
             ` 먼저 제출·승인을 받아라: \`harness gate submit ${state.phase} --evidence measured --paths <산출물>\`.`)
-        : '';
+        : L(' Deploy-ish commands open on the ship track (P10 onward), once that phase\'s gate is approved. '
+            + 'Check where you are with `harness status`.',
+            ' 배포성 명령은 출하 트랙(P10 이후)에서 해당 페이즈 게이트가 승인되면 열린다. '
+            + '지금 위치는 `harness status` 로 확인하라.');
       // [EFF-108] 언급이 아니라 **실행**을 본다 — `grep "npm publish" README.md` 는 배포가 아니다.
       const hit = config.design_blocked_bash.find(b => runsCommand(cmd, b));
       if (hit) {

@@ -137,11 +137,14 @@ export function createWave(
    */
   const missing = opts.design_refs.filter(id => !getNode(root, id));
   if (missing.length > 0) {
+    // [UX-123] 처방은 **부른 표면의 이름**으로 해야 한다. 도메인은 CLI·MCP 양쪽에서 불리는데
+    // 문구가 CLI 명령으로 고정돼 있어서, MCP 로 온 에이전트는 존재하지 않는 도구를 찾았다.
+    // 어느 쪽에서 왔는지는 호출측만 아니까 **두 이름을 함께** 말한다 — 짧게.
     throw new Error(tr(root, {
-      en: `Design refs not in the ledger: ${missing.join(', ')} — register them first with `
-        + '`harness node upsert --id <id> --title <title>`',
-      ko: `원장에 없는 설계 참조: ${missing.join(', ')} — `
-        + '`harness node upsert --id <id> --title <제목>` 로 먼저 등록하라',
+      en: `Design refs not in the ledger: ${missing.join(', ')} — register them first: `
+        + 'CLI `harness node upsert --id <id> --title <title>`, MCP `harness_node_upsert`',
+      ko: `원장에 없는 설계 참조: ${missing.join(', ')} — 먼저 등록하라: `
+        + 'CLI `harness node upsert --id <id> --title <제목>` · MCP `harness_node_upsert`',
     }));
   }
   if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {

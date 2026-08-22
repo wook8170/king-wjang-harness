@@ -27,6 +27,7 @@ import {
 import {
   getDoc, upsertDoc, submitDoc, approveDoc, reviseDoc, setDocArtifactUrl,
   staleDocs, loadRegistry,
+  docsForPhase,
 } from './registry';
 import { buildReviewPacket, renderRtm, buildHub, traceNode } from './report';
 import { proposeAdr, decideAdr, reviseAdr, getAdr, listAdrs, renderAdrPacket } from './adr';
@@ -401,12 +402,31 @@ export function run(argv: string[], root: string): number {
               console.error(L(`Review packet generation failed (the submission still stands) — ${String(e)}`, `리뷰 패킷 생성 실패(제출은 유효) — ${String(e)}`));
               packet = '';
             }
+            // [UX-166] **두 표면이 모순된 신호를 주던 것을 제출 시점에 잇는다.** 코어 플로우
+            // 안내대로 `--paths` 만 쓰면 패킷 머리에 "승인 근거가 아니다" 가 박히는데, 그
+            // 상태로 `gate approve` 는 성공한다 — 어느 쪽을 믿어야 할지 알 수 없다.
+            // 강제를 새로 만들지는 않는다(그건 별개 결정이다). 대신 **지금 무슨 상태인지와
+            // 잇는 방법**을 제출한 사람에게 그 자리에서 말한다. 판정은 패킷 한 벌을 쓴다.
+            const noDoc = docsForPhase(root, phase).length === 0;
+            // [UX-122] 제출은 끝이 아니다 — 다음 수는 **사람의 승인**이다.
             console.log(
               L(
                 `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}`
-                + (packet ? `\nReview packet: ${path.relative(root, packet)}` : ''),
+                + (packet ? `\nReview packet: ${path.relative(root, packet)}` : '')
+                + (noDoc
+                  ? `\nNote: no document is registered for ${phase}, so the packet says it is not grounds `
+                    + `for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` `
+                    + '→ publish → `harness doc url <DOC-x> <url>`, then submit again.'
+                  : '')
+                + `\nNext: a human approves it in their terminal — \`harness gate approve ${phase}\`.`,
                 `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`
-                + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : ''),
+                + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : '')
+                + (noDoc
+                  ? `\n참고: ${phase} 에 등록된 문서가 없어 패킷이 「승인 근거가 아니다」라고 적는다. `
+                    + `\`harness doc upsert --id <DOC-x> --path <파일> --phase ${phase}\` `
+                    + '→ 발행 → `harness doc url <DOC-x> <url>` 로 이은 뒤 다시 제출하라.'
+                  : '')
+                + `\n다음: 사람이 자기 터미널에서 승인한다 — \`harness gate approve ${phase}\`.`,
               ),
             );
             return 0;
@@ -1156,7 +1176,16 @@ export function run(argv: string[], root: string): number {
         }
         appendEvent(root, 'backtrack-started', { to: sub, reason }); // 순서 계약
         writeState(root, { ...readState(root), backtrack: { to: sub, reason } });
-        console.log(L(`Backtrack started → ${sub}: ${reason}`, `역행 시작 → ${sub}: ${reason}`));
+        // [UX-122] 「시작」만 말하면 사람은 페이즈가 옮겨진 줄 안다 — 직후 `status` 는 여전히
+        // 이전 페이즈다(마커만 섰다). 무엇이 됐고 무엇이 안 됐는지, 그리고 다음 수를 말한다.
+        console.log(L(
+          `Backtrack marker set → ${sub}: ${reason}\n`
+          + `The current phase has not moved yet — run \`harness phase set ${sub}\` to go back, `
+          + 'then fix the design artifacts and re-submit the gates you invalidated.',
+          `역행 마커 설정 → ${sub}: ${reason}\n`
+          + `현재 페이즈는 아직 그대로다 — \`harness phase set ${sub}\` 로 돌아간 뒤, `
+          + '설계 산출물을 고치고 무효가 된 게이트를 다시 제출하라.',
+        ));
         return 0;
       }
 

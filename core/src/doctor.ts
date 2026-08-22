@@ -19,14 +19,26 @@ import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './even
 import { tr } from './tr';
 import type { Msg } from './i18n';
 import { readState, writeState, defaultState } from './state';
+import { inspectConfig } from './config';
 import { computePolicyHash, pinnedPolicy, pinPolicy } from './policy';
 import type { HarnessState } from './types';
 
 export interface DoctorReport {
+  /**
+   * **수리 후** 기준으로 깨끗한가.
+   *
+   * [UX-121] 예전에는 수리 **전**에 모은 `issues` 로 계산해서, 성공한 복구가
+   * `repaired: true` + `ok: false` + "state.json is damaged" 를 동시에 찍었다 —
+   * 청정 여부를 알려면 사람이 같은 명령을 한 번 더 돌려야 했다. 진단 도구가 자기 작업의
+   * 결과를 안 알려 주면, 그 도구를 쓰는 사람은 매번 두 번 돌린다.
+   */
   ok: boolean;
   repaired: boolean;
   refused: boolean;
+  /** 발견한 문제 — **수리 전** 상태다. 무엇이 어긋나 있었는지가 보고의 본체이므로 지우지 않는다. */
   issues: string[];
+  /** 수리했을 때 **남은** 문제. 비어 있으면 복구가 끝난 것이다(`repaired` 가 false 면 `undefined`). */
+  remaining?: string[];
   warnings: string[];
   notes: string[];
 }
@@ -196,6 +208,15 @@ export function runDoctor(
     notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `고아 임시파일 ${swept}개 정리` }));
   }
 
+  // [UX-151] 6b. 깨진 config 는 조용히 기본값으로 폴백한다(훅 무해 계약) — 그 사실을 여기서 알린다.
+  //     사용자가 적어 둔 정책이 안 걸린 채 도는 것보다, 안 걸린 줄 모르는 것이 나쁘다.
+  for (const problem of inspectConfig(root).problems) {
+    warnings.push(t({
+      en: `config could not be parsed, so defaults are in effect — ${problem}`,
+      ko: `config 를 해석할 수 없어 기본값으로 동작 중이다 — ${problem}`,
+    }));
+  }
+
   // 7. 훅 에러 로그 — 침묵한 판정 실패는 여기서만 드러난다
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
@@ -330,5 +351,11 @@ export function runDoctor(
   }
 
   // issues 는 복구 후에도 남긴다 — 무엇이 어긋나 있었는지가 보고의 본체다.
+  // [UX-121] 다만 **판정(ok)은 수리 후 상태로** 낸다. 한 번 더 돌려야 알 수 있는 보고는
+  // 사람에게 같은 일을 두 번 시킨다. 재진단은 수리했을 때만, 수리 없이 한 번만 돈다.
+  if (repaired) {
+    const after = runDoctor(root, {});
+    return { ok: after.issues.length === 0, repaired, refused, issues, remaining: after.issues, warnings, notes };
+  }
   return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
 }
