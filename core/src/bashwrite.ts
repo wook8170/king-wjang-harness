@@ -135,12 +135,26 @@ function resolveIn(cwd: Cwd, p: string): string | null {
 /** 세그먼트를 **위치와 함께** 끊는다 — 리다이렉트는 원문 위치로 자기 cwd 를 찾아야 한다. */
 function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cwd: Cwd }> {
   const out: Array<{ text: string; start: number; cwd: Cwd }> = [];
-  const re = new RegExp(SEGMENT_SPLIT.source, 'g');
+  /**
+   * [ENG-226] **따옴표 안의 `&&`·`;` 는 분해 기준이 아니다.**
+   *
+   * 예전에는 원문을 정규식으로 그냥 쪼갰다. 그래서 `sh -c 'cd src && echo x > app.ts'` 가
+   * `sh -c 'cd src ` / ` echo x > app.ts'` 로 갈려 **래퍼 안쪽이 한 덩어리로 보이지 않았고**,
+   * `cd` 추적도 대상 정규화도 일어나지 않았다 — 설계 트랙 소스 쓰기가 그대로 통과했다.
+   * 토크나이저는 이미 따옴표를 존중한다. 분해도 같은 규칙을 쓴다.
+   */
   let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(cmd)) !== null) {
-    out.push({ text: cmd.slice(last, m.index), start: last, cwd: '' });
-    last = m.index + m[0].length;
+  let quote: '"' | "'" | null = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (quote) { if (ch === quote) quote = null; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    const two = cmd.slice(i, i + 2);
+    const len = two === '||' || two === '&&' ? 2 : ';|&\n()'.includes(ch) ? 1 : 0;
+    if (len === 0) continue;
+    out.push({ text: cmd.slice(last, i), start: last, cwd: '' });
+    last = i + len;
+    i += len - 1;
   }
   out.push({ text: cmd.slice(last), start: last, cwd: '' });
 
@@ -494,8 +508,28 @@ export function isReadOnlyCommand(cmd: string): boolean {
  *
  * 과차단을 줄이는 장치이지 방어를 넓히는 장치가 아니다 — 편 결과는 그대로 판정을 받는다.
  */
-function staticAssignments(cmd: string): Map<string, string> {
+/**
+ * [EFF-227] **`mktemp` 은 정의상 임시 디렉토리를 만든다 — 그건 우리가 아는 사실이다.**
+ *
+ * `tmpfile=$(mktemp); echo x > $tmpfile` 은 셸에서 가장 흔한 관용구인데, [SEC-216] 의
+ * 「볼 수 없는 쓰기」 규칙이 전 페이즈에서 이것을 막았다. 과차단은 이 제품에서 결함과 같은
+ * 무게다 — 이 정도로 흔한 관용구가 막히면 사람이 하네스를 끈다.
+ *
+ * 값 자체는 못 보지만 **어디에 떨어지는지는 안다**: `TMPDIR`(없으면 `/tmp`) 아래다.
+ * 프로젝트 밖이므로 하네스 소관이 아니고, 그 자리에 놓인 이름 모를 파일은 판정에서
+ * 그대로 허용으로 떨어진다. **모르는 것을 아는 척하지 않고, 아는 것을 모르는 척하지도 않는다.**
+ */
+const MKTEMP_VALUE = /^\$\(\s*mktemp\b[^)]*\)$|^`\s*mktemp\b[^`]*`$/;
+
+function staticAssignments(cmd: string, env: Record<string, string | undefined> = {}): Map<string, string> {
   const out = new Map<string, string>();
+  for (const m of cmd.matchAll(
+    /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=(\$\([^)]*\)|`[^`]*`)/g,
+  )) {
+    if (!MKTEMP_VALUE.test(m[2]) || out.has(m[1])) continue;
+    const tmp = (env.TMPDIR ?? '/tmp').replace(/\/$/, '');
+    out.set(m[1], `${tmp}/mktemp-generated`);
+  }
   const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cmd)) !== null) {
@@ -515,7 +549,7 @@ function staticAssignments(cmd: string): Map<string, string> {
  * 값에 공백·메타문자가 있으면 경로로 보지 않는다 — 펼 수 없는 것을 편 척하지 않는다.
  */
 export function expandStaticVars(cmd: string, env: Record<string, string | undefined> = {}): string {
-  const vars = staticAssignments(cmd);
+  const vars = staticAssignments(cmd, env);
   const lookup = (name: string): string | undefined => {
     const local = vars.get(name);
     if (local !== undefined) return local;
@@ -706,11 +740,23 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         }
         break;
       }
+      /**
+       * [ENG-226] **셸 목록의 다섯 번째 사본이 `case` 라벨로 숨어 있었다.**
+       * `fish`·`ash`·`busybox` 가 빠져 `ash -c 'cd src && echo x > app.ts'` 가 통과했다 —
+       * 래퍼 안쪽이 아예 안 열려서 `cd` 추적도 안 됐다.
+       *
+       * `case` 라벨은 정본(`SHELLS_TAKING_C`)에서 생성할 수 없다. 그래서 **드리프트를 테스트로
+       * 못 박는다** — 정본의 모든 셸에 대해 이 분기가 안쪽을 여는지 전수 검사한다
+       * (`blocker-3j.test.ts` [ENG-226]). 라벨이 빠지면 그 테스트가 먼저 깨진다.
+       */
       case 'sh':
       case 'bash':
       case 'zsh':
       case 'dash':
       case 'ksh':
+      case 'fish':
+      case 'ash':
+      case 'busybox':
       case 'eval': {
         // [SEC-97] `sh -c "cp /tmp/x src/app.ts"` — **가장 기본 래퍼**인데 안쪽을 안 봤다.
         // 리다이렉트 형태(`bash -c "echo x > src/app.ts"`)만 우연히 막혔다: 리다이렉트는 원문

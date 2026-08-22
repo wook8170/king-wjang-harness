@@ -10205,12 +10205,24 @@ function resolveIn(cwd, p) {
 }
 function segmentsWithIndex(cmd) {
   const out = [];
-  const re = new RegExp(SEGMENT_SPLIT.source, "g");
   let last = 0;
-  let m;
-  while ((m = re.exec(cmd)) !== null) {
-    out.push({ text: cmd.slice(last, m.index), start: last, cwd: "" });
-    last = m.index + m[0].length;
+  let quote = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    const two = cmd.slice(i, i + 2);
+    const len = two === "||" || two === "&&" ? 2 : ";|&\n()".includes(ch) ? 1 : 0;
+    if (len === 0) continue;
+    out.push({ text: cmd.slice(last, i), start: last, cwd: "" });
+    last = i + len;
+    i += len - 1;
   }
   out.push({ text: cmd.slice(last), start: last, cwd: "" });
   let cwd = "";
@@ -10489,8 +10501,16 @@ function isReadOnlyCommand(cmd) {
     return READ_ONLY_HEADS.includes(head);
   });
 }
-function staticAssignments(cmd) {
+var MKTEMP_VALUE = /^\$\(\s*mktemp\b[^)]*\)$|^`\s*mktemp\b[^`]*`$/;
+function staticAssignments(cmd, env = {}) {
   const out = /* @__PURE__ */ new Map();
+  for (const m2 of cmd.matchAll(
+    /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=(\$\([^)]*\)|`[^`]*`)/g
+  )) {
+    if (!MKTEMP_VALUE.test(m2[2]) || out.has(m2[1])) continue;
+    const tmp = (env.TMPDIR ?? "/tmp").replace(/\/$/, "");
+    out.set(m2[1], `${tmp}/mktemp-generated`);
+  }
   const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
   let m;
   while ((m = re.exec(cmd)) !== null) {
@@ -10501,7 +10521,7 @@ function staticAssignments(cmd) {
   return out;
 }
 function expandStaticVars(cmd, env = {}) {
-  const vars = staticAssignments(cmd);
+  const vars = staticAssignments(cmd, env);
   const lookup = (name) => {
     const local = vars.get(name);
     if (local !== void 0) return local;
@@ -10642,11 +10662,23 @@ function scanBashWrites(rawCmd, env = {}) {
         }
         break;
       }
+      /**
+       * [ENG-226] **셸 목록의 다섯 번째 사본이 `case` 라벨로 숨어 있었다.**
+       * `fish`·`ash`·`busybox` 가 빠져 `ash -c 'cd src && echo x > app.ts'` 가 통과했다 —
+       * 래퍼 안쪽이 아예 안 열려서 `cd` 추적도 안 됐다.
+       *
+       * `case` 라벨은 정본(`SHELLS_TAKING_C`)에서 생성할 수 없다. 그래서 **드리프트를 테스트로
+       * 못 박는다** — 정본의 모든 셸에 대해 이 분기가 안쪽을 여는지 전수 검사한다
+       * (`blocker-3j.test.ts` [ENG-226]). 라벨이 빠지면 그 테스트가 먼저 깨진다.
+       */
       case "sh":
       case "bash":
       case "zsh":
       case "dash":
       case "ksh":
+      case "fish":
+      case "ash":
+      case "busybox":
       case "eval": {
         const inner = [];
         if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));

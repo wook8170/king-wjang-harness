@@ -491,3 +491,37 @@ describe('[SEC-221] 「읽기로 분류된 쓰기 도구」 — 아홉 번째 �
     expect(isReadOnlyCommand('sort -i .harness/events.jsonl'), 'sort -i 는 조회다').toBe(true);
   });
 });
+
+describe('[ENG-226] 따옴표 안의 `&&` 는 분해 기준이 아니다', () => {
+  it('정본의 모든 셸에서 래퍼 안쪽이 열린다 — 라벨이 빠지면 여기가 먼저 깨진다', () => {
+    const root = setup('P0');
+    for (const sh of SHELLS_TAKING_C) {
+      const cmd = sh === 'busybox'
+        ? `busybox sh -c 'cd src && echo x > app.ts'`
+        : `${sh} -c 'cd src && echo x > app.ts'`;
+      expect(denied(bash(root, cmd)), `안쪽을 못 열었다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('따옴표 안 메타문자를 명령 연쇄로 오인하지 않는다', () => {
+    const out = bash(setup('P7'), "echo 'a && b; c'");
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});
+
+describe('[EFF-227] `mktemp` 관용구는 막지 않는다', () => {
+  it('가장 흔한 임시파일 관용구가 통과한다', () => {
+    const root = setup('P0');
+    for (const cmd of ['tmpfile=$(mktemp); echo x > $tmpfile', 't=$(mktemp -d); cp /tmp/a $t/x']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('진짜로 못 보는 것은 그대로 막힌다 — 예외가 규칙을 덮지 않는다', () => {
+    const root = setup('P0');
+    for (const cmd of ['p=$(base64 -d <<< Lg==); echo x >> $p', 'echo x >> $UNKNOWN_T']) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+});
