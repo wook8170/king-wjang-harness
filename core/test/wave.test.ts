@@ -8,6 +8,7 @@ import {
 } from '../src/wave';
 import { upsertNode, getNode } from '../src/ledger';
 import { evidenceDir, wavesDir, wavePath } from '../src/paths';
+import { realPng } from './png-fixture';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -75,7 +76,7 @@ describe('wave', () => {
     activateWave(root, 'wave-001');
     expect(() => completeWave(root)).toThrow(/시각 증적/);
     fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
-    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), 'fake');
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), realPng());
     completeWave(root);
     expect(readWave(root, 'wave-001').meta.status).toBe('done');
     expect(readState(root).activeWave).toBeNull();
@@ -173,7 +174,7 @@ describe('wave', () => {
     mkWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' });
     activateWave(root, 'wave-001');
     fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
-    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), 'fake');
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), realPng());
     completeWave(root);
 
     // 브랜치 전환·수동 삭제로 웨이브 파일만 사라진 상황
@@ -191,7 +192,7 @@ describe('wave', () => {
     // git 브랜치 전환 재현: .harness/ 는 커밋 대상이라 events.jsonl 이 waves/ 와 함께
     // 되감긴다. 미커밋 evidence/ 만 untracked 로 살아남는다.
     fs.mkdirSync(evidenceDir(root, 'wave-001'), { recursive: true });
-    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), 'fake');
+    fs.writeFileSync(path.join(evidenceDir(root, 'wave-001'), 'shot.png'), realPng());
 
     expect(() => mkWave(root, { milestone: 'M1', design_refs: ['UX-7'], acceptance: [], goal: 'ui' }))
       .toThrow(/이전 증적/);

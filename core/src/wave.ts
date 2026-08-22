@@ -9,6 +9,7 @@ import { readState, writeState } from './state';
 import { appendEvent, readEvents } from './events';
 import { noteTurnLogged } from './runtime';
 import type { WaveMeta } from './types';
+import { validateEvidence } from './evidence';
 
 /**
  * frontmatter는 신뢰할 수 없는 입력이다 — 손편집·불완전 파일이 들어올 수 있으므로
@@ -203,6 +204,28 @@ export function activateWave(root: string, id: string): void {
     );
   }
   if (meta.status === 'done') throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} 는 이미 done 이다` }));
+  /**
+   * [UTIL-105] **STALE 웨이브를 되살려 완료하는 길을 닫는다.**
+   *
+   * `node bump` 은 활성 웨이브를 STALE 로 정산하고 비활성화한다 — 거기까지는 가드가 있었다.
+   * 그런데 그 웨이브를 다시 `activate` 하면 **무경고로** 활성화되고 `complete` 가 `status: done`
+   * 을 찍었다. 결과 지시서에는 「구버전 결정 위에 지었다」는 흔적이 남지 않는다.
+   * README 의 "nothing silently builds on an outdated decision" 이 advisory 로만 성립했다.
+   *
+   * 처방은 제품이 이미 말하던 것 그대로다 — `node bump` 의 안내가 「새 웨이브를 만들어라」다.
+   * 되살리기를 막고 그 안내로 보낸다(끝단에서 막지 않고 **되살리는 순간** 막는다).
+   */
+  if (meta.status === 'stale') {
+    throw new Error(tr(root, {
+      en: `${id} is STALE — the design it referenced (${meta.design_refs.join(', ')}) has moved on since. `
+        + 'Re-activating it would silently build on an outdated decision. Open a new wave against the '
+        + 'current design instead: `harness wave create --goal "<goal>" --refs '
+        + `${meta.design_refs.join(',') || '<ids>'}\`.`,
+      ko: `${id} 는 STALE 이다 — 참조한 설계(${meta.design_refs.join(', ')})가 그 뒤로 바뀌었다. `
+        + '되살리면 낡은 결정 위에 조용히 짓게 된다. 현재 설계로 새 웨이브를 열어라: '
+        + `\`harness wave create --goal "<목표>" --refs ${meta.design_refs.join(',') || '<ids>'}\`.`,
+    }));
+  }
   meta.status = 'active';
   writeWave(root, id, meta, body);
   appendEvent(root, 'wave-activated', { id }); // 순서 계약: appendEvent가 writeState보다 먼저
@@ -252,15 +275,27 @@ export function completeWave(root: string): void {
   const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some(r => r.startsWith('UX-'))) {
     const dir = evidenceDir(root, id);
-    const files = evidenceFiles(root, id); // createWave 의 잔존 증적 가드와 같은 기준
-    if (files.length === 0) {
+    // [QUAL-104] **제품이 이미 가진 검사를 게이트가 부른다.** 예전에는 「파일이 있는가」만 봐서
+    // 9바이트 텍스트를 `mock.png` 로 두면 통과했다 — `evidence check` 는 같은 파일에
+    // "cannot read the PNG header" 를 내고 있었는데도. 기준은 `validateEvidence` 한 벌이다.
+    const report = validateEvidence(root, id);
+    if (report.usable.length === 0) {
+      const uxRefs = meta.design_refs.filter(r => r.startsWith('UX-')).join(', ');
+      // **파일이 있는데 못 쓰는 경우와 아예 없는 경우는 다른 문제다.** 「증적이 없다」로 뭉치면
+      // 이미 파일을 넣은 사람이 같은 파일을 또 넣는다 — 틀린 곳을 가리키는 오류문은 없느니만 못하다.
+      const why = report.files.length > 0
+        ? tr(root, {
+            en: `the files there do not count as evidence:\n  - ${report.problems.join('\n  - ')}`,
+            ko: `거기 있는 파일은 증적으로 세지 않는다:\n  - ${report.problems.join('\n  - ')}`,
+          })
+        : tr(root, {
+            en: `there is no visual evidence. Put a screenshot in ${dir}.`,
+            ko: `시각 증적이 없다. ${dir} 에 스크린샷을 넣어라.`,
+          });
       throw new Error(
         tr(root, {
-          en: `A wave referencing UX nodes `
-            + `(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')}) cannot be completed without `
-            + `visual evidence. Put a screenshot in ${dir}.`,
-          ko: `UX 노드(${meta.design_refs.filter(r => r.startsWith('UX-')).join(', ')})를 참조하는 웨이브는 `
-            + `시각 증적 없이 완료할 수 없다. ${dir} 에 스크린샷을 넣어라.`,
+          en: `A wave referencing UX nodes (${uxRefs}) cannot be completed — ${why}`,
+          ko: `UX 노드(${uxRefs})를 참조하는 웨이브는 완료할 수 없다 — ${why}`,
         }),
       );
     }

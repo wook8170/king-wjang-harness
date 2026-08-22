@@ -37,7 +37,7 @@ import { submitGate } from './gate';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { pick } from './i18n';
 import { langFor } from './tr';
-import { getNode, upsertNode, bumpNode } from './ledger';
+import { getNode, upsertNode, reviseNode } from './ledger';
 import { loadRegistry } from './registry';
 import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
@@ -437,16 +437,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
     case 'harness_node_bump': {
       const id = str(o, 'id');
       if (!id) return fail('A node id to revise is required');
-      const { node, affectedWaves, unverifiable } = bumpNode(root, id);
-      // 저널 먼저 — 마킹 루프 도중에 죽어도 bump 사실은 남아야 한다(events.ts 순서 계약).
-      appendEvent(root, 'node-bumped', {
-        id: node.id, version: node.version, affected: affectedWaves, unverifiable,
-      });
-      const failed: string[] = [];
-      for (const w of affectedWaves) {
-        try { markStale(root, w); } catch { failed.push(w); }
-      }
-      const marked = affectedWaves.filter(w => !failed.includes(w));
+      // 개정의 규칙(저널 + STALE 전파)은 도메인 한 벌이다 — 표면은 보고만 한다.
+      const { node, marked, failed, unverifiable } = reviseNode(root, id);
       const head = `${node.id} v${node.version} — ${pick({
         en: `STALE waves: ${marked.join(', ') || 'none'}`,
         ko: `STALE 웨이브: ${marked.join(', ') || '없음'}`,

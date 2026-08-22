@@ -61,12 +61,21 @@ export interface EvidenceFile {
 
 export interface EvidenceReport {
   /**
-   * `harness wave complete` 의 UX 게이트가 이 디렉토리로 열리는가 (= 인정 파일이 1개 이상).
-   * 형식·크기 의심이 있어도 게이트 기준 자체는 wave.ts 와 같게 둔다 — 판정을 여기서 몰래
-   * 조이면 두 곳의 기준이 갈라진다. 의심은 `problems` 로 보인다.
+   * `harness wave complete` 의 UX 게이트가 이 디렉토리로 열리는가 (= **인정 파일**이 1개 이상).
+   *
+   * [QUAL-104] 예전에는 「파일이 하나라도 있는가」였다. 그래서 9바이트 텍스트를 `mock.png` 로
+   * 두면 이 함수가 "cannot read the PNG header" 를 **problems 에 적으면서도 ok:true** 를 냈고,
+   * `wave complete` 는 그것을 통과시켰다 — 제품이 이미 가진 검사를 게이트가 부르지 않았다.
+   * 이제 `usable` 이 게이트의 유일한 기준이고 `wave.ts` 도 이 값을 쓴다(기준 한 벌).
    */
   ok: boolean;
   files: EvidenceFile[];
+  /**
+   * **게이트를 열 수 있는 파일** — 「그 파일이 자기가 주장하는 것이 아니다」라는 치명 문제가
+   * 붙지 않은 것들. 크기가 수상하다는 **의심**은 여기서 빼지 않는다(그건 사람이 볼 일이고,
+   * 의심만으로 막으면 정상 캡처가 걸려 과차단이 된다).
+   */
+  usable: EvidenceFile[];
   /** 세지 않은 것과 그 사유 + 셌지만 의심스러운 것. 조용히 버리는 항목은 하나도 없다. */
   problems: string[];
 }
@@ -363,6 +372,8 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
   const dir = evidenceDir(root, waveId);
   const files: EvidenceFile[] = [];
   const problems: string[] = [];
+  /** [QUAL-104] 「자기가 주장하는 것이 아닌」 파일 이름 — 게이트 계산에서 뺀다. */
+  const unusable = new Set<string>();
 
   let names: string[];
   try {
@@ -371,6 +382,7 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     return {
       ok: false,
       files,
+      usable: [],
       problems: [
         t({
           en: `the evidence directory is missing or unreadable: ${dir} — the UX gate opens only once a headless `
@@ -431,6 +443,8 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     if (ext === 'png') {
       const d = pngDimensions(abs);
       if (!d) {
+        // 치명 — 이 파일은 **자기가 주장하는 것이 아니다**. 게이트를 열어서는 안 된다.
+        unusable.add(name);
         problems.push(`${name}: ${t({
           en: 'cannot read the PNG header — it may be a corrupt file that is only named .png',
           ko: 'PNG 헤더를 읽을 수 없다 — 확장자만 png 인 손상 파일일 수 있다',
@@ -448,6 +462,7 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
       }
     }
     if (!EXPECTED_EXTS.has(ext)) {
+      unusable.add(name);      // 증적 형식이 아니다 — 세지 않는다
       problems.push(t({
         en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : 'no extension'}) — only screenshots, `
           + 'videos, traces and reports are treated as visual evidence.',
@@ -458,7 +473,8 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     files.push(file);
   }
 
-  return { ok: files.length > 0, files, problems };
+  const usable = files.filter(f => !unusable.has(f.name));
+  return { ok: usable.length > 0, files, usable, problems };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

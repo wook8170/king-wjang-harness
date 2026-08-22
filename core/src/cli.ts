@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
-import { getNode, upsertNode, bumpNode, loadLedger } from './ledger';
+import { getNode, upsertNode, reviseNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick } from './i18n';
@@ -989,23 +989,8 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
         if (sub === 'bump') {
-          const { node, affectedWaves, unverifiable } = bumpNode(root, rest[0]);
-          // 저널 먼저 — 마킹 루프 도중에 죽어도 bump 가 일어났다는 사실은 남아야 한다.
-          // affected 는 "마킹 대상"이지 "마킹 성공"이 아니다(성패는 아래 exit code 로 보고).
-          appendEvent(root, 'node-bumped', {
-            id: node.id, version: node.version, affected: affectedWaves, unverifiable,
-          });
-          // 활성 웨이브가 STALE 대상이면 markStale 이 activeWave 를 정산한다 — 그러면
-          // 이 세션의 stop 가드가 함께 풀리므로 마킹 전 상태를 기억해 두었다가 고지한다.
-          // state 를 못 읽는 상황이라도 마킹 루프는 진행해야 하니 실패는 경고 포기로 흡수한다.
-          let activeBefore: string | null = null;
-          try { activeBefore = readState(root).activeWave; } catch { /* 판정 불가 → 고지 생략 */ }
-          // 한 웨이브의 실패가 나머지 마킹을 막지 않는다 — 부분 실패는 감추지 말고 보고한다.
-          const failed: string[] = [];
-          for (const w of affectedWaves) {
-            try { markStale(root, w); } catch { failed.push(w); }
-          }
-          const marked = affectedWaves.filter(w => !failed.includes(w));
+          // 개정의 규칙(저널 + STALE 전파)은 도메인 한 벌이다 — 표면은 보고만 한다.
+          const { node, marked, failed, unverifiable, activeBefore } = reviseNode(root, rest[0]);
           console.log(L(`${node.id} v${node.version} — STALE waves: ${marked.join(', ') || 'none'}`, `${node.id} v${node.version} — STALE 웨이브: ${marked.join(', ') || '없음'}`));
           if (activeBefore && marked.includes(activeBefore)) {
             console.error(

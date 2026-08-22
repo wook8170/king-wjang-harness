@@ -3,7 +3,9 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { ledgerPath, wavesDir } from './paths';
 import { tr } from './tr';
-import { parseWave } from './wave';
+import { parseWave, markStale } from './wave';
+import { appendEvent } from './events';
+import { readState } from './state';
 import type { LedgerNode, WaveMeta } from './types';
 
 // 원장은 저널 파생이 아니다 — replayState가 node-* 이벤트를 폴드하지 않으며, 손상 시
@@ -112,4 +114,48 @@ export function bumpNode(
     }
   }
   return { node, affectedWaves, unverifiable };
+}
+
+/**
+ * [UTIL-105·ENG-106] **개정 = 판 올림 + 저널 + STALE 전파.** 한 벌로 둔다.
+ *
+ * `bumpNode` 는 「누가 영향을 받는가」를 **계산만** 했고, 저널 기록과 `markStale` 루프는
+ * CLI 와 MCP 가 **각자** 구현하고 있었다 — 같은 규칙 두 벌이다(이 리포가 반복해서 무는 사고).
+ * 그 결과 도메인만 부르는 경로(테스트·다른 호출자)에서는 웨이브가 STALE 이 되지 않았다.
+ *
+ * 여기서 전부 한다. 표면은 결과를 **보고만** 한다.
+ */
+export interface NodeRevision {
+  node: LedgerNode;
+  /** 실제로 STALE 로 표시한 웨이브. */
+  marked: string[];
+  /** 표시하려다 실패한 웨이브 — 전파가 뚫린 것이므로 감추지 않는다. */
+  failed: string[];
+  /** 참조 여부를 판정할 수 없던 웨이브(읽기·파싱 실패). */
+  unverifiable: string[];
+  /**
+   * 마킹 **전에** 활성이던 웨이브. 그것이 STALE 로 정산되면 이 세션의 턴 로그 가드가 함께
+   * 풀리므로 호출측이 사람에게 고지해야 한다.
+   */
+  activeBefore: string | null;
+}
+
+export function reviseNode(root: string, id: string): NodeRevision {
+  const { node, affectedWaves, unverifiable } = bumpNode(root, id);
+  // 저널 먼저 — 마킹 루프 도중에 죽어도 bump 가 일어났다는 사실은 남아야 한다(events.ts 순서 계약).
+  // affected 는 「마킹 대상」이지 「마킹 성공」이 아니다.
+  appendEvent(root, 'node-bumped', {
+    id: node.id, version: node.version, affected: affectedWaves, unverifiable,
+  });
+  let activeBefore: string | null = null;
+  try { activeBefore = readState(root).activeWave; } catch { /* 판정 불가 → 고지 생략 */ }
+  // 한 웨이브의 실패가 나머지 마킹을 막지 않는다 — 부분 실패는 감추지 말고 보고한다.
+  const failed: string[] = [];
+  for (const w of affectedWaves) {
+    try { markStale(root, w); } catch { failed.push(w); }
+  }
+  return {
+    node, marked: affectedWaves.filter(w => !failed.includes(w)),
+    failed, unverifiable, activeBefore,
+  };
 }
