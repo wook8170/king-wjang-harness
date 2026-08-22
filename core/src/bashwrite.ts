@@ -956,10 +956,24 @@ export function pathLikeMentions(cmd: string): string[] {
   const add = (t: string): void => { if (t && !out.includes(t)) out.push(t); };
 
   for (const seg of segmentsWithIndex(cmd)) {
-    const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
+    /**
+     * [COST-228] **탐욕 접두는 슬래시 없는 긴 입력에서 2차로 터진다.**
+     *
+     * 예전 정규식은 `[A-Za-z0-9_.-]*\/…` 였다. 슬래시가 없는 긴 낱말에서 접두가 매 위치마다
+     * 되짚어(backtrack) **입력 길이의 제곱**으로 늘었다 — 실측 2KB 2.6ms · 10KB 138ms ·
+     * 50KB 3495ms. 훅에는 10초 타임아웃이 있고 **타임아웃은 fail-open** 이라,
+     * 충분히 긴 명령 하나로 이 안전망이 통째로 꺼졌다. **비용 캡이 방어를 되돌리는** 부류다.
+     *
+     * 슬래시를 먼저 찾고 **거기서 뒤로 걸어** 접두를 모은다 — 각 문자를 상수 번만 본다.
+     */
+    const text = seg.text;
+    const re = /\/[A-Za-z0-9_.\-\/]*/g;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(seg.text)) !== null) {
-      const t = m[0];
+    while ((m = re.exec(text)) !== null) {
+      let from = m.index;
+      while (from > 0 && /[A-Za-z0-9_.\-]/.test(text[from - 1])) from--;
+      const t = text.slice(from, m.index + m[0].length);
+      re.lastIndex = from + t.length;
       if (isFlag(t) || !looksLikePath(t)) continue;
       // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 는 슬래시가 있어 이 안전망에
       // 잡혔고, 출하 트랙의 「새 파일 금지」가 존재하지 않는 그 「경로」를 두고 발화했다 —
@@ -972,8 +986,8 @@ export function pathLikeMentions(cmd: string): string[] {
       // 그것도 존재하지 않는 「파일」을 사유로 들면서. 과차단은 이 제품에서 결함과 같은
       // 무게다. 토큰만 봐서는 못 가리므로 **앞뒤 한 글자**를 본다(정규식이 `:`·`@` 에서
       // 끊기기 때문에 토큰 자체에는 그 흔적이 남지 않는다).
-      const before = seg.text[m.index - 1] ?? '';
-      const after = seg.text[m.index + t.length] ?? '';
+      const before = text[from - 1] ?? '';
+      const after = text[from + t.length] ?? '';
       if (after === ':') continue;                       // `registry.io/app:v1` · `host:port`
       if (before === '@' || before === ':') continue;    // `@scope/pkg` · `https://host/path`
       const resolved = resolveIn(seg.cwd, t);

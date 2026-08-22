@@ -359,3 +359,22 @@ describe('[SEC-204] 탈출구 env 리터럴 백스톱이 실제로 발화한다'
     expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
   });
 });
+
+describe('[COST-228] 안전망이 입력 길이에 선형이다 — 타임아웃은 fail-open 이다', () => {
+  it('슬래시 없는 긴 입력에서 2차로 터지지 않는다', () => {
+    const cmd = 'cp x y; echo ' + 'a'.repeat(200 * 1024);
+    pathLikeMentions(cmd);                       // 워밍업
+    const t0 = Date.now();
+    pathLikeMentions(cmd);
+    const ms = Date.now() - t0;
+    // 수정 전 실측: 50KB 에서 이미 3495ms — 10초 훅 타임아웃은 **통과**로 떨어진다.
+    // 잡으려는 것은 특정 밀리초가 아니라 「길이의 제곱」이라는 **부류**다.
+    expect(ms, `200KB 입력에 ${ms}ms 걸렸다 — 2차 폭발이 돌아왔는지 보라`).toBeLessThan(500);
+  });
+
+  it('추출 결과는 그대로다 — 비용만 뺐지 판정을 바꾸지 않았다', () => {
+    expect(pathLikeMentions('cd src && xxd -r -p a.hex app.ts')).toEqual(['src/a.hex', 'src/app.ts']);
+    expect(pathLikeMentions('cp /tmp/x .harness/events.jsonl'))
+      .toEqual(['/tmp/x', '.harness/events.jsonl']);
+  });
+});

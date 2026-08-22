@@ -10808,14 +10808,18 @@ function pathLikeMentions(cmd) {
     if (t && !out.includes(t)) out.push(t);
   };
   for (const seg of segmentsWithIndex(cmd)) {
-    const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
+    const text = seg.text;
+    const re = /\/[A-Za-z0-9_.\-\/]*/g;
     let m;
-    while ((m = re.exec(seg.text)) !== null) {
-      const t = m[0];
+    while ((m = re.exec(text)) !== null) {
+      let from = m.index;
+      while (from > 0 && /[A-Za-z0-9_.\-]/.test(text[from - 1])) from--;
+      const t = text.slice(from, m.index + m[0].length);
+      re.lastIndex = from + t.length;
       if (isFlag(t) || !looksLikePath(t)) continue;
       if (SUBSTITUTION_SCRIPT.test(t)) continue;
-      const before = seg.text[m.index - 1] ?? "";
-      const after = seg.text[m.index + t.length] ?? "";
+      const before = text[from - 1] ?? "";
+      const after = text[from + t.length] ?? "";
       if (after === ":") continue;
       if (before === "@" || before === ":") continue;
       const resolved = resolveIn(seg.cwd, t);
