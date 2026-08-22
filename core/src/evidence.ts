@@ -17,12 +17,16 @@
  * 경로가 오프라인·CI 환경에서 세션을 통째로 멈춰 세우고, 테스트가 외부 상태에 묶여 결정성을
  * 잃는다(design.ts 머리말의 같은 논리).
  *
- * **증적 인정 기준의 정본은 wave.ts 다.** `validateEvidence` 의 `files` 는 `completeWave` 의 UX
- * 게이트가 세는 집합과 **바이트 동일**해야 한다 — 비어 있지 않은 실제 파일만, 디렉토리는 제외.
- * (디렉토리 제외가 핵심이다: `stat.size` 는 디렉토리에서도 0 이 아니라 **빈 서브디렉토리 하나로
- * 게이트가 통과**된다. 이 리포지토리는 이미 그 부류에 한 번 물렸다.) 여기서만 더 엄격해지면
- * "게이트는 통과하는데 검증은 실패"하는 어긋남이 생기므로, 형식·크기 의심은 집합에서 빼는 게
- * 아니라 `problems` 로 보고한다. 더 엄격한 출하 판정은 `hasMeasuredEvidence` 가 따로 맡는다.
+ * **증적 인정 기준의 정본은 이 파일이다.** `completeWave` 의 UX 게이트는 `validateEvidence` 의
+ * `usable` 을 그대로 쓴다(기준 한 벌 — [QUAL-104]). 디렉토리 제외가 핵심이다: `stat.size` 는
+ * 디렉토리에서도 0 이 아니라 **빈 서브디렉토리 하나로 게이트가 통과**된다. 이 리포지토리는
+ * 이미 그 부류에 한 번 물렸다.
+ *
+ * [QUAL-140] 예전에는 「형식·크기 **의심**은 집합에서 빼지 않고 `problems` 로만 보고한다」였다.
+ * 그 절충으로 유효한 1×1 PNG 가 게이트를 열었다 — 같은 함수가 "too small" 이라고 적으면서.
+ * **제품이 의심한다고 적은 것을 게이트가 무시하면 그 검사는 장식이다.** 이제 의심도 `usable`
+ * 에서 뺀다. 과차단이 걱정이면 문턱을 실주행이면 반드시 넘는 값으로 잡을 일이지, 판정을
+ * 무르게 할 일이 아니다. `hasMeasuredEvidence`(출하)도 **같은 세 조건**을 쓴다.
  *
  * NOTE(배선): 이 모듈은 이벤트를 쓰지 않는다(순수 생성·판정). CLI 배선 시 필요하면 호출측이
  * 저널에 남긴다.
@@ -71,6 +75,14 @@ export interface EvidenceReport {
   ok: boolean;
   files: EvidenceFile[];
   /**
+   * [UX-160] 증적 디렉토리에서 **본 항목 수**(세지 않기로 한 것 포함, 디렉토리 자체가 없으면 0).
+   *
+   * 「거기 아무것도 없다」와 「거기 뭔가 있는데 세지 않는다」는 처방이 다르다. `files` 는
+   * 0바이트·끊긴 심링크·서브디렉토리를 담기 전에 걸러 내므로 그 구분을 못 한다 —
+   * 0바이트 캡처를 넣은 사람에게 "증적이 없다"고 말해 **방금 넣은 파일을 또 넣게** 했다.
+   */
+  entries: number;
+  /**
    * **게이트를 열 수 있는 파일** — 「그 파일이 자기가 주장하는 것이 아니다」라는 치명 문제가
    * 붙지 않은 것들. 크기가 수상하다는 **의심**은 여기서 빼지 않는다(그건 사람이 볼 일이고,
    * 의심만으로 막으면 정상 캡처가 걸려 과차단이 된다).
@@ -101,9 +113,24 @@ export interface ComparisonPacketOptions {
 /**
  * 이보다 작은 PNG 는 "찍히긴 했는데 빈 화면"일 가능성이 높다. 2x 스크린샷은 아무리 단순한
  * 화면이라도 수십 KB 다 — 1KiB 미만은 실패한 캡처를 증적으로 통과시키는 전형적 경로다.
- * 세지 않는 게 아니라(게이트 기준은 wave.ts) 의심으로 보고하고, measured 판정에서만 뺀다.
+ *
+ * [QUAL-140] 예전에는 「세지 않는 게 아니라 의심으로 보고하고 measured 판정에서만 뺀다」였다.
+ * 그 절충이 게이트를 열었다 — 유효한 1×1 PNG(70B)로 `wave complete` 가 통과했고, 같은 파일에
+ * `evidence check` 는 "too small" 이라고 **말하고 있었다.** 제품이 의심한다고 적은 것을
+ * 게이트가 무시하면 그 검사는 장식이다([SEC-137] 의 「못 봤으니 통과」와 같은 구조).
+ * 이제 **세지 않는다** — 게이트도 이 판정을 그대로 쓴다.
  */
 const MIN_PNG_BYTES = 1024;
+
+/**
+ * [QUAL-140] **크기 문턱은 패딩으로 넘을 수 있으므로 치수로도 잰다.** 1×1 PNG 에 `tEXt`
+ * 청크를 채우면 바이트 검사는 통과한다 — [SEC-137] 이 64KB 캡에서 실증한 바로 그 수법이다.
+ * 치수는 화면을 실제로 그려야 커지므로 패딩으로 못 속인다.
+ *
+ * 값은 **실주행 화면이면 반드시 넘는 쪽**으로 잡는다 — 가장 좁은 모바일 뷰포트도 375px 라
+ * 200px 아래로 찍히는 실제 화면은 없다. 과차단을 만들지 않는 것이 이 문턱의 조건이다.
+ */
+const MIN_PNG_EDGE = 200;
 
 /** 증적 디렉토리에서 예상되는 형식 — 스크린샷·비디오·트레이스·리포트. 그 밖은 problems 로 보고. */
 const EXPECTED_EXTS = new Set([
@@ -382,6 +409,7 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
     return {
       ok: false,
       files,
+      entries: 0,
       usable: [],
       problems: [
         t({
@@ -451,12 +479,17 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
         })}`);
       } else {
         file.dimensions = d;
-        if (st.size < MIN_PNG_BYTES) {
+        // [QUAL-140] 크기와 치수 **둘 다** 본다. 크기는 패딩으로, 치수는 그리지 않고는 못 넘는다.
+        // 그리고 여기서 걸리면 `usable` 에서 뺀다 — 보고만 하고 통과시키면 게이트가 아니다.
+        if (st.size < MIN_PNG_BYTES || Math.min(d.width, d.height) < MIN_PNG_EDGE) {
+          unusable.add(name);
           problems.push(t({
             en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small — most likely a blank screen or `
-              + 'a failed capture. Open it and confirm it shows a real run.',
+              + `a failed capture. A real screen capture is at least ${MIN_PNG_EDGE}px on each side. `
+              + 'Capture the running UI again.',
             ko: `${name}: ${st.size}바이트(${d.width}x${d.height})로 너무 작다 — `
-              + '빈 화면이거나 실패한 캡처일 가능성이 높다. 실주행 화면인지 눈으로 확인하라.',
+              + `빈 화면이거나 실패한 캡처일 가능성이 높다. 실주행 캡처는 각 변이 최소 ${MIN_PNG_EDGE}px 다. `
+              + '실행 중인 화면을 다시 찍어라.',
           }));
         }
       }
@@ -474,16 +507,22 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
   }
 
   const usable = files.filter(f => !unusable.has(f.name));
-  return { ok: usable.length > 0, files, usable, problems };
+  return { ok: usable.length > 0, files, entries: names.length, usable, problems };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. 출하 게이트 지지대 (P10/P12)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 실주행 캡처로 인정할 수 있는 파일인가 — 헤더가 읽히고 빈 화면 의심 크기가 아닌 PNG. */
+/**
+ * 실주행 캡처로 인정할 수 있는 파일인가 — 헤더가 읽히고, 빈 화면 의심 크기가 아니고,
+ * **실제 화면 치수**인 PNG. [QUAL-140] 치수 조건이 없으면 1×1 에 패딩을 채워 통과한다.
+ * `wave complete`(usable)와 여기(measured)가 같은 세 조건을 쓴다 —
+ * 판정 기준이 표면마다 다르면 사람은 가장 약한 쪽을 믿는다.
+ */
 const isRealCapture = (f: EvidenceFile): boolean =>
-  f.ext === 'png' && f.dimensions !== undefined && f.size >= MIN_PNG_BYTES;
+  f.ext === 'png' && f.dimensions !== undefined && f.size >= MIN_PNG_BYTES
+  && Math.min(f.dimensions.width, f.dimensions.height) >= MIN_PNG_EDGE;
 
 /**
  * P10/P12 가 `measured` 를 주장할 수 있는가 — **E2E 실주행 증적 없이는 measured 불가**(§3-5).

@@ -283,7 +283,11 @@ export function completeWave(root: string): void {
       const uxRefs = meta.design_refs.filter(r => r.startsWith('UX-')).join(', ');
       // **파일이 있는데 못 쓰는 경우와 아예 없는 경우는 다른 문제다.** 「증적이 없다」로 뭉치면
       // 이미 파일을 넣은 사람이 같은 파일을 또 넣는다 — 틀린 곳을 가리키는 오류문은 없느니만 못하다.
-      const why = report.files.length > 0
+      // [UX-160] 판별을 `files` 가 아니라 `entries` 로 한다. `files` 는 0바이트·끊긴 심링크·
+      // 서브디렉토리를 **담기 전에 continue** 하므로, 0바이트 캡처를 넣은 사람에게도
+      // "증적이 없다" 가 나갔다 — 방금 파일을 넣은 사람에게 파일을 넣으라는 문구다.
+      // 항목을 하나라도 봤다면 「거기 뭔가 있는데 세지 않는다」이고, 그 사유를 그대로 보여 준다.
+      const why = report.entries > 0
         ? tr(root, {
             en: `the files there do not count as evidence:\n  - ${report.problems.join('\n  - ')}`,
             ko: `거기 있는 파일은 증적으로 세지 않는다:\n  - ${report.problems.join('\n  - ')}`,
