@@ -144,8 +144,16 @@ console.log(L('`all-state` (every line a state transition) is adversarial input:
               '`all-state`(전 줄이 상태 전이)는 적대적 입력이라 문턱을 걸지 않고 기록만 한다 —'));
 console.log(L('journal only grows through harness commands, so 100,000 transitions is not reachable.',
               '저널은 harness 명령으로만 늘어나므로 10만 번의 상태 전이는 도달할 수 없다.'));
+/**
+ * [ENG-201] **게이트는 자동으로 검사할 수 있는 형태여야 한다.**
+ *
+ * 이 스크립트는 늘 exit 0 이었다 — 사람이 표를 읽고 직접 채점해야 했고, CI 에 걸 수 없었다.
+ * 게이트를 「문서에만 있는 기준」으로 두면 회귀는 사람이 안 볼 때 지나간다.
+ * 부하 중 초과는 실패로 세지 않는다(측정 머신을 재는 것이므로) — 대신 그 사실을 위에서 말한다.
+ */
 if (failed > 0) {
   console.log();
   console.log(L(`${failed} gated shape(s) exceeded the threshold on an idle machine — that is a real regression.`,
                 `유휴 상태에서 ${failed}개 부류가 문턱을 넘었다 — 이것은 진짜 회귀다.`));
+  process.exitCode = 1;
 }

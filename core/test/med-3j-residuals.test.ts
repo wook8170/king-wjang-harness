@@ -16,6 +16,7 @@ import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import { run } from '../src/cli';
 import { readJournalForReplay } from '../src/events';
+import { validateEvidence } from '../src/evidence';
 import { canEnterPhase } from '../src/gate';
 import { updateHashEntry } from '../src/hash';
 import { createHash } from 'node:crypto';
@@ -277,5 +278,54 @@ describe('[UTIL-189] 역행 왕복이 실제로 완성된다 — 문을 옮겼�
     finally { console.error = orig; }
     expect(code).not.toBe(0);
     expect(readState(root).phase).toBe('P12');
+  });
+});
+
+describe('[QUAL-200] 시각 증거 게이트는 시각 산출물을 요구한다', () => {
+  const evidenceDir = (root: string): string => {
+    const d = path.join(root, '.harness/evidence/wave-001');
+    fs.mkdirSync(d, { recursive: true });
+    return d;
+  };
+  /** 진짜 PNG 한 장 — 치수 문턱을 넘는 최소 실물. */
+  const writePng = (file: string, w = 400, h = 300): void => {
+    const zlib = require('node:zlib') as typeof import('node:zlib');
+    const raw = Buffer.concat(Array.from({ length: h }, () => Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3, 0x80)])));
+    const chunk = (type: string, data: Buffer): Buffer => {
+      const body = Buffer.concat([Buffer.from(type), data]);
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const crc = Buffer.alloc(4); crc.writeUInt32BE(zlib.crc32 ? zlib.crc32(body) : 0);
+      return Buffer.concat([len, body, crc]);
+    };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
+    ihdr[8] = 8; ihdr[9] = 2;
+    fs.writeFileSync(file, Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
+    ]));
+  };
+
+  it('텍스트 파일은 게이트를 열지 못한다 — 거부문·README·check 가 같은 말을 해야 한다', () => {
+    const root = setup('P7');
+    fs.writeFileSync(path.join(evidenceDir(root), 'notes.txt'), 'not an image\n');
+    const r = validateEvidence(root, 'wave-001');
+    expect(r.usable.map(f => f.name), 'txt 가 캡처를 대신했다').toEqual([]);
+    expect(r.problems.join('\n')).toMatch(/visual artifact|시각 산출물/);
+  });
+
+  it('진짜 캡처는 그대로 연다 — 문턱을 올린 것이 아니라 부류를 맞춘 것이다', () => {
+    const root = setup('P7');
+    const d = evidenceDir(root);
+    fs.writeFileSync(path.join(d, 'notes.txt'), 'context\n');   // 함께 있어도 된다
+    writePng(path.join(d, 'shot.png'));
+    const r = validateEvidence(root, 'wave-001');
+    expect(r.usable.map(f => f.name)).toEqual(['shot.png']);
+  });
+
+  it('내보낸 HTML 목업도 산출물이다 — Claude Design 흐름이 그것을 말한다', () => {
+    const root = setup('P7');
+    fs.writeFileSync(path.join(evidenceDir(root), 'mockup.html'), '<html><body>x</body></html>\n');
+    expect(validateEvidence(root, 'wave-001').usable.map(f => f.name)).toEqual(['mockup.html']);
   });
 });

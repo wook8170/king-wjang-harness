@@ -8450,6 +8450,12 @@ var EXPECTED_EXTS = /* @__PURE__ */ new Set([
   "txt",
   "md"
 ]);
+var IMAGE_MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp"
+};
 var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 function requireWaveId(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
@@ -8550,6 +8556,13 @@ function validateEvidence(root, waveId) {
     }
     const ext = path10.extname(name).slice(1).toLowerCase();
     const file = { name, path: abs, size: st.size, ext };
+    if (!IMAGE_MIME[ext] && ext !== "html" && ext !== "htm") {
+      unusable.add(name);
+      problems.push(`${name}: ${t({
+        en: "is not a visual artifact \u2014 the UX gate opens on a screenshot (png/jpg/webp) or an exported HTML mockup. Other files may sit here, but they do not stand in for a capture.",
+        ko: "\uC2DC\uAC01 \uC0B0\uCD9C\uBB3C\uC774 \uC544\uB2C8\uB2E4 \u2014 UX \uAC8C\uC774\uD2B8\uB294 \uCEA1\uCC98(png\xB7jpg\xB7webp)\uB098 \uB0B4\uBCF4\uB0B8 HTML \uBAA9\uC5C5\uC73C\uB85C \uC5F4\uB9B0\uB2E4. \uB2E4\uB978 \uD30C\uC77C\uC774 \uD568\uAED8 \uC788\uC5B4\uB3C4 \uB418\uC9C0\uB9CC \uCEA1\uCC98\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4."
+      })}`);
+    }
     if (ext === "png") {
       const d = pngDimensions(abs);
       if (!d) {

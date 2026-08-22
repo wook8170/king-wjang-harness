@@ -115,6 +115,13 @@ function advanceCwd(cwd: Cwd, op: string | undefined): Cwd {
  * `null` 은 「어디에 쓰는지 알 수 없다」는 사실이고, 통과가 아니다 — 호출측이 그 사실을 받는다.
  */
 function resolveIn(cwd: Cwd, p: string): string | null {
+  /**
+   * [SEC-198] **변수는 `cd` 에만 붙는 것이 아니다.** [SEC-170] 은 `cd $D` 를 미해결로 올렸는데
+   * 대상 **자체**의 변수(`$D/events.jsonl`)는 그대로 리터럴 취급됐다 — 그래서
+   * `D=.harness; echo … >> $D/events.jsonl` 한 줄로 저널 위조가 다시 열렸다(다섯 라운드째
+   * 같은 부류의 세 번째 표기). 셸이 나중에 펼 값을 여기서 알 수 없으면 **그 사실을 올린다.**
+   */
+  if (/[$`]/.test(p)) return null;
   if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈 — cwd 와 무관하다
   if (cwd === null) return null;
   if (cwd === '') return p; // 프로젝트 루트 — 기존 표기 그대로 둔다(거부문이 명령과 같아 보이게)
@@ -250,9 +257,22 @@ export interface BashWriteScan {
   unresolvedTargets: string[];
 }
 
+/**
+ * [ENG-199] **`-c` 로 프로그램 텍스트를 받는 셸의 단일 정본.**
+ *
+ * 이 목록이 두 벌이었다: `INTERPRETERS`(볼 수 없는 실행 판정)와 `commandLines` 안의 하드코딩
+ * 배열(감싼 명령 꺼내기). 갈린 결과가 실측으로 나왔다 — `fish -c "npm publish"`·`ash -c …` 가
+ * **설계 트랙 배포 차단을 우회**했다. 꺼내는 쪽이 모르는 셸은 안쪽을 아예 안 본다.
+ *
+ * 규칙이 두 벌이면 언제나 **느슨한 쪽이 정본이 된다.** 한 벌로 모은다.
+ */
+export const SHELLS_TAKING_C = [
+  'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'ash', 'busybox',
+] as const;
+
 /** 프로그램 텍스트를 받아 실행하는 해석기. 셸만이 아니다 — `python3` 도 stdin 을 읽는다. */
 const INTERPRETERS = new Set([
-  'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'ash',
+  ...SHELLS_TAKING_C,
   'node', 'nodejs', 'deno', 'bun', 'python', 'python2', 'python3',
   'perl', 'ruby', 'php', 'osascript',
 ]);
@@ -730,7 +750,7 @@ export function commandLines(cmd: string): string[] {
     // 감싼 안쪽도 실행 단위다.
     const inner: string[] = [];
     if (name === 'eval') inner.push(...args.filter(a => !isFlag(a)));
-    else if (['sh', 'bash', 'zsh', 'dash', 'ksh'].includes(name)) {
+    else if ((SHELLS_TAKING_C as readonly string[]).includes(name)) {
       for (let i = 0; i < args.length; i++) {
         if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
       }

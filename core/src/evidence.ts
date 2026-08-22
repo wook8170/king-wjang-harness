@@ -472,6 +472,26 @@ export function validateEvidence(root: string, waveId: string): EvidenceReport {
 
     const ext = path.extname(name).slice(1).toLowerCase();
     const file: EvidenceFile = { name, path: abs, size: st.size, ext };
+    /**
+     * [QUAL-200] **시각 증거 게이트가 시각 산출물을 요구하지 않고 있었다.**
+     *
+     * 검사는 `.png` 에만 걸려 있었고, 그 밖의 확장자는 **무검증으로 `usable`** 이었다.
+     * 실측: `echo 'not an image' > notes.txt` 한 줄로 `wave complete` 가 성공했다 —
+     * 거부문은 「스크린샷을 두라」고 하고, `evidence check` 는 그 txt 를 `usable` 로 분류하고,
+     * README 는 「그리지 않은 UX 는 출하할 수 없다」고 광고한다. **셋이 서로 다른 말을 했다.**
+     *
+     * 게이트를 여는 자격은 **제품이 이름 붙인 산출물**로 좁힌다 — 이미지와 HTML 내보내기
+     * (Claude Design 흐름이 그 둘을 말한다). 나머지 파일은 있어도 되지만 **게이트를 열지는 않는다**.
+     */
+    if (!IMAGE_MIME[ext] && ext !== 'html' && ext !== 'htm') {
+      unusable.add(name);
+      problems.push(`${name}: ${t({
+        en: 'is not a visual artifact — the UX gate opens on a screenshot (png/jpg/webp) or an exported '
+          + 'HTML mockup. Other files may sit here, but they do not stand in for a capture.',
+        ko: '시각 산출물이 아니다 — UX 게이트는 캡처(png·jpg·webp)나 내보낸 HTML 목업으로 열린다. '
+          + '다른 파일이 함께 있어도 되지만 캡처를 대신하지는 못한다.',
+      })}`);
+    }
     if (ext === 'png') {
       const d = pngDimensions(abs);
       if (!d) {

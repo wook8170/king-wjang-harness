@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { scanBashWrites, pathLikeMentions } from '../src/bashwrite';
+import { scanBashWrites, pathLikeMentions, commandLines, SHELLS_TAKING_C } from '../src/bashwrite';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import type { Phase } from '../src/types';
@@ -237,5 +237,52 @@ describe('[SEC-195] 판정기의 프로그램은 피판정자가 복제할 수 �
   it('무관한 복사는 그대로 통과한다', () => {
     const out = bash(setup('P7'), 'cp /tmp/a.js /tmp/b.js');
     expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});
+
+describe('[SEC-198] 변수는 `cd` 에만 붙지 않는다 — 대상 자체의 변수도 미해결이다', () => {
+  it('경로에 변수가 들어간 코어·정책 쓰기가 막힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'D=.harness; echo x >> $D/events.jsonl',
+      'D=.harness; cp /tmp/x $D/config.yaml',
+      'echo x >> ${D}/events.jsonl',
+      'P=$(pwd); tee $P/.harness/state.json',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('하네스 소유 이름이 아니면 변수 경로도 막지 않는다 — 문은 가장 좁게', () => {
+    const root = setup('P7');
+    for (const cmd of ['echo x >> build/$NAME.log', 'cp /tmp/x $HOME/notes.md']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+describe('[ENG-199] 셸 목록이 한 벌이다 — 두 벌이면 느슨한 쪽이 정본이 된다', () => {
+  it('꺼내기가 모르는 셸로 배포 차단을 우회할 수 없다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "fish -c 'npm publish'", "ash -c 'npm publish'",
+      "busybox sh -c 'npm publish'", "sh -c 'npm publish'",
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('감싼 것이 배포가 아니면 그대로 통과한다', () => {
+    const out = bash(setup('P7'), "sh -c 'npm test'");
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+
+  it('두 목록이 같은 정본을 쓴다 — 드리프트를 구조로 막는다', () => {
+    // 목록이 갈리면 「볼 수 없는 실행」과 「감싼 것 꺼내기」가 다른 셸 집합을 본다.
+    for (const sh of SHELLS_TAKING_C) {
+      expect(commandLines(`${sh} -c 'npm publish'`), `${sh} 안쪽을 못 꺼낸다`)
+        .toContain('npm publish');
+    }
   });
 });

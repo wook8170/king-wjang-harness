@@ -11,7 +11,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 210 · **open** 2 (MED 1 · LOW 1) · deferred 5 ·
+> 대장 집계: **verified** 215 · **open** 2 (MED 1 · LOW 1) · deferred 5 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -335,7 +335,7 @@ p95 < 150ms 확인 → 대장 PERF-26 을 `fixed` → `verified` 로 올린다.
 
 | 게이트 | 목표 | 최종 실측 | 판정 |
 |---|---|---|---|
-| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1243 passed ×3, 53 파일** (라운드 3-J 재측정) | ✅ |
+| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1251 passed ×3, 53 파일** (라운드 3-J 재측정) | ✅ |
 | G2 타입 | 오류 0 | `tsc --noEmit` exit 0 | ✅ |
 | G3 빌드·자체완결 | 맨 클론서 `--version`·`init`·`status` exit 0 | 전부 exit 0 (+`doctor`) | ✅ |
 | G4 훅 무해 | 4이벤트 × 4입력 exit 0 · 미초기화 0바이트 | **12/12 exit 0**, 0바이트 확인 | ✅ |
@@ -344,7 +344,7 @@ p95 < 150ms 확인 → 대장 PERF-26 을 `fixed` → `verified` 로 올린다.
 | G7 결정성 | 3회 동일·`Math.random` 0·마이그레이션 양방향 | 동일 · 실사용 0 · 왕복 성공 | ✅ |
 | G8 공급망 | 프로덕션 도달 crit/high 0 | `npm audit --omit=dev` **0** | ✅ |
 | G9 훅 지연 | 폴백이 **더하는** p95 비용 < 50ms — **저널 부류마다**(현실 분포·손상) | **현실 분포 14.6ms · 50% 손상 8.0ms · 100% 손상 11.6ms**(전부 문턱 안, 라운드 3-J 재측정). [COST-177] 이전에는 손상 저널이 269~573ms 였다. wall 절대값은 기록으로: 정상 133ms / 폴백 162ms, 그중 **Node 기동 99ms**. 적대적 100% 상태전이 49.4ms 는 **도달 불가라 문턱 미적용·기록만**([COST-178]). `evidence/cost-177-journal-shapes.log` · `evidence/perf-139-latency.log` · 사유는 `gates.md` | ✅ **감정자 재검증 통과** |
-| G10 이력 비밀 | 0 | gitleaks **171 커밋 no leaks**(라운드 3-J 재측정 · 5.06MB) | ✅ |
+| G10 이력 비밀 | 0 | gitleaks **177 커밋 no leaks**(라운드 3-K 재측정) | ✅ |
 | G11 CLI 계약 | `--help` exit 0 · 침묵 성공 0 | `--help` exit 0 + 20군 나열 · 침묵 성공 0 | ✅ (라운드1) |
 | G12 관측성 | 조용한 실패 0 · doctor 가 상태 반영 | 침묵 catch 5/5 ✅ · 승인 후 doctor `ok:true` · 복구 거부 해소 | ✅ (라운드1) |
 | G13 패키징 | 선언 산출물 누락 0 | 매니페스트·스킬 11·에이전트 5·dist 전부 존재 | ✅ |

@@ -8989,6 +8989,13 @@ function validateEvidence(root, waveId) {
     }
     const ext = path7.extname(name).slice(1).toLowerCase();
     const file = { name, path: abs, size: st.size, ext };
+    if (!IMAGE_MIME[ext] && ext !== "html" && ext !== "htm") {
+      unusable.add(name);
+      problems.push(`${name}: ${t({
+        en: "is not a visual artifact \u2014 the UX gate opens on a screenshot (png/jpg/webp) or an exported HTML mockup. Other files may sit here, but they do not stand in for a capture.",
+        ko: "\uC2DC\uAC01 \uC0B0\uCD9C\uBB3C\uC774 \uC544\uB2C8\uB2E4 \u2014 UX \uAC8C\uC774\uD2B8\uB294 \uCEA1\uCC98(png\xB7jpg\xB7webp)\uB098 \uB0B4\uBCF4\uB0B8 HTML \uBAA9\uC5C5\uC73C\uB85C \uC5F4\uB9B0\uB2E4. \uB2E4\uB978 \uD30C\uC77C\uC774 \uD568\uAED8 \uC788\uC5B4\uB3C4 \uB418\uC9C0\uB9CC \uCEA1\uCC98\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4."
+      })}`);
+    }
     if (ext === "png") {
       const d = pngDimensions(abs);
       if (!d) {
@@ -10189,6 +10196,7 @@ function advanceCwd(cwd, op) {
   return normalizePath((cwd ? cwd + "/" : "") + op);
 }
 function resolveIn(cwd, p) {
+  if (/[$`]/.test(p)) return null;
   if (p.startsWith("/") || p.startsWith("~")) return p;
   if (cwd === null) return null;
   if (cwd === "") return p;
@@ -10285,7 +10293,7 @@ function commandName(tokens) {
   const raw = tokens[i] ?? "";
   return { name: raw.split("/").pop() ?? "", args: tokens.slice(i + 1) };
 }
-var INTERPRETERS = /* @__PURE__ */ new Set([
+var SHELLS_TAKING_C = [
   "sh",
   "bash",
   "zsh",
@@ -10293,6 +10301,10 @@ var INTERPRETERS = /* @__PURE__ */ new Set([
   "ksh",
   "fish",
   "ash",
+  "busybox"
+];
+var INTERPRETERS = /* @__PURE__ */ new Set([
+  ...SHELLS_TAKING_C,
   "node",
   "nodejs",
   "deno",
@@ -10680,7 +10692,7 @@ function commandLines(cmd) {
     out.push([name, ...args].join(" ").trim());
     const inner = [];
     if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
-    else if (["sh", "bash", "zsh", "dash", "ksh"].includes(name)) {
+    else if (SHELLS_TAKING_C.includes(name)) {
       for (let i = 0; i < args.length; i++) {
         if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) {
           inner.push(args[i + 1]);
