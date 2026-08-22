@@ -2,7 +2,7 @@
 
 ## 2026-08-22 (라운드 3-E 완료) — ★ 잔가지 전건 처리 · **재측정 대기** · SEC-79 결정 필요
 
-**정본.** 메인 `27b2787` · **893 tests green · tsc 0** · 워킹트리 clean
+**정본.** 메인 `15a0510` · **893 tests green · tsc 0** · 워킹트리 clean
 (대장 **91행** · verified 88 · **open 1**([SEC-79] MED) · deferred 2 · **open BLOCKER 0 · open HIGH 0**).
 **판정 출하 불가 유지** — 재감정 미실행.
 
