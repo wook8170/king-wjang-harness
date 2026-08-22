@@ -286,3 +286,54 @@ describe('[ENG-199] 셸 목록이 한 벌이다 — 두 벌이면 느슨한 쪽�
     }
   });
 });
+
+/**
+ * 라운드 3-L. **여섯 번째 표기**가 나왔다 — 그리고 이번엔 처방의 방향을 바꿨다.
+ * 표기를 세는 대신 **추출이 실패한 사실 자체**를 잡는다.
+ */
+describe('[SEC-207] 추출이 실패한 것을 「대상 없음」으로 읽지 않는다', () => {
+  it('명령치환·중괄호·백틱으로 부순 경로가 전건 거부된다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'echo x >> $(echo .harness)/events.jsonl',
+      'echo x > $(echo .harness)/state.json',
+      'echo x | tee -a .harness/{events,_x}.jsonl',
+      'cp /tmp/x `echo .harness`/config.yaml',
+      'cp /tmp/x ${HOME}/../$(id -un)/.harness/state.json',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('펼 수 있는 것은 펴서 본다 — 무관한 중괄호·확장은 그대로 통과', () => {
+    const root = setup('P7');
+    for (const cmd of ['echo x > build/{a,b}.log', 'echo x >> notes.md', 'cp /tmp/x app/config.yaml']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+describe('[SEC-208] 「복사 도구」 열거를 지운다 — 정당한 한 형태만 통과시킨다', () => {
+  const install = path.resolve(__dirname, '..', '..');
+  const cliJs = path.join(install, 'core', 'dist', 'cli.js');
+
+  it('인터프리터로 프로그램을 읽어 옮기는 형태가 막힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      `python3 -c "open('/tmp/x','w').write(open('${cliJs}').read())"`,
+      `ruby -e 'IO.write("/tmp/y", IO.read("${cliJs}"))'`,
+      `cp ${cliJs} /tmp/x.js`,
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('실행 대상으로 오는 형태는 그대로 열려 있다 — [SEC-96] 이 연 조회 경로', () => {
+    const root = setup('P7');
+    for (const cmd of [`node ${cliJs} status`, `cat ${cliJs}`, 'node -e "console.log(1)"']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});

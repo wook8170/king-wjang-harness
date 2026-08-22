@@ -11524,18 +11524,51 @@ function harnessProgramFiles() {
     path13.join(install, "bin", "harness-hook")
   ];
 }
-var COPY_HEADS = /^(cp|mv|ln|install|rsync|cat|dd|tar|zip|xxd|base64|openssl|split|csplit)$/;
-function copiesHarnessProgram(cmd) {
+var INTERPRETER_HEADS = /^(node|nodejs|deno|bun|sh|bash|zsh|dash|ksh|fish|ash|busybox)$/;
+function runsProgramDirectly(root, line, prog) {
+  const same = (t) => realOrSelf(path13.isAbsolute(t) ? t : path13.resolve(root, t)) === realOrSelf(prog);
+  const tokens = line.split(/\s+/).filter(Boolean);
+  const first = tokens[0] ?? "";
+  if (first && same(first)) return true;
+  if (!INTERPRETER_HEADS.test(first.split("/").pop() ?? "")) return false;
+  const operand = tokens.slice(1).find((t) => !t.startsWith("-"));
+  return operand !== void 0 && same(operand);
+}
+function copiesHarnessProgram(root, cmd) {
   const progs = harnessProgramFiles();
   const real = progs.map((f2) => realOrSelf(f2));
-  for (const line of commandLines(cmd)) {
-    const head = (line.split(/\s+/)[0] ?? "").split("/").pop() ?? "";
-    if (!COPY_HEADS.test(head) && !/[^>]>[^>]?\s*\S/.test(cmd)) continue;
-    for (const m of pathLikeMentions(line)) {
-      const abs = realOrSelf(path13.isAbsolute(m) ? m : path13.resolve(process.cwd(), m));
-      const i = real.indexOf(abs);
-      if (i !== -1) return progs[i];
+  const lines = commandLines(cmd);
+  for (const m of pathLikeMentions(cmd)) {
+    const abs = realOrSelf(path13.isAbsolute(m) ? m : path13.resolve(root, m));
+    const i = real.indexOf(abs);
+    if (i === -1) continue;
+    if (lines.some((l) => runsProgramDirectly(root, l, progs[i]))) continue;
+    return progs[i];
+  }
+  return void 0;
+}
+var EXPANSION_META = /\$\(|`|\{|\*|\?/;
+function expandBraces(text, cap = 64) {
+  const m = /\{([^{}]*,[^{}]*)\}/.exec(text);
+  if (!m) return [text];
+  const out = [];
+  for (const alt of m[1].split(",")) {
+    const next = text.slice(0, m.index) + alt + text.slice(m.index + m[0].length);
+    for (const e of expandBraces(next, cap)) {
+      if (out.length >= cap) return out;
+      out.push(e);
     }
+  }
+  return out;
+}
+function targetLost(cmd, targets) {
+  if (!EXPANSION_META.test(cmd)) return void 0;
+  const texts = expandBraces(cmd);
+  for (const base of OWNED_BASENAMES) {
+    const seen = texts.some((t) => t.includes(base));
+    if (!seen) continue;
+    if (targets.some((t) => t.endsWith(base))) continue;
+    return base;
   }
   return void 0;
 }
@@ -11723,11 +11756,18 @@ function preTool(root, state, config, input, degraded) {
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
       }
-      const copied = copiesHarnessProgram(cmd);
+      const copied = copiesHarnessProgram(root, cmd);
       if (copied) {
         return deny(L(
           `This copies the harness's own program (${path13.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
           `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path13.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
+        ), degraded, lang);
+      }
+      const lost = targetLost(cmd, scan.targets);
+      if (lost) {
+        return deny(L(
+          `This command names \`${lost}\` but expands the path in a way this hook cannot resolve (command substitution, brace expansion, or a glob), so where the write lands is unknown \u2014 and that name belongs to the harness. Write the path out literally, or use harness commands.`,
+          `\uC774 \uBA85\uB839\uC740 \`${lost}\` \uC744(\uB97C) \uC9C0\uBAA9\uD558\uB294\uB370 \uACBD\uB85C\uB97C \uC5EC\uAE30\uC11C \uD3BC \uC218 \uC5C6\uB294 \uD615\uD0DC\uB85C \uC4F4\uB2E4(\uBA85\uB839\uCE58\uD658\xB7\uC911\uAD04\uD638\xB7\uAE00\uB86D) \u2014 \uC5B4\uB514\uC5D0 \uC4F0\uC774\uB294\uC9C0 \uC54C \uC218 \uC5C6\uACE0, \uADF8 \uC774\uB984\uC740 \uD558\uB124\uC2A4 \uC18C\uC720 \uD30C\uC77C\uC774\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
         ), degraded, lang);
       }
       const blind = scan.unresolvedTargets.find((t) => OWNED_BASENAMES.has(t.split("/").pop() ?? ""));

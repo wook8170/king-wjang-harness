@@ -874,26 +874,101 @@ function harnessProgramFiles(): string[] {
 }
 
 /**
- * 이 명령이 하네스 프로그램 파일의 **사본을 만들려** 하는가.
+ * [SEC-208] **「복사 도구」를 열거한 것이 또 하나의 열거였다.**
  *
- * 복사 부류의 명령에서만 발화한다. 이 구분이 없으면 `node <install>/core/dist/cli.js status`
- * 같은 **정상 직접 호출**까지 막힌다 — 그 형태는 [SEC-96] 이 일부러 열어 둔 조회 경로다.
- * 과차단은 이 제품에서 결함과 같은 무게이므로, 막는 것은 **사본을 만드는 행위**로 좁힌다.
+ * [SEC-195] 는 `cp|mv|ln|cat|tar|…` 목록에서만 발화했다. 그래서 목록 밖 인터프리터 한 줄로
+ * 그대로 우회됐다 — `python3 -c "open('/tmp/x','w').write(open(CLI).read())"`.
+ * **같은 파일에서 같은 실수를 두 번 했다.** 이번에는 열거를 지운다.
+ *
+ * 규칙을 뒤집는다: **변형 명령이 하네스 프로그램 파일을 언급하면 거부한다.** 예외는 하나 —
+ * 그 파일이 **인터프리터의 실행 대상**으로 오는 형태(`node <install>/core/dist/cli.js status`).
+ * 그것은 [SEC-96] 이 일부러 열어 둔 조회 경로다.
+ *
+ * 「목록에 있으면 막는다」가 아니라 **「정당한 한 형태만 통과시킨다」**이므로, 새 도구가 생겨도
+ * 기본값이 안전한 쪽이다.
  */
-const COPY_HEADS = /^(cp|mv|ln|install|rsync|cat|dd|tar|zip|xxd|base64|openssl|split|csplit)$/;
+const INTERPRETER_HEADS = /^(node|nodejs|deno|bun|sh|bash|zsh|dash|ksh|fish|ash|busybox)$/;
 
-function copiesHarnessProgram(cmd: string): string | undefined {
+/**
+ * 이 줄에서 프로그램 파일이 **실행 대상**으로 쓰였는가(= 정당한 직접 호출).
+ *
+ * 두 형태를 인정한다: 인터프리터의 첫 피연산자(`node …/cli.js status`)와, 프로그램 자체가
+ * 줄의 머리인 경우(`./cli.js status` — `npx` 같은 접두 명령은 `commandLines` 가 이미 벗긴다).
+ * `-c "…"` 로 감싸 **데이터로 읽는** 형태는 실행이 아니므로 여기서 걸러지지 않는다.
+ */
+function runsProgramDirectly(root: string, line: string, prog: string): boolean {
+  const same = (t: string): boolean =>
+    realOrSelf(path.isAbsolute(t) ? t : path.resolve(root, t)) === realOrSelf(prog);
+  const tokens = line.split(/\s+/).filter(Boolean);
+  const first = tokens[0] ?? '';
+  if (first && same(first)) return true;
+  if (!INTERPRETER_HEADS.test(first.split('/').pop() ?? '')) return false;
+  const operand = tokens.slice(1).find(t => !t.startsWith('-'));
+  return operand !== undefined && same(operand);
+}
+
+function copiesHarnessProgram(root: string, cmd: string): string | undefined {
   const progs = harnessProgramFiles();
   const real = progs.map(f => realOrSelf(f));
-  for (const line of commandLines(cmd)) {
-    const head = (line.split(/\s+/)[0] ?? '').split('/').pop() ?? '';
-    // 리다이렉트로 뜨는 사본(`cat cli.js > x`)은 원문에 `>` 가 남아 있으므로 그것도 본다.
-    if (!COPY_HEADS.test(head) && !/[^>]>[^>]?\s*\S/.test(cmd)) continue;
-    for (const m of pathLikeMentions(line)) {
-      const abs = realOrSelf(path.isAbsolute(m) ? m : path.resolve(process.cwd(), m));
-      const i = real.indexOf(abs);
-      if (i !== -1) return progs[i];
+  // **원문 전체**에서 언급을 뽑는다 — `open('<path>')` 처럼 괄호 안에 든 경로는 세그먼트
+  // 분해가 토막 내서 줄 단위로는 보이지 않는다(그것이 [SEC-208] 우회의 실제 원리였다).
+  const lines = commandLines(cmd);
+  for (const m of pathLikeMentions(cmd)) {
+    const abs = realOrSelf(path.isAbsolute(m) ? m : path.resolve(root, m));
+    const i = real.indexOf(abs);
+    if (i === -1) continue;
+    if (lines.some(l => runsProgramDirectly(root, l, progs[i]))) continue;   // 직접 호출 — [SEC-96]
+    return progs[i];
+  }
+  return undefined;
+}
+
+/**
+ * [SEC-207] **추출이 실패한 것을 「대상 없음」으로 읽으면 그것이 곧 통과다.**
+ *
+ * 여섯 라운드 동안 같은 급소가 여섯 가지 표기로 뚫렸다. 앞의 넷은 표기를 하나씩 닫았고,
+ * 다섯 번째([SEC-194] 글롭)에서 「어떤 표기로든 지목하는가」로 질문을 바꿨다. 그런데도
+ * 여섯 번째가 나왔다 — **명령치환 `$(...)`·중괄호 `{a,b}`** 다. 이유는 한 가지다:
+ * 그 표기들은 **대상 토큰 자체를 부숴서** 판정에 아예 도달하지 않는다
+ * (`$(echo .harness)/events.jsonl` 은 `(` 에서 끊기고, `.harness/{events,_x}.jsonl` 은
+ * 리터럴 경로가 텍스트에 없다).
+ *
+ * 그래서 이번에는 표기를 세지 않고 **추출의 실패를 감지한다**:
+ * 명령이 변형이고, 텍스트에 **하네스 소유 파일 이름**이 보이는데, 뽑아낸 대상 중
+ * 그 이름으로 끝나는 것이 **하나도 없다면** — 그 이름이 어디로 갔는지 우리는 모른다.
+ * 모르는 것은 통과가 아니다.
+ *
+ * 과차단을 좁히는 두 장치:
+ *  - **정적 확장 문자가 있을 때만** 발화한다. 깨끗한 경로(`cp /tmp/x app/config.yaml`)는
+ *    정상 판정으로 간다 — 거기서 허용이면 허용이다.
+ *  - 중괄호는 **펴서** 본다. 펼 수 있는 것을 「알 수 없음」으로 밀면 과차단이 넓어진다.
+ */
+const EXPANSION_META = /\$\(|`|\{|\*|\?/;
+
+/** `{a,b}` 를 펴서 후보 문자열을 만든다. 폭발을 막으려 상한을 둔다. */
+function expandBraces(text: string, cap = 64): string[] {
+  const m = /\{([^{}]*,[^{}]*)\}/.exec(text);
+  if (!m) return [text];
+  const out: string[] = [];
+  for (const alt of m[1].split(',')) {
+    const next = text.slice(0, m.index) + alt + text.slice(m.index + m[0].length);
+    for (const e of expandBraces(next, cap)) {
+      if (out.length >= cap) return out;
+      out.push(e);
     }
+  }
+  return out;
+}
+
+/** 소유 파일 이름이 텍스트에 보이는데 뽑은 대상 어디에도 없으면, 그 이름을 돌려준다. */
+function targetLost(cmd: string, targets: readonly string[]): string | undefined {
+  if (!EXPANSION_META.test(cmd)) return undefined;
+  const texts = expandBraces(cmd);
+  for (const base of OWNED_BASENAMES) {
+    const seen = texts.some(t => t.includes(base));
+    if (!seen) continue;
+    if (targets.some(t => t.endsWith(base))) continue;   // 판정으로 갔다 — 여기서 볼 일이 없다
+    return base;
   }
   return undefined;
 }
@@ -1286,7 +1361,7 @@ function preTool(
       }
       // [SEC-195] 하네스 자신의 프로그램을 복사하면 **이름 기반 잠금이 통째로 무의미해진다.**
       // 판정기의 프로그램은 피판정자의 복제 영역 밖에 있어야 한다([SEC-154] 와 같은 논리).
-      const copied = copiesHarnessProgram(cmd);
+      const copied = copiesHarnessProgram(root, cmd);
       if (copied) {
         return deny(L(
           `This copies the harness's own program (${path.basename(copied)}). The lock on `
@@ -1297,6 +1372,20 @@ function preTool(
           + '`gate approve` 잠금은 하네스 호출을 **이름으로** 알아보므로, 이름을 바꾼 사본은 '
           + '검사를 건너뛴다(PTY 는 터미널 검사도 통과한다). 설치된 `harness` 명령을 그대로 쓰라. '
           + '(승인 자체는 언제나 사용자가 자기 터미널에서 한다.)',
+        ), degraded, lang);
+      }
+
+      // [SEC-207] **대상 추출 자체가 실패한 경우**를 잡는다 — 표기가 토큰을 부수면
+      // 위의 어떤 판정도 발화하지 않는다. 「못 봤다」를 「없다」로 읽지 않는다.
+      const lost = targetLost(cmd, scan.targets);
+      if (lost) {
+        return deny(L(
+          `This command names \`${lost}\` but expands the path in a way this hook cannot resolve `
+          + '(command substitution, brace expansion, or a glob), so where the write lands is unknown — '
+          + 'and that name belongs to the harness. Write the path out literally, or use harness commands.',
+          `이 명령은 \`${lost}\` 을(를) 지목하는데 경로를 여기서 펼 수 없는 형태로 쓴다`
+          + '(명령치환·중괄호·글롭) — 어디에 쓰이는지 알 수 없고, 그 이름은 하네스 소유 파일이다. '
+          + '경로를 리터럴로 적거나 harness 명령을 쓰라.',
         ), degraded, lang);
       }
 
