@@ -24,7 +24,7 @@ import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCo
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
-import { loadProfile, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
+import { loadProfile, bundledProfilesDir, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
 import { POLICY_FILES, POLICY_PREFIXES } from './policy';
 import type { HarnessConfig, HarnessState } from './types';
 
@@ -584,6 +584,14 @@ function realOrSelf(p: string): string {
   try {
     return fs.realpathSync.native(p);
   } catch {
+    // [SEC-153] **끊긴 심링크**(대상이 아직 없는 링크)에서 realpath 는 던진다. 예전에는 곧장
+    // 조상 해석으로 넘어가 **링크 자신의 경로**를 돌려줬다 — 링크가 가리키는 보호 파일이
+    // 판정에 안 올라간다. 아직 없는 파일을 가리키는 링크로 쓰면 그 파일이 **생기므로**,
+    // 「대상이 없으니 안전하다」는 성립하지 않는다(정책 파일이 없는 새 프로젝트가 정확히 그 경우다).
+    try {
+      const target = fs.readlinkSync(p);
+      return realOrSelf(path.isAbsolute(target) ? target : path.join(path.dirname(p), target));
+    } catch { /* 심링크가 아니다 — 아래 조상 해석으로 */ }
     const parent = path.dirname(p);
     if (parent === p) return p;
     return path.join(realOrSelf(parent), path.basename(p));
@@ -796,6 +804,35 @@ function judgeWritePath(
       degraded, lang,
     );
   }
+  /**
+   * [SEC-154] **번들 프로파일도 정책이다 — 루트 밖이라는 이유로 통과시키지 않는다.**
+   *
+   * `profiles/<name>/` 은 소스 글롭·배포 명령·빌드 명령을 정의한다(스펙 §4-2 마지막 줄) —
+   * 즉 훅이 무엇을 막을지의 **입력**이고, `config.yaml` 과 같은 등급이다([SEC-69] 의 논리).
+   * 그런데 그 디렉토리는 플러그인 설치본이라 프로젝트 루트 밖에 있고, 루트 밖 쓰기는
+   * Bash 경로에서 통과하고 있었다 — 한 줄로 자기 판정 규칙을 고칠 수 있었다는 뜻이다.
+   * 게다가 그 편집은 **다른 모든 프로젝트에 영향**을 주고 플러그인 업데이트에 조용히 사라진다.
+   *
+   * 프로젝트 로컬 프로파일(`.harness/profile/`)은 `POLICY_PREFIXES` 가 이미 덮는다.
+   */
+  const bundleDir = realOrSelf(bundledProfilesDir());
+  const bundleHit = [raw]
+    .map(r => realOrSelf(path.resolve(root, r)))
+    .find(abs => abs === bundleDir || abs.startsWith(`${bundleDir}${path.sep}`));
+  if (raw && bundleHit) {
+    return deny(
+      L(
+        `${bundleHit} is a bundled profile — it defines what this hook blocks, for every project on this `
+        + 'machine, and a plugin update overwrites it. An agent cannot write it. To change policy for '
+        + 'this project, copy it into `.harness/profile/` — the project-local profile always wins.',
+        `${bundleHit} 은(는) 번들 프로파일이다 — 이 머신의 **모든 프로젝트**에 대해 훅이 무엇을 `
+        + '막을지 정하고, 플러그인 업데이트에 덮인다. 에이전트는 쓸 수 없다. 이 프로젝트의 정책을 '
+        + '바꾸려면 `.harness/profile/` 로 복사하라 — 프로젝트 로컬 프로파일이 항상 우선한다.',
+      ),
+      degraded, lang,
+    );
+  }
+
   const policyFile = [rel, realRel].find(
     r => POLICY_FILES.includes(r) || POLICY_PREFIXES.some(pre => r !== '' && r.startsWith(pre)),
   )
@@ -921,7 +958,11 @@ function preTool(
   const tool = input.tool_name ?? '';
   const isWrite = WRITE_TOOLS.includes(tool);
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
-  const raw = String(input.tool_input?.file_path ?? '');
+  // [SEC-152] `NotebookEdit` 의 대상은 `file_path` 가 아니라 `notebook_path` 다 — 도구는
+  // WRITE_TOOLS 에 있는데 경로를 못 꺼내서 **빈 문자열로 판정**됐고, 그러면 아무 규칙에도
+  // 안 걸린다. 도구를 목록에 넣는 것과 그 도구의 대상을 아는 것은 다른 일이다([SEC-135] 와
+  // 같은 부류 — 열거는 언제나 빠진 것을 남긴다).
+  const raw = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? '');
   // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산해, 아래 모든 프리픽스/파일명
   // 매치(CORE_FILES 보호, 설계 allowlist, 구축 트랙 `.harness/design/` 보호)에 "두 공간 중
   // 하나라도 걸리면 매치"로 쓴다. root 자체가 심링크면 리터럴 공간이 새고(C3), root
