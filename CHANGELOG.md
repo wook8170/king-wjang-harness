@@ -8,10 +8,78 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Round 3-I of the release-readiness audit. The full defect ledger lives in
-`docs/release-readiness/2026-08-21/ledger.md` (not shipped in the package).
+Nothing yet.
 
-### Fixed — enforcement
+## [0.1.0] — 2026-08-23
+
+First cut of the core engine. Rounds 3-I through 3-L of the release-readiness audit;
+independent adversarial appraisers, one per axis, each writing their own checklist.
+
+### Fixed — the same soft spot, eight notations
+
+Writing to a harness-owned file (the event journal, the state cache, the policy file)
+was blocked when the path was written out literally — and open under eight other spellings.
+Each round closed one and the next round found another:
+
+| Notation | Example |
+|---|---|
+| literal | `tee .harness/events.jsonl` (blocked from the start) |
+| `cd` prefix | `cd .harness && tee events.jsonl` |
+| glob | `printf x >> .harness/e*.jsonl` |
+| variable in the path | `D=.harness; echo x >> $D/events.jsonl` |
+| copying the harness binary | `cp cli.js /tmp/x.js` then running it under a PTY |
+| command substitution / braces | `echo x >> $(echo .harness)/events.jsonl` |
+| assembled file name | `a=events; b=.jsonl; echo x >> .harness/$a$b` |
+| encoded path | `p=$(base64 -d <<< …); printf x >> $p` |
+
+The last three changed the approach rather than the list. The hook now **detects that target
+extraction failed** rather than enumerating spellings: if a harness-owned name appears in the
+text and no extracted target accounts for it, or if a write target cannot be resolved at all,
+the call is refused. Static assignments and known environment variables are expanded first, so
+ordinary work (`LOG=build/out.log; echo x >> $LOG`) still goes through the normal judgement.
+
+### Fixed — over-blocking
+
+- Reading the journal was refused. `sed -n`, `awk`, `perl` and `cp <journal> /tmp/backup` are
+  reads, not writes; only in-place editing (`-i`) counts. The refusal text also said the command
+  "changes" a file it only read.
+- Container image references, URLs and scoped package names (`docker push registry.io/app:v1`,
+  `@types/node`) were treated as file paths, so a deploy was refused *after* its gate was approved.
+- Going back a phase pointed at `harness backtrack`, which pointed back at `harness phase set` —
+  the round trip never completed. It does now, and `harness backtrack clear` is discoverable.
+
+### Fixed — one rule, one place
+
+The shell list that decides "what does `-c` mean here" existed in four copies and had already
+drifted: `fish -c 'npm publish'` bypassed the deploy block. Hash discipline, build-command
+detection, and argument parsing had the same problem. Each is now derived from a single source,
+with tests that fail when a copy reappears.
+
+### Added
+
+- `npm run bench:hook` — reproduce the latency numbers from the installed package. It synthesises
+  100k-entry journals in three shapes, times the real hook process, prints your machine's `node`
+  startup floor next to the table, warns when the machine is busy, and exits non-zero on a real
+  regression.
+- The UX evidence gate now requires an actual visual artifact. A text file no longer opens it.
+
+### Changed
+
+- Gate G9 measures the cost the replay fallback *adds* (< 50 ms p95) rather than an absolute
+  wall-clock threshold, and measures it across journal shapes rather than one friendly sample.
+  An absolute threshold on wall-clock measures the machine underneath, not this tool.
+- Corrupted journals no longer throw once per line in the replay fallback: 573 ms → 12 ms p95
+  on a 100k-entry journal, measured before and after in the same process.
+
+### Known limits
+
+- Enforcement is agent-lane discipline, not a security boundary. A person at their own terminal
+  can always edit files directly.
+- A freshly installed copy of the package can be run under another name; the final defence there
+  is your host's permission dialog.
+- The release-readiness verdict is still **not-ready**. The ledger is in the repository.
+
+### Fixed — earlier in the same release (round 3-I)
 
 - An agent could write files with tools that were not on the write-tool list
   (`xxd`, `openssl`, `csplit`, `split` with a positional target), bypassing every write rule.

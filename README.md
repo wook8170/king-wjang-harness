@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1265 tests). The
+**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1265 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -283,10 +283,10 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 | A hook did nothing | `.harness/.runtime/hook-errors.log` — hook failures are absorbed to exit 0, so this file is the only place they surface |
 | You want to see the whole command map | `harness --help`, then `harness <group> --help` |
 
-**Reporting a bug.** This plugin has no public issue tracker yet — it is distributed
-from the repository you installed it from, so report through that channel. Include
-the output of `harness doctor` and your `harness --version`; both are safe to paste
-(they contain no file contents).
+**Reporting a bug.** `package.json` carries the repository and `bugs` URLs, but the
+repository is **private** — if you do not have access, report through whichever channel
+you received this from. Include the output of `harness doctor` and your
+`harness --version`; both are safe to paste (they contain no file contents).
 
 ## License & author
 

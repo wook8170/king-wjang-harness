@@ -231,7 +231,7 @@ npm install          # prepare hook builds core/dist via tsup
 
 ## 状态与路线图
 
-**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1265 项测试）。但出货就绪审计的判定
+**v0.1.0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1265 项测试）。但出货就绪审计的判定
 仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
 
 - ✅ 事件日志、状态重放、doctor 恢复
@@ -279,8 +279,9 @@ npm install          # prepare hook builds core/dist via tsup
 | 钩子什么也没做 | `.harness/.runtime/hook-errors.log` — 钩子失败会被吸收为 exit 0，这个文件是唯一的观测点 |
 | 想看完整命令地图 | `harness --help` → `harness <命令组> --help` |
 
-**报告缺陷。** 本插件尚无公开的问题追踪器 — 你安装它的那个仓库就是报告渠道。
-请附上 `harness doctor` 的输出和 `harness --version`（两者都不包含文件内容，可安全粘贴）。
+**报告缺陷。** `package.json` 中已写明仓库与 `bugs` 地址，但该仓库是**私有**的 ——
+如果你没有访问权限，请通过拿到本插件的渠道反馈。请附上 `harness doctor` 的输出和
+`harness --version`（两者都不包含文件内容，可安全粘贴）。
 
 ## 许可证与作者
 
