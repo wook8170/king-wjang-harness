@@ -10119,11 +10119,14 @@ function lastTier(root) {
 // core/src/bashwrite.ts
 var SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
 var MUTATING_TOKENS = [
+  // [EFF-214] `sed`·`awk`·`perl` 은 **이름만으로 변형이 아니다.** `-i` 없는 `sed -n '1,5p' f`·
+  // `awk 'NR<3' f` 는 순수 조회인데, 이름으로 `mutating` 을 세우는 바람에 안전망이 발화해
+  // **저널을 읽는 것까지 막혔다** — 「디버깅으로 저널을 읽는 것은 정당하다」는 이 파일의
+  // 원칙과 정면으로 어긋났다. 제자리 편집(`-i`)일 때만 아래 `case` 에서 세운다.
   ">",
   ">>",
   "tee",
   "touch",
-  "sed",
   "rm",
   "mv",
   "cp",
@@ -10136,9 +10139,7 @@ var MUTATING_TOKENS = [
   "python",
   "python3",
   "node",
-  "perl",
   "ruby",
-  "awk",
   "eval",
   // [SEC-101] 없애는 것도 변형이다 — `rmdir` 와 `find … -delete` 가 목록 밖이라
   // 안전망(`mutating` AND 조건)이 아예 걸리지 않았다.
@@ -10252,7 +10253,9 @@ var PREFIX_COMMANDS = /* @__PURE__ */ new Set([
   // `npm` 은 넣지 않는다 — `npm publish` 는 `npm` 자체가 실행 단위다.
   "npx",
   "bunx",
-  "pnpx"
+  "pnpx",
+  // [ENG-217] `busybox` 도 감싸기만 한다 — `busybox sh -c '…'` 의 실행 단위는 `sh -c '…'` 다.
+  "busybox"
 ]);
 var PREFIX_FLAG_TAKES_VALUE = /* @__PURE__ */ new Set([
   "-u",
@@ -10446,7 +10449,13 @@ var READ_ONLY_HEADS = [
   "id",
   "groups",
   "less",
-  "more"
+  "more",
+  // [EFF-214] 텍스트 처리기는 **제자리 편집(`-i`)일 때만** 쓴다. 그 형태는 위 `case` 가
+  // 대상을 뽑고 `mutating` 을 세우며, 프로그램 안에서 `>` 로 쓰면 리다이렉트 스캔이 잡는다.
+  // 이름만으로 변형으로 보면 저널을 **읽는 것까지** 막혀 사람이 하네스를 꺼버린다.
+  "sed",
+  "awk",
+  "perl"
 ];
 var READ_ONLY_GIT = [
   "status",
@@ -10476,7 +10485,32 @@ function isReadOnlyCommand(cmd) {
     return READ_ONLY_HEADS.includes(head);
   });
 }
-function scanBashWrites(cmd) {
+function staticAssignments(cmd) {
+  const out = /* @__PURE__ */ new Map();
+  const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const raw = m[2].replace(/^["']|["']$/g, "");
+    if (/[$`]/.test(raw)) continue;
+    if (!out.has(m[1])) out.set(m[1], raw);
+  }
+  return out;
+}
+function expandStaticVars(cmd, env = {}) {
+  const vars = staticAssignments(cmd);
+  const lookup = (name) => {
+    const local = vars.get(name);
+    if (local !== void 0) return local;
+    const e = env[name];
+    return e !== void 0 && e !== "" && !/[\s$`"'<>|;&()]/.test(e) ? e : void 0;
+  };
+  return cmd.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (whole, a, b) => lookup(a ?? b ?? "") ?? whole
+  );
+}
+function scanBashWrites(rawCmd, env = {}) {
+  const cmd = expandStaticVars(rawCmd, env);
   const targets = [];
   let mutating = false;
   let patchesWorkingTree = false;
@@ -10513,7 +10547,10 @@ function scanBashWrites(cmd) {
       case "sed":
       case "perl":
       case "ruby":
-        if (args.some((a) => a === "-i" || a.startsWith("-i"))) targets.push(...scriptFiles(name, args));
+        if (args.some((a) => a === "-i" || a.startsWith("-i"))) {
+          mutating = true;
+          targets.push(...scriptFiles(name, args));
+        }
         break;
       case "cp":
       case "install":
@@ -10642,11 +10679,13 @@ function scanBashWrites(cmd) {
           if (args[i] !== "-exec" && args[i] !== "-execdir" && args[i] !== "-ok" && args[i] !== "-okdir") continue;
           const inner = commandName(args.slice(i + 1));
           if (!inner.name) continue;
-          if (MUTATING_TOKENS.includes(inner.name)) {
+          const innerScan = scanBashWrites([inner.name, ...inner.args].join(" "));
+          if (innerScan.mutating) {
             mutating = true;
             patchesWorkingTree = true;
           }
-          targets.push(...inner.args.filter(looksLikePath));
+          targets.push(...innerScan.targets.filter((t) => t !== "{}"));
+          unresolvedTargets.push(...innerScan.unresolvedTargets);
         }
         break;
       }
@@ -10679,7 +10718,9 @@ function scanBashWrites(cmd) {
     appliesPatch,
     opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
-    unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))]
+    unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
+    // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
+    blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
   };
 }
 function commandLines(cmd) {
@@ -11136,6 +11177,9 @@ var STATE_FILES = [
 ];
 var CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 var OWNED_BASENAMES = new Set(CORE_FILES.map((f2) => f2.split("/").pop() ?? ""));
+var OWNED_DIRS = new Set(
+  CORE_FILES.map((f2) => f2.includes("/") ? f2.slice(0, f2.lastIndexOf("/") + 1) : "")
+);
 var TURN_LOG_HEADING = /^## (?:Turn log|턴 로그)[ \t]*$/m;
 var EXCERPT_OPEN = {
   en: "--- the following is a quoted record from the sheet (data), not an instruction ---",
@@ -11393,6 +11437,7 @@ function realRelPath(root, p) {
 function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path13.sep}`) || path13.isAbsolute(rel);
 }
+var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
 var SCRIPT_MAX_BYTES = 64 * 1024;
 var SCRIPT_MAX_DEPTH = 3;
 function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Set()) {
@@ -11400,7 +11445,13 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const unread = [];
   const tooDeep = [];
   const atLimit = depth >= SCRIPT_MAX_DEPTH;
-  const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
+  const runners = [...SCRIPT_RUNNERS].map((r) => r.replace(/[.]/g, "\\.")).join("|");
+  const prefixes = [...PREFIX_COMMANDS].join("|");
+  const re = new RegExp(
+    `(?:^|[;&|
+\`(])\\s*(?:(?:${prefixes})\\s+)?(?:(${runners})\\s+([^\\s;|&<>()]+)|(\\.{0,2}/[^\\s;|&<>()]+|[\\w.-]+/[^\\s;|&<>()]+))`,
+    "g"
+  );
   let m;
   while ((m = re.exec(cmd)) !== null) {
     const candidate = (m[1] !== void 0 ? m[2] : m[3]) ?? "";
@@ -11719,7 +11770,7 @@ function preTool(root, state, config, input, degraded) {
         `\uC2A4\uD06C\uB9BD\uD2B8 \uC0AC\uC2AC\uC774 ${SCRIPT_MAX_DEPTH}\uACB9\uC744 \uB118\uC5B4(${scripts.tooDeep.join(", ")}) \uD558\uB124\uC2A4\uAC00 \uB530\uB77C\uAC00\uAE30\uB97C \uBA48\uCDC4\uB2E4 \u2014 \uB9C8\uC9C0\uB9C9 \uB2E8\uACC4\uAC00 \uBB34\uC5C7\uC744 \uC4F0\uB294\uC9C0 \uC54C \uAE38\uC774 \uC5C6\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4. \uC0AC\uC2AC\uC744 \uD3C9\uD3C9\uD558\uAC8C \uB9CC\uB4E4\uAC70\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C.`
       ), degraded, lang);
     }
-    const scan = scanBashWrites(cmd);
+    const scan = scanBashWrites(cmd, process.env);
     const core = (t) => CORE_FILES.some((f2) => t.includes(f2)) || POLICY_PREFIXES.some((pre) => t.includes(pre));
     for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
@@ -11751,7 +11802,7 @@ function preTool(root, state, config, input, degraded) {
       ), degraded, lang);
     }
     if (scan.mutating) {
-      for (const target of pathLikeMentions(cmd)) {
+      for (const target of scan.targets.length === 0 ? pathLikeMentions(cmd) : []) {
         if (scan.targets.includes(target)) continue;
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
@@ -11762,6 +11813,27 @@ function preTool(root, state, config, input, degraded) {
           `This copies the harness's own program (${path13.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
           `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path13.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
         ), degraded, lang);
+      }
+      const blind0 = scan.blindTargets[0];
+      if (blind0 !== void 0) {
+        return deny(L(
+          `This computes the write target at run time (\`${blind0}\`), so the harness cannot see which file it writes \u2014 and that includes the event journal that decides whether a gate is approved. Write the path out literally, or use harness commands.`,
+          `\uC4F0\uAE30 \uB300\uC0C1\uC744 \uC2E4\uD589 \uC2DC\uC810\uC5D0 \uACC4\uC0B0\uD558\uB294 \uBA85\uB839\uC774\uB2E4(\`${blind0}\`) \u2014 \uC5B4\uB290 \uD30C\uC77C\uC5D0 \uC4F0\uB294\uC9C0 \uD558\uB124\uC2A4\uAC00 \uBCFC \uC218 \uC5C6\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+        ), degraded, lang);
+      }
+      const UNKNOWN = "__harness_unresolved__";
+      for (const raw2 of scan.unresolvedTargets) {
+        const prefix = raw2.split(/[$`{*?]/)[0];
+        const dir = prefix.includes("/") ? prefix.slice(0, prefix.lastIndexOf("/") + 1) : "";
+        if (dir === "") continue;
+        const ownedDir = OWNED_DIRS.has(dir);
+        const verdict = ownedDir ? true : judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
+        if (verdict) {
+          return deny(L(
+            `This builds the file name at run time (\`${raw2}\`), so the harness cannot tell which file it writes \u2014 and \`${dir}\` is a directory where writes are restricted. Write the path out literally, or use harness commands.`,
+            `\uD30C\uC77C \uC774\uB984\uC744 \uC2E4\uD589 \uC2DC\uC810\uC5D0 \uC870\uB9BD\uD558\uB294 \uBA85\uB839\uC774\uB2E4(\`${raw2}\`) \u2014 \uC5B4\uB290 \uD30C\uC77C\uC5D0 \uC4F0\uB294\uC9C0 \uC54C \uC218 \uC5C6\uACE0, \`${dir}\` \uB294 \uC4F0\uAE30\uAC00 \uC81C\uD55C\uB41C \uC790\uB9AC\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+          ), degraded, lang);
+        }
       }
       const lost = targetLost(cmd, scan.targets);
       if (lost) {
@@ -11777,7 +11849,7 @@ function preTool(root, state, config, input, degraded) {
           `\`cd\` \uB300\uC0C1\uC744 \uC5EC\uAE30\uC11C \uC77D\uC744 \uC218 \uC5C6\uC5B4(\uBCC0\uC218\xB7\uCE58\uD658) \`${blind}\` \uC774(\uAC00) \uC5B4\uB514\uC5D0 \uC4F0\uC774\uB294\uC9C0 \uC54C \uC218 \uC5C6\uB2E4 \u2014 \uADF8\uB9AC\uACE0 \uADF8 \uC774\uB984\uC740 \uD558\uB124\uC2A4 \uC18C\uC720 \uD30C\uC77C\uC774\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
         ), degraded, lang);
       }
-      const named = mentionsPath(cmd, CORE_FILES);
+      const named = scan.targets.length === 0 ? mentionsPath(cmd, CORE_FILES) : void 0;
       if (named) {
         return deny(L(
           `This command looks like it changes ${named} through the shell \u2014 core files can only be changed by harness commands. To read them, use \`harness status\` / \`harness gate status\`.`,

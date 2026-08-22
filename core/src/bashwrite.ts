@@ -28,8 +28,12 @@ const SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
  * 디버깅으로 저널을 읽는 것은 정당하고, 그것까지 막으면 사람이 하네스를 꺼버린다.
  */
 const MUTATING_TOKENS = [
-  '>', '>>', 'tee', 'touch', 'sed', 'rm', 'mv', 'cp', 'dd', 'truncate', 'install',
-  'ln', 'chmod', 'chown', 'python', 'python3', 'node', 'perl', 'ruby', 'awk', 'eval',
+  // [EFF-214] `sed`·`awk`·`perl` 은 **이름만으로 변형이 아니다.** `-i` 없는 `sed -n '1,5p' f`·
+  // `awk 'NR<3' f` 는 순수 조회인데, 이름으로 `mutating` 을 세우는 바람에 안전망이 발화해
+  // **저널을 읽는 것까지 막혔다** — 「디버깅으로 저널을 읽는 것은 정당하다」는 이 파일의
+  // 원칙과 정면으로 어긋났다. 제자리 편집(`-i`)일 때만 아래 `case` 에서 세운다.
+  '>', '>>', 'tee', 'touch', 'rm', 'mv', 'cp', 'dd', 'truncate', 'install',
+  'ln', 'chmod', 'chown', 'python', 'python3', 'node', 'ruby', 'eval',
   // [SEC-101] 없애는 것도 변형이다 — `rmdir` 와 `find … -delete` 가 목록 밖이라
   // 안전망(`mutating` AND 조건)이 아예 걸리지 않았다.
   'rmdir', 'find',
@@ -178,6 +182,8 @@ export const PREFIX_COMMANDS = new Set([
   // `prisma migrate deploy` 다. 벗기지 않으면 배포 판정이 러너 한 겹으로 빗나간다.
   // `npm` 은 넣지 않는다 — `npm publish` 는 `npm` 자체가 실행 단위다.
   'npx', 'bunx', 'pnpx',
+  // [ENG-217] `busybox` 도 감싸기만 한다 — `busybox sh -c '…'` 의 실행 단위는 `sh -c '…'` 다.
+  'busybox',
 ]);
 
 /** 접두 명령이 값으로 받는 플래그. 여기 없는 플래그는 값을 안 받는 것으로 본다. */
@@ -255,6 +261,12 @@ export interface BashWriteScan {
    * 호출측은 이 목록의 **파일 이름**만 보고 하네스 소유 파일을 지킨다(과차단 최소화).
    */
   unresolvedTargets: string[];
+  /**
+   * [SEC-216] **정적 성분이 하나도 없는 쓰기 대상.** `p=$(…); echo >> $p` 처럼 경로 전체가
+   * 실행 시점에 계산되면 리터럴 이름도([SEC-207]) 디렉토리 접두도([SEC-213]) 남지 않는다 —
+   * 「볼 수 없는 쓰기」다. `opaqueExec`(볼 수 없는 실행)와 같은 태도로 다룬다.
+   */
+  blindTargets: string[];
 }
 
 /**
@@ -419,6 +431,10 @@ const READ_ONLY_HEADS = [
   'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo', 'jq', 'yq', 'sort',
   'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
   'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
+  // [EFF-214] 텍스트 처리기는 **제자리 편집(`-i`)일 때만** 쓴다. 그 형태는 위 `case` 가
+  // 대상을 뽑고 `mutating` 을 세우며, 프로그램 안에서 `>` 로 쓰면 리다이렉트 스캔이 잡는다.
+  // 이름만으로 변형으로 보면 저널을 **읽는 것까지** 막혀 사람이 하네스를 꺼버린다.
+  'sed', 'awk', 'perl',
 ];
 /** `git` 은 하위명령마다 갈린다 — 조회인 것만 적는다(`commit`·`push` 는 여기 없다). */
 const READ_ONLY_GIT = [
@@ -439,7 +455,51 @@ export function isReadOnlyCommand(cmd: string): boolean {
   });
 }
 
-export function scanBashWrites(cmd: string): BashWriteScan {
+/**
+ * [SEC-216] **볼 수 있는 대입은 편다.**
+ *
+ * 여덟 번째 표기(`p=$(echo <base64> | base64 -d); echo … >> $p`)를 막으려면 「끝까지 안 펴지는
+ * 쓰기」를 거부해야 하는데, 그러면 `LOG=build/out.log; echo … >> $LOG` 같은 **정상 작업**까지
+ * 걸린다. 그래서 먼저 **볼 수 있는 것을 편다** — 같은 명령 안에서 리터럴로 대입된 변수는
+ * 치환해 정상 판정으로 보내고, 남는 것만 「진짜로 못 보는 것」으로 다룬다.
+ *
+ * 과차단을 줄이는 장치이지 방어를 넓히는 장치가 아니다 — 편 결과는 그대로 판정을 받는다.
+ */
+function staticAssignments(cmd: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cmd)) !== null) {
+    const raw = m[2].replace(/^["']|["']$/g, '');
+    if (/[$`]/.test(raw)) continue;                  // 값 자체가 동적이면 펼 수 없다
+    if (!out.has(m[1])) out.set(m[1], raw);          // 첫 대입만 — 재대입 순서는 알 수 없다
+  }
+  return out;
+}
+
+/**
+ * 알고 있는 정적 대입만 명령 문자열에 펴 넣는다. 모르는 변수는 그대로 둔다.
+ *
+ * `env` 는 **호출측이 준다** — 이 파일은 순수 함수만 두는 것이 계약이라 `process.env` 를
+ * 직접 읽지 않는다. 훅이 자기 환경을 넘겨 주면 `$HOME`·`$TMPDIR` 같은 흔한 변수가 펴져
+ * **프로젝트 밖 쓰기가 과차단되지 않는다**(그 값은 훅이 실제로 알고 있는 사실이다).
+ * 값에 공백·메타문자가 있으면 경로로 보지 않는다 — 펼 수 없는 것을 편 척하지 않는다.
+ */
+export function expandStaticVars(cmd: string, env: Record<string, string | undefined> = {}): string {
+  const vars = staticAssignments(cmd);
+  const lookup = (name: string): string | undefined => {
+    const local = vars.get(name);
+    if (local !== undefined) return local;
+    const e = env[name];
+    return e !== undefined && e !== '' && !/[\s$`"'<>|;&()]/.test(e) ? e : undefined;
+  };
+  return cmd.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (whole, a?: string, b?: string) => lookup(a ?? b ?? '') ?? whole);
+}
+
+export function scanBashWrites(rawCmd: string, env: Record<string, string | undefined> = {}): BashWriteScan {
+  // [SEC-216] 볼 수 있는 대입은 먼저 편다 — 그래야 남는 것이 진짜 신호가 된다.
+  const cmd = expandStaticVars(rawCmd, env);
   const targets: string[] = [];
   let mutating = false;
   let patchesWorkingTree = false;
@@ -496,7 +556,10 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 에는 슬래시가 있어서
         // `looksLikePath` 가 참을 내고, 그래서 출하 트랙에서 거짓 「새 파일」 거부가 났다
         // (기존 주석은 「따옴표라 걸러진다」고 적어 뒀지만 토크나이저가 따옴표를 벗긴다).
-        if (args.some(a => a === '-i' || a.startsWith('-i'))) targets.push(...scriptFiles(name, args));
+        if (args.some(a => a === '-i' || a.startsWith('-i'))) {
+          mutating = true;                              // [EFF-214] 제자리 편집일 때만 변형이다
+          targets.push(...scriptFiles(name, args));
+        }
         break;
       case 'cp':
       case 'install':
@@ -663,8 +726,14 @@ export function scanBashWrites(cmd: string): BashWriteScan {
           if (args[i] !== '-exec' && args[i] !== '-execdir' && args[i] !== '-ok' && args[i] !== '-okdir') continue;
           const inner = commandName(args.slice(i + 1));
           if (!inner.name) continue;
-          if (MUTATING_TOKENS.includes(inner.name)) { mutating = true; patchesWorkingTree = true; }
-          targets.push(...inner.args.filter(looksLikePath));
+          // [EFF-215] 「안쪽이 변형인가」를 **이름 목록으로 다시 묻지 않는다** — 같은 스캐너에
+          // 통째로 넘긴다. 이름으로 물었을 때 `sed -i` 가 목록에서 빠지자마자 이 절이 조용해졌고,
+          // 그동안 이 벡터를 막아 온 것은 `s/a/b/` 를 **가짜 경로로 오인한 우연**이었다
+          // (테스트가 그 우연을 고정하고 있었다 — 초록이 규칙이 옳다는 증거가 아닌 예다).
+          const innerScan = scanBashWrites([inner.name, ...inner.args].join(' '));
+          if (innerScan.mutating) { mutating = true; patchesWorkingTree = true; }
+          targets.push(...innerScan.targets.filter(t => t !== '{}'));
+          unresolvedTargets.push(...innerScan.unresolvedTargets);
         }
         break;
       }
@@ -723,6 +792,8 @@ export function scanBashWrites(cmd: string): BashWriteScan {
     mutating, patchesWorkingTree, appliesPatch, opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
+    // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
+    blindTargets: [...new Set(unresolvedTargets.filter(t => /^[$`]/.test(t)))],
   };
 }
 

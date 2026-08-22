@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -190,6 +190,17 @@ const CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
  * 아무것도 안 막으면 변수 한 줄로 [SEC-170] 이 되살아난다. 그 사이에서 **가장 좁은 문**을 고른다.
  */
 const OWNED_BASENAMES = new Set(CORE_FILES.map(f => f.split('/').pop() ?? ''));
+
+/**
+ * [SEC-213] **보호 파일이 사는 디렉토리.** `.harness/` 자체는 쓰기가 허용된 자리다
+ * (웨이브 지시서·증거·패킷이 거기 산다) — 보호되는 것은 **그 안의 특정 파일들**이다.
+ * 그래서 이름을 실행 시점에 조립하면(`\`.harness/$a$b\``) 디렉토리 판정만으로는 못 잡는다.
+ * 그 자리에 놓일 이름 모를 파일이 **보호 파일일 수도** 있으므로, 이 디렉토리들에서는
+ * 「모르는 이름」을 거부한다. 목록은 `CORE_FILES` 에서 파생한다 — 두 벌로 두지 않는다.
+ */
+const OWNED_DIRS = new Set(
+  CORE_FILES.map(f => (f.includes('/') ? f.slice(0, f.lastIndexOf('/') + 1) : '')),
+);
 
 /**
  * 턴 로그 헤딩은 **파싱 앵커**다 — 표시 문자열이 아니다. 지시서 본문은 생성 시점의 `lang` 을
@@ -674,7 +685,13 @@ function isOutsideRoot(rel: string): boolean {
  *    생기고, **한 겹만 봐도 「쓰고 바로 실행」이라는 실제 경로는 닫힌다.**
  *  - 읽기 실패는 조용히 무시한다 — 없는 파일을 실행하는 것은 어차피 셸이 실패시킨다.
  */
-const SCRIPT_RUNNERS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
+/**
+ * [ENG-217] **셸 목록의 세 번째 사본이었다.** [ENG-199] 가 `INTERPRETERS` 와 `commandLines`
+ * 두 벌을 `SHELLS_TAKING_C` 로 모았는데, 여기 하나가 더 있었고 그대로 갈려 있었다 —
+ * `fish`·`ash`·`busybox` 가 빠져 스크립트 본문 검사가 그 셸들에서 발화하지 않았다.
+ * **「모았다」는 주장은 모은 것만 말한다.** 정본에서 파생시켜 세 번째가 다시 생기지 않게 한다.
+ */
+const SCRIPT_RUNNERS = new Set<string>([...SHELLS_TAKING_C, 'source', '.']);
 const SCRIPT_MAX_BYTES = 64 * 1024;
 /**
  * [SEC-175] 사슬 깊이 상한. **[SEC-B3] 이 크기 캡에 한 처방을 깊이 캡에도 적용한다.**
@@ -712,7 +729,14 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
   // 크기 캡([SEC-B3])과 같은 태도다.
   const atLimit = depth >= SCRIPT_MAX_DEPTH;
   // 러너 + 파일, 그리고 `./x.sh`·`scripts/x.sh` 처럼 직접 실행하는 형태를 함께 본다.
-  const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
+  // [ENG-217] 셸 이름을 정규식 안에 **또** 적지 않는다 — 그것이 이 목록의 네 번째 사본이었다.
+  // 정본(`SCRIPT_RUNNERS` → `SHELLS_TAKING_C`)에서 만들어 쓴다.
+  const runners = [...SCRIPT_RUNNERS].map(r => r.replace(/[.]/g, '\\.')).join('|');
+  // 접두 명령(`sudo`·`busybox` …)이 앞에 붙어도 같은 실행이다 — 목록은 정본에서 온다.
+  const prefixes = [...PREFIX_COMMANDS].join('|');
+  const re = new RegExp(
+    `(?:^|[;&|\n\`(])\\s*(?:(?:${prefixes})\\s+)?(?:(${runners})\\s+([^\\s;|&<>()]+)`
+    + '|(\\.{0,2}/[^\\s;|&<>()]+|[\\w.-]+/[^\\s;|&<>()]+))', 'g');
   let m: RegExpExecArray | null;
   while ((m = re.exec(cmd)) !== null) {
     const candidate = (m[1] !== undefined ? m[2] : m[3]) ?? '';
@@ -1267,7 +1291,9 @@ function preTool(
     // 여기가 비어 있던 것이 출하 검증의 차단 결함 2건이었다: `echo x > src/app.ts` 로 설계
     // 트랙이 풀리고, `echo '{...}' >> .harness/events.jsonl` + `doctor --repair` 로 사람 승인
     // 없이 게이트가 열렸다. 페이즈와 무관하게 먼저 본다 — 코어 파일 보호가 페이즈 무관이므로.
-    const scan = scanBashWrites(cmd);
+    // [SEC-216] 훅은 자기 환경을 안다 — 그 사실을 스캐너에 넘겨 `$HOME` 같은 흔한 변수가
+    // 펴지게 한다(프로젝트 밖 쓰기까지 「볼 수 없다」로 막지 않기 위해서다).
+    const scan = scanBashWrites(cmd, process.env);
     /**
      * [SEC-B1] **가장 무거운 사유를 먼저 말한다.**
      *
@@ -1354,7 +1380,11 @@ function preTool(
       // 같은 안전망을 **설계 트랙 소스에도** 건다. 대칭이 아니면 뚫리는 쪽이 정본이 된다:
       // 이 net 이 없던 동안 `python3 -c "open('src/x.ts','w')"` 는 코어 파일에는 막히고
       // 소스에는 통과했다. `mutating` 과 AND 이므로 `cat src/app.ts` 같은 조회는 걸리지 않는다.
-      for (const target of pathLikeMentions(cmd)) {
+      // [EFF-214] 이 안전망도 **추출이 실패했을 때**를 위한 것이다. 대상이 뽑혔다면 스캐너가
+      // 그 명령의 모양을 이해했다는 뜻이고, 남은 언급은 대개 **읽는 쪽**이다
+      // (`cp .harness/events.jsonl /tmp/backup.jsonl` 의 첫 인자). 백업을 「변경」이라 거부하면
+      // 막는 것도 틀리고 사유도 틀린다.
+      for (const target of scan.targets.length === 0 ? pathLikeMentions(cmd) : []) {
         if (scan.targets.includes(target)) continue; // 위에서 이미 판정했다
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
@@ -1373,6 +1403,63 @@ function preTool(
           + '검사를 건너뛴다(PTY 는 터미널 검사도 통과한다). 설치된 `harness` 명령을 그대로 쓰라. '
           + '(승인 자체는 언제나 사용자가 자기 터미널에서 한다.)',
         ), degraded, lang);
+      }
+
+      /**
+       * [SEC-216] **볼 수 없는 쓰기는 통과가 아니다.**
+       *
+       * 여덟 번째 표기: `p=$(echo <base64> | base64 -d); echo … >> $p`. 경로 전체가 실행
+       * 시점에 계산돼 리터럴 이름도([SEC-207]) 정적 디렉토리도([SEC-213]) 남지 않는다.
+       *
+       * 이 리포는 **볼 수 없는 실행**(`opaqueExec` — 파이프로 받은 프로그램)을 이미 페이즈 무관
+       * 거부로 다룬다. 볼 수 없는 **쓰기**도 같은 부류다: 그 대상이 저널일 수도, 정책 파일일
+       * 수도 있고 우리는 알 수 없다. 볼 수 있는 대입은 [SEC-216] 이 미리 펴 주므로
+       * (`D=.harness; … $D/…` 는 정상 판정으로 간다) 여기 남는 것은 **진짜로 못 보는 것**뿐이다.
+       */
+      const blind0 = scan.blindTargets[0];
+      if (blind0 !== undefined) {
+        return deny(L(
+          `This computes the write target at run time (\`${blind0}\`), so the harness cannot see which `
+          + 'file it writes — and that includes the event journal that decides whether a gate is '
+          + 'approved. Write the path out literally, or use harness commands.',
+          `쓰기 대상을 실행 시점에 계산하는 명령이다(\`${blind0}\`) — 어느 파일에 쓰는지 하네스가 `
+          + '볼 수 없고, 거기에는 게이트 승인 여부를 정하는 이벤트 저널도 포함된다. '
+          + '경로를 리터럴로 적거나 harness 명령을 쓰라.',
+        ), degraded, lang);
+      }
+
+      /**
+       * [SEC-213] **이름을 조립하면 리터럴이 사라진다 — 그러나 디렉토리는 남는다.**
+       *
+       * 일곱 번째 표기다: `a=events; b=.jsonl; echo FORGED >> .harness/$a$b`.
+       * 소유 파일 이름이 텍스트 어디에도 없으므로 이름 기반 안전망([SEC-170]·[SEC-207])이
+       * 전부 조용하다. 그런데 **경로의 앞부분은 여전히 리터럴이다** — `.harness/`.
+       *
+       * 그래서 미해결 대상의 **정적 접두**(동적 성분 앞까지)를 잘라, 그 디렉토리에 놓인
+       * 이름 모를 파일 하나를 **같은 판정 함수**로 물어본다. 거기서 거부라면 조립된 이름도
+       * 거부다 — 무엇이 될지 모르는데 그 자리가 금지된 자리이기 때문이다.
+       *
+       * 규칙을 복제하지 않는 것이 요점이다: 어느 디렉토리가 보호되는지는 `judgeWritePath`
+       * 한 벌만 알고, 여기서는 **모른다는 사실**만 더한다.
+       */
+      const UNKNOWN = '__harness_unresolved__';
+      for (const raw of scan.unresolvedTargets) {
+        const prefix = raw.split(/[$`{*?]/)[0];
+        const dir = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/') + 1) : '';
+        if (dir === '') continue;                       // 정적 부분이 없다 — 말할 수 있는 게 없다
+        const ownedDir = OWNED_DIRS.has(dir);
+        const verdict = ownedDir
+          ? true
+          : judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
+        if (verdict) {
+          return deny(L(
+            `This builds the file name at run time (\`${raw}\`), so the harness cannot tell which file `
+            + `it writes — and \`${dir}\` is a directory where writes are restricted. Write the path out `
+            + 'literally, or use harness commands.',
+            `파일 이름을 실행 시점에 조립하는 명령이다(\`${raw}\`) — 어느 파일에 쓰는지 알 수 없고, `
+            + `\`${dir}\` 는 쓰기가 제한된 자리다. 경로를 리터럴로 적거나 harness 명령을 쓰라.`,
+          ), degraded, lang);
+        }
       }
 
       // [SEC-207] **대상 추출 자체가 실패한 경우**를 잡는다 — 표기가 토큰을 부수면
@@ -1402,7 +1489,13 @@ function preTool(
         ), degraded, lang);
       }
 
-      const named = mentionsPath(cmd, CORE_FILES);
+      /**
+       * [EFF-214] 이 안전망은 **대상 추출이 실패했을 때**를 위한 것이다. 대상이 뽑혔다면
+       * 위 판정이 이미 그것을 봤고, 남은 언급은 **읽는 쪽**일 가능성이 높다 —
+       * `cp .harness/events.jsonl /tmp/backup.jsonl` 처럼. 백업을 「변경」이라고 거부하면
+       * 사유까지 사실과 다르다. 그래서 **뽑은 대상이 하나도 없을 때만** 발화한다.
+       */
+      const named = scan.targets.length === 0 ? mentionsPath(cmd, CORE_FILES) : undefined;
       if (named) {
         return deny(L(
           `This command looks like it changes ${named} through the shell — core files can only be `

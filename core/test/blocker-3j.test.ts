@@ -337,3 +337,82 @@ describe('[SEC-208] 「복사 도구」 열거를 지운다 — 정당한 한 �
     }
   });
 });
+
+describe('[SEC-213] 이름을 조립해도 디렉토리는 남는다 — 일곱 번째 표기', () => {
+  it('실행 시점에 조립한 이름이 보호 자리에 떨어지면 거부된다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'a=events; b=.jsonl; echo FORGED >> .harness/$a$b',
+      'f=config.yaml; sed -i "" s/a/b/ .harness/$f',
+      'a=state; echo x > .harness/$a.json',
+      'd=design; echo x > .harness/$d/ledger.yaml',
+      'a=app; b=.ts; echo x > src/$a$b',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('보호 자리가 아니면 조립해도 막지 않는다 — 증거 폴더는 열려 있어야 한다', () => {
+    const root = setup('P7');
+    for (const cmd of [
+      'w=wave-001; echo x > .harness/evidence/$w/shot.png',
+      'echo x >> build/$NAME.log',
+      'echo x >> docs/$TOPIC.md',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+describe('[EFF-214] 저널을 읽는 것은 정당하다 — 이름만으로 변형으로 보지 않는다', () => {
+  it('제자리 편집이 아닌 텍스트 처리기와 백업은 통과한다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "sed -n '1,5p' .harness/config.yaml",
+      "awk 'NR<3' .harness/events.jsonl",
+      'perl -ne print .harness/config.yaml',
+      'cp .harness/events.jsonl /tmp/backup.jsonl',
+      'cat .harness/events.jsonl',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('제자리 편집·프로그램 내부 쓰기는 그대로 막힌다 — 넓힌 예외가 방어를 덮지 않는다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'sed -i "" s/a/b/ .harness/config.yaml',
+      'awk \'BEGIN{print "x" > ".harness/events.jsonl"}\' /dev/null',
+      'find . -name "*.ts" -exec sed -i "" s/a/b/ {} +',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+});
+
+describe('[SEC-216] 볼 수 없는 쓰기는 통과가 아니다 — 여덟 번째 표기', () => {
+  it('경로를 실행 시점에 계산하는 쓰기가 거부된다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'p=$(echo Lmhhcm5lc3MvZXZlbnRzLmpzb25s | base64 -d); printf x >> $p',
+      'p=`echo .harness/events.jsonl`; echo x >> $p',
+      'echo x >> $UNKNOWN_TARGET',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('볼 수 있는 대입은 펴서 정상 판정으로 보낸다 — 과차단을 줄이는 쪽이 먼저다', () => {
+    const root = setup('P7');
+    for (const cmd of ['LOG=build/out.log; echo x >> $LOG', 'O=docs/notes.md; echo x >> $O']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('펴 보니 보호 파일이면 그대로 막힌다 — 펴는 것은 방어를 넓히지도 좁히지도 않는다', () => {
+    expect(denied(bash(setup('P0'), 'D=.harness; echo x >> $D/events.jsonl'))).toBe(true);
+  });
+});
