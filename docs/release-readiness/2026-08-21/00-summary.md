@@ -11,7 +11,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 169 · **open** 19 (MED 0 · LOW 19) · deferred 3 ·
+> 대장 집계: **verified** 180 · **open** 8 (MED 0 · LOW 8) · deferred 3 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -113,11 +113,11 @@
 > 이번 수정 이후로는 아직 돌지 않았다 — 라운드 3-G 가 증명한 것이 정확히 그것이다
 > (봉인이 점수를 올린다 · 새 감정자는 늘 목록 밖을 본다, **둘 다 참**).
 >
-> ### 남은 open 19건 — MED 0 · LOW 19
+> ### 남은 open 8건 — MED 0 · LOW 8
 >
 > **MED (0)** 
 >
-> **LOW (19)** `UTIL-A5` · `UX-A6` · `QUAL-E` · `PROD-B3` · `PROD-B4` · `PROD-B5` · `PROD-B6` · `ENG-F` · `COST-B` · `UTIL-119` · `PROD-126` · `PROD-127` · `PROD-128` · `COST-129` · `COST-130` · `COST-131` · `QUAL-133` · `UX-150` · `COST-159`
+> **LOW (8)** `QUAL-E` · `COST-B` · `PROD-128` · `COST-129` · `COST-130` · `COST-131` · `QUAL-133` · `COST-159`
 >
 > rubric 의 4.8 조건은 「open BLOCKER 0 · open HIGH 0 **+ 잔여 감점 LOW 이하**」다.
 > 라운드 3-I 가 연 **MED 12건은 전건 닫혔고**, 남은 46건은 전부 LOW 라 그 조건 안이다.

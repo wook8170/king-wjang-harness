@@ -417,7 +417,11 @@ king-wjang-harness/
 ```
 claude plugin install king-wjang-harness@<마켓플레이스>
 /harness init     # .harness/ 생성, 프로파일 후보 제시, config 대화
-/harness start    # P0 진입, 이후 파이프라인이 주도
+harness phase set P0    # P0 진입, 이후 파이프라인이 주도
+# [UTIL-A5] 이 문서 초안에는 `/harness start`·`config` 라는 슬래시 명령 표면이
+# 적혀 있었는데 **구현되지 않았다.** 운영 표면(README·스킬)에는 없어 영향이
+# 문서 안에 갇혀 있었지만, 스펙이 없는 표면을 광고하면 다음 구현자가 그것을
+# 계약으로 읽는다. 실재하는 명령으로 바꾼다.
 ```
 
 ### 공존·비간섭 원칙

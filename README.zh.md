@@ -116,7 +116,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 | 指标 | 数值 |
 |---|---|
 | 钩子延迟（p95） | 进程内 **2.6 ms**；10 万条（15 MB）日志重放回退路径为 **18.9 ms**。钩子以独立 `node` 进程运行，因此端到端还要付出你机器的 Node 启动开销 —— 本机实测挂钟时间 133 ms / 162 ms，其中 **99 ms 是 `node` 启动**。挂钟绝对值是机器的属性，不是本工具的属性。 |
-| 测试套件 | **1155 项通过**（49 个文件） |
+| 测试套件 | **1174 项通过**（50 个文件） |
 | 每会话新增上下文 | 启用时 **约 240 令牌**；没有 `.harness/` 的项目为 **0** |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
@@ -178,7 +178,7 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness phase set <P0..P12>` | 切换阶段 —— **只有通过审批的关卡才能开启下一个阶段** |
 | `harness node upsert --id <id> --title <t> [--status …]` | 新增或更新一个设计台账节点 |
 | `harness node bump <id>` | 修订一个节点 → `version++`，向引用它的波次传播 STALE |
-| `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | 开启一个波次 → 打印其 id |
+| `harness wave create --goal <g> [--milestone m] [--refs a,b] [--accept c]` | 开启一个波次 → 打印其 id（`--goal` 为必填） |
 | `harness wave activate <wave-id>` | 激活一个波次 |
 | `harness wave update "<做了什么 / 下一步>"` | 结算轮次日志 |
 | `harness wave complete` | 完成一个波次（引用 UX 的波次需要视觉证据） |
@@ -186,6 +186,18 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness doctor [--repair [--force]] [--accept-policy]` | 完整性检查 · 日志重放恢复 · 策略变更检测（`--accept-policy` 需要 `HARNESS_ACCEPT_POLICY=1` — 仅限人工） |
 
 `harness --help` 会打印命令地图，`harness <命令组> --help` 会列出该组的子命令；这张表是简要参考。钩子事件（`harness hook …`）由插件调用，从不需要手动调用。
+
+---
+
+### MCP 工具 —— 无需 shell 的同一引擎
+
+插件同时注册了一个 MCP 服务器，智能体可以用类型化的工具调用代替 `Bash` 来驱动本工具：
+`harness_status`、`harness_wave_create`／`_activate`／`_update`／`_complete`、
+`harness_node_upsert`／`_bump`、`harness_gate_submit`／`_status`／`_verify`、`harness_doc_upsert`、
+`harness_trace`、`harness_doctor` 等。
+
+**有两件事是刻意做不到的**：无法批准关卡（最终点击永远属于人 §4-3），也无法越过未批准的关卡推进阶段。
+通过 MCP 能做的事，本来通过 CLI 也能做 —— 关卡还是同一批关卡。
 
 ---
 
@@ -214,7 +226,7 @@ npm install          # prepare hook builds core/dist via tsup
 
 ## 状态与路线图
 
-**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1155 项测试）。但出货就绪审计的判定
+**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1174 项测试）。但出货就绪审计的判定
 仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
 
 - ✅ 事件日志、状态重放、doctor 恢复

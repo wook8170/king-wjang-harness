@@ -116,7 +116,7 @@ flowchart LR
 | 指標 | 値 |
 |---|---|
 | フックレイテンシ (p95) | インプロセス **2.6 ms**・10万件（15 MB）ジャーナル再生フォールバックで **18.9 ms**。フックは独立した `node` プロセスなので、エンドツーエンドではマシンの Node 起動が加わる —— この環境では実時間 133 ms / 162 ms で、そのうち **99 ms が `node` の起動**である。実時間の絶対値は本ツールではなくマシンの性質だ。 |
-| テストスイート | **1155件 パス**（49ファイル） |
+| テストスイート | **1174件 パス**（50ファイル） |
 | セッションあたりの追加コンテキスト | ハーネス有効時 **~240トークン**・`.harness/` の無いプロジェクトでは **0** |
 | ランタイム依存 | **1件**（`yaml`、バンドル済み） |
 | 決定性 | 3回の実行で判定が完全一致 |
@@ -179,7 +179,7 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness phase set <P0..P12>` | フェーズを切り替える —— **承認されたゲートだけが次を開く** |
 | `harness node upsert --id <id> --title <t> [--status …]` | 設計台帳ノードを upsert する |
 | `harness node bump <id>` | ノードを改訂する → `version++`、参照元ウェーブに STALE を伝播 |
-| `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | ウェーブを開く → その id を出力する |
+| `harness wave create --goal <g> [--milestone m] [--refs a,b] [--accept c]` | ウェーブを開く → その id を出力する（`--goal` は必須） |
 | `harness wave activate <wave-id>` | ウェーブをアクティブ化する |
 | `harness wave update "<did / next>"` | ターンログを決着させる |
 | `harness wave complete` | ウェーブを完了する（UXを参照するウェーブは視覚的エビデンスが必須） |
@@ -187,6 +187,19 @@ npm install          # prepare hook builds core/dist via tsup
 | `harness doctor [--repair [--force]] [--accept-policy]` | 整合性チェック ・ ジャーナル再生による復旧 ・ ポリシー変更の検知（`--accept-policy` は `HARNESS_ACCEPT_POLICY=1` が必要 — 人間のみ） |
 
 `harness --help` がコマンドマップを、`harness <グループ> --help` がそのグループのサブコマンドを表示する。このテーブルは簡易リファレンスだ。フックイベント（`harness hook …`）はプラグインが呼び出すものであり、手で呼ぶことはない。
+
+---
+
+### MCP ツール —— シェルなしで同じエンジン
+
+プラグインは MCP サーバーも登録する。エージェントは `Bash` の代わりに型付きツール呼び出しで
+ハーネスを操作できる: `harness_status`、`harness_wave_create`・`_activate`・`_update`・`_complete`、
+`harness_node_upsert`・`_bump`、`harness_gate_submit`・`_status`・`_verify`、`harness_doc_upsert`、
+`harness_trace`、`harness_doctor` など。
+
+**意図的にできないこと が二つ**: ゲートの承認はできない（最終クリックは常に人間だ §4-3）し、
+未承認ゲートを越えてフェーズを進めることもできない。MCP でできることは CLI でもできたことだけだ ——
+ゲートは同じゲートである。
 
 ---
 
@@ -215,7 +228,7 @@ npm install          # prepare hook builds core/dist via tsup
 
 ## ステータスとロードマップ
 
-**v0 —— コアエンジン・ゲート・構築/出荷トラックまで実装・実測済み**（テスト1155件）。ただし
+**v0 —— コアエンジン・ゲート・構築/出荷トラックまで実装・実測済み**（テスト1174件）。ただし
 リリース準備の判定は依然 **出荷不可** —— 何が開いているかは下の「既知の限界」を参照。
 
 - ✅ イベントジャーナル、状態リプレイ、doctor による復旧

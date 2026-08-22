@@ -116,7 +116,7 @@ flowchart LR
 | 지표 | 값 |
 |---|---|
 | 훅 지연 (p95) | 인프로세스 **2.6 ms** · 10만 건(15 MB) 저널 재생 폴백에서 **18.9 ms**. 훅은 별도 `node` 프로세스라 끝단에서는 머신의 Node 기동이 더해진다 — 이 머신에서 wall-time 133 ms / 162 ms 이고 그중 **99 ms 가 `node` 기동**이다. wall-time 절대값은 이 도구가 아니라 머신의 성질이다. |
-| 테스트 스위트 | **1155 passing** (49 파일) |
+| 테스트 스위트 | **1174 passing** (50 파일) |
 | 세션당 추가 컨텍스트 | 하네스가 켜졌을 때 **~240 토큰** · `.harness/` 없는 프로젝트는 **0** |
 | 런타임 의존성 | **1** (`yaml`, 번들) |
 | 결정성 | 3× 실행 동일 판정 |
@@ -178,7 +178,7 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 | `harness phase set <P0..P12>` | 페이즈 전환 — **승인된 게이트만 다음 페이즈를 연다** |
 | `harness node upsert --id <id> --title <t> [--status …]` | 설계 원장 노드 upsert |
 | `harness node bump <id>` | 노드 개정 → `version++`, 참조 웨이브에 STALE 전파 |
-| `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | 웨이브 생성 → id 출력 |
+| `harness wave create --goal <g> [--milestone m] [--refs a,b] [--accept c]` | 웨이브 생성 → id 출력 (`--goal` 필수) |
 | `harness wave activate <wave-id>` | 웨이브 활성화 |
 | `harness wave update "<한 일 / 다음>"` | 턴 로그 정산 |
 | `harness wave complete` | 웨이브 완료 (UX 참조 웨이브는 시각 증적 필요) |
@@ -186,6 +186,19 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 | `harness doctor [--repair [--force]] [--accept-policy]` | 무결성 검사 · 저널 재생 복구 · 정책 변경 탐지 (`--accept-policy` 는 `HARNESS_ACCEPT_POLICY=1` 필요 — 사람만) |
 
 `harness --help`가 명령 지도를, `harness <군> --help`가 그 군의 하위명령을 보여준다; 이 표는 짧은 레퍼런스다. 훅 이벤트(`harness hook …`)는 플러그인이 호출하며, 손으로 칠 일 없다.
+
+---
+
+### MCP 도구 — 셸 없이 같은 엔진
+
+플러그인은 MCP 서버도 등록한다. 에이전트가 `Bash` 대신 타입 있는 도구 호출로 하네스를 몰 수 있다:
+`harness_status`, `harness_wave_create`·`_activate`·`_update`·`_complete`,
+`harness_node_upsert`·`_bump`, `harness_gate_submit`·`_status`·`_verify`, `harness_doc_upsert`,
+`harness_trace`, `harness_doctor` 등.
+
+**의도적으로 못 하는 것 둘**: 게이트를 승인할 수 없고(최종 클릭은 항상 사람이다 §4-3),
+승인되지 않은 게이트를 지나 페이즈를 옮길 수 없다. MCP 로 할 수 있는 것은 CLI 로도 할 수 있던
+것뿐이다 — 게이트는 같은 게이트다.
 
 ---
 
@@ -214,7 +227,7 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 
 ## 상태 & 로드맵
 
-**v0 — 코어 엔진·게이트·구축/출하 트랙까지 구현·실측 완료** (1155 tests). 다만 출하 검증 판정은
+**v0 — 코어 엔진·게이트·구축/출하 트랙까지 구현·실측 완료** (1174 tests). 다만 출하 검증 판정은
 아직 **출하 불가**다 — 무엇이 열려 있는지는 아래 「알려진 한계」를 보라.
 
 - ✅ 이벤트 저널, 상태 재생, doctor 복구

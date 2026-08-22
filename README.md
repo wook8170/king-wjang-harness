@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1155 passing** (49 files) |
+| Test suite | **1174 passing** (50 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -179,7 +179,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 | `harness phase set <P0..P12>` | Switch phase — **only an approved gate opens the next one** |
 | `harness node upsert --id <id> --title <t> [--status …]` | Upsert a design-ledger node |
 | `harness node bump <id>` | Revise a node → `version++`, propagate STALE to referencing waves |
-| `harness wave create [--milestone m] [--goal g] [--refs a,b] [--accept c]` | Open a wave → prints its id |
+| `harness wave create --goal <g> [--milestone m] [--refs a,b] [--accept c]` | Open a wave → prints its id (`--goal` is required) |
 | `harness wave activate <wave-id>` | Activate a wave |
 | `harness wave update "<did / next>"` | Settle the turn log |
 | `harness wave complete` | Complete a wave (UX-referencing waves require visual evidence) |
@@ -187,6 +187,19 @@ Your active role is at the **decision points**: approve the design, decide when 
 | `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check · journal-replay recovery · policy-drift check (`--accept-policy` needs `HARNESS_ACCEPT_POLICY=1`, humans only) |
 
 `harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
+
+---
+
+### MCP tools — the same engine, without the shell
+
+The plugin also registers an MCP server, so an agent can drive the harness through typed tool calls
+instead of `Bash`: `harness_status`, `harness_wave_create` / `_activate` / `_update` / `_complete`,
+`harness_node_upsert` / `_bump`, `harness_gate_submit` / `_status` / `_verify`, `harness_doc_upsert`,
+`harness_trace`, `harness_doctor`, and more.
+
+Two things it deliberately does **not** do: it cannot approve a gate (the final click is always a
+human's, §4-3), and it cannot set a phase past an unapproved gate. Everything an agent can do through
+MCP, it could already do through the CLI — the gates are the same gates.
 
 ---
 
@@ -215,7 +228,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1155 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1174 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

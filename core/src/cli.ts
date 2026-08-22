@@ -215,6 +215,20 @@ function requirePhase(raw: unknown, cmd: string, lang: Lang): Phase {
   ));
 }
 
+/**
+ * 배포된 버전 문자열. `package.json` 이 정본이고, 못 읽으면 그 사실을 숨기지 않는다 —
+ * 「알 수 없음」이 틀린 숫자보다 낫다(버그 리포트가 엉뚱한 릴리스를 가리키면 조사자가 헤맨다).
+ */
+function harnessVersion(): string {
+  for (const rel of ['../../package.json', '../package.json']) {
+    try {
+      const v = JSON.parse(fs.readFileSync(path.resolve(__dirname, rel), 'utf8')).version;
+      if (typeof v === 'string' && v) return `v${v}`;
+    } catch { /* 다음 후보 */ }
+  }
+  return 'version unknown (package.json not readable)';
+}
+
 export function run(argv: string[], root: string): number {
   const [cmd, sub, ...rest] = argv;
 
@@ -942,7 +956,17 @@ export function run(argv: string[], root: string): number {
             const changed = diffTokens(doc, swapped);
             const out = flag(args, 'out');
             if (out) fs.writeFileSync(path.resolve(root, out), generateCss(swapped, lang));
-            console.log(L(`Swap is meaningful — ${changed.length} token(s) changed${out ? ` · CSS → ${out}` : ''}`, `스왑 유효 — 변경 토큰 ${changed.length}건${out ? ` · CSS → ${out}` : ''}`));
+            // [UX-A6] `--out` 이 없으면 **아무것도 기록하지 않는다** — 그런데 「N개 바뀌었다」만
+            // 말하면 사람은 파일이 생긴 줄 안다. 드라이런이면 드라이런이라고 말하고, 기록하려면
+            // 무엇을 쳐야 하는지 함께 준다. `--out` 은 디렉토리가 아니라 **파일 경로**다.
+            console.log(L(
+              `Swap is meaningful — ${changed.length} token(s) changed`
+              + (out ? ` · CSS written to ${out}` : ' · dry run: nothing was written. '
+                + 'Pass `--out <file.css>` to write the swapped CSS.'),
+              `스왑 유효 — 변경 토큰 ${changed.length}건`
+              + (out ? ` · CSS 기록 → ${out}` : ' · 드라이런: 아무것도 기록하지 않았다. '
+                + '기록하려면 `--out <파일.css>` 를 넘겨라.'),
+            ));
             return 0;
           }
           default: throw new Error(unknownSub('tokens', sub, lang));
@@ -1237,7 +1261,11 @@ export function run(argv: string[], root: string): number {
       }
 
       case '--version':
-        console.log('king-wjang-harness core v0');
+        // [PROD-126·PROD-B5] **버그 리포트에 적을 수 있는 버전을 낸다.** 예전에는 "core v0"
+        // 뿐이라 `plugin.json`·마켓플레이스의 0.0.1 과 어긋났고, Support 절이 "harness --version
+        // 을 붙여라" 라고 하는데 그 출력으로는 **릴리스를 구분할 수 없었다.**
+        // 값은 `package.json` 에서 읽는다 — 상수로 박으면 릴리스 때마다 두 곳이 갈린다.
+        console.log(`king-wjang-harness ${harnessVersion()}`);
         return 0;
 
       default:

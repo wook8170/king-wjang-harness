@@ -100,7 +100,7 @@ export const COMMANDS: CommandGroup[] = [
     name: 'doc',
     summary: M('Document registry — the artifacts a gate reviews.', '문서 레지스트리 — 게이트가 심사하는 산출물.'),
     subs: [
-      { name: 'upsert', args: '--id <DOC-x> --path <p> --phase <P>', summary: M('Register or update a document.', '문서를 등록·수정한다.') },
+      { name: 'upsert', args: '--id <DOC-x> --path <p> --phase <P> [--refs <ids>] [--url <url>]', summary: M('Register or update a document. --refs links it to ledger nodes (RTM traceability).', '문서를 등록·수정한다. --refs 로 원장 노드에 연결한다(RTM 추적성).') },
       { name: 'url', args: '<DOC-x> <artifact-url>', summary: M('Attach a published artifact URL to a document.', '문서에 게시된 아티팩트 URL 을 붙인다.') },
       { name: 'submit', args: '<DOC-x>', summary: M('Submit a document for review (pins its hash).', '문서를 심사에 올린다(해시 고정).') },
       { name: 'approve', args: '<DOC-x>', summary: M('Approve a submitted document.', '제출된 문서를 승인한다.') },
@@ -136,7 +136,7 @@ export const COMMANDS: CommandGroup[] = [
     name: 'tokens',
     summary: M('Design tokens — generate, lint raw values, swap themes.', '디자인 토큰 — 생성·raw 값 검사·테마 교체.'),
     subs: [
-      { name: 'gen', args: '[--out <dir>]', summary: M('Generate CSS/TS token files from the token source.', '토큰 원본에서 CSS/TS 토큰 파일을 생성한다.') },
+      { name: 'gen', args: '[--out <dir>]', summary: M('Generate CSS/TS token files from the token source. Without --out they land in the project root (tokens.css, tokens.ts, tailwind.tokens.js).', '토큰 원본에서 CSS/TS 토큰 파일을 생성한다. --out 없이 부르면 프로젝트 루트에 떨어진다(tokens.css·tokens.ts·tailwind.tokens.js).') },
       { name: 'lint', args: '<files...>', summary: M('Find raw colour/size literals that should be semantic tokens.', '시맨틱 토큰이어야 할 raw 색·크기 리터럴을 찾는다.') },
       { name: 'swap', args: '--with <theme.json> [--out <dir>]', summary: M('Regenerate tokens with an override theme.', '대체 테마로 토큰을 다시 생성한다.') },
     ],
