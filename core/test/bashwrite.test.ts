@@ -57,9 +57,15 @@ describe('scanBashWrites: 쓰기 대상 추출', () => {
     expect(t('sed s/a/b/ src/app.ts')).toEqual([]);
   });
 
-  it('cp·mv 는 목적지만, ln 은 링크 이름만', () => {
+  /**
+   * [SEC-101] **`mv` 는 원본도 대상이다** — 이 테스트가 원래 「목적지만」으로 규칙을 고정하고
+   * 있었고, 그 고정이 곧 구멍이었다(`mv .harness /tmp/x` 로 하네스 전체가 통과했다).
+   * `cp` 는 원본을 남기므로 목적지만이 맞다 — 갈리는 지점은 **원본이 사라지는가**다.
+   */
+  it('cp 는 목적지만 · mv 는 원본도 · ln 은 링크 이름만', () => {
     expect(t('cp /tmp/evil.ts src/app.ts')).toEqual(['src/app.ts']);
-    expect(t('mv a.txt docs/b.txt')).toEqual(['docs/b.txt']);
+    expect(t('mv a.txt docs/b.txt')).toEqual(['docs/b.txt', 'a.txt']);
+    expect(t('mv .harness /tmp/gone')).toContain('.harness');
     expect(t('ln -s /tmp/evil src/link.ts')).toEqual(['src/link.ts']);
   });
 

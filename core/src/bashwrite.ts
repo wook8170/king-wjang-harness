@@ -30,6 +30,9 @@ const SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
 const MUTATING_TOKENS = [
   '>', '>>', 'tee', 'touch', 'sed', 'rm', 'mv', 'cp', 'dd', 'truncate', 'install',
   'ln', 'chmod', 'chown', 'python', 'python3', 'node', 'perl', 'ruby', 'awk', 'eval',
+  // [SEC-101] 없애는 것도 변형이다 — `rmdir` 와 `find … -delete` 가 목록 밖이라
+  // 안전망(`mutating` AND 조건)이 아예 걸리지 않았다.
+  'rmdir', 'find',
 ];
 
 /** 따옴표를 존중하는 토크나이저. 이스케이프는 다루지 않는다(모델이 쓰는 표현 범위). */
@@ -127,6 +130,78 @@ export interface BashWriteScan {
   targets: string[];
   /** 변형 명령·연산자가 하나라도 있었는가. 안전망 (2) 의 조건. */
   mutating: boolean;
+  /**
+   * [SEC-100] **프로그램 본문을 명령에서 볼 수 없는 실행.** 값이 있으면 그 형태의 이름이다.
+   *
+   * `SEC-49`(직접 쓰기) → `SEC-A`(`git apply`) → 이것으로 **세 번째 포장**이고 셋 다 결과가
+   * 같다: 저널 위조 → `doctor --repair` → 사람 승인 없이 게이트 개통. 포장을 하나씩 잡는
+   * 대신 부류를 잡는다 — 해석기가 프로그램을 **파이프·명령치환·프로세스치환·stdin** 에서
+   * 받으면 무엇을 쓸지 정적으로 알 길이 없다.
+   *
+   * 반대로 **리터럴 프로그램**(`sh -c "npm test"`)과 **스크립트 파일**(`python3 x.py`)은
+   * 여기 걸리지 않는다 — 전자는 재귀 스캔이, 후자는 호출측의 본문 이어붙이기가 본다.
+   * 「감싸인 것을 꺼내 같은 스캐너로 다시」가 되는 것은 통과시키고, **꺼낼 수 없는 것만** 막는다.
+   */
+  opaqueExec?: string;
+}
+
+/** 프로그램 텍스트를 받아 실행하는 해석기. 셸만이 아니다 — `python3` 도 stdin 을 읽는다. */
+const INTERPRETERS = new Set([
+  'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'ash',
+  'node', 'nodejs', 'deno', 'bun', 'python', 'python2', 'python3',
+  'perl', 'ruby', 'php', 'osascript',
+]);
+
+/** 해석기가 **리터럴 프로그램**을 인자로 받는 플래그(`sh -c`·`node -e`·`perl -E`). */
+const PROGRAM_FLAG = /^-(?:[A-Za-z]*c|e|E|-eval|-command)$/;
+
+/** 인자가 명령치환으로 **시작**하는가. 부분 치환(`cd $(pwd) && npm test`)은 아니다. */
+const startsWithSubstitution = (a: string): boolean => a.startsWith('$(') || a.startsWith('`');
+
+/**
+ * 프로그램 본문을 볼 수 없는 실행을 찾는다 (SEC-100).
+ *
+ * `SEGMENT_SPLIT` 을 쓰지 않는 이유: 그것은 괄호에서도 쪼개므로 `eval "$(curl x)"` 의 인자가
+ * 조각나 **찾으려는 형태 자체가 사라진다.** 여기서는 파이프 구조를 살려서 쪼갠다 —
+ * 「파이프를 받는 것은 그 조각의 **첫** 명령」이라는 사실이 판정의 핵심이기 때문이다.
+ */
+function opaqueExecOf(cmd: string): string | undefined {
+  // 프로세스 치환으로 프로그램을 넘기는 형태 — `bash <(curl …)`·`source <(…)`·`. <(…)`
+  const proc = /(?:^|[\s;&|])(sh|bash|zsh|dash|ksh|fish|source|\.)\s+(?:-\S+\s+)*<\(/.exec(cmd);
+  if (proc) return `${proc[1]} <(…)`;
+
+  // `||` 는 파이프가 아니다 — 쪼개기 전에 자리표시자로 감춰 둔다.
+  const OR = '\u0000';
+  const parts = cmd.replace(/\|\|/g, OR).split('|');
+  for (let i = 0; i < parts.length; i++) {
+    const chunks = parts[i].split(OR).join('||').split(/(?:&&|\|\||;|\n)/);
+    for (let k = 0; k < chunks.length; k++) {
+      const { name, args } = commandName(tokenize(chunks[k]));
+
+      if (name === 'eval') {
+        if (args.some(startsWithSubstitution)) return 'eval "$(…)"';
+        continue;
+      }
+      if (!INTERPRETERS.has(name)) continue;
+
+      const flagIdx = args.findIndex(a => PROGRAM_FLAG.test(a));
+      if (flagIdx >= 0) {
+        const prog = args[flagIdx + 1];
+        // 리터럴 프로그램은 재귀 스캔이 본다. 통째 치환일 때만 볼 수 없다.
+        if (prog !== undefined && startsWithSubstitution(prog)) return `${name} -c "$(…)"`;
+        continue;
+      }
+      if (args.some(a => /^-[A-Za-z]*s$/.test(a))) return `${name} -s`;
+      if (args.includes('/dev/stdin') || args.includes('-')) return `${name} /dev/stdin`;
+
+      // 스크립트 파일을 받았으면 그 파일은 읽을 수 있다(호출측이 본문을 이어 붙인다).
+      if (args.some(a => !isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a))) continue;
+
+      // 인자 없는 해석기가 파이프 뒤에 있다 = 파이프가 곧 프로그램이다.
+      if (i > 0 && k === 0) return `${name} ← pipe`;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -175,6 +250,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   let patchesWorkingTree = false;
   let appliesPatch = false;
   const patchFiles: string[] = [];
+  let opaqueExec = opaqueExecOf(cmd);
 
   // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니다.
   const redirects = redirectTargets(cmd);
@@ -208,10 +284,22 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         if (args.some(a => a === '-i' || a.startsWith('-i'))) targets.push(...paths);
         break;
       case 'cp':
-      case 'mv':
       case 'install':
         // 목적지는 마지막 피연산자다. 원본은 읽기이므로 대상이 아니다.
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        break;
+      case 'mv':
+        // 목적지는 마지막 피연산자다.
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        // [SEC-101] **원본도 대상이다 — mv 는 원본을 없앤다.** `cp` 와 갈리는 지점이 여기다.
+        // `rm -rf .harness` 는 막는데 `mv .harness /tmp/x` 는 통과해 하네스 전체가 한 줄로
+        // 사라졌다. 「지운다」를 명령 이름으로 열거하면 언제나 빠진 이름이 있으므로,
+        // **보호 대상이 사라지는 것**을 본다.
+        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
+        break;
+      case 'rmdir':
+        // 비우는 것도 없애는 것이다(SEC-101 과 같은 이유).
+        targets.push(...paths);
         break;
       case 'ln':
         // 심링크는 **링크 이름**이 생기는 자리다(마지막 인자). 대상 파일은 건드리지 않는다.
@@ -336,10 +424,21 @@ export function scanBashWrites(cmd: string): BashWriteScan {
           if (sub.mutating) mutating = true;
           if (sub.patchesWorkingTree) patchesWorkingTree = true;
           if (sub.appliesPatch) { appliesPatch = true; patchFiles.push(...sub.patchFiles); }
+          // 감싼 안쪽이 불투명하면 바깥도 불투명하다 — `sh -c "curl x | sh"`.
+          opaqueExec ??= sub.opaqueExec;
         }
         break;
       }
       case 'find': {
+        // [SEC-101] `-delete` 는 `-exec rm` 과 같은 일을 **감싸는 명령 없이** 한다 — 그래서
+        // 아래 `-exec` 스캔이 아예 걸리지 않았고 `find .harness -delete` 가 통과했다.
+        // 삭제 대상은 find 의 시작 경로(첫 피연산자들)다.
+        if (args.some(a => a === '-delete')) {
+          for (const a of args) {
+            if (isFlag(a) || a.startsWith('-')) break;   // 첫 술어(-name 등)를 만나면 경로 끝
+            targets.push(a);
+          }
+        }
         // [SEC-91] `find . -name '*.ts' -exec sed -i "" s/a/b/ {} +` — 진짜 쓰기는 `-exec` 뒤에 있다.
         // xargs 와 같은 구조라 같은 처방을 쓴다: 감싸인 명령을 꺼내 **같은 스캐너로 다시 판정**한다.
         // 대상은 `{}` 라 정적으로 못 뽑으므로, 안쪽이 변형 명령이면 「작업트리를 건드린다」는
@@ -368,7 +467,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   // 중복 제거 — 같은 대상으로 두 번 deny 사유를 만들 이유가 없다.
   return {
     targets: [...new Set(targets.filter(Boolean))],
-    mutating, patchesWorkingTree, appliesPatch,
+    mutating, patchesWorkingTree, appliesPatch, opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
   };
 }

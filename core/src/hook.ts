@@ -960,6 +960,33 @@ function preTool(
      * 구축·출하 트랙에서 저널 위조가 그대로 열려 있었다(출하 트랙은 배포 게이트가 사는
      * **최고가치 구간**이다).
      */
+    /**
+     * [SEC-100] **프로그램 본문을 볼 수 없는 실행은 페이즈와 무관하게 막는다.**
+     *
+     * `SEC-49`(직접 쓰기) → `SEC-A`(`git apply`) → 이것으로 세 번째다. 셋 다 결과가 같았다:
+     * 저널을 위조하고 `doctor --repair` 로 재생시키면 **사람 승인 없이 배포 게이트가 열린다.**
+     * 포장을 하나씩 잡는 방식이 세 번 실패했으므로 부류를 잡는다 — 훅은 서브프로세스가
+     * 무엇을 쓸지 볼 수 없고, 볼 수 없는 쓰기를 통과시키면 강제는 한 줄로 풀린다.
+     *
+     * 페이즈 무관인 이유는 `SEC-A` 와 같다: 코어 보호가 페이즈 무관이므로 그 보호를
+     * 우회하는 경로도 페이즈 무관이어야 한다.
+     */
+    if (scan.opaqueExec) {
+      return deny(L(
+        `This runs a program the harness cannot see (${scan.opaqueExec}) — the command text does not `
+        + 'contain what will be executed, so there is no way to tell whether it writes to the event '
+        + 'journal that decides whether a gate is approved. Pass the program as a file and run it '
+        + '(`bash script.sh`), or inline it (`sh -c "…"`), and the harness will check it the same way '
+        + 'as any other write. If it genuinely has to be piped, **the user runs it themselves** in '
+        + 'their terminal.',
+        `하네스가 볼 수 없는 프로그램을 실행한다(${scan.opaqueExec}) — 명령문에 무엇이 실행될지가 `
+        + '없으므로, 게이트 승인 여부를 정하는 이벤트 저널에 쓰는지 알 길이 없다. 프로그램을 '
+        + '파일로 넘겨 실행하거나(`bash script.sh`) 인라인으로 적어라(`sh -c "…"`) — 그러면 '
+        + '다른 쓰기와 똑같은 잣대로 검사한다. 정말 파이프로 넣어야 하면 **사용자가 직접 '
+        + '터미널에서** 실행한다.',
+      ), degraded, lang);
+    }
+
     if (scan.appliesPatch) {
       const patched = readPatchTargets(root, scan.patchFiles);
       if (patched === null) {
