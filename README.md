@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1236 passing** (53 files) — 16 are repo-only checks that skip in the published package (1220 there) |
+| Test suite | **1243 passing** (53 files) — 16 are repo-only checks that skip in the published package (1227 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1236 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1243 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

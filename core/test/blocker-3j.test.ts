@@ -173,3 +173,69 @@ describe('[SEC-175] 깊이 캡도 fail-closed — 형제 캡을 하나만 고치
     expect(reason(out)).toMatch(/겹|levels|deep/);
   });
 });
+
+/**
+ * 라운드 3-K BLOCKER 2건. **둘 다 「이름으로 세는 방어」의 실패다.**
+ * [SEC-194] 는 파일 이름을, [SEC-195] 는 프로그램 이름을 세고 있었다 —
+ * 세는 방어는 언제나 안 센 이름을 남긴다.
+ */
+describe('[SEC-194] 글롭도 리터럴과 같은 파일을 지목한다', () => {
+  const vectors = [
+    'printf x >> .harness/e*.jsonl',
+    'cp /tmp/badcfg .har*/config.yaml',
+    'tee .harness/*.jsonl',
+    'cp /tmp/x .harness/design/l*.yaml',
+    'cd .harness && tee e*.jsonl',
+    'mv /tmp/x .harness/state.jso?',
+  ];
+
+  it('보호 파일에 맞는 글롭은 전건 거부된다', () => {
+    const root = setup('P0');
+    for (const cmd of vectors) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('페이즈와 무관하게 막힌다 — 구축 트랙에서도 저널은 하네스 것이다', () => {
+    const root = setup('P7');
+    expect(denied(bash(root, 'printf x >> .harness/e*.jsonl'))).toBe(true);
+  });
+
+  it('보호 파일에 안 맞는 글롭은 그대로 통과한다 — 과차단은 구조적으로 없다', () => {
+    const root = setup('P0');
+    for (const cmd of ['cp /tmp/x docs/*.md', 'rm -f build/*.tar', 'grep -rn foo docs/*.md']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('거부 사유가 어느 파일에 맞는지 말한다', () => {
+    expect(reason(bash(setup('P0'), 'printf x >> .harness/e*.jsonl'))).toMatch(/events\.jsonl/);
+  });
+});
+
+describe('[SEC-195] 판정기의 프로그램은 피판정자가 복제할 수 없다', () => {
+  const install = path.resolve(__dirname, '..', '..');
+  const cliJs = path.join(install, 'core', 'dist', 'cli.js');
+
+  it('하네스 프로그램을 복사·리다이렉트로 빼돌리지 못한다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      `cp ${cliJs} /tmp/x.js`,
+      `cp ${path.join(install, 'bin', 'harness')} /tmp/h`,
+      `cat ${cliJs} > /tmp/y.js`,
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('읽기는 막지 않는다 — 문제는 사본을 만드는 것이다', () => {
+    const out = bash(setup('P0'), `cat ${cliJs}`);
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+
+  it('무관한 복사는 그대로 통과한다', () => {
+    const out = bash(setup('P7'), 'cp /tmp/a.js /tmp/b.js');
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});

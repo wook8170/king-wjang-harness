@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -796,6 +796,108 @@ function readPatchTargets(root: string, files: string[]): string[] | null {
   return [...new Set(out)];
 }
 
+/**
+ * [SEC-194] **별칭은 한 형태가 아니다 — 부류로 물어야 끝난다.**
+ *
+ * 보호 파일을 지목하는 표기는 여러 가지다. 라운드마다 하나씩 닫았고, 닫을 때마다 다음 것이 남았다:
+ *
+ *   `tee .harness/events.jsonl`        → DENY  (리터럴 — 원래 막던 것)
+ *   `cd .harness && tee events.jsonl`  → [SEC-170] 에서 닫음 (가상 cwd 정규화)
+ *   `printf x >> .harness/e*.jsonl`    → **여기서 닫는다** ← 글롭
+ *
+ * 세 번째가 다섯 라운드째 BLOCKER 였다. 앞의 둘을 닫으면서 이것을 남긴 이유는 단순하다 —
+ * **표기를 하나씩 셌기 때문이다.** 그래서 질문을 바꾼다: 「이 대상이 보호 파일을 **어떤
+ * 표기로든** 지목하는가」.
+ *
+ * 글롭은 정적으로 펼 수 없다(파일이 아직 없을 수도 있다). 그러나 **역방향은 정적으로 가능하다**:
+ * 대상을 패턴으로 보고 **보호 목록을 그 패턴에 대조**한다. 하나라도 맞으면 셸이 그 파일에
+ * 쓸 수 있다는 뜻이므로 거부한다. 과차단은 구조적으로 없다 — 보호 파일에 맞지 않는 글롭은
+ * 그대로 통과한다.
+ */
+const GLOB_META = /[*?[]/;
+
+/** 셸 글롭 → 정규식. `*`·`?` 는 셸과 같이 `/` 를 넘지 않는다. */
+function globToRegExp(pattern: string): RegExp {
+  let out = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '*') { out += '[^/]*'; continue; }
+    if (c === '?') { out += '[^/]'; continue; }
+    if (c === '[') {
+      const close = pattern.indexOf(']', i + 1);
+      if (close === -1) { out += '\\['; continue; }          // 닫히지 않은 `[` 는 리터럴이다
+      out += pattern.slice(i, close + 1);
+      i = close;
+      continue;
+    }
+    out += c.replace(/[.+^${}()|\\]/g, '\\$&');
+  }
+  return new RegExp(`^${out}$`);
+}
+
+/** 이 대상이 글롭이고, 그 글롭이 보호 파일을 지목하면 그 파일 이름을 돌려준다. */
+function protectedByGlob(target: string): string | undefined {
+  if (!GLOB_META.test(target)) return undefined;
+  let re: RegExp;
+  try { re = globToRegExp(target); } catch { return undefined; }
+  return CORE_FILES.find(f => re.test(f))
+    ?? POLICY_PREFIXES.map(pre => `${pre}profile.yaml`).find(f => re.test(f));
+}
+
+/**
+ * [SEC-195] **하네스 자신의 프로그램도 정책이다 — 복사되면 이름 기반 잠금이 통째로 무의미해진다.**
+ *
+ * `gate approve` 의 사람 잠금은 두 겹이었다: 훅이 **이름으로** 하네스 호출을 알아보고 막고,
+ * CLI 가 TTY 를 요구한다([SEC-138]). 그런데 실측으로 둘 다 한 줄씩에 무너졌다:
+ *
+ *   `cp <plugin>/core/dist/cli.js /tmp/x.js`                    → 복사본은 **다른 이름**이다
+ *   `python3 -c 'import pty; pty.spawn(["node","/tmp/x.js",…])'` → PTY 는 **TTY 다**
+ *
+ * 이름으로 알아보는 잠금은 **이름을 바꾸면 끝난다.** 그래서 이름을 더 세는 대신
+ * **복사 자체를 막는다** — `profiles/`([SEC-154])와 같은 논리다: 판정기의 프로그램은
+ * 피판정자의 쓰기·복제 영역 밖에 있어야 한다.
+ *
+ * **남는 한계는 적어 둔다(정직 고지):** 에이전트가 패키지를 새로 설치해 그 사본을 돌리는 길은
+ * 이 훅이 막지 못한다. 그 지점의 최종 방어는 **호스트의 권한 다이얼로그**이고 — 그것이
+ * 「최종 클릭은 항상 사람」의 실제 근거다. 여기서 하는 일은 **가장 싼 우회를 없애는 것**이다.
+ */
+function harnessProgramFiles(): string[] {
+  // `__dirname` 은 `<install>/core/src`(테스트) 또는 `<install>/core/dist`(번들) 다.
+  // **양쪽 다 든다** — 소스를 복사하는 것도 프로그램을 복사하는 것이다.
+  const install = path.resolve(__dirname, '..', '..');
+  return [
+    path.join(install, 'core', 'dist', 'cli.js'), path.join(install, 'core', 'dist', 'mcp.js'),
+    path.join(install, 'core', 'src', 'cli.ts'), path.join(install, 'core', 'src', 'mcp.ts'),
+    path.join(install, 'core', 'src', 'hook.ts'),
+    path.join(install, 'bin', 'harness'), path.join(install, 'bin', 'harness-hook'),
+  ];
+}
+
+/**
+ * 이 명령이 하네스 프로그램 파일의 **사본을 만들려** 하는가.
+ *
+ * 복사 부류의 명령에서만 발화한다. 이 구분이 없으면 `node <install>/core/dist/cli.js status`
+ * 같은 **정상 직접 호출**까지 막힌다 — 그 형태는 [SEC-96] 이 일부러 열어 둔 조회 경로다.
+ * 과차단은 이 제품에서 결함과 같은 무게이므로, 막는 것은 **사본을 만드는 행위**로 좁힌다.
+ */
+const COPY_HEADS = /^(cp|mv|ln|install|rsync|cat|dd|tar|zip|xxd|base64|openssl|split|csplit)$/;
+
+function copiesHarnessProgram(cmd: string): string | undefined {
+  const progs = harnessProgramFiles();
+  const real = progs.map(f => realOrSelf(f));
+  for (const line of commandLines(cmd)) {
+    const head = (line.split(/\s+/)[0] ?? '').split('/').pop() ?? '';
+    // 리다이렉트로 뜨는 사본(`cat cli.js > x`)은 원문에 `>` 가 남아 있으므로 그것도 본다.
+    if (!COPY_HEADS.test(head) && !/[^>]>[^>]?\s*\S/.test(cmd)) continue;
+    for (const m of pathLikeMentions(line)) {
+      const abs = realOrSelf(path.isAbsolute(m) ? m : path.resolve(process.cwd(), m));
+      const i = real.indexOf(abs);
+      if (i !== -1) return progs[i];
+    }
+  }
+  return undefined;
+}
+
 function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
@@ -826,6 +928,20 @@ function judgeWritePath(
   const spaces = [rel, realRel].filter(r => r !== '' && !isOutsideRoot(r));
 
   // 상태 파일과 정책 파일은 **바꾸는 방법이 다르다** — 한 문장으로 뭉뚱그리면 둘 다 틀린 안내가 된다.
+  // [SEC-194] 글롭이 보호 파일을 지목하면 리터럴과 **같은 규칙**으로 판정한다.
+  // 여기(판정 함수 한 벌) 에 두는 이유: Write·리다이렉트·명령 대상·안전망이 전부 이리로 모인다.
+  const globbed = [rel, realRel, rawPath].map(protectedByGlob).find(Boolean);
+  if (globbed) {
+    return deny(
+      L(
+        `This pattern can match ${globbed}, which only harness commands may change — a glob names the `
+        + 'same file as a literal path does. Write the path out, and use harness commands for that file.',
+        `이 패턴은 ${globbed} 에 맞을 수 있다 — 글롭도 리터럴 경로와 **같은 파일**을 지목한다. `
+        + '경로를 그대로 적고, 그 파일은 harness 명령으로 바꿔라.',
+      ),
+      degraded, lang,
+    );
+  }
   const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r))
     ?? STATE_FILES.find(sf => spaces.some(r => coversPath(r, sf)));
   if (stateFile) {
@@ -1168,6 +1284,22 @@ function preTool(
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
       }
+      // [SEC-195] 하네스 자신의 프로그램을 복사하면 **이름 기반 잠금이 통째로 무의미해진다.**
+      // 판정기의 프로그램은 피판정자의 복제 영역 밖에 있어야 한다([SEC-154] 와 같은 논리).
+      const copied = copiesHarnessProgram(cmd);
+      if (copied) {
+        return deny(L(
+          `This copies the harness's own program (${path.basename(copied)}). The lock on `
+          + '`gate approve` recognises harness invocations by name, so a renamed copy would run it '
+          + 'without the check — and a PTY satisfies the terminal test. Run the installed `harness` '
+          + 'command instead. (Approval itself is always yours, in your own terminal.)',
+          `하네스 자신의 프로그램(${path.basename(copied)})을 복사하려는 명령이다. `
+          + '`gate approve` 잠금은 하네스 호출을 **이름으로** 알아보므로, 이름을 바꾼 사본은 '
+          + '검사를 건너뛴다(PTY 는 터미널 검사도 통과한다). 설치된 `harness` 명령을 그대로 쓰라. '
+          + '(승인 자체는 언제나 사용자가 자기 터미널에서 한다.)',
+        ), degraded, lang);
+      }
+
       // [SEC-170] **어디에 쓰는지 모르는 쓰기**는 통과가 아니다. `cd` 대상을 못 읽어
       // 대상 경로가 미해결로 남은 것 중, 하네스 소유 파일 **이름**을 가진 것을 막는다.
       const blind = scan.unresolvedTargets.find(t => OWNED_BASENAMES.has(t.split('/').pop() ?? ''));

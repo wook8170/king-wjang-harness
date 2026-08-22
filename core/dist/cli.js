@@ -11463,6 +11463,70 @@ function readPatchTargets(root, files) {
   }
   return [...new Set(out)];
 }
+var GLOB_META = /[*?[]/;
+function globToRegExp2(pattern) {
+  let out = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") {
+      out += "[^/]*";
+      continue;
+    }
+    if (c === "?") {
+      out += "[^/]";
+      continue;
+    }
+    if (c === "[") {
+      const close = pattern.indexOf("]", i + 1);
+      if (close === -1) {
+        out += "\\[";
+        continue;
+      }
+      out += pattern.slice(i, close + 1);
+      i = close;
+      continue;
+    }
+    out += c.replace(/[.+^${}()|\\]/g, "\\$&");
+  }
+  return new RegExp(`^${out}$`);
+}
+function protectedByGlob(target) {
+  if (!GLOB_META.test(target)) return void 0;
+  let re;
+  try {
+    re = globToRegExp2(target);
+  } catch {
+    return void 0;
+  }
+  return CORE_FILES.find((f2) => re.test(f2)) ?? POLICY_PREFIXES.map((pre) => `${pre}profile.yaml`).find((f2) => re.test(f2));
+}
+function harnessProgramFiles() {
+  const install = path13.resolve(__dirname, "..", "..");
+  return [
+    path13.join(install, "core", "dist", "cli.js"),
+    path13.join(install, "core", "dist", "mcp.js"),
+    path13.join(install, "core", "src", "cli.ts"),
+    path13.join(install, "core", "src", "mcp.ts"),
+    path13.join(install, "core", "src", "hook.ts"),
+    path13.join(install, "bin", "harness"),
+    path13.join(install, "bin", "harness-hook")
+  ];
+}
+var COPY_HEADS = /^(cp|mv|ln|install|rsync|cat|dd|tar|zip|xxd|base64|openssl|split|csplit)$/;
+function copiesHarnessProgram(cmd) {
+  const progs = harnessProgramFiles();
+  const real = progs.map((f2) => realOrSelf(f2));
+  for (const line of commandLines(cmd)) {
+    const head = (line.split(/\s+/)[0] ?? "").split("/").pop() ?? "";
+    if (!COPY_HEADS.test(head) && !/[^>]>[^>]?\s*\S/.test(cmd)) continue;
+    for (const m of pathLikeMentions(line)) {
+      const abs = realOrSelf(path13.isAbsolute(m) ? m : path13.resolve(process.cwd(), m));
+      const i = real.indexOf(abs);
+      if (i !== -1) return progs[i];
+    }
+  }
+  return void 0;
+}
 function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
@@ -11475,6 +11539,17 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     return t !== "" && (protectedPath === t || protectedPath.startsWith(`${t}/`));
   };
   const spaces = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r));
+  const globbed = [rel, realRel, rawPath].map(protectedByGlob).find(Boolean);
+  if (globbed) {
+    return deny(
+      L(
+        `This pattern can match ${globbed}, which only harness commands may change \u2014 a glob names the same file as a literal path does. Write the path out, and use harness commands for that file.`,
+        `\uC774 \uD328\uD134\uC740 ${globbed} \uC5D0 \uB9DE\uC744 \uC218 \uC788\uB2E4 \u2014 \uAE00\uB86D\uB3C4 \uB9AC\uD130\uB7F4 \uACBD\uB85C\uC640 **\uAC19\uC740 \uD30C\uC77C**\uC744 \uC9C0\uBAA9\uD55C\uB2E4. \uACBD\uB85C\uB97C \uADF8\uB300\uB85C \uC801\uACE0, \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
+      ),
+      degraded,
+      lang
+    );
+  }
   const stateFile = [rel, realRel].find((r) => STATE_FILES.includes(r)) ?? STATE_FILES.find((sf) => spaces.some((r) => coversPath(r, sf)));
   if (stateFile) {
     return deny(
@@ -11635,6 +11710,13 @@ function preTool(root, state, config, input, degraded) {
         if (scan.targets.includes(target)) continue;
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
+      }
+      const copied = copiesHarnessProgram(cmd);
+      if (copied) {
+        return deny(L(
+          `This copies the harness's own program (${path13.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
+          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path13.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
+        ), degraded, lang);
       }
       const blind = scan.unresolvedTargets.find((t) => OWNED_BASENAMES.has(t.split("/").pop() ?? ""));
       if (blind) {
