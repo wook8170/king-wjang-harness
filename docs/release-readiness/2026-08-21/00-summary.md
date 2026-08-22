@@ -11,7 +11,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 127 · **open** 62 (MED 12 · LOW 50) · deferred 3 ·
+> 대장 집계: **verified** 129 · **open** 60 (MED 11 · LOW 49) · deferred 3 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -109,11 +109,11 @@
 > 이번 수정 이후로는 아직 돌지 않았다 — 라운드 3-G 가 증명한 것이 정확히 그것이다
 > (봉인이 점수를 올린다 · 새 감정자는 늘 목록 밖을 본다, **둘 다 참**).
 >
-> ### 남은 open 62건 — MED 12 · LOW 50
+> ### 남은 open 60건 — MED 11 · LOW 49
 >
-> **MED (12)** `VAL-134` · `SEC-138` · `PERF-139` · `QUAL-140` · `PROD-141` · `ENG-142` · `ENG-143` · `UX-144` · `UX-145` · `UX-146` · `UX-147` · `QUAL-148`
+> **MED (11)** `VAL-134` · `PERF-139` · `QUAL-140` · `PROD-141` · `ENG-142` · `ENG-143` · `UX-144` · `UX-145` · `UX-146` · `UX-147` · `QUAL-148`
 >
-> **LOW (50)** `UTIL-A3` · `UTIL-A4` · `UTIL-A5` · `UX-A6` · `UX-A7` · `UX-A8` · `QUAL-D` · `QUAL-E` · `PROD-B3` · `PROD-B4` · `PROD-B5` · `PROD-B6` · `ENG-F` · `COST-B` · `UTIL-119` · `UX-120` · `UX-121` · `UX-122` · `UX-123` · `UX-124` · `PROD-125` · `PROD-126` · `PROD-127` · `PROD-128` · `COST-129` · `COST-130` · `COST-131` · `EFF-132` · `QUAL-133` · `UTIL-149` · `UX-150` · `UX-151` · `SEC-152` · `SEC-153` · `SEC-154` · `ENG-155` · `ENG-156` · `ENG-157` · `ENG-158` · `COST-159` · `UX-160` · `UX-161` · `UX-162` · `UX-163` · `UX-164` · `UX-165` · `UX-166` · `PROD-167` · `PROD-168` · `PROD-169`
+> **LOW (49)** `UTIL-A3` · `UTIL-A4` · `UTIL-A5` · `UX-A6` · `UX-A7` · `UX-A8` · `QUAL-D` · `QUAL-E` · `PROD-B3` · `PROD-B4` · `PROD-B5` · `PROD-B6` · `ENG-F` · `COST-B` · `UTIL-119` · `UX-120` · `UX-121` · `UX-122` · `UX-123` · `UX-124` · `PROD-126` · `PROD-127` · `PROD-128` · `COST-129` · `COST-130` · `COST-131` · `EFF-132` · `QUAL-133` · `UTIL-149` · `UX-150` · `UX-151` · `SEC-152` · `SEC-153` · `SEC-154` · `ENG-155` · `ENG-156` · `ENG-157` · `ENG-158` · `COST-159` · `UX-160` · `UX-161` · `UX-162` · `UX-163` · `UX-164` · `UX-165` · `UX-166` · `PROD-167` · `PROD-168` · `PROD-169`
 >
 > rubric 의 4.8 조건은 「open BLOCKER 0 · open HIGH 0 **+ 잔여 감점 LOW 이하**」다.
 > **MED 12건이 그 조건을 깬다** — 라운드 3-H 시점의 「30건 전부 LOW」는 더 이상 참이 아니다.

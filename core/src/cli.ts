@@ -414,6 +414,35 @@ export function run(argv: string[], root: string): number {
           case 'approve': {
             // 이 명령은 **의도적으로 permission allowlist 에서 제외**한다(§4-3) — 실행마다
             // 권한 다이얼로그가 떠서 승인의 최종 클릭은 항상 사람이 한다.
+            //
+            // [SEC-138] 그런데 그 다이얼로그가 없는 환경(allowlist·bypassPermissions)에서는
+            // 훅 한 겹이 전부였고, 그 한 겹은 **형태를 세기 때문에** 사소한 난독화로 열렸다
+            // (`node -e` 문자열 결합 · `'appr''ove'` 따옴표 분리 · 바이너리 리네임 — 감정자가
+            // 세 형태 모두 실측 개통). `--force`·`--accept-policy` 는 훅+CLI 두 겹이라 같은
+            // 난독화를 버텼다 — **비대칭이 곧 결함**이었다.
+            //
+            // 두 번째 겹은 env 가 아니라 **TTY** 다. `gate approve` 는 탈출구가 아니라 정상
+            // 흐름이라 사람에게 env 를 요구하면 문서·리뷰 패킷·도움말이 가리키는 길이 통째로
+            // 어긋난다. 사람은 자기 터미널에 있으니 TTY 가 있고 에이전트의 도구 호출에는 없다 —
+            // **사람에게 비용 0, 그리고 형태를 세지 않으므로 아직 이름 붙지 않은 우회에도 선다.**
+            // TTY 가 없는 사람 환경(원격 파이프·CI)만 env 로 연다. 그 리터럴을 명령에 인라인으로
+            // 붙여 켜는 것은 훅이 막는다 — 인라인으로 켤 수 있으면 그건 잠금이 아니다.
+            if (!process.stdin.isTTY && process.env.HARNESS_APPROVE_NO_TTY !== '1') {
+              throw new Error(L(
+                'Approving a gate is the human\'s final click, so it must come from a terminal — '
+                + 'this process has no TTY, which is what an agent\'s tool call looks like. '
+                + 'Run `harness gate approve <P>` yourself in your terminal. Everything else on the '
+                + 'gate is open: `harness gate status`, `harness gate verify <P>`. If you really are '
+                + 'a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` '
+                + 'yourself — but then nothing is checking that a person read the review packet.',
+                '게이트 승인은 사람의 최종 클릭이라 터미널에서 와야 한다 — 이 프로세스에는 TTY 가 '
+                + '없고, 그것이 곧 에이전트 도구 호출의 모습이다. `harness gate approve <P>` 를 '
+                + '사용자가 직접 터미널에서 실행하라. 나머지는 열려 있다: `harness gate status`·'
+                + '`harness gate verify <P>`. TTY 없는 사람 환경(원격 파이프·CI)이 정말 필요하면 '
+                + '사용자가 직접 `HARNESS_APPROVE_NO_TTY=1` 을 켠다 — 다만 그 순간 리뷰 패킷을 '
+                + '사람이 읽었는지 검사하는 것이 아무것도 남지 않는다.',
+              ));
+            }
             const phase = rest[0];
             if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
             const r = approveGate(root, phase);

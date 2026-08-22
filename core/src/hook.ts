@@ -1112,7 +1112,11 @@ function preTool(
      * `gate approve` 는 탈출구가 아니라 **정상 흐름**이고, env 를 요구하면 문서·패킷·
      * 도움말이 가리키는 사람의 길이 통째로 어긋난다).
      */
-    if (invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd)) {
+    // [SEC-138] 두 번째 겹(CLI 의 TTY 검사)의 탈출구 env 를 **인라인으로 켜는 것**을 막는다 —
+    // `--force`·`--accept-policy` 와 같은 두 절 구조다(env 리터럴 언급 + 실행 형태). 이 절이
+    // 없으면 훅의 형태 인식을 뚫은 뒤 env 를 붙여 두 번째 겹까지 한 줄로 끌 수 있다.
+    if (/HARNESS_APPROVE_NO_TTY/.test(cmd)
+        || (invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd))) {
       return deny(L(
         'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '
         + 'Submit the artifacts and let the review packet be read: '
