@@ -426,16 +426,42 @@ function scriptFiles(name: string, args: string[]): string[] {
  * 그래서 `echo hi` 는 조회지만 `echo hi > f` 는 활동이고, `sed`·`awk`·`find` 는
  * 변형 토큰이라 애초에 조회로 인정되지 않는다.
  */
+/**
+ * **모든 형태에서** 조회인 명령만 여기 둔다.
+ *
+ * [SEC-221] 예전에는 `yq`·`sort`·`awk` 가 여기 있었다. 셋 다 **쓰기 플래그가 있다** —
+ * `yq -i`, `sort -o`, `awk -i inplace`. 「이름이 목록에 있으면 조회」로 읽는 순간
+ * `yq -i '…' .harness/config.yaml` 한 줄로 정책 파일이 열렸다(끝단까지 실증됐다).
+ *
+ * 규칙: **쓰기 형태가 하나라도 있는 도구는 이 목록에 못 들어온다.** 그런 도구는 아래
+ * `CONDITIONAL_WRITERS` 에 **그 형태와 함께** 적고, 그 형태일 때만 변형으로 본다.
+ * 모르는 도구는 여전히 기본값이 「쓸 수 있다」이므로([SEC-B1]) 새 도구가 생겨도 안전한 쪽이다.
+ */
 const READ_ONLY_HEADS = [
   'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'egrep', 'fgrep', 'file', 'stat',
-  'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo', 'jq', 'yq', 'sort',
+  'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo',
   'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
   'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
-  // [EFF-214] 텍스트 처리기는 **제자리 편집(`-i`)일 때만** 쓴다. 그 형태는 위 `case` 가
-  // 대상을 뽑고 `mutating` 을 세우며, 프로그램 안에서 `>` 로 쓰면 리다이렉트 스캔이 잡는다.
-  // 이름만으로 변형으로 보면 저널을 **읽는 것까지** 막혀 사람이 하네스를 꺼버린다.
-  'sed', 'awk', 'perl',
 ];
+
+/**
+ * [SEC-221] **쓰기 형태가 있는 조회 도구** — 그 형태일 때만 변형이다.
+ *
+ * 값은 「이 플래그가 있으면 쓴다」는 판정이다. 플래그 의미는 도구마다 다르므로
+ * (`grep -o` 는 출력 파일이 아니라 only-matching 이다) **일반 규칙으로 뭉갤 수 없고**,
+ * 여기 적은 것만 신뢰한다. 적지 않은 도구는 `READ_ONLY_HEADS` 에 없으면 기본값이 변형이다.
+ */
+const CONDITIONAL_WRITERS: Record<string, (args: readonly string[]) => boolean> = {
+  sed: a => a.some(x => x === '-i' || x.startsWith('-i')),
+  perl: a => a.some(x => x === '-i' || x.startsWith('-i')),
+  ruby: a => a.some(x => x === '-i' || x.startsWith('-i')),
+  awk: a => a.some(x => x === '-i' || x === '--include' || x === 'inplace'),
+  gawk: a => a.some(x => x === '-i' || x === '--include' || x === 'inplace'),
+  yq: a => a.some(x => x === '-i' || x === '--inplace' || x === '--in-place'),
+  jq: a => a.some(x => x === '-i' || x === '--in-place'),
+  sort: a => a.some(x => x === '-o' || x.startsWith('--output')),
+  tr: () => false,
+};
 /** `git` 은 하위명령마다 갈린다 — 조회인 것만 적는다(`commit`·`push` 는 여기 없다). */
 const READ_ONLY_GIT = [
   'status', 'log', 'diff', 'show', 'blame', 'branch', 'remote', 'rev-parse', 'describe',
@@ -449,8 +475,11 @@ export function isReadOnlyCommand(cmd: string): boolean {
   const lines = commandLines(cmd);
   if (lines.length === 0) return false;
   return lines.every(l => {
-    const [head, second] = l.split(/\s+/);
+    const [head, second, ...rest] = l.split(/\s+/);
     if (head === 'git') return second !== undefined && READ_ONLY_GIT.includes(second);
+    // [SEC-221] 쓰기 형태가 있는 도구는 그 형태가 아닐 때만 조회다.
+    const cond = CONDITIONAL_WRITERS[head];
+    if (cond !== undefined) return !cond([second ?? '', ...rest]);
     return READ_ONLY_HEADS.includes(head);
   });
 }
@@ -771,7 +800,14 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // (`pathLikeMentions` + `mentionsPath(CORE_FILES)`)이 발화하게 한다. 그 안전망은
         // **슬래시가 있는 토큰만** 보므로 `build.js` 같은 낱말은 걸리지 않고,
         // `src/app.ts`·`.harness/config.yaml` 처럼 진짜 경로만 판정으로 간다.
-        if (name && !READ_ONLY_HEADS.includes(name)) mutating = true;
+        // [SEC-221] 조회 도구라도 **쓰기 형태**면 변형이고, 그 대상은 판정으로 보낸다.
+        const cond = CONDITIONAL_WRITERS[name];
+        if (cond?.(args)) {
+          mutating = true;
+          targets.push(...paths);
+          break;
+        }
+        if (name && !READ_ONLY_HEADS.includes(name) && cond === undefined) mutating = true;
         break;
       }
     }

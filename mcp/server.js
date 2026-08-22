@@ -14,7 +14,15 @@
 // committed so a bare clone works without a build (SHIP-11).
 
 const SERVER_NAME = 'king-wjang-harness';
-const SERVER_VERSION = '0.0.1';
+// [PROD-222] 버전을 **두 벌로 두지 않는다** — 릴리스를 끊을 때 여기만 낡아 0.0.1 이 남았다.
+// `package.json` 이 정본이고, 읽지 못하면 그 사실을 그대로 드러낸다(거짓 버전을 지어내지 않는다).
+const SERVER_VERSION = (() => {
+  try {
+    return JSON.parse(
+      require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'package.json'), 'utf8'),
+    ).version ?? 'unknown';
+  } catch { return 'unknown'; }
+})();
 const DEFAULT_PROTOCOL = '2025-06-18';
 
 // Keep stdout clean: if the core ever calls console.log, that one line must not break the

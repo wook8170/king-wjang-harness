@@ -10428,9 +10428,6 @@ var READ_ONLY_HEADS = [
   "date",
   "whoami",
   "echo",
-  "jq",
-  "yq",
-  "sort",
   "uniq",
   "cut",
   "column",
@@ -10449,14 +10446,19 @@ var READ_ONLY_HEADS = [
   "id",
   "groups",
   "less",
-  "more",
-  // [EFF-214] 텍스트 처리기는 **제자리 편집(`-i`)일 때만** 쓴다. 그 형태는 위 `case` 가
-  // 대상을 뽑고 `mutating` 을 세우며, 프로그램 안에서 `>` 로 쓰면 리다이렉트 스캔이 잡는다.
-  // 이름만으로 변형으로 보면 저널을 **읽는 것까지** 막혀 사람이 하네스를 꺼버린다.
-  "sed",
-  "awk",
-  "perl"
+  "more"
 ];
+var CONDITIONAL_WRITERS = {
+  sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
+  perl: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
+  ruby: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
+  awk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
+  gawk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
+  yq: (a) => a.some((x) => x === "-i" || x === "--inplace" || x === "--in-place"),
+  jq: (a) => a.some((x) => x === "-i" || x === "--in-place"),
+  sort: (a) => a.some((x) => x === "-o" || x.startsWith("--output")),
+  tr: () => false
+};
 var READ_ONLY_GIT = [
   "status",
   "log",
@@ -10480,8 +10482,10 @@ function isReadOnlyCommand(cmd) {
   const lines = commandLines(cmd);
   if (lines.length === 0) return false;
   return lines.every((l) => {
-    const [head, second] = l.split(/\s+/);
+    const [head, second, ...rest] = l.split(/\s+/);
     if (head === "git") return second !== void 0 && READ_ONLY_GIT.includes(second);
+    const cond = CONDITIONAL_WRITERS[head];
+    if (cond !== void 0) return !cond([second ?? "", ...rest]);
     return READ_ONLY_HEADS.includes(head);
   });
 }
@@ -10699,7 +10703,13 @@ function scanBashWrites(rawCmd, env = {}) {
         break;
       }
       default: {
-        if (name && !READ_ONLY_HEADS.includes(name)) mutating = true;
+        const cond = CONDITIONAL_WRITERS[name];
+        if (cond?.(args)) {
+          mutating = true;
+          targets.push(...paths);
+          break;
+        }
+        if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) mutating = true;
         break;
       }
     }

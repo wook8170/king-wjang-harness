@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { scanBashWrites, pathLikeMentions, commandLines, SHELLS_TAKING_C } from '../src/bashwrite';
+import { scanBashWrites, pathLikeMentions, commandLines, SHELLS_TAKING_C, isReadOnlyCommand } from '../src/bashwrite';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import type { Phase } from '../src/types';
@@ -446,5 +446,48 @@ describe('[SEC-219] 루트 밖 스크립트를 「안 읽었다」로 통과시�
   it('없는 스크립트는 조용히 넘어간다 — 셸이 알아서 실패한다', () => {
     const out = bash(setup('P0'), 'sh /tmp/kwh-does-not-exist-xyz.sh');
     expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});
+
+describe('[SEC-221] 「읽기로 분류된 쓰기 도구」 — 아홉 번째 부류', () => {
+  it('쓰기 형태의 조회 도구가 코어·정책 파일에 닿지 못한다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "yq -i '.x=1' .harness/config.yaml",
+      "awk -i inplace '{print}' .harness/config.yaml",
+      'sort -o .harness/events.jsonl .harness/events.jsonl',
+      "jq -i '.' .harness/state.json",
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('같은 도구의 조회 형태는 그대로 통과한다 — 플래그 의미는 도구마다 다르다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "yq '.x' .harness/config.yaml",
+      "awk 'NR<3' .harness/events.jsonl",
+      'sort .harness/events.jsonl',
+      'grep -o foo .harness/config.yaml',   // `-o` 는 출력 파일이 아니다
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('모든 형태에서 조회인 것만 목록에 있다 — 쓰기 플래그가 있는 도구는 조건부다', () => {
+    // 목록에 쓰기 가능한 도구가 다시 들어오면 이 검사가 깨진다.
+    // 플래그는 **도구마다 다르다** — `sort -i` 는 ignore-unprintable 이라 조회다.
+    for (const [cmd, label] of [
+      ["yq -i '.x=1' .harness/config.yaml", 'yq -i'],
+      ["jq -i '.' .harness/state.json", 'jq -i'],
+      ['sort -o out .harness/events.jsonl', 'sort -o'],
+      ["awk -i inplace '{print}' .harness/config.yaml", 'awk -i inplace'],
+      ["sed -i '' s/a/b/ .harness/config.yaml", 'sed -i'],
+    ] as const) {
+      expect(isReadOnlyCommand(cmd), `${label} 를 조회로 봤다`).toBe(false);
+    }
+    // 반대 방향 — 같은 도구의 조회 형태는 조회로 남아야 한다.
+    expect(isReadOnlyCommand('sort -i .harness/events.jsonl'), 'sort -i 는 조회다').toBe(true);
   });
 });

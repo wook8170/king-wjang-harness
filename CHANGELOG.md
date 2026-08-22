@@ -111,7 +111,7 @@ with tests that fail when a copy reappears.
 - `usage tier` records downgrades, so a one-off measurement no longer injects stale guidance
   into every future session.
 
-### Added
+### Added — earlier in the same release (round 3-I)
 
 - A configuration section in all four READMEs covering every `.harness/config.yaml` key,
   including the four that decide what the hook blocks.
