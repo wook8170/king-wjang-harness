@@ -17,7 +17,8 @@ import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, 
 import { getNode, mergeNode, reviseNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
-import { pick } from './i18n';
+import { pick, type Lang } from './i18n';
+import { langFor } from './tr';
 import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
 import {
@@ -57,7 +58,7 @@ import {
 } from './ship';
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus } from './types';
-import type { DocNode, EvidenceGrade } from './types';
+import type { DocNode, EvidenceGrade, Phase } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
@@ -184,12 +185,57 @@ const csv = (v: string | undefined): string[] =>
   (v ?? '').split(',').map(s => s.trim()).filter(Boolean);
 
 /** exit code 반환 — 테스트에서 직접 호출 */
+/**
+ * [UX-A7·QUAL-D·UX-A8] **페이즈 인자 해석을 한 벌로.**
+ *
+ * 같은 검사가 CLI 안에 아홉 벌 있었고, 그래서 셋이 한꺼번에 났다:
+ *  ① 인자를 생략하면 "Invalid phase: **undefined**" — 내부 값이 사용자에게 샌다([UX-86] 이
+ *     여섯 경로에서 닫은 부류의 잔재이고, 여기 세 경로는 그 목록에 없었다).
+ *  ② `p1` 처럼 소문자로 치면 거부하면서 **제안도 하지 않는다.**
+ *  ③ 아홉 벌이라 문구가 조금씩 달라, 같은 실수에 표면마다 다른 답이 나갔다.
+ *
+ * 한 벌로 두면 다음에 페이즈를 받는 명령이 늘어도 같은 답이 나간다.
+ */
+function requirePhase(raw: unknown, cmd: string, lang: Lang): Phase {
+  const L = (en: string, ko: string): string => pick({ en, ko }, lang);
+  if (raw === undefined || raw === null || String(raw).trim() === '') {
+    throw new Error(L(
+      `Which phase? Usage: \`${cmd} <phase>\` — one of ${PHASES.join(', ')}.`,
+      `어느 페이즈인가? 사용법: \`${cmd} <페이즈>\` — ${PHASES.join(', ')} 중 하나.`,
+    ));
+  }
+  const given = String(raw).trim();
+  const upper = given.toUpperCase();
+  // 대소문자는 사람의 실수지 다른 의도가 아니다 — `p1` 을 거부만 하고 제안도 안 하면
+  // 사용자는 무엇이 틀렸는지 모른다. 정규화해서 받아들이되, 그 밖의 값은 목록을 보여 준다.
+  if (isPhase(upper)) return upper;
+  throw new Error(L(
+    `Invalid phase: ${given} — one of ${PHASES.join(', ')}.`,
+    `유효하지 않은 페이즈: ${given} — ${PHASES.join(', ')} 중 하나.`,
+  ));
+}
+
 export function run(argv: string[], root: string): number {
   const [cmd, sub, ...rest] = argv;
 
   // 훅은 어떤 경우에도 세션을 깨지 않는다 — 바깥 catch보다 먼저 처리
   if (cmd === 'hook') {
     try {
+      // [UTIL-A3] **사람이 물어본 것과 배선이 틀린 것을 구분한다.** 예전에는 둘 다 무출력
+      // exit 0 이었고, 이 명령군에 --help 를 친 사람이 아무것도 못 본 채 hook-errors.log
+      // 에 unknown-hook-event 를 쌓아 doctor 경고를 만들었다 — 도움말을 물어본 것이
+      // 진단 경고가 되면 사람은 그 경고를 무시하기 시작한다.
+      if (sub === undefined || sub === '--help' || sub === '-h' || sub === 'help') {
+        console.log(pick({
+          en: `Hook events (called by the plugin, not by hand): ${HOOK_EVENTS.join(', ')}\n`
+            + 'Each reads the Claude Code hook payload on stdin and prints a JSON decision on stdout.\n'
+            + 'Running one by hand does nothing harmful — it just judges that payload.',
+          ko: `훅 이벤트(플러그인이 부른다 — 손으로 부르는 명령이 아니다): ${HOOK_EVENTS.join(', ')}\n`
+            + '각각 stdin 으로 Claude Code 훅 페이로드를 읽고 stdout 으로 JSON 판정을 낸다.\n'
+            + '손으로 실행해도 해롭지 않다 — 그 페이로드를 판정할 뿐이다.',
+        }, langFor(root)));
+        return 0;
+      }
       // 배선 오타는 조용히 죽는 게 가장 위험하다 — 침묵하되 흔적을 남긴다.
       if (!HOOK_EVENTS.includes(sub)) {
         logHookIssue(root, `cli unknown-hook-event ${String(sub)}`);
@@ -347,8 +393,7 @@ export function run(argv: string[], root: string): number {
 
       case 'phase': {
         if (sub !== 'set') throw new Error(L('Usage: harness phase set <P0..P12>', '사용법: harness phase set <P0..P12>'));
-        const phase = req(rest[0], `harness phase set <${PHASES[0]}..${PHASES[PHASES.length - 1]}>`);
-        if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${phase} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${phase} (${PHASES.join(', ')})`));
+        const phase = requirePhase(rest[0], 'harness phase set', lang);
         // 페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 발생한다(§2 흐름 규칙).
         // setPhaseViaGate 가 직전 페이즈 게이트 승인 여부를 검사하고 거부 사유를 던진다.
         // --force 는 게이트 검사를 건너뛰는 탈출구다(부트스트랩·복구용, 이벤트에 흔적을 남긴다).
@@ -384,8 +429,7 @@ export function run(argv: string[], root: string): number {
         const args = [sub, ...rest];
         switch (sub) {
           case 'submit': {
-            const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+            const phase = requirePhase(rest[0], 'harness gate submit', lang);
             const evidence = (flag(args, 'evidence') ?? 'claimed') as EvidenceGrade;
             if (!isEvidenceGrade(evidence)) {
               throw new Error(L(`Invalid evidence grade: ${evidence} (one of claimed, code, measured)`, `유효하지 않은 근거 등급: ${evidence} (claimed, code, measured 중 하나)`));
@@ -463,15 +507,13 @@ export function run(argv: string[], root: string): number {
                 + '사람이 읽었는지 검사하는 것이 아무것도 남지 않는다.',
               ));
             }
-            const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+            const phase = requirePhase(rest[0], 'harness gate approve', lang);
             const r = approveGate(root, phase);
             console.log(L(`${phase} approved — ${r.approvedAt} · evidence ${r.evidence}`, `${phase} 승인됨 — ${r.approvedAt} · 근거 ${r.evidence}`));
             return 0;
           }
           case 'verify': {
-            const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+            const phase = requirePhase(rest[0], 'harness gate verify', lang);
             const v = verifyGate(root, phase);
             console.log(JSON.stringify(v, null, 2));
             return v.ok ? 0 : 1;
@@ -486,8 +528,7 @@ export function run(argv: string[], root: string): number {
           case 'feedback': {
             // FEAT-23: 캔버스·리뷰 코멘트를 개정 근거로 수집한다. 가져오기는 에이전트/CLI 몫이고
             // (코어는 네트워크를 타지 않는다, §1) 여기서는 `design sync --from` 과 같은 패턴을 쓴다.
-            const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+            const phase = requirePhase(rest[0], 'harness gate feedback', lang);
             const from = flag(rest, 'from');
             if (!from) {
               const existing = readGateFeedback(root, phase).trim();
@@ -635,7 +676,16 @@ export function run(argv: string[], root: string): number {
                 reason: reason as CriticalReason,
                 detail: flag(args, 'detail') ?? '',
               });
-              console.log(L('Escalation raised', '소환 발동'));
+              // [UTIL-A4] **exit 2 는 계약이다** — 「사람을 소환했다」를 종료코드로 알려
+              // 루프가 계속 돌지 않게 한다. 값을 바꾸면 그 신호가 사라지므로 바꾸지 않고,
+              // 대신 **성공 출력에 적는다.** 비문서화된 비영 종료코드는 `set -e` 스크립트와
+              // 「exit≠0 = 실패」로 읽는 에이전트에게 성공을 실패로 오독시킨다.
+              console.log(L(
+                'Escalation raised — exit code 2 means "a human was summoned", not failure. '
+                + 'Stop here and wait; clear it with `harness loop critical clear`.',
+                '소환 발동 — 종료코드 2 는 실패가 아니라 "사람을 소환했다"는 뜻이다. '
+                + '여기서 멈추고 기다려라. 해제는 `harness loop critical clear`.',
+              ));
               return 2;
             }
             const c = pendingCritical(root);
@@ -902,8 +952,7 @@ export function run(argv: string[], root: string): number {
       case 'report': {
         switch (sub) {
           case 'packet': {
-            const phase = rest[0];
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${rest[0]} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${rest[0]} (${PHASES.join(', ')})`));
+            const phase = requirePhase(rest[0], 'harness evidence packet', lang);
             console.log(buildReviewPacket(root, phase));
             return 0;
           }
@@ -918,10 +967,9 @@ export function run(argv: string[], root: string): number {
         switch (sub) {
           case 'propose': {
             const id = flag(args, 'id');
-            const phase = flag(args, 'phase');
             const question = flag(args, 'question');
             if (!id || !question) throw new Error(L('Usage: harness adr propose --id <ADR-x> --phase <P0..P12> --question <q> --option <id:title> ...', '사용법: harness adr propose --id <ADR-x> --phase <P0..P12> --question <질문> --option <id:제목> ...'));
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${String(phase)} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${String(phase)} (${PHASES.join(', ')})`));
+            const phase = requirePhase(flag(args, 'phase'), 'harness adr propose --phase', lang);
             // --option 은 반복 가능하다: `--option a:라이브러리 --option b:자체구축`
             const options = args
               .map((a, i) => (a === '--option' ? args[i + 1] : undefined))
@@ -982,9 +1030,8 @@ export function run(argv: string[], root: string): number {
           case 'upsert': {
             const id = flag(args, 'id');
             const docPath = flag(args, 'path');
-            const phase = flag(args, 'phase');
             if (!id || !docPath) throw new Error(L('Usage: harness doc upsert --id <DOC-x> --path <path> --phase <P0..P12>', '사용법: harness doc upsert --id <DOC-x> --path <경로> --phase <P0..P12>'));
-            if (!isPhase(phase)) throw new Error(L(`Invalid phase: ${String(phase)} (one of ${PHASES.join(', ')})`, `유효하지 않은 페이즈: ${String(phase)} (${PHASES.join(', ')})`));
+            const phase = requirePhase(flag(args, 'phase'), 'harness doc upsert --phase', lang);
             const prev = getDoc(root, id);
             const statusFlag = flag(args, 'status');
             if (statusFlag !== undefined && !isDocStatus(statusFlag)) {
@@ -1161,7 +1208,7 @@ export function run(argv: string[], root: string): number {
           console.log(L('Backtrack ended', '역행 종료'));
           return 0;
         }
-        if (!isPhase(sub)) throw new Error(L(`Invalid phase: ${sub}`, `유효하지 않은 페이즈: ${sub}`));
+        const target = requirePhase(sub, 'harness backtrack', lang);
         // [USE-90] 사유는 **필수다.** 예전에는 빠지면 `(미기재)` 를 넣고 exit 0 으로 기록했다 —
         // 침묵 성공이자, 영문 기본 출력에 한국어가 박히는 경로였다. 역행은 승인된 설계로
         // 되돌아가는 결정이라 「왜」가 없으면 나중에 아무도 그 결정을 재구성할 수 없다.
@@ -1174,16 +1221,16 @@ export function run(argv: string[], root: string): number {
             + '저널에 남아 나중에 그 결정을 재구성하는 근거가 된다.',
           ));
         }
-        appendEvent(root, 'backtrack-started', { to: sub, reason }); // 순서 계약
-        writeState(root, { ...readState(root), backtrack: { to: sub, reason } });
+        appendEvent(root, 'backtrack-started', { to: target, reason }); // 순서 계약
+        writeState(root, { ...readState(root), backtrack: { to: target, reason } });
         // [UX-122] 「시작」만 말하면 사람은 페이즈가 옮겨진 줄 안다 — 직후 `status` 는 여전히
         // 이전 페이즈다(마커만 섰다). 무엇이 됐고 무엇이 안 됐는지, 그리고 다음 수를 말한다.
         console.log(L(
-          `Backtrack marker set → ${sub}: ${reason}\n`
-          + `The current phase has not moved yet — run \`harness phase set ${sub}\` to go back, `
+          `Backtrack marker set → ${target}: ${reason}\n`
+          + `The current phase has not moved yet — run \`harness phase set ${target}\` to go back, `
           + 'then fix the design artifacts and re-submit the gates you invalidated.',
-          `역행 마커 설정 → ${sub}: ${reason}\n`
-          + `현재 페이즈는 아직 그대로다 — \`harness phase set ${sub}\` 로 돌아간 뒤, `
+          `역행 마커 설정 → ${target}: ${reason}\n`
+          + `현재 페이즈는 아직 그대로다 — \`harness phase set ${target}\` 로 돌아간 뒤, `
           + '설계 산출물을 고치고 무효가 된 게이트를 다시 제출하라.',
         ));
         return 0;
