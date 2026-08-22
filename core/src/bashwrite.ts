@@ -73,6 +73,10 @@ const looksLikePath = (t: string): boolean =>
 export const PREFIX_COMMANDS = new Set([
   'sudo', 'doas', 'env', 'nohup', 'time', 'command', 'exec', 'nice', 'ionice',
   'stdbuf', 'setsid', 'timeout', 'unbuffer', 'script', 'proxychains', 'chroot',
+  // [EFF-108] 패키지 러너도 감싸기만 한다 — `npx prisma migrate deploy` 의 실행 단위는
+  // `prisma migrate deploy` 다. 벗기지 않으면 배포 판정이 러너 한 겹으로 빗나간다.
+  // `npm` 은 넣지 않는다 — `npm publish` 는 `npm` 자체가 실행 단위다.
+  'npx', 'bunx', 'pnpx',
 ]);
 
 /** 접두 명령이 값으로 받는 플래그. 여기 없는 플래그는 값을 안 받는 것으로 본다. */
@@ -244,6 +248,34 @@ function innerCommandOf(args: string[]): string[] {
   return args.slice(i);
 }
 
+/**
+ * [EFF-109] `sed`·`perl`·`ruby` 의 피연산자에서 **프로그램(치환 스크립트)을 뺀 파일들**.
+ *
+ * `s/x/y/` 는 슬래시가 있어 경로로 보이고, 그걸 대상으로 올리면 출하 트랙의 「새 파일 금지」가
+ * 존재하지 않는 파일을 두고 발화한다 — 원인을 오도하는 거부라 사람이 엉뚱한 곳을 고친다.
+ *
+ * 규칙은 이들 도구의 실제 계약 그대로다:
+ *  - `-e`/`-f`(또는 `-pe` 처럼 e 가 섞인 플래그)가 있으면 프로그램은 **그 플래그가 데려간다** →
+ *    남은 피연산자는 전부 파일이다.
+ *  - 없으면 **첫 피연산자가 프로그램**이고 나머지가 파일이다.
+ */
+function scriptFiles(name: string, args: string[]): string[] {
+  const carriesProgram = (a: string): boolean =>
+    /^-[A-Za-z]*[ef]$/.test(a) || (name !== 'sed' && /^-[A-Za-z]*e[A-Za-z]*$/.test(a));
+  const operands: string[] = [];
+  let programTaken = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (isFlag(a)) {
+      if (carriesProgram(a)) { programTaken = true; i++; }      // 다음 토큰이 프로그램이다
+      continue;
+    }
+    operands.push(a);
+  }
+  const files = programTaken ? operands : operands.slice(1);    // 첫 피연산자가 프로그램
+  return files.filter(looksLikePath);
+}
+
 export function scanBashWrites(cmd: string): BashWriteScan {
   const targets: string[] = [];
   let mutating = false;
@@ -280,8 +312,11 @@ export function scanBashWrites(cmd: string): BashWriteScan {
       case 'sed':
       case 'perl':
       case 'ruby':
-        // 제자리 편집(-i)일 때만 파일을 건드린다. 스크립트 인자는 따옴표라 looksLikePath 로 걸러진다.
-        if (args.some(a => a === '-i' || a.startsWith('-i'))) targets.push(...paths);
+        // 제자리 편집(-i)일 때만 파일을 건드린다.
+        // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 에는 슬래시가 있어서
+        // `looksLikePath` 가 참을 내고, 그래서 출하 트랙에서 거짓 「새 파일」 거부가 났다
+        // (기존 주석은 「따옴표라 걸러진다」고 적어 뒀지만 토크나이저가 따옴표를 벗긴다).
+        if (args.some(a => a === '-i' || a.startsWith('-i'))) targets.push(...scriptFiles(name, args));
         break;
       case 'cp':
       case 'install':
@@ -473,6 +508,59 @@ export function scanBashWrites(cmd: string): BashWriteScan {
 }
 
 /**
+ * [EFF-108] 명령을 **실행 단위로 정규화**해 돌려준다 — 감싼 것은 꺼내서 함께 넣는다.
+ *
+ * 왜 필요한가: 배포 명령 차단이 `cmd.includes('npm publish')` 였다. 그래서
+ * `grep "npm publish" README.md` 처럼 **읽기만 하는 명령**이 배포로 오판돼 막혔다
+ * (설계·구축·미승인 출하 트랙 전부). 과차단은 이 제품에서 결함과 같은 무게다 —
+ * 사람이 과차단에 질려 하네스를 끄면 방어는 그 순간 0 이 된다.
+ *
+ * 반대로 단순히 「앞에서 시작하는가」만 보면 래퍼 한 겹으로 차단이 풀린다
+ * (`sh -c "npm publish"`). 그래서 `scanBashWrites` 와 **같은 꺼내기 규칙**을 쓴다:
+ * 접두 명령을 벗기고, `sh -c`·`eval`·`xargs`·`find -exec` 의 안쪽을 꺼내 함께 돌려준다.
+ */
+export function commandLines(cmd: string): string[] {
+  const out: string[] = [];
+  for (const segment of cmd.split(SEGMENT_SPLIT)) {
+    const tokens = tokenize(segment);
+    if (tokens.length === 0) continue;
+    const { name, args } = commandName(tokens);
+    if (!name) continue;
+    out.push([name, ...args].join(' ').trim());
+
+    // 감싼 안쪽도 실행 단위다.
+    const inner: string[] = [];
+    if (name === 'eval') inner.push(...args.filter(a => !isFlag(a)));
+    else if (['sh', 'bash', 'zsh', 'dash', 'ksh'].includes(name)) {
+      for (let i = 0; i < args.length; i++) {
+        if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
+      }
+    } else if (name === 'xargs') {
+      const sub = innerCommandOf(args);
+      if (sub.length > 0) inner.push(sub.join(' '));
+    } else if (name === 'find') {
+      for (let i = 0; i < args.length - 1; i++) {
+        if (['-exec', '-execdir', '-ok', '-okdir'].includes(args[i])) {
+          inner.push(args.slice(i + 1).filter(a => a !== ';' && a !== '+' && a !== '{}').join(' '));
+        }
+      }
+    }
+    for (const chunk of inner) out.push(...commandLines(chunk));
+  }
+  return out;
+}
+
+/**
+ * 이 명령이 `phrase` 를 **실행하는가**(언급이 아니라). 호출측이 배포·빌드 판정에 쓴다.
+ * 낱말 경계까지 본다 — `npm publish` 가 `npm publishing` 을 무는 일은 없어야 한다.
+ */
+export function runsCommand(cmd: string, phrase: string): boolean {
+  const p = phrase.trim();
+  if (!p) return false;
+  return commandLines(cmd).some(l => l === p || l.startsWith(`${p} `));
+}
+
+/**
  * 명령 원문에 등장한 **경로처럼 생긴 토큰**을 전부 뽑는다(따옴표 안쪽 포함).
  *
  * 존재 이유: `scanBashWrites` 는 리다이렉트와 알려진 쓰기 명령만 대상을 뽑는다. 그 밖의
@@ -488,6 +576,9 @@ export function scanBashWrites(cmd: string): BashWriteScan {
  * 슬래시가 있는 토큰만 본다. 확장자만 있는 낱말(`app.ts`)까지 넣으면 커밋 메시지·로그 문구가
  * 경로로 잡혀 오탐이 폭증한다 — 안전망은 조용해야 쓸모가 있다.
  */
+/** `s/x/y/`·`y/abc/xyz/` 같은 sed·perl 치환 스크립트 — 경로처럼 보이지만 파일이 아니다. */
+const SUBSTITUTION_SCRIPT = /^[sy]\/[^/]*\/[^/]*\/[gimIpe0-9]*$/;
+
 export function pathLikeMentions(cmd: string): string[] {
   const out: string[] = [];
   const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
@@ -495,6 +586,11 @@ export function pathLikeMentions(cmd: string): string[] {
   while ((m = re.exec(cmd)) !== null) {
     const t = m[0];
     if (isFlag(t) || !looksLikePath(t)) continue;
+    // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 는 슬래시가 있어 이 안전망에
+    // 잡혔고, 출하 트랙의 「새 파일 금지」가 존재하지 않는 그 「경로」를 두고 발화했다 —
+    // 원인을 오도하는 거부는 사람을 엉뚱한 곳으로 보낸다. 주 추출기(`scriptFiles`)만
+    // 고치면 이쪽이 남으므로 **두 곳 다** 같은 사실을 알아야 한다.
+    if (SUBSTITUTION_SCRIPT.test(t)) continue;
     if (!out.includes(t)) out.push(t);
   }
   return out;

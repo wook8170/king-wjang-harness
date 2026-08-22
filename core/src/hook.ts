@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -1053,6 +1053,35 @@ function preTool(
       ), degraded, lang);
     }
 
+    /**
+     * [SEC-103] **승인의 최종 클릭은 사람이다 — 훅 계층에도 그 잠금을 둔다.**
+     *
+     * `gate approve` 의 도움말은 스스로 "Humans only — never an agent" 라 적어 두었는데,
+     * 훅은 이 명령에 **아무 판정도 하지 않았다**(0바이트 = 허용). 기댈 것이 권한 다이얼로그
+     * 하나뿐이라 allowlist·bypassPermissions 환경에서는 방어가 0 이었다 — `init` 이
+     * 「allowlist 에 넣지 마라」고 경고하는 것 자체가 그 취약함의 자인이다.
+     *
+     * `--force`·`--accept-policy` 와 **같은 형태**로 맞춘다: 훅이 에이전트 경로를 닫고,
+     * 사람은 자기 터미널에서 그대로 실행한다. 사람의 정상 경로에는 아무 비용도 없다 —
+     * 훅은 에이전트의 도구 호출에만 붙기 때문이다(그래서 env 잠금은 두지 않는다.
+     * `gate approve` 는 탈출구가 아니라 **정상 흐름**이고, env 를 요구하면 문서·패킷·
+     * 도움말이 가리키는 사람의 길이 통째로 어긋난다).
+     */
+    if (invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd)) {
+      return deny(L(
+        'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '
+        + 'Submit the artifacts and let the review packet be read: '
+        + '`harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** '
+        + 'in their terminal with `harness gate approve <P>`. Everything else on the gate is open to '
+        + 'you: `harness gate status`, `harness gate verify <P>`.',
+        '게이트 승인은 사람의 판단이라 에이전트가 `harness gate approve` 를 실행할 수 없다. '
+        + '산출물을 제출해 리뷰 패킷이 읽히게 하라: '
+        + '`harness gate submit <P> --evidence measured --paths <산출물>`. 그 다음 **사용자가 직접** '
+        + '터미널에서 `harness gate approve <P>` 로 승인한다. 나머지는 열려 있다: '
+        + '`harness gate status`·`harness gate verify <P>`.',
+      ), degraded, lang);
+    }
+
     // (OPS-76) `doctor --accept-policy` 는 정책 베이스라인을 **지금 상태로 재고정**하는 명령이다 —
     // 즉 「정책이 바뀌었다」는 경고를 지우는 유일한 수단이다. 정책 파일 쓰기를 막아 놓고(SEC-69)
     // 이 명령을 열어 두면, 에이전트가 드리프트를 조용히 수용해 **탐지 장치를 끌 수 있다.**
@@ -1098,7 +1127,8 @@ function preTool(
         ? L(` Submit and get it approved first: \`harness gate submit ${state.phase} --evidence measured --paths <artifacts>\`.`,
             ` 먼저 제출·승인을 받아라: \`harness gate submit ${state.phase} --evidence measured --paths <산출물>\`.`)
         : '';
-      const hit = config.design_blocked_bash.find(b => cmd.includes(b));
+      // [EFF-108] 언급이 아니라 **실행**을 본다 — `grep "npm publish" README.md` 는 배포가 아니다.
+      const hit = config.design_blocked_bash.find(b => runsCommand(cmd, b));
       if (hit) {
         return deny(L(`Deploy-ish commands (${hit}) cannot run in ${where}.${next}`,
           `${where}에서는 배포성 명령(${hit})을 실행할 수 없다.${next}`), degraded, lang);

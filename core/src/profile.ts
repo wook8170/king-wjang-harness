@@ -38,6 +38,7 @@ import * as YAML from 'yaml';
 import { harnessDir } from './paths';
 import { loadConfig } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
+import { runsCommand } from './bashwrite';
 
 /**
  * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
@@ -504,9 +505,12 @@ export function isDeployCommand(profile: Profile, command: string): boolean {
   try {
     const cmd = normCmd(command);
     if (!cmd) return false;
+    // [EFF-108] **언급이 아니라 실행**을 본다. `cmd.includes` 였을 때
+    // `grep "npm publish" README.md` 같은 순수 조회가 배포로 오판돼 막혔다.
+    // 판정은 `runsCommand` 한 곳뿐이고, 그것이 래퍼(`sh -c`)·접두 명령까지 꺼내 본다.
     return (profile.deployCommands ?? []).some(d => {
       const needle = normCmd(d);
-      return needle.length > 0 && cmd.includes(needle); // 빈 항목이 전체 차단으로 번지지 않게
+      return needle.length > 0 && runsCommand(cmd, needle); // 빈 항목이 전체 차단으로 번지지 않게
     });
   } catch {
     return false;
