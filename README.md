@@ -115,7 +115,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 
 | Metric | Value |
 |---|---|
-| Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
+| Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
 | Test suite | **1085 passing** (44 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
@@ -236,13 +236,13 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a 4-level script chain is not followed.
-- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events (decades of use) measured p95 ≈ 101ms, and only while the state store is degraded — `doctor --repair` ends it.
+- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events / 15 MB (decades of use) measured p95 ≈ 19 ms in-process (+29 ms wall-clock), and only while the state store is degraded — `doctor --repair` ends it.
 
 ---
 
 ## FAQ
 
-**Does it slow me down?** Sub-150ms per hook, and it only speaks up when a rule is actually crossed. Trivial turns don't even trigger the stop guard (it only arms when a wave is active).
+**Does it slow me down?** Single-digit milliseconds of actual work per hook, and it only speaks up when a rule is actually crossed. What you feel is your machine starting `node`, which every Claude Code hook pays. Trivial turns don't even trigger the stop guard (it only arms when a wave is active).
 
 **What if I disagree with a block?** The design is a *speed bump, not a wall.* The Stop guard accepts an explicit "this turn was trivial" report; design/ship separation is crossed with an official `backtrack`. The hooks are an accident-prevention layer, not a security boundary.
 

@@ -1,0 +1,2 @@
+{"ts":"2026-08-22T13:42:11.383Z","type":"init","data":{}}
+{"ts":"2026-08-22T13:42:11.384Z","type":"policy-pinned","data":{"hash":"242a25805337c46710fe10697baf75d624e4e1ffccc431da7b3bdc9f34d4704f","files":[".harness/config.yaml"],"via":"init","prevHash":null}}
