@@ -163,7 +163,10 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'next', summary: M('Print what to do next as JSON.', '다음에 할 일을 JSON 으로 출력한다.') },
       { name: 'attempt', args: '<wave-id> --outcome <pass|fail> [--detail <text>]', summary: M('Record one execution attempt and its outcome.', '실행 시도 한 번과 결과를 기록한다.') },
       { name: 'brief', args: '<wave-id> [--for <executor|verifier>]', summary: M('Render the sanitized brief handed to an agent.', '에이전트에게 넘길 중화된 브리프를 렌더링한다.') },
-      { name: 'critical raise', args: '--reason <r> [--wave <id>] [--detail <text>]', summary: M('Escalate to the human with a reason.', '사유와 함께 사람을 소환한다.') },
+      { name: 'critical raise',
+        // [UTIL-A5·UX-102] `--reason` 은 enum 이다. `<r>` 로 적어 두면 안내대로 친 사람이
+        // usage 에러를 만난다 — 도움말이 실제 계약을 그대로 보여야 한다.
+        args: '--reason <repeated-failure|backtrack-needed|external-blocker|acceptance-unclear> [--wave <id>] [--detail <text>]', summary: M('Escalate to the human with a reason.', '사유와 함께 사람을 소환한다.') },
       // [UX-A1] 해제 명령이 도움말에 없어서, 소환된 사람이 **빠져나올 길을 찾을 수 없었다.**
       // 안내 문구는 실재하지 않는 `loop clear` 를 가리키고 있었다 — 막다른 길 두 겹.
       { name: 'critical clear', summary: M('Clear the escalation so the wave loop can run again.', '소환을 해제해 웨이브 루프를 다시 돌린다.') },

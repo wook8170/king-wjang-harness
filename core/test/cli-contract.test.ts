@@ -300,6 +300,38 @@ describe('UX-A1: 에스컬레이션은 해제할 길이 보여야 한다', () =>
     const { text } = capture(() => run(['loop', 'next'], root));
     if (/harness loop/.test(text)) expect(text).not.toMatch(/harness loop clear(?!\w)/);
   });
+
+  /**
+   * [UX-102] **안내를 그대로 쳤을 때 되는가** — 이름이 실재하는 것으로는 부족하다.
+   *
+   * 이 결함은 두 겹이었다: 없는 하위명령(`loop check`)을 가리켰고, 이름을 고친 뒤에도
+   * `--reason <why>` 라고 적으면 enum 이 아니라 usage 에러가 났다. 위 두 테스트는 **이름**만
+   * 봤기 때문에 둘 다 못 잡는다. 그래서 안내문에서 명령을 **기계로 뽑아 실제로 실행**한다.
+   */
+  it('4연속 실패 안내를 그대로 실행하면 성공한다 (이름이 아니라 실행 가능성)', () => {
+    const root = init();
+    capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 't'], root));
+    capture(() => run(['wave', 'create', '--goal', 'g', '--refs', 'F-1'], root));
+    capture(() => run(['wave', 'activate', 'wave-001'], root));
+    for (let i = 0; i < 4; i++) {
+      capture(() => run(['loop', 'attempt', 'wave-001', '--outcome', 'fail'], root));
+    }
+    capture(() => run(['loop', 'critical', 'clear'], root));
+
+    const { text } = capture(() => run(['loop', 'next'], root));
+    const guided = /`harness ([^`]+)`/.exec(text);
+    expect(guided, '가장 막힌 순간의 안내에 명령이 없다').not.toBeNull();
+
+    // 자리표시자가 남아 있으면 그건 「그대로 치면 되는 안내」가 아니다.
+    const argv = guided![1].split(/\s+/);
+    expect(argv.join(' '), '안내에 자리표시자가 남아 있다').not.toMatch(/[<>]/);
+
+    // 소환은 성공해도 종료코드 2 다(「사람을 불렀다」는 신호). 여기서 보는 것은
+    // **안내가 거부당하지 않았는가** — 없는 하위명령·usage·필수 인자 누락이 아닌가다.
+    const { code, text: out } = capture(() => run(argv, root));
+    expect(code, `안내대로 실행했는데 거부당했다: harness ${argv.join(' ')} → ${out}`).not.toBe(1);
+    expect(out).not.toMatch(/Usage:|사용법|Unknown/);
+  });
 });
 
 describe('UX-A3: 읽지 못한 파일을 「깨끗하다」로 보고하지 않는다', () => {

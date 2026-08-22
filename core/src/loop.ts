@@ -250,8 +250,30 @@ export function pendingCritical(root: string): CriticalEvent | null {
 }
 
 /** 소환 발동(§4-4). 저널이 유일한 기록이라 상태 파일 쓰기가 없다 — 순서 계약 자동 충족. */
+/**
+ * [UX-102] 소환 설명을 **하네스가 알 수 있으면 하네스가 적는다.**
+ *
+ * `repeated-failure` 는 웨이브 id·연속 실패 횟수·한계가 전부 저널에 있다 — 그걸 에이전트에게
+ * 다시 타이핑시키면 정보는 그대로인데 안내가 「자리표시자를 채워 넣어라」가 되고, 그러면
+ * *그대로 실행 가능한 안내*가 아니게 된다. 파생 규칙은 여기 한 벌만 둔다
+ * (`checkThreshold` 가 자기 문장을 따로 만들던 것을 이리로 합쳤다).
+ */
+function derivedDetail(
+  root: string, opts: { waveId?: string; reason: CriticalReason; attempts?: number },
+): string {
+  if (opts.reason !== 'repeated-failure') return '';
+  const waveId = opts.waveId ?? readState(root).activeWave ?? undefined;
+  if (!waveId) return '';
+  const streak = opts.attempts ?? attemptCount(root, waveId);
+  if (streak <= 0) return '';
+  return tr(root, {
+    en: `${streak} consecutive verification failures on the same wave (limit ${DEFAULT_FAILURE_LIMIT})`,
+    ko: `동일 웨이브 ${streak}회 연속 검증 실패 (한계 ${DEFAULT_FAILURE_LIMIT})`,
+  });
+}
+
 export function raiseCritical(
-  root: string, opts: { waveId?: string; reason: CriticalReason; detail: string; attempts?: number },
+  root: string, opts: { waveId?: string; reason: CriticalReason; detail?: string; attempts?: number },
 ): CriticalEvent {
   if (!isCriticalReason(opts.reason)) {
     throw new Error(
@@ -261,10 +283,11 @@ export function raiseCritical(
       }),
     );
   }
-  if (!opts.detail || !opts.detail.trim()) {
-    throw new Error(tr(root, { en: 'The escalation detail is empty — say in one line what the user has to decide', ko: '소환 설명(detail)이 비었다 — 사용자가 무엇을 판단해야 하는지 한 줄로 적어라' }));
+  const detail = (opts.detail ?? '').trim() || derivedDetail(root, opts);
+  if (!detail) {
+    throw new Error(tr(root, { en: `The escalation detail is empty and cannot be derived for ${opts.reason} — say in one line what the user has to decide: --detail "<one line>"`, ko: `소환 설명(detail)이 비었고 ${opts.reason} 은(는) 하네스가 유추할 수 없다 — 사용자가 무엇을 판단해야 하는지 한 줄로 적어라: --detail "<한 줄>"` }));
   }
-  const data: Record<string, unknown> = { reason: opts.reason, detail: opts.detail };
+  const data: Record<string, unknown> = { reason: opts.reason, detail };
   if (opts.waveId) data.id = opts.waveId;
   if (opts.attempts !== undefined) data.attempts = opts.attempts;
   const ev = appendEvent(root, 'critical-raised', data);
@@ -290,13 +313,10 @@ export function checkThreshold(
   if (streak < limit) return null;
   const existing = pendingCritical(root);
   if (existing) return existing;
+  // 설명은 `raiseCritical` 이 파생한다 — 같은 문장을 두 곳에서 만들지 않는다.
   return raiseCritical(root, {
     waveId,
     reason: 'repeated-failure',
-    detail: tr(root, {
-      en: `${streak} consecutive verification failures on the same wave (limit ${limit})`,
-      ko: `동일 웨이브 ${streak}회 연속 검증 실패 (한계 ${limit})`,
-    }),
     attempts: streak,
   });
 }
@@ -448,11 +468,20 @@ export function nextAction(root: string, opts?: { failureLimit?: number }): Loop
       // 루프를 멈추고 컨트롤러에게 소환 발동을 지시한다(§4-4 ②).
       return {
         kind: 'idle',
+        // [UX-102] 여기가 **가장 막힌 순간**이고, 이 문구를 읽는 것은 사람이 아니라 에이전트다.
+        // 실재하지 않는 `loop check` 를 가리키고 있었다(실재는 `loop critical raise`) —
+        // [UX-A1] 과 같은 부류의 재발이라, 이번엔 이름 하나가 아니라 부류를 테스트로 막았다
+        // (`guidance-commands-exist.test.ts`). 연속 실패를 푸는 길도 함께 적는다:
+        // 소환은 사람을 부르는 것이고, streak 자체는 **성공한 시도**로만 0 이 된다.
         reason: t({
           en: `${active} has failed verification ${view.streak} times in a row (limit ${limit}) — `
-            + 'raise the critical event with `harness loop check` to summon the user.',
+            + 'summon the user with `harness loop critical raise --reason repeated-failure`. '
+            + 'The streak only resets on a passing attempt '
+            + `(\`harness loop attempt ${active} --outcome pass\`).`,
           ko: `${active} 가 ${view.streak}회 연속 검증 실패다 (한계 ${limit}) — `
-            + '`harness loop check` 로 크리티컬 이벤트를 발동해 사용자를 소환하라.',
+            + '`harness loop critical raise --reason repeated-failure` 로 사용자를 소환하라. '
+            + '연속 실패는 성공한 시도로만 0 이 된다'
+            + `(\`harness loop attempt ${active} --outcome pass\`).`,
         }),
       };
     }
