@@ -65,9 +65,22 @@ describe('[PROD-B4] MCP 서버가 4개 언어 README 에 실린다', () => {
   });
 });
 
-describe('[PROD-B6] 폐기된 구판 감사가 판정으로 읽히지 않는다', () => {
+/**
+ * [PROD-141] 이 절은 **배포본에 없는 파일**을 본다(`docs/release-readiness` 는 export-ignore).
+ * 무조건 읽으면 아카이브에서 `npm test` 가 깨진다 — 이 라운드가 닫은 바로 그 결함을 새
+ * 테스트가 다시 만들 뻔했다. 리포 안에서만 돌리고, 리포 안인지는 `.git` 으로 판정한다.
+ * 리포 안인데 파일이 없으면 아래 sanity 가 빨강이 된다(조용히 건너뛰지 않는다).
+ */
+const IN_REPO = fs.existsSync(path.join(repo, '.git'));
+const LEGACY = path.join(repo, 'docs/release-readiness/readiness.md');
+
+describe.skipIf(!IN_REPO)('[PROD-B6] 폐기된 구판 감사가 판정으로 읽히지 않는다', () => {
+  it('리포 안에서는 그 문서가 실재한다 — 검사가 조용히 사라지지 않게', () => {
+    expect(fs.existsSync(LEGACY)).toBe(true);
+  });
+
   it('구판 문서 머리에 폐기 표시와 현재 판정 위치가 있다', () => {
-    const t = read('docs/release-readiness/readiness.md');
+    const t = fs.readFileSync(LEGACY, 'utf8');
     expect(t.slice(0, 1200)).toMatch(/폐기된 구판 감사/);
     expect(t.slice(0, 1200)).toMatch(/00-summary\.md/);
     expect(t.slice(0, 1200)).toMatch(/출하 불가/);
