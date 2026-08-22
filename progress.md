@@ -48,6 +48,64 @@
 
 ---
 
+## 세션 인계 메모 (2026-08-22, 재부팅 직전 — 미착수분 그대로)
+
+**리포는 손대지 않았다.** 워킹트리에 추가된 것은 **감정 보고를 리포로 옮긴 것 하나뿐**이다:
+`docs/release-readiness/2026-08-21/round3i/` — 3-I 감정 7편(`appraisal2-*.md`) · 내 재현
+(`repro-3i.md`) · LOW 30 배치안(`low30-plan.md`). **원래 `/private/tmp` 세션 스크래치패드에만
+있어서 재부팅에 날아갈 것**이었다. `.gitattributes` 가 `docs/release-readiness` 를 export-ignore
+하므로 배포본에는 안 실린다.
+
+### 등재 준비까지 끝낸 것 (다음 세션은 표만 쓰면 된다)
+
+대장 신규 ID 는 **135 부터 숫자로** 붙인다 — 글자접미 ID 는 외부 lint 가 통째로 못 보고
+(`ledger-summary-sync.test.ts:206` 가 사각 상한 41 로 고정), SEC-B1/B2/B3 도 **숫자로 등재**해야 한다.
+
+| 새 ID | (작업명) | 심각도 · 상태 | 무엇 |
+|---|---|---|---|
+| SEC-135 | SEC-B1 | BLOCKER · verified | 열거 밖 쓰기 도구(`xxd`/`openssl`/`csplit`/`split`) 위치인자 통과 |
+| SEC-136 | SEC-B2 | BLOCKER · verified | 그것으로 `config.yaml` 덮어 강제 해제 — SEC-69 재발 |
+| SEC-137 | SEC-B3 | BLOCKER · verified | 64KB 초과 스크립트 본문 미독 통과(비용 캡이 방어를 되돌림) |
+| SEC-138 | 실효성 MED | MED · open | `gate approve` 훅 백스톱이 난독화로 열림(`node -e` 결합·따옴표분리·리네임). force/accept-policy 는 2겹이라 버팀 — **비대칭이 결함** |
+| PERF-139 | 가성비 MED-2 | MED · open | 100k 저널 폴백 p95 **229ms** > 게이트 150ms, README 광고 101ms 재현 실패 |
+| QUAL-140 | 효용성 D1 | MED · open | 1×1 PNG(70B)로 UX 증거 게이트 통과 — 치수 검출 로직이 제품에 있는데 게이트가 안 씀 |
+| PROD-141 | 엔지니어링 1 | MED · open | `git archive` 배포본에서 `ledger-summary-sync.test.ts` 가 export-ignore 된 디렉토리를 절대경로로 읽어 **1파일 수집 실패·12테스트 미실행** |
+| ENG-142 | 엔지니어링 2 | MED · open | 대장 쓰기 차단(`STATE_FILES` 의 defects/deployments.yaml) 무테스트 |
+| ENG-143 | 엔지니어링 3 | MED · open | 출하 measured-only 규칙 두 벌(`gate.ts:645` · `ship.ts:586`) |
+| UX-144 | 사용성 1 | MED · open | usage 티어 **하향 미기록** → stale 지시 무기한 주입, 해제 명령 부재(`cli.ts:521`) |
+| UX-145 | 사용성 2 | MED · open | `evidence packet --ux` 가 사유 없는 bare usage(형제 `evidence spec` 은 설명함) |
+| UX-146 | 사용성 4 | MED · open | 정책 config 키 4종 미문서(`design_allowed_prefixes`·`design_blocked_bash`·`design_system_frozen_roots`·`block_raw_values`) |
+| UX-147 | 사용성 5 = 상품성 D6 | MED · open | `profile cmd` 처방이 **번들 플러그인 디렉토리**를 안내 — 실제로는 `.harness/profile/` 이 우선(`profile.ts:328`) |
+| DOC-148 | 가치 NEW-3 | MED · open | `00-summary.md:289` 게이트표가 낡음(G1 "626 passed·27파일" vs 실제 1031/39 · G9 ⚠ · G10 71커밋) — 판정 근거표가 자기 문서 안에서 모순 |
+| **VAL-134 수정** | 사용성 3 | LOW→**MED** | 없는 파일 `gate submit --paths` 를 「프로젝트 밖」으로 오진 — **심링크 루트 한정이 아니었다**(감정자가 평범한 루트에서 재현). 새 행이 아니라 기존 행의 심각도·문장을 고친다 |
+
+**LOW 신규(감정자 발견, 미등재)** — 149 부터: 십트랙 deny 문구 과대 · `doc --help` 의 `--refs` 미표기 ·
+깨진 config 무음 폴백 · NotebookEdit `notebook_path` 미판정 · dangling-symlink realpath 사각 ·
+번들 프로파일 out-of-root 쓰기 · 재생 evidence 폴드 무테스트 · `.harness/` 허용 가드 무테스트 ·
+**낡은 헤더 주석 2곳**(`gate.ts:41-43`·`ship.ts:39-41` — 둘 다 현재 사실과 **반대**) ·
+`mcp/server.js` 무테스트 · PERF-26 fast-path 가 all-replay 에서 naive 보다 느림 ·
+0바이트 증거에도 "no visual evidence" 동일 문구 · 1×1 경고가 ship verdict 로 지연 ·
+`design sync --from` 원시 ENOENT · doctor 가 `hook-errors.log` 경로 미안내 ·
+배포성 deny 에 탈출 경로 없음 · `--acceptance`/`--accept` 별칭 미문서 ·
+`gate submit --paths` 만 쓰면 패킷은 "승인 근거 아님" 인데 `gate approve` 는 성공 ·
+배포본에 `docs/superpowers`·`.claude/skills/verify` 잔존(export-ignore 누락) ·
+`lang: ko` README 4종 미기재 · `readiness-auditor.md` 의 "already installed" 단정(사용자 결정 반영).
+※ `--version`/CHANGELOG 계열은 **PROD-126 과 중복**이라 새로 만들지 않는다.
+
+### 등재할 때 반드시 지킬 것 (조사해서 확인한 계약)
+
+- 외부 lint: `bash ~/.claude/skills/verifying-production-readiness/bin/ledger-lint.sh docs/release-readiness/2026-08-21/ledger.md` — **지금 초록**(118행 검사).
+  R1 은 `measured` 행에 **실존 파일:줄** 인용을 요구하고, R7 은 그 줄이 공백·닫는괄호면 위반이다.
+- 리포 안 테스트(`core/test/ledger-summary-sync.test.ts`)가 더 세다:
+  ① 대장 헤더의 `open BLOCKER`/`open HIGH`/`open 전체` 가 표 실제와 일치 ·
+  ② `00-summary.md` 의 `# 판정` 인용 블록(다음 `## ` 전까지)의 verified·open 수 일치 ·
+  ③ **open 행 ID 가 판정 블록에 전부 나열** ·  ④ 닫힌 ID 가 「남은 open」 표에 남아 있지 않을 것.
+  → 대장만 고치면 반드시 빨강이 된다. **`00-summary.md` 판정 블록을 같은 커밋에서 고친다.**
+- 3-I 증거 로그가 아직 없다 — 등재 전에 `evidence/round3i.log` 를 만들어 감정 실측과 내 재현
+  (폴백 p50 211ms·p95 229ms, n=30)을 남기고 그것을 인용한다. 인용할 파일이 없으면 R1 이 막는다.
+
+---
+
 ## 다음 즉시 할 일
 
 1. **대장에 라운드 3-I 결과를 등재한다** — 지금 대장은 3-I 를 모른다.
