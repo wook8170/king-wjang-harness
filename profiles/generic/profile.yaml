@@ -23,9 +23,6 @@ source_globs:
 # if the two diverge you get "blocked by the config default but not by the profile",
 # and nobody can tell which one is authoritative.
 deploy_commands:
-  # [EFF-132] 가장 흔한 배포 트리거가 목록에 없었다 — CI 가 붙어 있으면 이 한 줄이 곧
-  # 배포다. 프로파일이 「스택별 배포 명령」을 정의하는 자리이므로 여기에 둔다.
-  - git push
   - docker push
   - kubectl apply
   - helm upgrade
