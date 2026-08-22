@@ -54,21 +54,57 @@ export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
  * `# harness 로 정산` 같은 주석이나 `git commit -m "harness"` 의 인자를 자기호출로
  * 오판하면, 진짜 작업 턴이 활동 집계에서 빠져 stop 가드가 조용히 뚫린다.
  */
-const HARNESS_CMD_RE = new RegExp(
-  `(^|[;&|\n\`]\\s*|\\$\\(\\s*|\\(\\s*)`
-  // [LOGIC-94] 접두 명령 목록은 **`bashwrite.ts` 한 곳이 정본**이다. 예전에는 여기에
-  // 9종을 인라인으로 박아 두어 두 목록이 이미 갈려 있었다 — `timeout 30 harness wave update "x"`·
-  // `stdbuf`·`setsid`·`ionice`·`unbuffer` 가 자기호출로 인식되지 않아, 정산한 턴이 활동으로
-  // 집계되고 stop 가드가 **정산 직후에도 다시 차단**했다(로그 → 활동 → 또 로그 요구 루프).
-  // 목록을 두 벌 두면 한쪽을 넓힐 때 다른 쪽이 조용히 뒤처진다.
-  // 접두 명령은 자기 플래그·값을 데리고 온다(`timeout 30`·`stdbuf -oL`·`nice -n 10`·`sudo -u me`) —
-  // 그것까지 건너뛰지 않으면 목록만 맞춰 놓고도 인식이 계속 실패한다. 다만 **맨 단어는
-  // 건너뛰지 않는다** — 한 번 그렇게 넓혔더니 `time make harness`·`sudo apt-get install harness`·
-  // `nice cargo build harness` 가 전부 자기호출로 잡혔다(실측). 이 패턴은 **좁게 틀려야 안전**하다:
-  // 넓히면 진짜 작업 턴이 활동 집계에서 빠져 **정산 강제가 조용히 풀린다**(SEC-78 의 교훈).
-  + `((?:${[...PREFIX_COMMANDS, 'xargs'].join('|')})(?:\\s+(?:-\\S+(?:\\s+[A-Za-z_][\\w.-]*)?|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*`
-  + `((?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*)(\\S*\\/)?harness(\\s|$)`,
-);
+/**
+ * [COST-A] 예전에는 이 판정이 **중첩 수량자 정규식**이었다. 접두 명령 연쇄
+ * (`timeout 30 stdbuf -oL nice -n 10 …`)가 길어지고 끝이 `harness` 가 아니면 backtracking 이
+ * 지수로 터졌다 — 실측 래퍼 20개 253ms · 22개 1071ms · 25개 8270ms(래퍼 하나당 약 4배).
+ * 훅은 매 Bash 호출마다 이걸 돌리므로, **최악 입력의 상한이 사람이 기다리는 최대 지연**이 된다
+ * (`hooks.json` 의 timeout 10초가 상한이지만 그 10초가 그대로 턴 지연으로 나간다).
+ *
+ * 그래서 정규식을 버리고 **선형 스캔**으로 바꾼다. 판정 내용은 그대로다:
+ * `harness` 는 **명령 위치**에만 있어야 하고(줄 처음·`;`/`&`/`|`/개행/백틱·서브셸·명령치환 뒤),
+ * 그 앞에는 접두 명령(자기 플래그·값 포함)과 인라인 env 대입만 올 수 있다.
+ * **맨 단어는 건너뛰지 않는다** — `time make harness`·`sudo apt-get install harness` 를
+ * 자기호출로 잡으면 진짜 작업 턴이 활동 집계에서 빠져 **정산 강제가 조용히 풀린다**(SEC-78).
+ * 이 판정은 넓게 틀리면 위험하고 좁게 틀리면 안전하다.
+ */
+const PREFIX_SET = new Set<string>([...PREFIX_COMMANDS, 'xargs']);
+const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const PREFIX_FLAG_RE = /^-\S+$/;
+/** 플래그가 데려오는 값(`sudo -u me`). 숫자는 아래 규칙이 따로 받는다. */
+const PREFIX_FLAG_VALUE_RE = /^[A-Za-z_][\w.-]*$/;
+/** 접두 명령이 데려오는 수치 인자(`timeout 30`·`sleep 1.5s`). */
+const PREFIX_NUMBER_RE = /^\d+(?:\.\d+)?[smhd]?$/;
+const HARNESS_WORD_RE = /^(?:\S*\/)?harness$/;
+
+/** 이 Bash 명령이 **하네스 자신**을 부르는가(활동 집계 제외 판정). */
+export function isSelfCall(cmd: string): boolean {
+  // 명령 위치를 여는 구분자마다 잘라, 각 조각의 **첫 명령**만 본다.
+  for (const segment of cmd.split(/[;&|\n`]|\$\(|\(/)) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < tokens.length && PREFIX_SET.has(tokens[i])) {
+      i++;
+      while (i < tokens.length) {
+        if (PREFIX_FLAG_RE.test(tokens[i])) {
+          i++;
+          // `stdbuf -oL harness status` — `harness` 는 `-oL` 의 값처럼 생겼다. 정규식은
+          // backtracking 으로 이 모호성을 풀었으므로, 선형 스캔도 같은 방향을 택한다:
+          // **하네스 호출로 읽을 수 있으면 그렇게 읽는다.** 반대로 택하면 접두 명령이 붙은
+          // 정산 호출이 자기호출로 인식되지 않아 stop 가드가 정산 직후 또 차단한다(LOGIC-94).
+          if (i < tokens.length
+            && PREFIX_FLAG_VALUE_RE.test(tokens[i])
+            && !HARNESS_WORD_RE.test(tokens[i])) i++;
+        } else if (PREFIX_NUMBER_RE.test(tokens[i])) {
+          i++;
+        } else break;
+      }
+    }
+    while (i < tokens.length && ENV_ASSIGN_RE.test(tokens[i])) i++;
+    if (i < tokens.length && HARNESS_WORD_RE.test(tokens[i])) return true;
+  }
+  return false;
+}
 
 /**
  * `phase set --force` 자기해제 **탐지 전용** 패턴. `HARNESS_CMD_RE` 와 **일부러 분리**했다.
@@ -1118,7 +1154,7 @@ function preTool(
 function postTool(root: string, input: HookInput): null {
   const tool = input.tool_name ?? '';
   const cmd = String(input.tool_input?.command ?? '');
-  const selfCall = tool === 'Bash' && HARNESS_CMD_RE.test(cmd);
+  const selfCall = tool === 'Bash' && isSelfCall(cmd);
   // 활동 = 작업트리를 바꿀 수 있었던 도구만. Read·Grep·WebFetch 같은 조회로 stop 가드를
   // 깨우면 "읽기만 한 턴"에도 로그를 요구해 가드가 잡음이 된다.
   // harness 자기 명령은 제외 — 턴 로그를 남기는 행위 자체가 활동으로 집계되면

@@ -141,3 +141,39 @@ describe('VAL-B: 판정 블록이 대장과 갈리지 않는다', () => {
     expect(stale, `이미 닫힌 항목이 open 표에 남아 있다: ${stale.join(', ')}`).toEqual([]);
   });
 });
+
+/**
+ * [QUAL-A·QUAL-C] **어휘를 리포 안에서 지킨다.**
+ *
+ * 출하 판정의 4.8 하드 조건에 「대장 lint 통과」가 있는데, 그 lint 는 리포 밖(스킬)에 있고
+ * 리포의 테스트는 심각도·상태 어휘를 전혀 보지 않았다. 그래서 `LOW-MED` 같은 사전 밖 값이
+ * **918 tests green 을 통과한 채** 대장에 들어갔고, 조건을 객관적으로 깨뜨렸다.
+ * 밖의 검사에 기대는 조건은 안에서도 지켜야 한다 — 밖의 검사는 언제든 안 돌 수 있다.
+ *
+ * 게다가 그 lint 의 ID 패턴(`[A-Z]*-[0-9]*`)은 **글자로 끝나는 ID 를 아예 안 본다** —
+ * 같은 위반이 한 건 더 숨어 있었다(UTIL-B). 이 검사는 ROW 정규식을 쓰므로 그 사각이 없다.
+ */
+describe('QUAL-A: 대장 어휘가 사전 안에 있다', () => {
+  const SEVERITY = new Set(['BLOCKER', 'HIGH', 'MED', 'LOW', '—', '-']);
+  const STATUS = new Set(['open', 'fixing', 'fixed', 'verified', 'rejected', 'deferred']);
+  const GRADE = new Set(['claimed', 'code', 'measured']);
+  const rows = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(l => ROW.test(l));
+
+  it('데이터 행이 실제로 잡힌다 — 검사가 빈 집합을 통과하지 않게', () => {
+    expect(rows.length).toBeGreaterThan(50);
+  });
+
+  it.each([
+    ['심각도', 2, SEVERITY],
+    ['상태', 5, STATUS],
+    ['근거등급', 6, GRADE],
+  ] as const)('%s 어휘가 전부 사전 안이다', (_label, col, dict) => {
+    const bad: string[] = [];
+    for (const line of rows) {
+      const f = line.split('|').map(x => x.trim());
+      const v = f[col] ?? '';
+      if (!dict.has(v)) bad.push(`${ROW.exec(line)![1]}: ${JSON.stringify(v)}`);
+    }
+    expect(bad).toEqual([]);
+  });
+});

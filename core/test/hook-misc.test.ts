@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { createWave, activateWave, logTurn } from '../src/wave';
 import { readRuntime } from '../src/runtime';
-import { handleHook } from '../src/hook';
+import { handleHook, isSelfCall } from '../src/hook';
 import type { Phase } from '../src/types';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -549,5 +549,52 @@ describe('hook: "루트 밖" deny 사유의 raw 중화 (SEC-12)', () => {
     expect(r).not.toContain('\x1b');
     // 페이로드의 표시 가능한 텍스트는 중화된 형태로 남는다(진단 가치 보존)
     expect(r).toContain('/etc/evil');
+  });
+});
+
+/**
+ * [COST-A] 자기호출 판정이 **중첩 수량자 정규식**이던 시절, 접두 명령 연쇄가 길고 끝이
+ * `harness` 가 아니면 backtracking 이 지수로 터졌다(래퍼 25개 8.3초 실측). 훅은 매 Bash
+ * 호출마다 이 판정을 돌리므로 **최악 입력의 상한이 사람이 기다리는 최대 지연**이 된다.
+ * 선형 스캔으로 바꾼 뒤에도 **판정 내용이 그대로인지**가 진짜 조건이다 — 넓게 틀리면
+ * 진짜 작업 턴이 활동 집계에서 빠져 정산 강제가 조용히 풀린다.
+ */
+describe('COST-A: 자기호출 판정이 선형이고, 판정 내용은 그대로다', () => {
+  const post = (root: string, command: string) =>
+    handleHook(root, 'post-tool', { tool_name: 'Bash', tool_input: { command } });
+
+  it('중첩 래퍼가 길어져도 시간이 폭발하지 않는다', () => {
+    const root = setup();
+    const t0 = Date.now();
+    post(root, `${'timeout 30 stdbuf -oL nice -n 10 '.repeat(40)}zzz`);
+    expect(Date.now() - t0).toBeLessThan(1000);       // 예전엔 래퍼 25개에서 8초가 넘었다
+  });
+
+  const SELF = [
+    'harness status',
+    './bin/harness wave update',
+    'timeout 30 harness wave update "x"',
+    'stdbuf -oL harness status',
+    'nice -n 10 harness status',
+    'sudo -u me harness status',
+    'FOO=1 harness status',
+    'echo a; harness status',
+    '$(harness status)',
+  ];
+  it.each(SELF)('%s 는 자기호출이다', (cmd) => {
+    expect(isSelfCall(cmd)).toBe(true);
+  });
+
+  const NOT_SELF = [
+    'time make harness',
+    'sudo apt-get install harness',
+    'nice cargo build harness',
+    'echo harness',
+    'git commit -m "harness 로 정산"',
+    '# harness 로 정산',
+    'grep harness README.md',
+  ];
+  it.each(NOT_SELF)('%s 는 자기호출이 아니다 — 넓히면 정산 강제가 풀린다', (cmd) => {
+    expect(isSelfCall(cmd)).toBe(false);
   });
 });

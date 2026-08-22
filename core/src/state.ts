@@ -36,8 +36,31 @@ export function hasHarness(root: string): boolean {
   return fs.existsSync(harnessDir(root));
 }
 
+/**
+ * [UTIL-A2] `state.json` 만 사라진 상태에서 **내부 절대경로가 박힌 raw ENOENT** 를 뱉었다 —
+ * 사람은 오류가 가리키는 곳을 고치려 드는데, 그 문구는 「이 경로가 왜 여기 있나」만 남긴다.
+ * 이 상태는 **미초기화가 아니라 열화**이고 복구 수단이 실제로 있다(저널 재생).
+ *
+ * 한 곳에서 고친다 — 명령마다 안내를 복제하면 새 명령이 생길 때마다 빠진다([USE-93]·[OPS-94]가
+ * 같은 사고였다). 던지는 것은 그대로 유지한다: `doctor` 는 자기 존재 검사로 이 상태를 잡으므로
+ * 복구 경로는 이 문구에 걸리지 않는다.
+ */
 export function readState(root: string): HarnessState {
-  return JSON.parse(fs.readFileSync(statePath(root), 'utf8')) as HarnessState;
+  try {
+    return JSON.parse(fs.readFileSync(statePath(root), 'utf8')) as HarnessState;
+  } catch (e) {
+    if (hasHarness(root) && !isInitialized(root)) {
+      throw new Error(tr(root, {
+        en: '.harness/ is here but state.json is missing — the state store is derived, so the event '
+          + 'journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses '
+          + 'while .harness/ exists',
+        ko: '.harness/ 는 있는데 state.json 이 없다 — 상태 저장소는 파생물이라 이벤트 저널로 다시 '
+          + '만들 수 있다. `harness doctor --repair` 를 실행하라. `harness init` 은 .harness/ 가 있으면 '
+          + '거부하므로 그쪽이 아니다',
+      }));
+    }
+    throw e;
+  }
 }
 
 export function writeState(root: string, state: HarnessState): void {

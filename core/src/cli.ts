@@ -744,7 +744,19 @@ export function run(argv: string[], root: string): number {
             for (const f of files) {
               if (isTokenFile(root, f)) continue; // 토큰 파일 자체는 raw 값의 정당한 거처다
               let src = '';
-              try { src = fs.readFileSync(path.resolve(root, f), 'utf8'); } catch { continue; }
+              // [UX-A3] 읽지 못한 파일을 조용히 건너뛰면 **오타가 lint 통과로 위장된다** —
+              // `tokens lint nofile.css` 가 「raw 값 없음」 exit 0 이었다. 검사하지 못한 것을
+              // 검사해서 깨끗한 것과 같이 보고하면 그 lint 는 근거가 아니다.
+              try {
+                src = fs.readFileSync(path.resolve(root, f), 'utf8');
+              } catch {
+                throw new Error(L(
+                  `Cannot read the file to lint: ${f} — check the path. `
+                  + 'A file that was not read is not a file that is clean',
+                  `린트할 파일을 읽을 수 없다: ${f} — 경로를 확인하라. `
+                  + '읽지 못한 파일은 깨끗한 파일이 아니다',
+                ));
+              }
               for (const h of findRawValues(src)) {
                 console.log(L(`${f}:${h.line}:${h.column} ${h.kind} raw value ${h.value}`, `${f}:${h.line}:${h.column} ${h.kind} raw 값 ${h.value}`));
                 total++;

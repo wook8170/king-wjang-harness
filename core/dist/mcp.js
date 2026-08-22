@@ -7498,7 +7498,17 @@ function hasHarness(root) {
   return fs2.existsSync(harnessDir(root));
 }
 function readState(root) {
-  return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+  try {
+    return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+  } catch (e) {
+    if (hasHarness(root) && !isInitialized(root)) {
+      throw new Error(tr(root, {
+        en: ".harness/ is here but state.json is missing \u2014 the state store is derived, so the event journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses while .harness/ exists",
+        ko: ".harness/ \uB294 \uC788\uB294\uB370 state.json \uC774 \uC5C6\uB2E4 \u2014 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uD30C\uC0DD\uBB3C\uC774\uB77C \uC774\uBCA4\uD2B8 \uC800\uB110\uB85C \uB2E4\uC2DC \uB9CC\uB4E4 \uC218 \uC788\uB2E4. `harness doctor --repair` \uB97C \uC2E4\uD589\uD558\uB77C. `harness init` \uC740 .harness/ \uAC00 \uC788\uC73C\uBA74 \uAC70\uBD80\uD558\uBBC0\uB85C \uADF8\uCABD\uC774 \uC544\uB2C8\uB2E4"
+      }));
+    }
+    throw e;
+  }
 }
 function writeState(root, state) {
   const target = statePath(root);

@@ -274,3 +274,65 @@ describe('UTIL-D: 미지 플래그를 거부한다', () => {
     expect(unknownFlags(['node', 'upsert', '--nope', 'x'])).toEqual(['--nope']);
   });
 });
+
+/**
+ * 재감정(사용성·효용성 축)이 낸 「안내가 원인과 다른 곳을 가리킨다」 부류 3건.
+ * 공통점은 하나다 — **막힌 사람이 빠져나올 길을 찾을 수 없다.**
+ */
+describe('UX-A1: 에스컬레이션은 해제할 길이 보여야 한다', () => {
+  it('`loop --help` 가 해제 명령을 알려 준다', () => {
+    const root = init();
+    const { text } = capture(() => run(['loop', '--help'], root));
+    expect(text).toContain('critical clear');
+  });
+
+  it('해제 명령이 실제로 동작한다 — 안내가 가리키는 곳이 실재한다', () => {
+    const root = init();
+    capture(() => run(['loop', 'critical', 'raise', '--reason', 'repeated-failure'], root));
+    const { code, text } = capture(() => run(['loop', 'critical', 'clear'], root));
+    expect(code).toBe(0);
+    expect(text).toMatch(/cleared|해제/i);
+  });
+
+  it('소환 안내가 실재하지 않는 `loop clear` 를 가리키지 않는다', () => {
+    const root = init();
+    capture(() => run(['loop', 'critical', 'raise', '--reason', 'repeated-failure'], root));
+    const { text } = capture(() => run(['loop', 'next'], root));
+    if (/harness loop/.test(text)) expect(text).not.toMatch(/harness loop clear(?!\w)/);
+  });
+});
+
+describe('UX-A3: 읽지 못한 파일을 「깨끗하다」로 보고하지 않는다', () => {
+  it('없는 파일을 린트하면 실패하고 경로를 말한다', () => {
+    const root = init();
+    const { code, text } = capture(() => run(['tokens', 'lint', 'nofile.css'], root));
+    expect(code).toBe(1);
+    expect(text).toContain('nofile.css');
+  });
+
+  it('있는 파일은 그대로 린트된다 (과차단 0)', () => {
+    const root = init();
+    fs.writeFileSync(path.join(root, 'a.css'), '.x { color: red; }\n');
+    expect(capture(() => run(['tokens', 'lint', 'a.css'], root)).code).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('UTIL-A2: state.json 만 없는 상태를 열화로 안내한다', () => {
+  const degraded = (): string => {
+    const root = init();
+    fs.rmSync(path.join(root, '.harness', 'state.json'));
+    return root;
+  };
+
+  it('내부 경로가 박힌 raw ENOENT 를 뱉지 않는다', () => {
+    const { text } = capture(() => run(['status'], degraded()));
+    expect(text).not.toMatch(/ENOENT/);
+    expect(text).toMatch(/doctor --repair/);
+  });
+
+  it('안내가 가리키는 복구 경로가 실제로 통한다', () => {
+    const root = degraded();
+    expect(capture(() => run(['doctor', '--repair'], root)).code).toBe(0);
+    expect(capture(() => run(['status'], root)).code).toBe(0);
+  });
+});

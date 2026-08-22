@@ -7498,11 +7498,24 @@ function defaultState() {
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
+function isInitialized(root) {
+  return fs2.existsSync(statePath(root));
+}
 function hasHarness(root) {
   return fs2.existsSync(harnessDir(root));
 }
 function readState(root) {
-  return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+  try {
+    return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+  } catch (e) {
+    if (hasHarness(root) && !isInitialized(root)) {
+      throw new Error(tr(root, {
+        en: ".harness/ is here but state.json is missing \u2014 the state store is derived, so the event journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses while .harness/ exists",
+        ko: ".harness/ \uB294 \uC788\uB294\uB370 state.json \uC774 \uC5C6\uB2E4 \u2014 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uD30C\uC0DD\uBB3C\uC774\uB77C \uC774\uBCA4\uD2B8 \uC800\uB110\uB85C \uB2E4\uC2DC \uB9CC\uB4E4 \uC218 \uC788\uB2E4. `harness doctor --repair` \uB97C \uC2E4\uD589\uD558\uB77C. `harness init` \uC740 .harness/ \uAC00 \uC788\uC73C\uBA74 \uAC70\uBD80\uD558\uBBC0\uB85C \uADF8\uCABD\uC774 \uC544\uB2C8\uB2E4"
+      }));
+    }
+    throw e;
+  }
 }
 function writeState(root, state) {
   const target = statePath(root);
@@ -8874,7 +8887,10 @@ ${TOKEN_DOC_SKELETON}`
       { name: "next", summary: M("Print what to do next as JSON.", "\uB2E4\uC74C\uC5D0 \uD560 \uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
       { name: "attempt", args: "<wave-id> --outcome <pass|fail> [--detail <text>]", summary: M("Record one execution attempt and its outcome.", "\uC2E4\uD589 \uC2DC\uB3C4 \uD55C \uBC88\uACFC \uACB0\uACFC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
       { name: "brief", args: "<wave-id> [--for <executor|verifier>]", summary: M("Render the sanitized brief handed to an agent.", "\uC5D0\uC774\uC804\uD2B8\uC5D0\uAC8C \uB118\uAE38 \uC911\uD654\uB41C \uBE0C\uB9AC\uD504\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
-      { name: "critical", args: "raise --reason <r> [--wave <id>] [--detail <text>]", summary: M("Escalate to the human with a reason.", "\uC0AC\uC720\uC640 \uD568\uAED8 \uC0AC\uB78C\uC744 \uC18C\uD658\uD55C\uB2E4.") }
+      { name: "critical raise", args: "--reason <r> [--wave <id>] [--detail <text>]", summary: M("Escalate to the human with a reason.", "\uC0AC\uC720\uC640 \uD568\uAED8 \uC0AC\uB78C\uC744 \uC18C\uD658\uD55C\uB2E4.") },
+      // [UX-A1] 해제 명령이 도움말에 없어서, 소환된 사람이 **빠져나올 길을 찾을 수 없었다.**
+      // 안내 문구는 실재하지 않는 `loop clear` 를 가리키고 있었다 — 막다른 길 두 겹.
+      { name: "critical clear", summary: M("Clear the escalation so the wave loop can run again.", "\uC18C\uD658\uC744 \uD574\uC81C\uD574 \uC6E8\uC774\uBE0C \uB8E8\uD504\uB97C \uB2E4\uC2DC \uB3CC\uB9B0\uB2E4.") }
     ]
   },
   {
@@ -9740,10 +9756,32 @@ function commandFor(profile, key) {
 
 // core/src/hook.ts
 var WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
-var HARNESS_CMD_RE = new RegExp(
-  `(^|[;&|
-\`]\\s*|\\$\\(\\s*|\\(\\s*)((?:${[...PREFIX_COMMANDS, "xargs"].join("|")})(?:\\s+(?:-\\S+(?:\\s+[A-Za-z_][\\w.-]*)?|\\d+(?:\\.\\d+)?[smhd]?))*\\s+)*((?:[A-Za-z_][A-Za-z0-9_]*=\\S*\\s+)*)(\\S*\\/)?harness(\\s|$)`
-);
+var PREFIX_SET = /* @__PURE__ */ new Set([...PREFIX_COMMANDS, "xargs"]);
+var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+var PREFIX_FLAG_RE = /^-\S+$/;
+var PREFIX_FLAG_VALUE_RE = /^[A-Za-z_][\w.-]*$/;
+var PREFIX_NUMBER_RE = /^\d+(?:\.\d+)?[smhd]?$/;
+var HARNESS_WORD_RE = /^(?:\S*\/)?harness$/;
+function isSelfCall(cmd) {
+  for (const segment of cmd.split(/[;&|\n`]|\$\(|\(/)) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < tokens.length && PREFIX_SET.has(tokens[i])) {
+      i++;
+      while (i < tokens.length) {
+        if (PREFIX_FLAG_RE.test(tokens[i])) {
+          i++;
+          if (i < tokens.length && PREFIX_FLAG_VALUE_RE.test(tokens[i]) && !HARNESS_WORD_RE.test(tokens[i])) i++;
+        } else if (PREFIX_NUMBER_RE.test(tokens[i])) {
+          i++;
+        } else break;
+      }
+    }
+    while (i < tokens.length && ENV_ASSIGN_RE.test(tokens[i])) i++;
+    if (i < tokens.length && HARNESS_WORD_RE.test(tokens[i])) return true;
+  }
+  return false;
+}
 var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 var CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
 var invokesHarness = (cmd) => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
@@ -10295,7 +10333,7 @@ function preTool(root, state, config, input, degraded) {
 function postTool(root, input) {
   const tool = input.tool_name ?? "";
   const cmd = String(input.tool_input?.command ?? "");
-  const selfCall = tool === "Bash" && HARNESS_CMD_RE.test(cmd);
+  const selfCall = tool === "Bash" && isSelfCall(cmd);
   if (WRITE_TOOLS.includes(tool) || tool === "Bash" && !selfCall) noteActivity(root);
   return null;
 }
@@ -12892,8 +12930,8 @@ function summonMessage(evt, root) {
   lines.push(`${t({ en: "To decide", ko: "\uACB0\uC815\uD560 \uAC83" })}:`);
   for (const d of REASON_DECISION[evt.reason]) lines.push(`  - ${t(d)}`);
   lines.push(t({
-    en: "Once decided, clear the escalation with `harness loop clear` \u2014 the wave loop stays stopped until then.",
-    ko: "\uD310\uB2E8\uC774 \uB05D\uB098\uBA74 `harness loop clear` \uB85C \uC18C\uD658\uC744 \uD574\uC81C\uD574\uC57C \uC6E8\uC774\uBE0C \uB8E8\uD504\uAC00 \uB2E4\uC2DC \uB3C8\uB2E4."
+    en: "Once decided, clear the escalation with `harness loop critical clear` \u2014 the wave loop stays stopped until then.",
+    ko: "\uD310\uB2E8\uC774 \uB05D\uB098\uBA74 `harness loop critical clear` \uB85C \uC18C\uD658\uC744 \uD574\uC81C\uD574\uC57C \uC6E8\uC774\uBE0C \uB8E8\uD504\uAC00 \uB2E4\uC2DC \uB3C8\uB2E4."
   }));
   return lines.join("\n");
 }
@@ -14340,7 +14378,10 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               try {
                 src = fs22.readFileSync(path20.resolve(root, f2), "utf8");
               } catch {
-                continue;
+                throw new Error(L(
+                  `Cannot read the file to lint: ${f2} \u2014 check the path. A file that was not read is not a file that is clean`,
+                  `\uB9B0\uD2B8\uD560 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${f2} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uB77C. \uC77D\uC9C0 \uBABB\uD55C \uD30C\uC77C\uC740 \uAE68\uB057\uD55C \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4`
+                ));
               }
               for (const h of findRawValues(src)) {
                 console.log(L(`${f2}:${h.line}:${h.column} ${h.kind} raw value ${h.value}`, `${f2}:${h.line}:${h.column} ${h.kind} raw \uAC12 ${h.value}`));
