@@ -352,6 +352,30 @@ describe('[SEC-213] 이름을 조립해도 디렉토리는 남는다 — 일곱 
     }
   });
 
+  /**
+   * [QUAL-229] **이 커버리지는 행동을 고정하지, `OWNED_DIRS` 절을 고정하지는 못한다.**
+   *
+   * 감정자가 「`OWNED_DIRS` 뮤테이션이 생존한다」고 지적했고 그건 사실이다. 그래서 **그 절만
+   * 발화하는 입력**을 찾아 봤는데 — 명령치환은 `opaqueExec` 가, 미정의 변수 형태는 경로
+   * 안전망이 **먼저** 잡는다. 즉 **그 절이 실제로 짊어지는 입력을 찾지 못했다.**
+   *
+   * 그러면 둘 중 하나다: 아직 못 찾은 입력이 있거나, **그 절이 이미 중복이거나.**
+   * 어느 쪽인지 모르는 채로 「고정했다」고 적지 않는다 — 대장 [QUAL-229] 로 열어 둔다.
+   * 아래 검사는 **행동**(이 형태들이 막힌다)을 고정하며, 그것만으로도 값이 있다.
+   */
+  it('조립한 이름이 보호 자리에 떨어지면 막힌다 (행동 고정 — 절 고정은 아니다)', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'echo FORGED >> .harness/$(echo events).jsonl',
+      'echo x > .harness/design/$(echo ledger).yaml',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+    // 반대 방향 — 보호 디렉토리가 아니면 같은 형태라도 통과해야 한다.
+    const out = bash(setup('P7'), 'echo x > docs/$(echo notes).md');
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+
   it('보호 자리가 아니면 조립해도 막지 않는다 — 증거 폴더는 열려 있어야 한다', () => {
     const root = setup('P7');
     for (const cmd of [
