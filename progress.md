@@ -118,7 +118,10 @@
 - deferred 3건 유지.
 - 아티팩트(같은 URL 로 갱신): 출하 판정 `https://claude.ai/code/artifact/745a8475-fb5a-4030-9872-25a67e5255cc` ·
   7축 감정 `https://claude.ai/code/artifact/e10df637-045b-446d-9443-a604dfa8790a`.
-  **둘 다 3-I 내용이라 3-J 로 갱신 필요.** 소스는 `round3i/harness-*.html` 에 커밋돼 있다.
+  **둘 다 3-J 로 갱신 완료**(2026-08-23). 소스는 `round3j/harness-verdict.html` ·
+  `round3j/harness-appraisal.html` 에 커밋돼 있다(3-I 판은 `round3i/` 에 남겨 뒀다).
+  판정 페이지는 **대장이 아직 3-I 상태(open 0)이고 3-J 결함은 미등재**임을 명시해 뒀다 —
+  등재가 끝나면 그 절을 갱신할 것.
 
 ### 시스템 지식 (이번 추가)
 

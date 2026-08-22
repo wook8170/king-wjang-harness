@@ -1,0 +1,510 @@
+<title>하네스 출하 판정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Song+Myung&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root{
+    --paper:#f6f4ef; --raised:#fffdf8; --sunk:#eae5db;
+    --ink:#1b1a16; --ink-2:#55524a; --ink-3:#847f73;
+    --rule:#ddd7cb; --rule-soft:#e9e4d9;
+    --threshold:#b5760a; --threshold-wash:#f7edda;
+    --sealed:#2f6b52; --sealed-wash:#e5eee9;
+    --breach:#9c2f26; --breach-wash:#f7e6e3;
+    --shadow:0 1px 2px rgba(27,26,22,.07);
+    --display:"Song Myung","Apple SD Gothic Neo",Georgia,serif;
+    --sans:"IBM Plex Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#141410; --raised:#1c1c16; --sunk:#23231c;
+      --ink:#e9e6dc; --ink-2:#aaa598; --ink-3:#827d70;
+      --rule:#33322a; --rule-soft:#282720;
+      --threshold:#d9a03f; --threshold-wash:#2b2313;
+      --sealed:#7fb99a; --sealed-wash:#16241d;
+      --breach:#dd7a6b; --breach-wash:#2c1815;
+      --shadow:0 1px 2px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141410; --raised:#1c1c16; --sunk:#23231c;
+    --ink:#e9e6dc; --ink-2:#aaa598; --ink-3:#827d70;
+    --rule:#33322a; --rule-soft:#282720;
+    --threshold:#d9a03f; --threshold-wash:#2b2313;
+    --sealed:#7fb99a; --sealed-wash:#16241d;
+    --breach:#dd7a6b; --breach-wash:#2c1815;
+    --shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:60rem;margin:0 auto;padding:0 1.4rem 5rem}
+  a{color:var(--threshold)}
+  :focus-visible{outline:2px solid var(--threshold);outline-offset:2px}
+
+  header.verdict{padding:4rem 0 2.6rem;border-bottom:1px solid var(--rule);
+    display:flex;flex-direction:column;gap:1.5rem}
+  .eyebrow{font-family:var(--mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);display:flex;flex-wrap:wrap;gap:.35rem 1.2rem}
+  .stampline{display:flex;align-items:baseline;flex-wrap:wrap;gap:.4rem 1.3rem}
+  h1.stamp{font-family:var(--display);font-weight:400;font-size:clamp(2.9rem,9vw,5rem);
+    line-height:.95;letter-spacing:-.01em;color:var(--breach);margin:0}
+  .stamp-sub{font-family:var(--mono);font-size:.86rem;letter-spacing:.08em;color:var(--ink-2)}
+  .why{margin:0;max-width:47rem;font-size:1.03rem;color:var(--ink-2);text-wrap:pretty}
+  .why strong{color:var(--ink);font-weight:600}
+
+  section{padding-top:3rem}
+  h2{font-family:var(--display);font-weight:400;font-size:1.45rem;margin:0 0 .3rem;
+    letter-spacing:-.005em;text-wrap:balance}
+  .lede{margin:0 0 1.4rem;max-width:45rem;color:var(--ink-2);font-size:.94rem;text-wrap:pretty}
+
+  .chart{border:1px solid var(--rule);border-radius:3px;background:var(--raised);
+    box-shadow:var(--shadow);padding:1.4rem 1.5rem 1.1rem}
+  .axis-row{display:grid;grid-template-columns:9.5rem 1fr 5.6rem;align-items:center;
+    gap:.9rem;padding:.42rem 0}
+  .axis-name{font-size:.93rem;display:flex;align-items:baseline;gap:.5rem}
+  .axis-name b{font-family:var(--mono);font-size:.74rem;color:var(--ink-3);font-weight:500}
+  .track{position:relative;height:1.15rem;background:var(--sunk);border-radius:1px}
+  .track i{display:block;height:100%;background:var(--ink-3);border-radius:1px}
+  .track i.hit{background:var(--sealed)}
+  .track i.miss{background:var(--breach)}
+  .track .line{position:absolute;top:-.42rem;bottom:-.42rem;left:96%;width:2px;
+    background:var(--threshold)}
+  .axis-num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;
+    font-size:.9rem;white-space:nowrap}
+  .axis-num .prev{color:var(--ink-3);font-size:.78rem}
+  .up{color:var(--sealed)} .down{color:var(--breach)}
+  .chart-foot{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;margin-top:1rem;padding-top:.9rem;
+    border-top:1px solid var(--rule-soft);font-size:.83rem;color:var(--ink-2)}
+  .tick{display:inline-block;width:.55rem;height:.55rem;margin-right:.4rem;border-radius:1px;
+    vertical-align:baseline}
+
+  .strip{display:flex;height:2.4rem;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+  .strip span{display:flex;align-items:center;justify-content:center;color:#fff;
+    font-family:var(--mono);font-size:.8rem;font-weight:500;font-variant-numeric:tabular-nums}
+  .seg-v{background:#2f6b52;flex:188} .seg-d{background:#847f73;flex:3}
+  .seg-r{background:#5f5c54;flex:2}
+  .strip.pending{margin-top:.55rem;height:1.9rem;border-color:var(--breach)}
+  .strip.pending span{background:#9c2f26;flex:1}
+  .strip-key{display:flex;flex-wrap:wrap;gap:.35rem 1.5rem;margin-top:.75rem;font-size:.85rem;color:var(--ink-2)}
+  .strip-key b{font-family:var(--mono);font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:33rem}
+  th{text-align:left;font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:600;padding:0 .85rem .5rem 0;border-bottom:1px solid var(--rule);white-space:nowrap}
+  td{padding:.75rem .85rem .75rem 0;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.6}
+  tr:last-child td{border-bottom:0}
+  td.id,th.id{width:1%;white-space:nowrap}
+  td.id code{font-family:var(--mono);font-size:.8rem;color:var(--ink);background:none;padding:0}
+  td.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  code{font-family:var(--mono);font-size:.85em;background:var(--sunk);padding:.06em .32em;
+    border-radius:2px;color:var(--ink-2)}
+  td strong,li strong,p strong{font-weight:600;color:var(--ink)}
+
+  .chip{display:inline-block;font-family:var(--mono);font-size:.68rem;font-weight:500;
+    letter-spacing:.05em;padding:.14rem .45rem;border-radius:2px;border:1px solid transparent;white-space:nowrap}
+  .c-blocker{color:var(--breach);background:var(--breach-wash);border-color:var(--breach)}
+  .c-high{color:var(--threshold);background:var(--threshold-wash);border-color:var(--threshold)}
+  .c-med{color:var(--ink-2);background:var(--sunk);border-color:var(--rule)}
+  .c-sealed{color:var(--sealed);background:var(--sealed-wash);border-color:var(--sealed)}
+
+  .note{background:var(--raised);border:1px solid var(--rule);border-radius:3px;
+    padding:1.3rem 1.4rem;box-shadow:var(--shadow);margin-top:1.4rem}
+  .note.alarm{border-left:3px solid var(--breach)}
+  .note.method{border-left:3px solid var(--threshold)}
+  .note.good{border-left:3px solid var(--sealed)}
+  .note h3{font-family:var(--display);font-weight:400;font-size:1.08rem;margin:0 0 .5rem}
+  .note p{margin:0 0 .65rem;color:var(--ink-2);font-size:.93rem}
+  .note p:last-child{margin-bottom:0}
+  .chain{font-family:var(--mono);font-size:.82rem;color:var(--ink-2);background:var(--sunk);
+    border-radius:2px;padding:.7rem .85rem;overflow-x:auto;white-space:nowrap;margin:.2rem 0 .8rem}
+  .chain b{color:var(--breach);font-weight:500}
+  .chain s{color:var(--ink-3);text-decoration-thickness:1px}
+  ul.plain{margin:0;padding-left:1.1rem;color:var(--ink-2)}
+  ul.plain li{margin-bottom:.5rem}
+  ul.plain li:last-child{margin-bottom:0}
+
+  footer{margin-top:3.5rem;padding-top:1.3rem;border-top:1px solid var(--rule);
+    font-size:.81rem;color:var(--ink-3)}
+  footer p{margin:0 0 .45rem}
+  @media (max-width:44rem){
+    header.verdict{padding-top:2.6rem}
+    section{padding-top:2.2rem}
+    .axis-row{grid-template-columns:7.5rem 1fr 4.6rem;gap:.6rem}
+    .axis-name{font-size:.86rem}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="verdict">
+  <div class="eyebrow">
+    <span>king-wjang-harness</span><span>Claude Code 플러그인</span>
+    <span>라운드 3-J</span><span>2026-08-23</span><span>d7175ab</span>
+  </div>
+  <div class="stampline">
+    <h1 class="stamp">출하 불가</h1>
+    <span class="stamp-sub">재감정이 돌았다 — 여섯 축이 내려갔다</span>
+  </div>
+  <p class="why">
+    라운드 3-I 는 대장을 <strong>open 0</strong> 으로 비웠고, 판정을 올리는 유일한 길인
+    <strong>7축 재감정</strong>을 이번에 돌렸다. 결과는 <strong>전 축 4.8 미달</strong>이고
+    <strong>여섯 축이 지난 라운드보다 내려갔다.</strong> 감정자들이 목록 밖에서
+    <strong>BLOCKER 1건 · HIGH 1건</strong>을 새로 찾아 왔다 — <strong>네 라운드 연속 같은 패턴이다.</strong>
+    하나 달라진 것이 있다: 라운드 3-I 가 바꾼 <strong>게이트 기준(G9)의 재검증은 통과했다.</strong>
+    그 절차만은 설계대로 작동했다.
+  </p>
+</header>
+
+<section>
+  <h2>일곱 축 — 이번엔 여섯이 내려갔다</h2>
+  <p class="lede">
+    세로선이 기준선 4.8. 감정 대상은 <code>3aec164</code> 한 커밋에 고정했고, 감정자 일곱은
+    서로의 결과를 보지 못했으며 <strong>이전 라운드 보고도 받지 않았다.</strong>
+    가성비 축은 지연 측정 오염을 피해 <strong>나머지가 끝난 뒤 단독</strong>으로 돌았다.
+  </p>
+
+  <div class="chart">
+    <div class="axis-row">
+      <span class="axis-name"><b>1</b>효용성</span>
+      <span class="track"><i style="width:88%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.4 <span class="prev down">▼4.6</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>2</b>실효성</span>
+      <span class="track"><i style="width:90%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.5 <span class="prev down">▼4.6</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>3</b>엔지니어링</span>
+      <span class="track"><i style="width:92%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.6 <span class="prev">＝4.6</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>4</b>가치(출하)</span>
+      <span class="track"><i class="miss" style="width:60%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">3.0 <span class="prev down">▼3.5</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>5</b>가성비</span>
+      <span class="track"><i style="width:90%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.5 <span class="prev">＝4.5</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>6</b>사용성</span>
+      <span class="track"><i style="width:84%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.2 <span class="prev down">▼4.4</span></span>
+    </div>
+    <div class="axis-row">
+      <span class="axis-name"><b>7</b>상품성</span>
+      <span class="track"><i style="width:86%"></i><i class="line" aria-hidden="true"></i></span>
+      <span class="axis-num">4.3 <span class="prev down">▼4.7</span></span>
+    </div>
+    <div class="chart-foot">
+      <span><i class="tick" style="background:var(--threshold)"></i>기준선 <b>4.8</b></span>
+      <span>내려간 축 <b>5</b> · 동일 <b>2</b> · 올라간 축 <b>0</b></span>
+      <span>실질 도달 <b>0 / 7</b></span>
+    </div>
+  </div>
+
+  <div class="note alarm">
+    <h3>지난 라운드와 정확히 반대다 — 그리고 그것이 더 정직한 신호다</h3>
+    <p>
+      라운드 3-I 에서는 여섯 축이 <strong>올랐다.</strong> 봉인이 점수를 올린 것이다.
+      이번엔 여섯이 <strong>내려갔다.</strong> 새 감정자들이 지난 라운드 목록을 안 받고
+      자기 목록을 만들자, <strong>지난 라운드 점수에 반영되지 않았던 것들이 한꺼번에 보였다.</strong>
+    </p>
+    <p>
+      점수가 오르내린 것보다 중요한 사실은 이것이다 — <strong>네 라운드 연속으로,
+      우리 목록이 비어 있을 때마다 목록 밖에서 결함이 나왔다.</strong>
+      「대장이 open 0 이다」는 <strong>출하 가능의 근거가 될 수 없다</strong>는 것이
+      이제 네 번 실측으로 확인됐다.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>★ G9 재정의 — 재검증 통과</h2>
+  <p class="lede">
+    라운드 3-I 는 게이트 하나의 기준 자체를 바꿨다. <code>OPS-74</code>(구현자의 측정 목록은 근거가
+    아니다)에 따라 <strong>감정자 재검증 전까지 판정 근거로 쓰지 않겠다</strong>고 못 박아 뒀었다.
+    이번에 가성비 축이 그것을 <strong>독립적으로 다시 쟀다.</strong>
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>측정 표면</th><th class="mono">감정자 델타</th><th class="mono">구현자 델타</th><th class="mono">문턱</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>프로세스 wall-time</td><td class="mono"><strong>+32.7 ms</strong></td><td class="mono">+29 ms</td><td class="mono">50 ms</td><td><span class="chip c-sealed">재현</span></td></tr>
+        <tr><td>인프로세스</td><td class="mono"><strong>+21.4 ms</strong></td><td class="mono">+16.3 ms</td><td class="mono">50 ms</td><td><span class="chip c-sealed">재현</span></td></tr>
+        <tr><td><code>node -e ''</code> 기동만</td><td class="mono"><strong>39.7 ms</strong></td><td class="mono">99 ms</td><td class="mono">—</td><td>머신차</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note good">
+    <h3>결정적 근거는 「같은 코드가 머신만 바꿔 판정이 갈린다」였다</h3>
+    <p>
+      감정자는 <code>node</code> 기동을 직접 쟀다 — 자기 머신 <strong>39.7ms</strong>,
+      구현자 머신 99ms. 그 결과 <strong>같은 코드가 옛 절대문턱(폴백 p95 &lt; 150ms)에서
+      감정자 머신은 97ms 로 통과하고 구현자 머신은 162ms 로 불통과</strong>한다.
+      <strong>코드를 한 줄도 안 고치고 머신만 바꿔 게이트 판정이 뒤집힌다.</strong>
+    </p>
+    <p>
+      반면 제품이 통제하는 몫(정상 wall − node 기동)은 두 머신에서
+      <strong>~25–28ms 로 안정</strong>이었다. 감정자 결론: <strong>「통과시키려 문턱을 옮긴 것이 아니라,
+      옛 문턱이 머신을 재던 것을 제품(델타)으로 옮긴 정당한 수정」.</strong>
+    </p>
+    <p>
+      이것이 이번 라운드의 유일한 좋은 소식이자, <strong>절차가 설계대로 작동한 증거</strong>다 —
+      기준을 바꾼 사람이 자기 근거로 판정을 올리지 않았고, 독립 감정자가 그것을 재서 확인했다.
+    </p>
+  </div>
+
+  <div class="note alarm">
+    <h3>그러나 「재정의가 정당하다」와 「G9 이 좋은 게이트다」는 다른 말이다</h3>
+    <p>
+      같은 감정자가 곧바로 결함을 냈다. 폴백은 <strong>바로 손상 상태를 살아남으려고 존재</strong>하는데,
+      G9 은 <strong>가장 친화적인 저널</strong>(프리필터가 전부 건너뛰는 90% 턴로그)만 잰다.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>저널 100k줄</th><th class="mono">인프로세스 열화 p95</th><th class="mono">wall</th><th>50ms 델타 문턱</th></tr></thead>
+        <tbody>
+          <tr><td>현실 분포 (G9 이 재는 것)</td><td class="mono">21.8 ms</td><td class="mono">97.4 ms</td><td><span class="chip c-sealed">충족</span></td></tr>
+          <tr><td>100% 상태전이</td><td class="mono">65.2 ms</td><td class="mono">—</td><td><span class="chip c-blocker">초과</span></td></tr>
+          <tr><td>50% 손상</td><td class="mono">208.7 ms</td><td class="mono">—</td><td><span class="chip c-blocker">초과</span></td></tr>
+          <tr><td>100% 손상</td><td class="mono"><strong>420 ms</strong></td><td class="mono"><strong>315 ms</strong></td><td><span class="chip c-blocker">초과</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:.8rem">
+      <strong>비용 절감(프리필터)이 최악 입력에서 무력화되고, 측정(G9)이 그 입력을 회피한다</strong> —
+      지난 라운드 64KB 캡과 <strong>같은 부류가 성능 게이트 자체에</strong> 남았다.
+      게다가 현실 델타 21ms 에 문턱 50ms 라 <strong>2.3배 회귀가 나야 트립</strong>한다.
+      +15ms(70% 슬로다운)짜리 회귀는 조용히 통과한다.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>BLOCKER — <code>cd</code> 한 줄이 방어를 통째로 무력화한다</h2>
+  <p class="lede">
+    가치 축이 목록 밖에서 찾았고, <strong>메인 세션이 제품 표면에서 재현했다.</strong>
+    재현해 보니 <strong>보고보다 넓었다</strong> — 감정자는 구멍 하나를 봤는데 실제로는 둘이다.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>명령 (P0 설계 트랙 · <code>bin/harness-hook pre-tool</code>)</th><th>판정</th></tr></thead>
+      <tbody>
+        <tr><td><code>xxd -r -p payload.hex src/app.ts</code></td><td><span class="chip c-sealed">deny</span></td></tr>
+        <tr><td><code>cd src &amp;&amp; xxd -r -p payload.hex app.ts</code></td><td><span class="chip c-blocker">ALLOW (0바이트)</span></td></tr>
+        <tr><td><code>cd .harness &amp;&amp; xxd -r -p ../p7.hex state.json</code></td><td><span class="chip c-blocker">ALLOW</span></td></tr>
+        <tr><td><code>cd .harness &amp;&amp; xxd -r -p ../c.hex config.yaml</code></td><td><span class="chip c-blocker">ALLOW</span></td></tr>
+        <tr><td><code>cd .harness &amp;&amp; tee events.jsonl &lt; ../x</code></td><td><span class="chip c-blocker">ALLOW</span></td></tr>
+        <tr><td><code>cd src &amp;&amp; tee app.ts &lt; ../x</code></td><td><span class="chip c-sealed">deny</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note alarm">
+    <h3>구멍이 둘이다 — 그리고 이번 뿌리는 열거가 아니다</h3>
+    <p>
+      <strong>① 안전망이 「슬래시 있는 경로」만 본다.</strong> 열거 밖 쓰기 도구(<code>xxd</code> 등)는
+      대상 추출이 안 되고 <code>pathLikeMentions</code> 안전망에 걸려 막히는데, 그 안전망이
+      슬래시 전용이라 <strong><code>cd</code> 로 슬래시를 없애면 통째로 비활성</strong>된다.
+    </p>
+    <p>
+      <strong>② 보호 파일을 리터럴 상대경로로 매칭한다.</strong> 그래서 <code>cd .harness</code> 가
+      그 매칭을 무력화하고, <strong>열거된 평범한 도구(<code>tee</code>)로도 저널 위조가 통과</strong>한다.
+      이것은 <code>SEC-100</code>·<code>SEC-A</code>(저널 위조 → <code>doctor --repair</code> → 게이트 개통)
+      부류의 재개방이다.
+    </p>
+    <p>
+      지난 세 번은 <strong>열거의 실패</strong>였다(<code>SEC-49</code> → <code>SEC-A</code> →
+      <code>SEC-100</code> → <code>SEC-135</code>). <strong>이번은 정규화의 실패다</strong> —
+      대상 경로를 <strong>판정 시점에 <code>cwd</code> 를 반영해 절대경로로 정규화</strong>하지 않았다.
+      처방이 다른 부류이므로, 도구를 더 열거하는 것으로는 닫히지 않는다.
+    </p>
+    <p>
+      회귀 테스트도 같은 구멍을 남겼다 — <code>core/test/blocker-3i.test.ts:38</code> 은
+      <strong>슬래시 있는 형태만</strong> 검사한다. <strong>한 형태를 고정한 테스트는 부류를 못 잡는다.</strong>
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>결함 대장 — 지금 상태와, 아직 안 들어간 것</h2>
+  <p class="lede">
+    <strong>3-J 결함은 아직 대장에 등재되지 않았다.</strong> 전건 재현 후 등재하는 것이 이 리포의 절차다 —
+    이번에도 재현하다 BLOCKER 범위가 넓어졌으므로 그 절차를 건너뛰지 않는다.
+  </p>
+
+  <div class="strip" role="img" aria-label="대장 193행 중 검증 완료 188건, 미해결 0건, 보류 3건, 기각 2건">
+    <span class="seg-v">188</span><span class="seg-d"></span><span class="seg-r"></span>
+  </div>
+  <div class="strip pending" role="img" aria-label="라운드 3-J 가 낸 등재 대기 결함">
+    <span>3-J 등재 대기 — BLOCKER 1 · HIGH 1 · MED 약 10 · LOW 다수</span>
+  </div>
+  <div class="strip-key">
+    <span><i class="tick" style="background:#2f6b52"></i>검증 완료 <b>188</b></span>
+    <span><i class="tick" style="background:#847f73"></i>보류 <b>3</b></span>
+    <span><i class="tick" style="background:#5f5c54"></i>기각 <b>2</b></span>
+    <span><i class="tick" style="background:#9c2f26"></i>등재 대기 <b>3-J 전건</b> (중복 제거·재현 전 잠정치)</span>
+  </div>
+
+  <div class="note">
+    <h3>3-J 가 낸 것 (등재 전)</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th class="id">심각도</th><th>무엇인가</th><th class="id">낸 축</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id"><span class="chip c-blocker">BLOCKER</span></td>
+            <td><code>cd</code> 로 설계 게이트·저널·정책 파일 보호가 전부 풀린다 <strong>(재현 완료 · 보고보다 넓음)</strong></td>
+            <td class="id">4</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-high">HIGH</span></td>
+            <td><code>ship verdict</code> 가 <strong>P0 신규 프로젝트에도 「GO / Ready to ship」</strong> —
+              생애주기의 마지막 표면이 거짓 초록을 준다</td>
+            <td class="id">6</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>유령 MCP 도구 2종</strong> — <code>harness_gate_verify</code>·<code>harness_doc_upsert</code> 를
+              README 4개 언어가 광고하는데 서버엔 없다(실측 16종). <strong>세 축이 독립적으로 짚었다</strong></td>
+            <td class="id">1·6·7</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td>엔지니어링 <strong>하드 조건 「중복 규칙 0」 위반</strong> — 「명령을 실행하는가」 판정이
+              <code>runsCommand</code> 정본과 <code>cmd.includes</code> 두 벌이고 <strong>이미 갈렸다</strong>
+              (언급만 해도 과차단 · 이중 공백이면 미차단)</td>
+            <td class="id">3</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>외부 lint 가 대장의 20%를 조용히 건너뛴다</strong> — 글자접미 39행(BLOCKER
+              <code>SEC-A</code> 포함)을 안 보면서 「153행 R1–R7 통과」라 완전한 척 보고한다</td>
+            <td class="id">4</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>G9 이 최악 입력을 안 잰다</strong> · 회귀 탐지 하한이 2.3배로 너무 높다</td>
+            <td class="id">5</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>출하 트랙 과차단</strong> — <code>docker push</code> 등 슬래시 인자 배포 명령을
+              「신규 파일」로 오인해 <strong>게이트 승인 후에도</strong> 막는다</td>
+            <td class="id">2</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>승인된 설계의 무감지 개정</strong> — <code>phase set</code> 후진에
+              backtrack·해시 재검증이 없다</td>
+            <td class="id">1</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">MED</span></td>
+            <td><strong>「Measured」 수치가 배포본만으로 재현 불가</strong> — 벤치 스크립트·픽스처 미출하 ·
+              대표 A/B 실험에 방법론 기록이 없다</td>
+            <td class="id">7</td>
+          </tr>
+          <tr>
+            <td class="id"><span class="chip c-med">LOW~MED</span></td>
+            <td><strong>깊이 캡은 아직 fail-open</strong> — 크기 캡(64KB)은 <code>SEC-B3</code> 로
+              fail-closed 로 고쳤는데 깊이 캡(<code>depth&gt;=3</code>)은 조용히 통과시킨다.
+              <strong>같은 버그를 형제 캡에는 안 고쳤다</strong></td>
+            <td class="id">5</td>
+          </tr>
+          <tr>
+            <td class="id">LOW 다수</td>
+            <td>배포본 <code>npm test</code> 는 1177 passed <strong>| 16 skipped</strong> 인데 README 는
+              「1193 passing」 · 헤드라인 「~0 tokens」가 같은 문서 measured 「~240 tokens」와 모순 ·
+              <code>lang: ko</code> 가 MCP 거부문엔 미적용인데 「every message」라 광고 ·
+              요약↔대장 드리프트 · G10 커밋 수 낡음 …</td>
+            <td class="id">전 축</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>이 라운드가 남긴 규칙</h2>
+  <div class="note">
+    <ul class="plain">
+      <li><strong>경로를 리터럴 상대경로로 매칭하면 <code>cd</code> 한 줄이 무력화한다.</strong>
+        대상은 <strong>판정 시점에 <code>cwd</code> 를 반영해 절대경로로 정규화</strong>해야 한다.
+        열거를 늘리는 것으로는 안 닫힌다 — 부류가 다르다.</li>
+      <li><strong>안전망이 「슬래시 있는 것만」 보면 그 안전망은 옵션이다.</strong></li>
+      <li><strong>회귀 테스트가 한 형태만 고정하면 부류가 안 잡힌다.</strong>
+        같은 결함의 무슬래시 변종이 그대로 살아 있었다.</li>
+      <li><strong>캡을 하나만 fail-closed 로 고치면 형제 캡이 남는다.</strong>
+        크기는 고쳤고 깊이는 안 고쳤다.</li>
+      <li><strong>우회를 많이 설계하는 것과 목록 밖으로 나가는 것은 다른 일이다.</strong>
+        실효성 축이 ~90벡터를 전건 deny 로 통과시켰는데, 가치 축이 목록 밖에서 BLOCKER 를 찾았다 —
+        <strong>세 라운드 연속 같은 구도다.</strong></li>
+      <li><strong>여러 축이 독립적으로 같은 결함을 짚으면 재현 우선순위를 올려라.</strong>
+        유령 MCP 도구를 세 축이 각자 찾았다.</li>
+      <li><strong>성능 게이트도 최악 입력을 재야 한다.</strong> 가장 친화적인 입력만 재는 게이트는
+        「비용 캡이 방어를 되돌린다」와 같은 부류다 — 이번엔 그것이 <strong>게이트 자체</strong>에 있었다.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>판정을 벗으려면</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th class="id">순서</th><th>조건</th><th>지금 상태</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="id"><code>1</code></td>
+          <td><strong>G9 재정의 재검증</strong> — 라운드 3-I 가 남긴 부채</td>
+          <td><span class="chip c-sealed">통과</span> 감정자가 독립 재현 · <code>OPS-74</code> 요구 충족.
+            <strong>이번 라운드에 유일하게 닫힌 칸이다</strong></td>
+        </tr>
+        <tr>
+          <td class="id"><code>2</code></td>
+          <td><strong>3-J 결함 전건 재현 후 등재 · 봉인</strong></td>
+          <td>미착수. BLOCKER 1건은 재현 완료(범위 확대) · 유령 MCP 도구 1건 확인 완료.
+            나머지는 재현 전이다 — <strong>보고를 액면으로 받지 않는다</strong></td>
+        </tr>
+        <tr>
+          <td class="id"><code>3</code></td>
+          <td><strong>또 한 번의 재감정</strong></td>
+          <td>봉인이 끝난 뒤. <strong>네 라운드 연속 목록 밖에서 결함이 나왔으므로
+            또 나올 것으로 보는 편이 맞다</strong></td>
+        </tr>
+        <tr>
+          <td class="id"><code>—</code></td>
+          <td>사용자 판단 대기</td>
+          <td><code>git remote</code> 가 없어 푸시할 원격이 없고 <code>package.json</code> 의
+            <code>repository</code>·<code>bugs</code> 도 비어 있다(<strong>주소를 지어내지 않았다</strong>).
+            <strong>외부 <code>ledger-lint.sh</code> 의 glob 사각은 리포 밖 스킬 소관</strong>이라 고칠지 판단이 필요하다</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p>
+    근거 정본은 저장소의 결함 대장(<code>docs/release-readiness/2026-08-21/ledger.md</code>)이고,
+    3-J 감정 원본 일곱 편은 <code>round3j/appraisal3-1..7-*.md</code> 에 있다.
+    G9 재정의 사유는 <code>gates.md</code> 말미, 지연 실측은 <code>evidence/perf-139-latency.log</code>.
+  </p>
+  <p>
+    출하 불가 · 7축 전 축 4.8 미달(3.0–4.6) · 대장 verified 188 · open 0(3-J 미등재) ·
+    1193 tests green ×3 · tsc 0 · <code>d7175ab</code> · 2026-08-23
+  </p>
+</footer>
+
+</div>
