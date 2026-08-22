@@ -1,6 +1,6 @@
 # 결함 대장 — king-wjang-harness `e860460` (feature/core-engine-v0)
 
-**갱신** 2026-08-22 (라운드 3-F — 7축 재감정 반영: BLOCKER 1 · HIGH 3 · MED 10 봉인) · **판정** 출하 불가 · **open BLOCKER** 0 · **open HIGH** 0 · **open 전체** 14 (전부 LOW) · **verified** 105 · **deferred** 3 · **fixed(재측정 대기)** 0
+**갱신** 2026-08-22 (라운드 3-F — 7축 재감정 반영: BLOCKER 1 · HIGH 3 · MED 12 봉인) · **판정** 출하 불가 · **open BLOCKER** 0 · **open HIGH** 0 · **open 전체** 14 (전부 LOW) · **verified** 105 · **deferred** 3 · **fixed(재측정 대기)** 0
 
 🔴 **라운드 3 중반에 낸 「출하 가능」 판정을 철회한다.** 42 에이전트 독립 적대 감사가
 **BLOCKER 2건**을 찾았고 전건 재현했다: 판정 정책 파일이 피판정자 쓰기 영역 안에 있어
