@@ -7,7 +7,7 @@
 
 Process discipline for AI coding agents — **enforced by hooks, not suggested by prompts.** king-wjang-harness makes the **Design → Build → Ship** lifecycle *inviolable*: it physically denies the tool call when your agent tries to write source code during design, or end a session with work left unsettled. No persuasion. No "please remember to." A deterministic gate that runs **outside the model**.
 
-<sub>Hooks + CLI · append-only event journal as source of truth · ~0 context tokens · silent in projects that don't opt in</sub>
+<sub>Hooks + CLI · append-only event journal as source of truth · ~240 context tokens per session · silent in projects that don't opt in</sub>
 
 ---
 
@@ -32,7 +32,7 @@ This is the benchmark that matters. Not "which tool is faster" — **which layer
 | **Mechanism** | Text the model reads and *chooses* to follow | Hook returns `deny` / `block` — a decision **outside** the model |
 | **Can the model ignore it?** | Yes — rationalizes under pressure | **No** — the tool call is physically stopped |
 | **Reliability under load** | Degrades exactly when it matters most | Constant — a return value doesn't get tired |
-| **Context cost** | Grows with every rule you add | **~0 tokens** — runs out of process |
+| **Context cost** | Grows with every rule you add | **flat ~240 tokens/session** — the rules run out of process, so adding one costs nothing |
 | **Failure mode** | Silent drift; you find out later | Observable — every skip leaves a trace |
 | **State** | Stateless; re-explained each session | Durable event journal; survives `/clear`, resume, machine change |
 
@@ -96,7 +96,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 - No raw values in feature code — semantic tokens only. `text.primary` ✅ · `blue.500` ❌.
 - One source (`design-tokens.json`); CSS variables, TS constants, and Tailwind config are all *generated*, never hand-copied.
 - A four-layer system — tokens → primitives → base components → domain components — where every layer is a `DS-*` ledger node; the directory **freezes** after approval, so components can't sprawl.
-- **Triple enforcement:** lint (a raw value = CI red) + hook (color/spacing literals outside the token file are denied) + a **token-swap drill** (swap the theme, screenshot every screen — only hardcoded screens fail to change, exposing them instantly).
+- **Triple enforcement** (the hook layer is **off by default** — turn it on in `config.yaml`)**:** lint (a raw value = CI red) + hook (color/spacing literals outside the token file are denied) + a **token-swap drill** (swap the theme, screenshot every screen — only hardcoded screens fail to change, exposing them instantly).
 
 > The payoff is the invariant: **re-theme the entire product by editing one file** — and prove it with a screenshot drill, not a promise.
 
@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1223 passing** (53 files) — 16 are repo-only checks that skip in the published package (1207 there) |
+| Test suite | **1227 passing** (53 files) — 16 are repo-only checks that skip in the published package (1211 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -213,11 +213,11 @@ block feels wrong for your stack, this is the dial, not the source code.
 
 | Key | Default | What it does |
 |---|---|---|
-| `lang` | `en` | Language of every message the harness prints — CLI, hook JSON, MCP, and generated documents. Set `ko` for Korean. |
+| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean. **MCP tool descriptions and refusals stay English** (the ko strings are not in the MCP bundle). |
 | `profile` | `generic` | Which profile supplies `test` / `build` / `deploy` / `e2e` commands. A project-local `.harness/profile/` always wins over the bundled one. |
 | `remote_control` | `true` | Whether SessionStart mentions remote control. |
 | `terse` | `false` | Shorter hook guidance. |
-| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **Where writing is allowed on the design track.** Anything outside these prefixes is denied until the P6 gate is approved. |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **Where implementation code may be written on the design track.** Source files outside these prefixes are denied until the P6 gate is approved — tests, config, and docs are not blocked by this rule. |
 | `design_blocked_bash` | deploy commands (`npm publish`, `docker push`, `terraform apply`, …) | **Shipping commands that stay blocked** until the shipping track opens. Substring match, so no trailing flags. Your stack's own commands belong in the profile's `deploy_commands`. |
 | `design_system_frozen_roots` | `[]` | Directories where design-system files must not change once frozen. |
 | `block_raw_values` | `false` | Deny writes that hardcode raw colors/sizes instead of referencing semantic tokens. |
@@ -230,7 +230,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1223 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1227 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

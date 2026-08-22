@@ -16,6 +16,7 @@ import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import { run } from '../src/cli';
 import { readJournalForReplay } from '../src/events';
+import { canEnterPhase } from '../src/gate';
 import type { Phase } from '../src/types';
 
 const setup = (phase?: Phase) => {
@@ -167,5 +168,45 @@ describe('[COST-177] 폴백은 손상 저널에서도 싸다 — 가장 필요�
     // 수정 전 실측 p95 573ms(같은 머신). 문턱은 넉넉히 잡는다 — 잡으려는 것은
     // 「줄마다 예외」라는 **부류**이지 특정 머신의 밀리초가 아니다.
     expect(ms, `손상 저널 폴백이 ${ms}ms 걸렸다 — 예외 폭주가 돌아왔는지 보라`).toBeLessThan(200);
+  });
+});
+
+describe('[UX-182] 한 문장 안의 두 이름은 같아야 한다', () => {
+  it('게이트 거부문의 괄호가 처방이 가리키는 게이트의 상태를 말한다', () => {
+    const root = setup('P0');
+    const v = canEnterPhase(root, 'P2');
+    expect(v.ok).toBe(false);
+    // 「가장 앞의 것부터 P0」이라고 하면서 괄호는 P1 상태를 보여 주면 사람이 헤맨다.
+    expect(v.reason).toMatch(/P0 (is currently|는 현재)/);
+    expect(v.reason).not.toMatch(/P1 (is currently|는 현재)/);
+  });
+});
+
+describe('[UX-183] 가리키는 곳이 없는 근거는 근거가 아니다', () => {
+  const captureErr = (fn: () => void): string => {
+    const lines: string[] = [];
+    const orig = console.error;
+    console.error = (...a: unknown[]) => { lines.push(a.map(String).join(' ')); };
+    try { fn(); } finally { console.error = orig; }
+    return lines.join('\n');
+  };
+
+  it('없는 경로를 근거로 넣으면 경고한다 — 등재는 막지 않는다', () => {
+    const root = setup();
+    const msg = captureErr(() => {
+      expect(run(['ship', 'defect', 'add', '--id', 'DEF-1', '--severity', 'high',
+        '--title', 't', '--evidence', 'does/not/exist.ts:40'], root)).toBe(0);
+    });
+    expect(msg).toMatch(/does\/not\/exist\.ts/);
+  });
+
+  it('있는 경로·URL·경로 아닌 값에는 조용하다 — 경고가 시끄러우면 아무도 안 읽는다', () => {
+    const root = setup();
+    fs.writeFileSync(path.join(root, 'real.ts'), 'x\n');
+    for (const ev of ['real.ts:1', 'https://ci.example/run/1', 'measured by hand']) {
+      const msg = captureErr(() => run(['ship', 'defect', 'add', '--id', `D-${ev.length}`,
+        '--severity', 'low', '--title', 't', '--evidence', ev], root));
+      expect(msg, `쓸데없이 경고했다: ${ev}`).toBe('');
+    }
   });
 });

@@ -28,6 +28,24 @@ const read = (f: string) => fs.readFileSync(path.join(repo, f), 'utf8');
  * 그래서 이름을 하나 고치는 대신 **부류를 막는다**: README 에 등장하는 `harness_*` 이름을
  * 기계로 뽑아 서버의 도구 목록과 전수 대조한다. 도구가 늘거나 이름이 바뀌면 문서가 먼저 깨진다.
  */
+/**
+ * [PROD-184] **같은 문서 안에서 두 숫자가 다르면 하나는 거짓이다.**
+ *
+ * 헤드라인은 「~0 context tokens」인데 같은 문서의 measured 표는 「~240 tokens」였다.
+ * 둘 다 참인 주장(규칙이 프로세스 밖에 있어 **늘지 않는다** vs 세션당 주입량)이지만,
+ * 읽는 사람에게는 그냥 모순이다 — 그리고 광고 쪽이 더 눈에 띈다.
+ */
+describe('PROD-184: README 안의 토큰 수치가 서로 어긋나지 않는다', () => {
+  it('한 문서에 나오는 토큰 수치가 전부 같다', () => {
+    for (const f of READMES) {
+      const nums = [...read(f).matchAll(/~?\s*(\d+)\s*(?:context\s+)?(?:tokens|토큰|トークン|令牌)/g)]
+        .map(m => m[1]);
+      expect(nums.length, `${f} 에 토큰 수치가 없다`).toBeGreaterThan(0);
+      expect([...new Set(nums)], `${f} 가 서로 다른 토큰 수치를 말한다`).toHaveLength(1);
+    }
+  });
+});
+
 describe('PROD-171: README 가 말하는 MCP 도구가 실재한다', () => {
   const actual = new Set(toolDefinitions().map(d => d.name));
 

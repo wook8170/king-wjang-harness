@@ -881,7 +881,9 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
   const gates = readState(root).gates;
   const missing = PHASES.slice(0, i).filter(p => gates[p]?.status !== 'approved');
   if (missing.length === 0) return { ok: true };
-  const prev = PHASES[i - 1];
+  // [UX-182] 괄호가 **처방과 다른 게이트**를 말하고 있었다 — 「가장 앞의 것부터」라고 하면서
+  // 상태는 바로 앞 게이트(`prev`)의 것을 보여 줬다. 막힌 사람이 두 이름 사이에서 헤맨다.
+  // 처방이 가리키는 게이트의 상태를 보여 준다 — 한 문장 안의 두 이름은 같아야 한다.
   const first = missing[0];
   const list = missing.join(', ');
   return {
@@ -889,12 +891,12 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
     reason:
       tr(root, {
         en: `Cannot move to ${phase} — ${missing.length} gate(s) before it are not approved: ${list} `
-          + `(${prev} is currently: ${gates[prev]?.status ?? 'pending'}). Start with the earliest: `
+          + `(${first} is currently: ${gates[first]?.status ?? 'pending'}). Start with the earliest: `
           + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
           + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2). "
           + 'Approving a later gate does not stand in for the ones before it',
         ko: `${phase} 로 갈 수 없다 — 그 앞의 게이트 ${missing.length}개가 승인되지 않았다: ${list} `
-          + `(${prev} 는 현재 ${gates[prev]?.status ?? 'pending'}). 가장 앞의 것부터 처리하라: `
+          + `(${first} 는 현재 ${gates[first]?.status ?? 'pending'}). 가장 앞의 것부터 처리하라: `
           + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
           + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2). "
           + '뒤 게이트를 승인한다고 앞 게이트를 대신하지는 못한다',

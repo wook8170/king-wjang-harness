@@ -12453,14 +12453,13 @@ function canEnterPhase(root, phase) {
   const gates = readState(root).gates;
   const missing = PHASES.slice(0, i).filter((p) => gates[p]?.status !== "approved");
   if (missing.length === 0) return { ok: true };
-  const prev = PHASES[i - 1];
   const first = missing[0];
   const list = missing.join(", ");
   return {
     ok: false,
     reason: tr(root, {
-      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${prev} is currently: ${gates[prev]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
-      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${prev} \uB294 \uD604\uC7AC ${gates[prev]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
+      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${first} is currently: ${gates[first]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${first} \uB294 \uD604\uC7AC ${gates[first]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
     })
   };
 }
@@ -14478,6 +14477,16 @@ function harnessVersion() {
   }
   return "version unknown (package.json not readable)";
 }
+function warnUnresolvedEvidence(root, evidence, lang) {
+  const raw = (evidence ?? "").trim();
+  if (!raw) return;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return;
+  const p0 = raw.replace(/:\d+(?::\d+)?$/, "");
+  if (!p0 || !/[/.]/.test(p0)) return;
+  if (path20.isAbsolute(p0)) return;
+  if (fs22.existsSync(path20.resolve(root, p0))) return;
+  console.error(lang === "ko" ? `\uACBD\uACE0: \uADFC\uAC70 \uACBD\uB85C\uAC00 \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC5C6\uB2E4 \u2014 ${p0}. \uACB0\uD568\uC740 \uB4F1\uC7AC\uD588\uB2E4. \uC2E4\uC81C \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uAC8C \uACE0\uCE58\uB824\uBA74 \`harness ship defect update <id> --evidence <\uACBD\uB85C:\uC904>\` \uC744 \uC4F0\uB77C.` : `Warning: the evidence path does not exist in this project \u2014 ${p0}. The defect was recorded. Point it at a real file with \`harness ship defect update <id> --evidence <path:line>\`.`);
+}
 function run(argv, root) {
   const [cmd, sub, ...rest] = argv;
   if (cmd === "hook") {
@@ -14710,6 +14719,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
                 title: flag(args, "title") ?? "",
                 evidence: flag(args, "evidence") ?? ""
               });
+              warnUnresolvedEvidence(root, d.evidence, lang);
               console.log(`${d.id} [${d.severity}] ${d.status}`);
               return 0;
             }

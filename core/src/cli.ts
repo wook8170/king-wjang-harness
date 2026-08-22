@@ -229,6 +229,32 @@ function harnessVersion(): string {
   return 'version unknown (package.json not readable)';
 }
 
+/**
+ * [UX-183] **가리키는 곳이 없는 근거는 근거가 아니다.**
+ *
+ * `ship defect add --evidence does/not/exist.ts:40` 이 아무 말 없이 성공했다. 이 리포의
+ * 대장은 「measured 근거」를 세는데, 존재하지 않는 경로가 그 자리에 조용히 들어가면
+ * **집계는 정직해 보이고 내용은 비어 있다.**
+ *
+ * 거부하지는 않는다 — 근거가 다른 저장소·로그·URL 을 가리키는 정당한 경우가 있고,
+ * 결함 등재 자체를 막으면 사람이 대장을 안 쓰게 된다(그러면 대장이 0 이 된다).
+ * **사실만 말한다**: 프로젝트 안 경로처럼 보이는데 그 파일이 없다.
+ */
+function warnUnresolvedEvidence(root: string, evidence: string, lang: Lang): void {
+  const raw = (evidence ?? '').trim();
+  if (!raw) return;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return;          // URL — 파일이 아니다
+  const p0 = raw.replace(/:\d+(?::\d+)?$/, '');              // `path:line[:col]`
+  if (!p0 || !/[/.]/.test(p0)) return;                       // 경로처럼 안 생겼다 — 판단하지 않는다
+  if (path.isAbsolute(p0)) return;                           // 프로젝트 밖 — 여기서 알 수 없다
+  if (fs.existsSync(path.resolve(root, p0))) return;
+  console.error(lang === 'ko'
+    ? `경고: 근거 경로가 이 프로젝트에 없다 — ${p0}. 결함은 등재했다. `
+      + '실제 파일을 가리키게 고치려면 `harness ship defect update <id> --evidence <경로:줄>` 을 쓰라.'
+    : `Warning: the evidence path does not exist in this project — ${p0}. The defect was recorded. `
+      + 'Point it at a real file with `harness ship defect update <id> --evidence <path:line>`.');
+}
+
 export function run(argv: string[], root: string): number {
   const [cmd, sub, ...rest] = argv;
 
@@ -607,6 +633,7 @@ export function run(argv: string[], root: string): number {
                 title: flag(args, 'title') ?? '',
                 evidence: flag(args, 'evidence') ?? '',
               });
+              warnUnresolvedEvidence(root, d.evidence, lang);
               console.log(`${d.id} [${d.severity}] ${d.status}`);
               return 0;
             }
