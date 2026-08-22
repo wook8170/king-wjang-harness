@@ -31,7 +31,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isInitialized, readState } from './state';
+import { isInitialized, hasHarness, readState } from './state';
 import { appendEvent } from './events';
 import { submitGate } from './gate';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
@@ -275,6 +275,17 @@ const INIT_GUIDANCE =
   'No .harness/ here — this project is not managed by the harness yet. '
   + 'Run `harness init` in the terminal first.';
 
+/**
+ * [OPS-99] `.harness/` 는 있는데 `state.json` 만 없는 상태 — **미초기화가 아니라 열화**다.
+ * 이 둘을 한 문장으로 뭉뚱그리면 「관리되지 않는 프로젝트다 → init 하라」는 거짓 안내가
+ * 나가고, `init` 은 디렉토리가 이미 있다며 거부해 사람이 빠져나갈 길이 없다. CLI 는
+ * OPS-94 로 이 함정을 닫았는데 이 표면에는 그대로 남아 있었다.
+ */
+const REPAIR_GUIDANCE =
+  '.harness/ is here but state.json is missing — the state store is derived, so the event '
+  + 'journal can rebuild it. Call harness_doctor with repair: true (or run `harness doctor --repair` '
+  + 'in the terminal). Do not run `harness init`: it refuses while .harness/ exists.';
+
 /** §4-3 안전 속성. 어떤 인자·어떤 상태에서도 승인은 일어나지 않는다. */
 function refuseApprove(o: Record<string, unknown>): McpToolResult {
   const phase = str(o, 'phase');
@@ -298,15 +309,32 @@ export function callTool(root: string, name: string, args: unknown): McpToolResu
   // 승인 거절은 init 검사·예외 처리보다 앞선다 — 어떤 경로로도 우회되지 않게.
   if (name === 'harness_gate_approve') return refuseApprove(o);
 
-  const known = toolDefinitions().some(d => d.name === name);
-  if (!known) {
+  const def = toolDefinitions().find(d => d.name === name);
+  if (!def) {
     return fail(
       `Unknown tool: ${name} — available tools: `
       + toolDefinitions().map(d => d.name).join(', '),
     );
   }
 
-  if (!NEEDS_INIT_EXEMPT.has(name) && !isInitialized(root)) return fail(INIT_GUIDANCE);
+  /**
+   * [API-98] 스키마에 없는 입력 키는 **거부**한다 — CLI 의 미지 플래그(UTIL-D)와 같은 부류다.
+   * 조용히 무시하면 `titel` 같은 오타 하나가 「요청한 것과 다른 레코드」를 원장에 남기고,
+   * 부른 쪽은 성공(ok=true)만 보므로 영영 모른다. 판정 근거는 도구가 스스로 선언한
+   * `inputSchema.properties` 라 새 도구가 생겨도 목록이 갈리지 않는다.
+   */
+  const allowed = Object.keys(def.inputSchema.properties);
+  const unknownKeys = Object.keys(o).filter(k => !allowed.includes(k));
+  if (unknownKeys.length > 0) {
+    return fail(
+      `Unknown input for ${name}: ${unknownKeys.join(', ')} — this tool takes `
+      + `${allowed.length > 0 ? allowed.join(', ') : 'no arguments'}. `
+      + 'An unknown key is never applied, so it would have recorded something other than what was asked.',
+    );
+  }
+
+  if (!hasHarness(root)) return fail(INIT_GUIDANCE);
+  if (!NEEDS_INIT_EXEMPT.has(name) && !isInitialized(root)) return fail(REPAIR_GUIDANCE);
 
   try {
     return dispatch(root, name, o);

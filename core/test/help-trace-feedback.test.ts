@@ -246,3 +246,40 @@ describe('API-29: 침묵 성공이 없다', () => {
     expect(c.text()).toContain('--goal');
   });
 });
+
+/**
+ * [PROD-D] 저장 형식이 「한 코멘트 = 한 불릿」이라 수집할 때 `- ` 를 붙인다 — 그런데 리뷰
+ * 코멘트는 **마크다운 목록 그대로 붙여넣는 것**이 가장 흔한 입력이라 `- - 코멘트` 가
+ * 기본값이었다. 사람이 읽는 개정 근거 문서라 표시가 곧 품질이다.
+ */
+describe('PROD-D: 수집한 피드백에 불릿이 겹치지 않는다', () => {
+  const collect = (root: string, body: string): string => {
+    const file = path.join(root, 'fb.txt');
+    fs.writeFileSync(file, body);
+    run(['gate', 'feedback', 'P0', '--from', file], root);
+    const c = capture();
+    run(['gate', 'feedback', 'P0'], root);
+    c.restore();
+    return c.text();
+  };
+
+  it('이미 불릿인 입력을 이중 불릿으로 만들지 않는다', () => {
+    const root = tmp();
+    const c0 = capture(); run(['init'], root); c0.restore();
+    const text = collect(root, '- already bulleted\n* star bullet\n+ plus bullet\nplain line\n');
+    expect(text).not.toContain('- - ');
+    expect(text).not.toContain('- * ');
+    expect(text).not.toContain('- + ');
+    expect(text).toContain('- already bulleted');
+    expect(text).toContain('- star bullet');
+    expect(text).toContain('- plain line');
+  });
+
+  it('불릿을 벗겨도 코멘트 수는 그대로다 — 내용을 잃지 않는다', () => {
+    const root = tmp();
+    const c0 = capture(); run(['init'], root); c0.restore();
+    const text = collect(root, '- one\n- two\n- three\n');
+    expect(text).toContain('3');
+    for (const w of ['one', 'two', 'three']) expect(text).toContain(w);
+  });
+});

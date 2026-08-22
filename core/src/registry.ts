@@ -268,6 +268,24 @@ export function setDocArtifactUrl(root: string, id: string, url: string): DocNod
   if (parsed.protocol !== 'https:' || !parsed.hostname) {
     throw new Error(tr(root, { en: `The artifact URL must be https: "${url}" — paste the claude.ai artifact address as-is`, ko: `아티팩트 URL 은 https 여야 한다: "${url}" — claude.ai 아티팩트 주소를 그대로 넣어라` }));
   }
+  /**
+   * [UTIL-E] 안내문이 「claude.ai 아티팩트 주소」라고 말하면서 아무 호스트나 받으면
+   * 광고와 실제가 갈린다. 이 필드의 용도는 **사람이 원격에서 열어 보는 발행본**이고
+   * 그 발행처가 claude.ai 다 — 스킬 11장이 전부 `https://claude.ai/public/artifacts/<id>`
+   * 형태를 지시한다. 여기서 걸러내지 못하면 리뷰어가 열 수 없는 URL(오탈자·localhost·
+   * 사내 미러)이 승인 경로까지 그대로 실려 간다.
+   */
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'claude.ai' && !host.endsWith('.claude.ai')) {
+    throw new Error(tr(root, {
+      en: `The artifact URL must be a claude.ai address — got host "${host}". `
+        + 'Publish the document as a claude.ai artifact and paste that URL '
+        + '(https://claude.ai/public/artifacts/<id>)',
+      ko: `아티팩트 URL 은 claude.ai 주소여야 한다 — 받은 호스트는 "${host}" 다. `
+        + '문서를 claude.ai 아티팩트로 발행하고 그 URL 을 넣어라 '
+        + '(https://claude.ai/public/artifacts/<id>)',
+    }));
+  }
   const next: DocNode = { ...doc, artifactUrl: parsed.toString() };
   appendEvent(root, 'doc-artifact-url-set', {
     id, version: next.version, artifactUrl: next.artifactUrl,

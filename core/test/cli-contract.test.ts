@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { run } from '../src/cli';
+import { run, unknownFlags, VALUE_FLAGS, BOOL_FLAGS } from '../src/cli';
 import { nearestCommand } from '../src/help';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-contract-'));
@@ -195,5 +195,82 @@ describe('LOGIC-87: 원장 부모는 존재해야 한다', () => {
     const root = init();
     expect(capture(() => run(['node', 'upsert', '--id', 'C-1', '--title', 'concept'], root)).code).toBe(0);
     expect(capture(() => run(['node', 'upsert', '--id', 'D-1', '--title', 'domain', '--parent', 'C-1'], root)).code).toBe(0);
+  });
+});
+
+/**
+ * [UTIL-D] 미지 플래그는 **조용히 무시되지 않는다.**
+ *
+ * 이 가드의 진짜 위험은 반대편이다 — 목록에 빠진 플래그가 있으면 **정당한 입력이 막힌다.**
+ * 그래서 차단 측정에는 「막으면 안 되는 것」을 반드시 짝으로 두고, 목록이 소스와 갈리는지를
+ * 소스 파싱으로 직접 잰다(사람이 기억해야 하는 목록은 결국 갈린다).
+ */
+describe('UTIL-D: 미지 플래그를 거부한다', () => {
+  it('오타 플래그는 exit 1 이고 「그럼 무엇이었나」를 준다', () => {
+    const root = init();
+    const { code, text } = capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 't', '--titel', 'oops'], root));
+    expect(code).toBe(1);
+    expect(text).toContain('--titel');
+    expect(text).toContain('--title');   // 편집거리 제안
+  });
+
+  it('거부된 명령은 레코드를 남기지 않는다 — 조용한 오작동이 아니라 실패다', () => {
+    const root = init();
+    capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 't', '--nosuchflag', 'x'], root));
+    const { text } = capture(() => run(['node', 'list'], root));
+    expect(text).not.toContain('F-1');
+  });
+
+  it('`--title=x` 는 지원하지 않는 형태라 거부하고 올바른 형태를 알려 준다', () => {
+    const root = init();
+    const { code, text } = capture(() => run(['node', 'upsert', '--id', 'F-1', '--title=x'], root));
+    expect(code).toBe(1);
+    expect(text).toContain('--title <value>');
+  });
+
+  // ── 막으면 안 되는 것 (과차단 0) ──
+  it('정상 호출은 그대로 통과한다', () => {
+    const root = init();
+    expect(capture(() => run(['node', 'upsert', '--id', 'F-2', '--title', 't'], root)).code).toBe(0);
+  });
+
+  it('`--` 로 시작하는 값을 삼키지 않는다 — 값은 거르지 않는 것이 계약이다', () => {
+    const root = init();
+    const { code } = capture(() => run(['node', 'upsert', '--id', 'F-3', '--title', '--force'], root));
+    expect(code).toBe(0);
+  });
+
+  it('미지 명령은 여전히 「알 수 없는 명령」이 먼저다 (UX-24 계약)', () => {
+    const root = init();
+    const { text } = capture(() => run(['nosuchcmd', '--nosuchflag'], root));
+    expect(text).toContain('nosuchcmd');
+    expect(text).not.toContain('--nosuchflag');   // 플래그 검사가 먼저 울면 원인을 다른 곳으로 가리킨다
+  });
+
+  it('`--help` 는 플래그 검사보다 먼저다', () => {
+    const root = init();
+    expect(capture(() => run(['node', '--help'], root)).code).toBe(0);
+  });
+
+  it('목록이 소스와 갈리지 않는다 — cli.ts 가 읽는 플래그가 전부 등록돼 있다', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/cli.ts'), 'utf8');
+    const known = new Set([...VALUE_FLAGS, ...BOOL_FLAGS]);
+    const missing: string[] = [];
+    for (const m of src.matchAll(/flag\([^,]+,\s*'([a-zA-Z0-9-]+)'/g)) {
+      if (!known.has(m[1])) missing.push(`flag(…, '${m[1]}')`);
+    }
+    // `'--x'` 리터럴 — 상수 선언부(이 목록 자신)와 도움말·오류문 예시는 제외한다.
+    const decl = src.slice(src.indexOf('export const VALUE_FLAGS'), src.indexOf('function editDistance'));
+    for (const m of src.matchAll(/'--([a-zA-Z0-9-]+)'/g)) {
+      if (decl.includes(`'--${m[1]}'`)) continue;
+      if (['help', 'version'].includes(m[1])) continue;   // 명령 토큰으로도 쓰인다
+      if (!known.has(m[1])) missing.push(`'--${m[1]}'`);
+    }
+    expect(missing, '새 플래그를 VALUE_FLAGS/BOOL_FLAGS 에 등록하지 않으면 정당한 입력이 막힌다').toEqual([]);
+  });
+
+  it('unknownFlags 는 값 자리의 `--` 토큰을 플래그로 세지 않는다', () => {
+    expect(unknownFlags(['node', 'upsert', '--title', '--force'])).toEqual([]);
+    expect(unknownFlags(['node', 'upsert', '--nope', 'x'])).toEqual(['--nope']);
   });
 });

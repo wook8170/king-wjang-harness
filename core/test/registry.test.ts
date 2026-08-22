@@ -307,3 +307,36 @@ describe('registry — staleDocs / docsForPhase', () => {
     expect(docsForPhase(root, 'P9')).toEqual([]);
   });
 });
+
+/**
+ * [UTIL-E] 안내문이 「claude.ai 아티팩트 주소」라고 말하면 실제로도 그것만 받아야 한다.
+ * 이 필드의 용도는 사람이 원격에서 열어 보는 발행본이라, 열 수 없는 URL 이 승인 경로까지
+ * 실려 가면 게이트가 보는 것과 사람이 보는 것이 갈린다.
+ */
+describe('UTIL-E: 아티팩트 URL 은 claude.ai 주소여야 한다', () => {
+  const reg = (root: string) => {
+    writeDoc(root, 'docs/a.md', 'body');
+    upsertDoc(root, { id: 'DOC-1', phase: 'P0', path: 'docs/a.md', version: 1, status: 'draft', linkedNodes: [] });
+  };
+
+  it('claude.ai 주소는 받는다', () => {
+    const root = setup(); reg(root);
+    expect(setDocArtifactUrl(root, 'DOC-1', URL_OK).artifactUrl).toBe(URL_OK);
+  });
+
+  it('서브도메인도 받는다', () => {
+    const root = setup(); reg(root);
+    const u = 'https://www.claude.ai/public/artifacts/x';
+    expect(setDocArtifactUrl(root, 'DOC-1', u).artifactUrl).toBe(u);
+  });
+
+  it.each([
+    'https://example.com/x',
+    'https://localhost/x',
+    'https://claude.ai.evil.test/x',
+  ])('%s 는 거부하고 무엇이었어야 하는지 알려 준다', u => {
+    const root = setup(); reg(root);
+    expect(() => setDocArtifactUrl(root, 'DOC-1', u)).toThrow(/claude\.ai/);
+    expect(getDoc(root, 'DOC-1')!.artifactUrl).toBeUndefined();
+  });
+});

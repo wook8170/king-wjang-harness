@@ -507,7 +507,15 @@ export function feedbackPath(root: string, phase: Phase): string {
 }
 
 export function recordGateFeedback(root: string, phase: Phase, raw: string): number {
-  const lines = raw.split('\n').map(l => sanitizeUntrusted(l)).filter(l => l.trim());
+  /**
+   * [PROD-D] 저장 형식이 「한 코멘트 = 한 불릿」이라 아래에서 `- ` 를 다시 붙인다 —
+   * 그런데 리뷰 코멘트를 **마크다운 목록 그대로 붙여넣는 것**이 가장 흔한 입력이라
+   * `- - 코멘트` 가 기본값이 돼 있었다. 입력쪽 불릿은 벗겨서 정규화한다.
+   */
+  const stripBullet = (l: string): string => l.replace(/^\s*[-*+]\s+/, '');
+  const lines = raw.split('\n')
+    .map(l => stripBullet(sanitizeUntrusted(l)))
+    .filter(l => l.trim());
   if (lines.length === 0) {
     throw new Error(
       tr(root, {

@@ -75,6 +75,93 @@ function flag(argv: string[], name: string): string | undefined {
 }
 
 /**
+ * [UTIL-D] **미지 플래그는 거부한다.** 예전에는 조용히 무시했다 —
+ * `node upsert --id F-1 --title t --titel oops` 가 exit 0 으로 「요청과 다른 레코드」를
+ * 만들고, 친 사람은 성공만 보므로 영영 모른다. 조용한 오작동은 오류보다 나쁘다.
+ *
+ * 판정 목록은 **이 파일이 실제로 읽는 플래그 전체**이고, `cli-contract.test.ts` 가
+ * 소스를 파싱해 누락을 잡는다 — 새 플래그를 등록하지 않으면 정당한 입력이 막히는
+ * (과차단) 쪽으로 틀어지므로, 그 방향을 테스트로 못 박아 둔다.
+ *
+ * 명령별이 아니라 **전체 합집합**으로 판정하는 이유: 명령별 목록은 한 곳이라도 빠지면
+ * 곧 과차단이고, 이 리포에서 과차단은 결함과 같은 무게다(사람이 하네스를 꺼 버린다).
+ * 합집합은 실제 실패모드인 **오타**를 잡으면서 정당한 입력을 막을 여지가 없다.
+ */
+export const VALUE_FLAGS: ReadonlySet<string> = new Set([
+  'accept', 'acceptance', 'anchor', 'artboard', 'choose', 'defer-reason', 'detail', 'env',
+  'evidence', 'for', 'from', 'goal', 'id', 'limit', 'milestone', 'name', 'option', 'out',
+  'outcome', 'parent', 'path', 'paths', 'percent', 'phase', 'png', 'question', 'rationale',
+  'reason', 'recommend', 'refs', 'reject', 'severity', 'sha', 'status', 'text', 'title',
+  'url', 'ux', 'version', 'wave', 'with',
+]);
+
+/** 값을 받지 않고 홀로 서는 플래그. */
+export const BOOL_FLAGS: ReadonlySet<string> = new Set([
+  'accept-policy', 'force', 'help', 'repair',
+]);
+
+/** 편집거리 — 오타에 「그럼 무엇이었나」를 붙이기 위한 최소 구현. */
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(
+        prev[j] + 1,
+        prev[j - 1] + 1,
+        diag + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
+}
+
+function nearestFlag(name: string): string | undefined {
+  let best: string | undefined;
+  let bestD = 3; // 3 이상 벌어지면 추측이 아니라 헛짚음이다 — 말하지 않는다
+  for (const cand of [...VALUE_FLAGS, ...BOOL_FLAGS]) {
+    const d = editDistance(name, cand);
+    if (d < bestD) { bestD = d; best = cand; }
+  }
+  return best;
+}
+
+/**
+ * argv 를 왼쪽에서 오른쪽으로 훑어 **모르는 플래그**만 모은다.
+ *
+ * 값을 받는 플래그 뒤 한 토큰은 건너뛴다 — `--reason --force` 처럼 `--` 로 시작하는
+ * **정당한 값**이 있기 때문이다(flag() 가 값을 거르지 않는 것과 같은 이유). 즉 확실히
+ * 아는 것만 실패로 판정하고, 애매하면 통과시킨다(과차단 0 방향).
+ */
+export function unknownFlags(argv: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (typeof tok !== 'string' || !tok.startsWith('--') || tok === '--') continue;
+    const name = tok.slice(2);
+    if (VALUE_FLAGS.has(name)) { i++; continue; }
+    if (BOOL_FLAGS.has(name)) continue;
+    out.push(tok);
+  }
+  return out;
+}
+
+/** 모르는 토큰 하나를 「무엇이 잘못됐고 무엇이었어야 하나」로 바꾼다. */
+function explainUnknownFlag(tok: string): string {
+  const eq = tok.indexOf('=');
+  if (eq > 2) {
+    const base = tok.slice(2, eq);
+    // `--title=x` 는 지금까지 조용히 무시됐다 — flag() 는 `--title` 을 정확히 찾기 때문이다.
+    if (VALUE_FLAGS.has(base)) return `${tok} (values take a space: \`--${base} <value>\`)`;
+  }
+  const near = nearestFlag(tok.slice(2));
+  return near ? `${tok} (did you mean --${near}?)` : tok;
+}
+
+/**
  * 훅 경로에서 침묵으로 흡수한 사고를 관측 가능하게 만든다 — hook.ts 의 logHookError 와
  * 같은 파일에 남긴다. `.harness/` 가 없으면 아무것도 하지 않는다(비간섭 불변식):
  * 하네스를 쓰지 않는 프로젝트에 디렉토리·파일을 만들면 안 된다.
@@ -179,6 +266,19 @@ export function run(argv: string[], root: string): number {
     const PRE_INIT_OK = new Set(['init', 'migrate', '--version', 'hook']);
     if (!PRE_INIT_OK.has(cmd) && findGroup(cmd) !== undefined && !hasHarness(root)) {
       throw new Error(L('No .harness/ here — run `harness init` first.', '.harness/ 가 없다 — `harness init` 을 먼저 실행하라'));
+    }
+    // [UTIL-D] 아는 명령에만 건다 — 미지 명령은 UX-24 계약대로 「알 수 없는 명령」이 먼저다.
+    if (findGroup(cmd) !== undefined) {
+      const bad = unknownFlags(argv);
+      if (bad.length > 0) {
+        const what = bad.map(explainUnknownFlag).join(' · ');
+        throw new Error(L(
+          `Unknown flag: ${what}. An unknown flag is never applied — accepting it silently would `
+          + `record something other than what you asked for. Run \`harness ${cmd} --help\` to see what this group takes.`,
+          `알 수 없는 플래그: ${what}. 모르는 플래그는 적용되지 않는다 — 조용히 받으면 `
+          + `요청과 다른 것이 기록된다. \`harness ${cmd} --help\` 로 이 명령군이 받는 것을 확인하라.`,
+        ));
+      }
     }
     switch (cmd) {
       case 'init':

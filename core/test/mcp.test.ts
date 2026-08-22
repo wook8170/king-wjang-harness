@@ -259,3 +259,77 @@ describe('mcp: 결정성', () => {
     expect(JSON.stringify(toolDefinitions())).toBe(JSON.stringify(toolDefinitions()));
   });
 });
+
+/**
+ * [API-98] 스키마 밖 입력 키는 CLI 의 미지 플래그(UTIL-D)와 **같은 부류**다 —
+ * 조용히 무시하면 오타 하나가 「요청과 다른 레코드」를 남기고 부른 쪽은 ok=true 만 본다.
+ * 표면이 둘이면 규칙도 둘로 갈리므로(LOGIC-93·API-92 가 그 사고였다) 여기서 함께 못 박는다.
+ */
+describe('API-98: MCP 는 스키마 밖 입력 키를 거부한다', () => {
+  it('미지 키는 ok=false 이고 받는 키를 알려 준다', () => {
+    const root = setup();
+    const r = callTool(root, 'harness_node_upsert', { id: 'F-1', title: 't', nosuchkey: 'x' });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('nosuchkey');
+    expect(r.content).toContain('id');
+  });
+
+  it('거부된 호출은 원장에 아무것도 남기지 않는다', () => {
+    const root = setup();
+    callTool(root, 'harness_node_upsert', { id: 'F-1', title: 't', nosuchkey: 'x' });
+    expect(getNode(root, 'F-1')).toBeUndefined();
+  });
+
+  it('인자를 받지 않는 도구에 키를 주면 거부한다', () => {
+    const root = setup();
+    const r = callTool(root, 'harness_status', { x: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('no arguments');
+  });
+
+  it('선언된 키만 쓰는 정상 호출은 전부 통과한다 (과차단 0)', () => {
+    const root = setup();
+    expect(callTool(root, 'harness_status', {}).ok).toBe(true);
+    expect(callTool(root, 'harness_node_upsert', { id: 'F-2', title: 't' }).ok).toBe(true);
+    expect(callTool(root, 'harness_wave_list', {}).ok).toBe(true);
+  });
+});
+
+/**
+ * [OPS-99] `.harness/` 는 있는데 `state.json` 만 없는 상태는 **미초기화가 아니라 열화**다.
+ * 두 상태를 한 문장으로 뭉뚱그리면 「관리되지 않는 프로젝트다 → init 하라」는 거짓 안내가
+ * 나가고 `init` 은 거부해 사람이 빠져나갈 길이 없다 — CLI 가 OPS-94 로 닫은 함정이
+ * 이 표면에 남아 있었다. **가드를 넣었으면 복구 경로가 그 가드에 걸리는지까지 잰다.**
+ */
+describe('OPS-99: state.json 만 없는 상태의 안내와 복구', () => {
+  const degrade = (): string => {
+    const root = setup();
+    fs.unlinkSync(path.join(root, '.harness', 'state.json'));
+    return root;
+  };
+
+  it('「하네스가 관리하지 않는다」고 말하지 않는다 — .harness/ 는 있다', () => {
+    const r = callTool(degrade(), 'harness_status', {});
+    expect(r.ok).toBe(false);
+    expect(r.content).not.toContain('not managed by the harness');
+    expect(r.content).toContain('state.json');
+  });
+
+  it('막다른 길인 `harness init` 대신 복구 수단을 가리킨다', () => {
+    const r = callTool(degrade(), 'harness_status', {});
+    expect(r.content).toContain('harness_doctor');
+  });
+
+  it('그 복구 경로가 실제로 통한다 — doctor → status 가 되살아난다', () => {
+    const root = degrade();
+    expect(callTool(root, 'harness_doctor', { repair: true }).ok).toBe(true);
+    expect(callTool(root, 'harness_status', {}).ok).toBe(true);
+  });
+
+  it('.harness/ 자체가 없으면 그때는 init 안내가 맞다', () => {
+    const root = mkroot();
+    const r = callTool(root, 'harness_status', {});
+    expect(r.ok).toBe(false);
+    expect(r.content).toContain('harness init');
+  });
+});
