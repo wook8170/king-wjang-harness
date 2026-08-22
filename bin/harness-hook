@@ -1,18 +1,27 @@
 #!/bin/sh
-# [PERF-95] 훅 비간섭 비용을 없앤다.
+# [PERF-95] Remove the cost of being non-intrusive.
 #
-# 하네스를 쓰지 않는 프로젝트에서도 Write/Edit/Bash 마다 node 가 두 번(pre+post) 뜬다 —
-# 내용·부작용·토큰은 0 이지만 기동비 ~107ms/호출은 그대로 남는다(594KB 번들 require 포함).
-# 이 스크립트는 그 판정을 sh 한 번(~4ms)으로 내린다.
+# In a project that does not use the harness, node still starts twice (pre+post) for every
+# Write/Edit/Bash. The output, the side effects and the token cost are all zero, but the ~107ms
+# startup per call is not (it includes requiring a 594KB bundle). This script makes that same
+# decision in one sh invocation (~4ms).
 #
-# **판정 기준이 코어와 글자 그대로 같아야 한다.** 코어의 루트는
-# `process.env.CLAUDE_PROJECT_DIR ?? process.cwd()` 이고 부모 디렉토리를 거슬러 올라가지
-# 않는다(cli.ts main). 그래서 여기 조건은 추정이 아니라 **같은 판정**이다 — 어긋나면
-# 하네스가 걸린 프로젝트에서 훅이 조용히 안 뜨고, 그것이 이 제품 최악의 실패다.
+# **The condition here must be literally the same decision the core makes.** The core's root is
+# `process.env.CLAUDE_PROJECT_DIR ?? process.cwd()` and it does not walk up to parent directories
+# (cli.ts main). So this is not a guess — it is the same test. If the two ever diverge, the hook
+# silently fails to run in a project that does have the harness, and that is this product's worst
+# possible failure.
 #
-# hooks.json 문자열에 `[ -d … ] &&` 를 박지 않고 셔뱅 스크립트로 둔 이유: 호스트가 훅
-# 명령을 셸로 해석하는지에 방어 전체를 걸지 않기 위해서다. 실행 파일은 어느 쪽이든 뜬다.
+# [COST-130] The test is **existence**, not "is a directory". If `.harness` is a regular file the
+# project is misconfigured, not un-harnessed: the core refuses in that state, so this gate must
+# hand the call over rather than allow everything. Fail closed — the two surfaces must not disagree
+# about whether enforcement applies.
 #
-# 출력 없이 exit 0 = 「판정 없음(허용)」 — 하네스 없는 프로젝트의 기존 동작과 같다.
-[ -d "${CLAUDE_PROJECT_DIR:-.}/.harness" ] || exit 0
+# Why this is a shebang script instead of `[ -e … ] &&` inlined into hooks.json: so the whole
+# defence does not rest on whether the host interprets the hook command through a shell.
+# An executable runs either way.
+#
+# No output and exit 0 = "no decision (allow)" — the same behaviour a project without the harness
+# has always had.
+[ -e "${CLAUDE_PROJECT_DIR:-.}/.harness" ] || exit 0
 exec "$(dirname "$0")/harness" hook "$@"

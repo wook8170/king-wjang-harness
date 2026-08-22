@@ -7440,8 +7440,25 @@ var DEFAULT_CONFIG = {
 };
 var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
 var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
+var CONFIG_CACHE = /* @__PURE__ */ new Map();
+function configCacheKey(p) {
+  try {
+    const st = fs.statSync(p, { bigint: true });
+    return `${st.mtimeNs}:${st.size}`;
+  } catch {
+    return "absent";
+  }
+}
 function loadConfig(root) {
   const p = configPath(root);
+  const key = configCacheKey(p);
+  const hit = CONFIG_CACHE.get(p);
+  if (hit && hit.key === key) return hit.value;
+  const value = parseConfig(p);
+  CONFIG_CACHE.set(p, { key, value });
+  return value;
+}
+function parseConfig(p) {
   let raw = {};
   if (fs.existsSync(p)) {
     try {
@@ -7461,6 +7478,19 @@ function loadConfig(root) {
     design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
     block_raw_values: raw.block_raw_values === true
   };
+}
+function inspectConfig(root) {
+  const p = configPath(root);
+  if (!fs.existsSync(p)) return { problems: [] };
+  try {
+    const parsed = YAML.parse(fs.readFileSync(p, "utf8"));
+    if (parsed !== null && parsed !== void 0 && typeof parsed !== "object") {
+      return { problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`] };
+    }
+    return { problems: [] };
+  } catch (e) {
+    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`] };
+  }
 }
 
 // core/src/tr.ts
@@ -8062,10 +8092,17 @@ function assertPhaseFit(root, phase, paths) {
 }
 function assertInsideRoot(root, paths) {
   const real = (p) => {
-    try {
-      return fs6.realpathSync(p);
-    } catch {
-      return p;
+    let cur = path5.resolve(p);
+    const rest = [];
+    for (; ; ) {
+      try {
+        return path5.join(fs6.realpathSync(cur), ...rest.reverse());
+      } catch {
+      }
+      const parent = path5.dirname(cur);
+      if (parent === cur) return path5.resolve(p);
+      rest.push(path5.basename(cur));
+      cur = parent;
     }
   };
   const base = real(root);
@@ -8171,6 +8208,13 @@ function submitGate(root, phase, opts) {
   };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
+}
+function measuredOnlyViolation(root, phase, evidence) {
+  if (!SHIP_PHASES.includes(phase) || evidence === "measured") return null;
+  return tr(root, {
+    en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
+    ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+  });
 }
 function feedbackPath(root, phase) {
   return path5.join(packetsDir(root), `${phase}.feedback.md`);
@@ -8387,6 +8431,7 @@ var BANNER = {
 // core/src/evidence.ts
 var trFor = (lang) => (m) => pick(m, lang);
 var MIN_PNG_BYTES = 1024;
+var MIN_PNG_EDGE = 200;
 var EXPECTED_EXTS = /* @__PURE__ */ new Set([
   "png",
   "jpg",
@@ -8448,6 +8493,7 @@ function validateEvidence(root, waveId) {
     return {
       ok: false,
       files,
+      entries: 0,
       usable: [],
       problems: [
         t({
@@ -8509,10 +8555,11 @@ function validateEvidence(root, waveId) {
         })}`);
       } else {
         file.dimensions = d;
-        if (st.size < MIN_PNG_BYTES) {
+        if (st.size < MIN_PNG_BYTES || Math.min(d.width, d.height) < MIN_PNG_EDGE) {
+          unusable.add(name);
           problems.push(t({
-            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. Open it and confirm it shows a real run.`,
-            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uD654\uBA74\uC778\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uB77C.`
+            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. A real screen capture is at least ${MIN_PNG_EDGE}px on each side. Capture the running UI again.`,
+            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uCEA1\uCC98\uB294 \uAC01 \uBCC0\uC774 \uCD5C\uC18C ${MIN_PNG_EDGE}px \uB2E4. \uC2E4\uD589 \uC911\uC778 \uD654\uBA74\uC744 \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
           }));
         }
       }
@@ -8527,9 +8574,9 @@ function validateEvidence(root, waveId) {
     files.push(file);
   }
   const usable = files.filter((f2) => !unusable.has(f2.name));
-  return { ok: usable.length > 0, files, usable, problems };
+  return { ok: usable.length > 0, files, entries: names.length, usable, problems };
 }
-var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES;
+var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES && Math.min(f2.dimensions.width, f2.dimensions.height) >= MIN_PNG_EDGE;
 function hasMeasuredEvidence(root, waveId) {
   return validateEvidence(root, waveId).files.some(isRealCapture);
 }
@@ -8616,8 +8663,8 @@ function createWave(root, opts) {
   const missing = opts.design_refs.filter((id2) => !getNode(root, id2));
   if (missing.length > 0) {
     throw new Error(tr(root, {
-      en: `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first with \`harness node upsert --id <id> --title <title>\``,
-      ko: `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+      en: `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first: CLI \`harness node upsert --id <id> --title <title>\`, MCP \`harness_node_upsert\``,
+      ko: `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C: CLI \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \xB7 MCP \`harness_node_upsert\``
     }));
   }
   if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
@@ -8715,7 +8762,7 @@ function completeWave(root) {
     const report = validateEvidence(root, id);
     if (report.usable.length === 0) {
       const uxRefs = meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ");
-      const why = report.files.length > 0 ? tr(root, {
+      const why = report.entries > 0 ? tr(root, {
         en: `the files there do not count as evidence:
   - ${report.problems.join("\n  - ")}`,
         ko: `\uAC70\uAE30 \uC788\uB294 \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4:
@@ -9339,12 +9386,8 @@ function shipVerdict(root) {
     for (const phase of SHIP_PHASES) {
       const g = state.value.gates[phase];
       if (!g || g.status === "pending") continue;
-      if (g.evidence !== "measured") {
-        reasons.push(t({
-          en: `ship gate ${phase} evidence grade is not measured (currently: ${g.evidence ?? "none"}) \u2014 the ship track passes on measured only (Iron Rule, spec \xA73-4). Attach real-run evidence and resubmit`,
-          ko: `\uCD9C\uD558 \uAC8C\uC774\uD2B8 ${phase} \uC758 \uADFC\uAC70 \uB4F1\uAE09\uC774 measured \uAC00 \uC544\uB2C8\uB2E4 (\uD604\uC7AC: ${g.evidence ?? "\uC5C6\uC74C"}) \u2014 \uCD9C\uD558 \uD2B8\uB799\uC740 measured \uB9CC \uD1B5\uACFC\uD55C\uB2E4(Iron Rule, \uC2A4\uD399 \xA73-4). \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C`
-        }));
-      }
+      const violation = measuredOnlyViolation(root, phase, g.evidence);
+      if (violation) reasons.push(violation);
     }
   }
   const waves = waveEntries2(root, t);
@@ -9494,11 +9537,18 @@ function runDoctor(root, opts = {}) {
   if (swept > 0) {
     notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC` }));
   }
+  for (const problem of inspectConfig(root).problems) {
+    warnings.push(t({
+      en: `config could not be parsed, so defaults are in effect \u2014 ${problem}`,
+      ko: `config \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uC5B4 \uAE30\uBCF8\uAC12\uC73C\uB85C \uB3D9\uC791 \uC911\uC774\uB2E4 \u2014 ${problem}`
+    }));
+  }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
+    const log = path14.join(runtimeDir(root), "hook-errors.log");
     warnings.push(t({
-      en: `${hookErrors} hook decision failure(s) recorded \u2014 find out why`,
-      ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778 \uD655\uC778 \uD544\uC694`
+      en: `${hookErrors} hook decision failure(s) recorded \u2014 read ${log} to find out why`,
+      ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
   if (fs15.existsSync(harnessDir(root))) {
@@ -9576,6 +9626,10 @@ function runDoctor(root, opts = {}) {
       }));
     } catch {
     }
+  }
+  if (repaired) {
+    const after = runDoctor(root, {});
+    return { ok: after.issues.length === 0, repaired, refused, issues, remaining: after.issues, warnings, notes };
   }
   return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
 }

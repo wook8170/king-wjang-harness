@@ -12,7 +12,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
-import { appendEvent } from './events';
+import { appendEvent, resolveState } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { getNode, mergeNode, reviseNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
@@ -537,7 +537,16 @@ export function run(argv: string[], root: string): number {
             console.log(flipped.length ? L(`Invalidated: ${flipped.join(', ')}`, `무효화: ${flipped.join(', ')}`) : L('Nothing to invalidate', '무효화 대상 없음'));
             return 0;
           }
-          case 'status': console.log(JSON.stringify(readState(root).gates, null, 2)); return 0;
+          case 'status': {
+            // [QUAL-133] 강제가 보는 상태와 **같은 상태**를 보여 준다. 열화라는 사실도 함께 —
+            // 조용히 재생 결과만 보여 주면 이번엔 열화가 숨는다.
+            const r = resolveState(root);
+            console.log(JSON.stringify(
+              r.degraded ? { gates: r.state.gates, degraded: 'state.json unreadable — replayed from the journal; run `harness doctor --repair`' } : r.state.gates,
+              null, 2,
+            ));
+            return 0;
+          }
 
           case 'feedback': {
             // FEAT-23: 캔버스·리뷰 코멘트를 개정 근거로 수집한다. 가져오기는 에이전트/CLI 몫이고

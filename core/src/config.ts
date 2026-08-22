@@ -34,8 +34,40 @@ const asBool = (v: unknown, d: boolean): boolean =>
 const asStrArray = (v: unknown, d: string[]): string[] =>
   Array.isArray(v) ? v.map(String) : [...d];
 
+/**
+ * [COST-129] **훅 1회당 같은 파일을 세 번 읽고 세 번 파싱하던 것을 한 번으로.**
+ *
+ * `handleHook`·`loadProfile`·`tr` 이 각자 `loadConfig` 를 부른다. 기본 51B config 에서는
+ * 0.06ms × 3 = 0.18ms 라 무시할 수준이지만, **정책 목록이 큰 config 에서는 그렇지 않다** —
+ * 66KB config 실측 **37.5ms × 3 = 112ms/호출**로, 훅이 하는 실제 일(인프로세스 p50 0.9ms)을
+ * 통째로 압도한다. 「대형에서만 유의」는 「무시해도 된다」가 아니었다.
+ *
+ * 캐시 키에 **나노초 mtime 과 크기**를 함께 넣는다. 밀리초 해상도로는 같은 밀리초 안에 쓰고
+ * 다시 읽는 경우(테스트가 정확히 그렇다) 낡은 값을 준다 — 성능을 위해 정확성을 내주면
+ * 그건 최적화가 아니라 버그다. 파일이 바뀌면 키가 달라져 자동으로 다시 읽는다.
+ */
+const CONFIG_CACHE = new Map<string, { key: string; value: HarnessConfig }>();
+
+function configCacheKey(p: string): string {
+  try {
+    const st = fs.statSync(p, { bigint: true });
+    return `${st.mtimeNs}:${st.size}`;
+  } catch {
+    return 'absent';
+  }
+}
+
 export function loadConfig(root: string): HarnessConfig {
   const p = configPath(root);
+  const key = configCacheKey(p);
+  const hit = CONFIG_CACHE.get(p);
+  if (hit && hit.key === key) return hit.value;
+  const value = parseConfig(p);
+  CONFIG_CACHE.set(p, { key, value });
+  return value;
+}
+
+function parseConfig(p: string): HarnessConfig {
   let raw: Record<string, unknown> = {};
   if (fs.existsSync(p)) {
     try {

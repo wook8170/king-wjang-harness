@@ -7,7 +7,7 @@
  */
 import * as fs from 'node:fs';
 import { eventsPath } from './paths';
-import { defaultState } from './state';
+import { defaultState, readState } from './state';
 import { isPhase, isEvidenceGrade } from './types';
 import type { HarnessEvent, HarnessState } from './types';
 
@@ -99,6 +99,39 @@ export const REPLAY_TYPES: ReadonlySet<string> = new Set([
 const TYPE_RE = /"type"\s*:\s*"([a-z-]+)"/;
 
 /**
+ * [COST-159] **최적화가 최악 입력에서 비용을 더 쓰면 그건 최적화가 아니다.**
+ *
+ * 정규식은 「파싱을 건너뛸 줄」에서는 크게 남지만, **전 줄이 재생 대상인 저널**에서는
+ * 정규식 + JSON.parse 를 둘 다 내므로 순수 파싱보다 느리다 — 실측 100k 줄에서
+ * naive 38.2ms vs 정규식 경로 45.5ms(약 +20%).
+ *
+ * 우리 writer 는 `JSON.stringify` 라 항상 `"type":"..."` 형태다. 그 흔한 모양을 `indexOf`
+ * 로 먼저 잡고, 못 잡았을 때만 정규식으로 내려간다(손편집·다른 writer 의 공백 형태 대비).
+ * 관용은 유지하고 비용만 뺀다.
+ *
+ * **남은 역행은 없앤 척하지 않는다(계약).** 사전 필터는 걸러 낼 것이 하나도 없는 입력에서
+ * 반드시 손해다 — 그것이 사전 필터의 본질이다. 실측(100k 줄, `phase-set` 전용 최악 입력):
+ *
+ * | 입력 | 이 경로 | 순수 파싱 |
+ * |---|---|---|
+ * | 현실 분포(턴 로그 위주) | **15.9ms** | 51.5ms |
+ * | 전 줄 재생 대상(최악) | 54.9ms | **47.6ms** |
+ *
+ * 최악에서 약 +15%, 현실 분포에서 약 3.2배 이득이다. 실제 저널에서 상태 전이는 소수이므로
+ * 이 절충을 유지한다. 최악 분포가 흔해지면 이 표를 다시 재고 판단을 뒤집어야 한다.
+ */
+const LITERAL = '"type":"';
+function eventType(line: string): string | undefined {
+  const i = line.indexOf(LITERAL);
+  if (i !== -1) {
+    const start = i + LITERAL.length;
+    const end = line.indexOf('"', start);
+    if (end !== -1) return line.slice(start, end);
+  }
+  return TYPE_RE.exec(line)?.[1];
+}
+
+/**
  * PERF-26: 훅의 **열화 경로**(state.json 부재·손상)용 빠른 재생.
  *
  * 저널 10만 건에서 pre-tool p95 가 169ms 로 게이트(150ms)를 넘었다. 원인은 전 줄 JSON.parse 다 —
@@ -115,7 +148,7 @@ export function readJournalForReplay(root: string): Journal {
   let corruptLines = 0;
   for (const line of fs.readFileSync(eventsPath(root), 'utf8').split('\n')) {
     if (!line.trim()) continue;
-    const t = TYPE_RE.exec(line)?.[1];
+    const t = eventType(line);
     if (t && !REPLAY_TYPES.has(t)) continue;          // 상태 무변이 — 파싱할 이유가 없다
     let parsed: unknown;
     try { parsed = JSON.parse(line); } catch { corruptLines++; continue; }
@@ -191,4 +224,25 @@ export function replayState(events: HarnessEvent[]): HarnessState {
   }
   if (lastAppliedTs) s.updatedAt = lastAppliedTs;
   return s;
+}
+
+/**
+ * [QUAL-133] **열화 상태에서 표면마다 다른 답을 내지 않는다.**
+ *
+ * 훅은 `state.json` 이 없거나 깨지면 저널을 재생해 판정한다. 그런데 `gate status`·`status` 는
+ * 파일만 읽어서, 재생으로 살아 있는 게이트를 **빈 배열 `[]`** 로 보여 줬다 — 강제는 그 게이트를
+ * 따르는데 사람에게는 없다고 말한 것이다([SEC-100] 재현 중 관측). 어느 쪽이 참인지 알 수 없는
+ * 상태에서 사람은 조회 결과를 믿는다.
+ *
+ * 그래서 해석을 **한 벌로** 내린다. `degraded` 를 함께 돌려주므로 부르는 쪽이 그 사실을
+ * 표시할 수 있다 — 조용히 재생 결과를 보여 주면 이번엔 열화라는 사실이 숨는다.
+ */
+export function resolveState(root: string): { state: HarnessState; degraded: boolean } {
+  try {
+    const parsed = readState(root);
+    if (parsed && typeof parsed === 'object' && typeof (parsed as HarnessState).phase === 'string') {
+      return { state: parsed, degraded: false };
+    }
+  } catch { /* 아래 재생으로 */ }
+  return { state: replayState(readJournalForReplay(root).events), degraded: true };
 }

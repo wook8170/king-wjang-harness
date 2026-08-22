@@ -230,6 +230,11 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
     // state.json(파생 캐시)만 사라진 걸 미사용으로 오판하면(구 isInitialized 게이트) events.jsonl·
     // 활성 웨이브가 멀쩡한데도 하네스가 조용히 꺼진다(LOGIC-11). 디렉토리 기준은 initHarness
     // 가드와 동일 정의 — state.json 부재는 아래 저널 재생 폴백이 흡수한다.
+    //
+    // [COST-130] 기준은 **존재**다(파일이든 디렉토리든). `.harness` 가 일반 파일이면 그
+    // 프로젝트는 하네스를 안 쓰는 게 아니라 **잘못 설정된** 것이므로, 통과시키는 대신
+    // 판정으로 보낸다(fail-closed). `bin/harness-hook` 의 sh 게이트가 `-d` 로 재던 동안
+    // 두 표면이 갈렸다 — sh 는 전부 허용하고 코어는 거부했다. 이제 둘 다 `-e`/existsSync 다.
     if (!fs.existsSync(harnessDir(root))) return null;
     let state: HarnessState;
     let degraded: Degraded | null = null;
@@ -258,7 +263,7 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       case 'post-tool':
         return postTool(root, input);
       case 'stop':
-        return stopGuard(root, state, input, config.lang);
+        return stopGuard(root, state, input, config.lang, degraded);
       default:
         return null;
     }
@@ -1334,14 +1339,33 @@ function postTool(root: string, input: HookInput): null {
 
 // ---- stop (Task 10에서 테스트 주도로 완성) ----
 
-function stopGuard(root: string, state: HarnessState, input: HookInput, lang: Lang): object | null {
+function stopGuard(
+  root: string, state: HarnessState, input: HookInput, lang: Lang, degraded: Degraded | null = null,
+): object | null {
   if (input.stop_hook_active) return null; // 턴당 1회만 차단 (루프 가드)
-  if (!state.activeWave) return null;
+  /**
+   * [COST-131·COST-B] **열화 비용을 위반이 없어도 알린다.**
+   *
+   * `degradedNote` 는 deny 와 session-start 에만 붙어 있었다. 그래서 규칙을 한 번도 안 어기고
+   * 오래 작업하면 **복구 권고를 영영 못 보고**, 매 훅 호출마다 저널 재생 비용을 다시 낸다
+   * (100k 저널에서 +29ms, 실측 `evidence/perf-139-latency.log`).
+   *
+   * allow 경로에 붙이지 않는 이유는 **비간섭 계약** 때문이다 — 훅은 위반이 없으면 0바이트다.
+   * 턴 끝은 그 계약을 깨지 않으면서 사람에게 닿는 유일한 지점이고, 턴당 한 번이라 잡음이
+   * 되지 않는다. 자동 복구는 여전히 하지 않는다 — 훅은 상태를 쓰지 않는다(`doctor --repair` 몫).
+   */
+  const note = degraded ? degradedNote(degraded, lang) : '';
+  /** 차단이 있으면 그 사유에 덧붙인다 — 열화 고지가 **차단을 대신해서는 안 된다.** */
+  const withNote = (r: object | null): object | null => {
+    if (r && 'reason' in r) return { ...r, reason: `${(r as { reason: string }).reason}\n\n${note}` };
+    return note ? { systemMessage: note } : r;
+  };
+  if (!state.activeWave) return withNote(null);
   const rt = readRuntime(root);
   // 마커는 session-start 에서 리셋된다 — 여기서 없다는 건 현 세션에 작업 활동이 없었다는 뜻.
-  if (!rt.lastActivityAt) return null;
+  if (!rt.lastActivityAt) return withNote(null);
   if (!rt.lastTurnAt || rt.lastTurnAt < rt.lastActivityAt) {
-    return {
+    return withNote({
       decision: 'block',
       reason: pick({
         en: `The turn log for active wave ${state.activeWave} has not been updated since the last `
@@ -1352,7 +1376,7 @@ function stopGuard(root: string, state: HarnessState, input: HookInput, lang: La
           + '`harness wave update "<한 일, 다음 할 일>"` 로 지시서를 갱신한 뒤 종료하라. '
           + '(정말 로그가 불필요한 사소한 턴이었다면 그 사유를 한 줄 보고하고 종료해도 된다)',
       }, lang),
-    };
+    });
   }
-  return null;
+  return withNote(null);
 }

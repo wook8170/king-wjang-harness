@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// core/dist 는 커밋된다(플러그인 clone 설치가 빌드 없이 동작하도록). 다만 dist 를 지웠거나
-// 소스만 받은 경우엔 번들이 없을 수 있다 — 그때도 훅은 세션을 깨면 안 되므로 훅 경로만
-// 안내 한 줄 + exit 0 으로 침묵한다(무해 계약). 일반 CLI 는 실패를 숨기지 않는다(exit 1).
+// core/dist is committed so a plugin clone works without a build step. If someone deleted dist,
+// or took only the sources, the bundle may be missing — and even then the hook must not break the
+// session, so the hook path stays silent: one line of guidance and exit 0 (the do-no-harm contract).
+// Ordinary CLI calls do not hide failure (exit 1).
 let cli;
 try {
   cli = require('../core/dist/cli.js');
