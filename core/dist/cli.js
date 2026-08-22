@@ -9453,6 +9453,18 @@ var path10 = __toESM(require("path"));
 
 // core/src/policy.ts
 var crypto2 = __toESM(require("crypto"));
+
+// core/src/hash.ts
+function updateHashEntry(h, rel, content) {
+  if (content === null) {
+    h.update(`${rel}\0unreadable\0`);
+    return;
+  }
+  h.update(`${rel}\0${content.length}\0`);
+  h.update(content);
+}
+
+// core/src/policy.ts
 var fs10 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
@@ -9491,12 +9503,7 @@ function computePolicyHash(root) {
     } catch {
       content = null;
     }
-    if (content === null) {
-      h.update(`${rel}\0unreadable\0`);
-      continue;
-    }
-    h.update(`${rel}\0${content.length}\0`);
-    h.update(content);
+    updateHashEntry(h, rel, content);
   }
   return { hash: h.digest("hex"), files };
 }
@@ -12214,9 +12221,7 @@ function assertInsideRoot(root, paths) {
 function computeArtifactHash(root, relPaths) {
   const h = crypto4.createHash("sha256");
   for (const rel of normalizePaths(root, relPaths)) {
-    const content = readArtifact(root, rel);
-    h.update(`${rel}\0${content.length}\0`);
-    h.update(content);
+    updateHashEntry(h, rel, readArtifact(root, rel));
   }
   return h.digest("hex");
 }

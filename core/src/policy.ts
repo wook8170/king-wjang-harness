@@ -32,6 +32,7 @@
  * 순수성: 시각·난수 없음. 같은 파일 상태면 같은 해시다.
  */
 import * as crypto from 'node:crypto';
+import { updateHashEntry } from './hash';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
@@ -99,13 +100,8 @@ export function computePolicyHash(root: string): PolicySnapshot {
   for (const rel of files) {
     let content: Buffer | null = null;
     try { content = fs.readFileSync(path.join(root, rel)); } catch { content = null; }
-    if (content === null) {
-      // 읽기 실패(권한 등)를 «내용 없음»으로 뭉개면 빈 파일과 구분되지 않는다.
-      h.update(`${rel}\0unreadable\0`);
-      continue;
-    }
-    h.update(`${rel}\0${content.length}\0`);
-    h.update(content);
+    // [ENG-186] 규율은 `hash.ts` 한 벌에서 온다 — 두 벌이면 느슨한 쪽이 정본이 된다.
+    updateHashEntry(h, rel, content);
   }
   return { hash: h.digest('hex'), files };
 }

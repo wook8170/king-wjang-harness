@@ -35,6 +35,34 @@ const read = (f: string) => fs.readFileSync(path.join(repo, f), 'utf8');
  * 둘 다 참인 주장(규칙이 프로세스 밖에 있어 **늘지 않는다** vs 세션당 주입량)이지만,
  * 읽는 사람에게는 그냥 모순이다 — 그리고 광고 쪽이 더 눈에 띈다.
  */
+/**
+ * [PROD-180] **재현하라고 적은 명령은 실재해야 한다.**
+ *
+ * 「Measured」 표의 수치를 제3자가 다시 잴 수 있게 `npm run bench:hook` 을 실었다.
+ * 그 명령이 사라지거나 이름이 바뀌면 README 가 **없는 재현 절차를 가리키게** 된다 —
+ * [PROD-171] 의 유령 MCP 도구와 같은 부류다. 그래서 같은 방식으로 막는다.
+ */
+describe('PROD-180: README 가 부르는 npm 스크립트가 실재한다', () => {
+  const scripts = new Set(Object.keys(
+    JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8')).scripts ?? {},
+  ));
+
+  it('문서에 등장하는 `npm run <script>` 가 전부 package.json 에 있다', () => {
+    for (const f of READMES) {
+      const named = [...read(f).matchAll(/npm run ([\w:.-]+)/g)].map(m => m[1]);
+      const ghosts = [...new Set(named)].filter(n => !scripts.has(n));
+      expect(ghosts, `${f} 가 존재하지 않는 npm 스크립트를 가리킨다`).toEqual([]);
+    }
+  });
+
+  it('벤치 스크립트가 배포본에 실린다 — 재현 절차가 패키지 밖에 있으면 재현이 아니다', () => {
+    expect(scripts.has('bench:hook')).toBe(true);
+    expect(fs.existsSync(path.join(repo, 'scripts/bench-hook-latency.mjs'))).toBe(true);
+    const attrs = fs.readFileSync(path.join(repo, '.gitattributes'), 'utf8');
+    expect(attrs, 'scripts/ 가 export-ignore 되면 받는 사람이 못 돌린다').not.toMatch(/^scripts\b.*export-ignore/m);
+  });
+});
+
 describe('PROD-184: README 안의 토큰 수치가 서로 어긋나지 않는다', () => {
   it('한 문서에 나오는 토큰 수치가 전부 같다', () => {
     for (const f of READMES) {

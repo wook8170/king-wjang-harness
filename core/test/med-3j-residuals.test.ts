@@ -17,6 +17,8 @@ import { handleHook } from '../src/hook';
 import { run } from '../src/cli';
 import { readJournalForReplay } from '../src/events';
 import { canEnterPhase } from '../src/gate';
+import { updateHashEntry } from '../src/hash';
+import { createHash } from 'node:crypto';
 import type { Phase } from '../src/types';
 
 const setup = (phase?: Phase) => {
@@ -208,5 +210,31 @@ describe('[UX-183] 가리키는 곳이 없는 근거는 근거가 아니다', ()
         '--severity', 'low', '--title', 't', '--evidence', ev], root));
       expect(msg, `쓸데없이 경고했다: ${ev}`).toBe('');
     }
+  });
+});
+
+describe('[ENG-186] 해시 규율은 한 벌이고, 그 한 벌에 테스트가 있다', () => {
+  const h = () => createHash('sha256');
+  const digest = (entries: Array<[string, string | null]>): string => {
+    const x = h();
+    for (const [rel, body] of entries) updateHashEntry(x, rel, body === null ? null : Buffer.from(body));
+    return x.digest('hex');
+  };
+
+  it('경계 없는 이어붙임을 막는다 — 다른 조합이 같은 해시를 내면 변조가 통과한다', () => {
+    // 구분자가 없으면 "a"+"xy" 와 "ax"+"y" 가 같은 바이트열이 된다.
+    expect(digest([['a', 'xy']])).not.toBe(digest([['ax', 'y']]));
+  });
+
+  it('길이 구분자를 지우면 갈리는 조합 — 감정자의 생존 뮤테이션이 겨눈 자리다', () => {
+    expect(digest([['f', 'ab'], ['g', 'c']])).not.toBe(digest([['f', 'a'], ['g', 'bc']]));
+  });
+
+  it('「읽지 못했다」와 「비어 있다」를 구분한다', () => {
+    expect(digest([['f', null]])).not.toBe(digest([['f', '']]));
+  });
+
+  it('같은 입력은 같은 해시다 — 결정적이어야 한다', () => {
+    expect(digest([['f', 'x'], ['g', 'y']])).toBe(digest([['f', 'x'], ['g', 'y']]));
   });
 });

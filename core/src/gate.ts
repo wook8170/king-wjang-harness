@@ -47,6 +47,7 @@
  * `core/test/eng-3i-residuals.test.ts` 가 전수 대조한다.
  */
 import * as crypto from 'node:crypto';
+import { updateHashEntry } from './hash';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
@@ -518,11 +519,9 @@ function assertInsideRoot(root: string, paths: string[]): void {
 export function computeArtifactHash(root: string, relPaths: string[]): string {
   const h = crypto.createHash('sha256');
   for (const rel of normalizePaths(root, relPaths)) {
-    const content = readArtifact(root, rel);
-    // 경로·길이·내용 사이에 구분자를 넣는다. 경계 없이 이으면 서로 다른 파일 조합이 같은
-    // 바이트열이 되어 변조가 해시를 통과할 수 있다.
-    h.update(`${rel}\0${content.length}\0`);
-    h.update(content);
+    // [ENG-186] 규율은 `hash.ts` 한 벌에서 온다 — 경로·길이·내용 사이의 구분자가
+    // 없으면 서로 다른 파일 조합이 같은 바이트열이 되어 변조가 해시를 통과한다.
+    updateHashEntry(h, rel, readArtifact(root, rel));
   }
   return h.digest('hex');
 }

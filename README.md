@@ -38,7 +38,7 @@ This is the benchmark that matters. Not "which tool is faster" — **which layer
 
 > **Complementary, not competitive.** Skill libraries like [superpowers](https://github.com/obra/superpowers) make the model *smarter about how to work*. king-wjang-harness makes the *process itself inviolable*. Use both: the skill proposes, the hook disposes.
 
-**We tested this claim.** Two agents, same task (bootstrap a harness, drive a wave to completion through a UX evidence gate):
+**One informal run — not a benchmark.** We tried this once per arm and did not record the methodology (models, exact task text, trial count), so read it as an anecdote, not a measurement: Two agents, same task (bootstrap a harness, drive a wave to completion through a UX evidence gate):
 - **Without the harness's guidance** → the agent hit the evidence gate, exhausted guesses for a bypass flag, and **left the work unfinished**.
 - **With it** → completed every step, recovered from the gate correctly.
 
@@ -116,10 +116,15 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1227 passing** (53 files) — 16 are repo-only checks that skip in the published package (1211 there) |
+| Test suite | **1233 passing** (53 files) — 16 are repo-only checks that skip in the published package (1217 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
+
+**Re-measure it yourself** — `npm run bench:hook` ships with the package. It synthesises 100k-entry
+journals in three shapes (realistic, corrupted, adversarial), times the real hook process, and prints
+your machine's `node` startup floor alongside, because a large part of any absolute number is that
+floor and not this tool.
 
 ---
 
@@ -230,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1227 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1233 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
