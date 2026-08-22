@@ -180,10 +180,14 @@ export function submitDoc(root: string, id: string): DocNode {
   if (!doc.artifactUrl) {
     throw new Error(
       tr(root, {
+        // [UX-124] 처방에 **칠 수 있는 명령**이 없었다(한쪽은 내부 함수명을 그대로 노출했다).
+        // 무엇을 해야 하는지는 알겠는데 어떻게 하는지 모르는 거부문은 사람을 멈춰 세운다.
         en: `Document ${id} has no artifact URL — a document that only exists locally cannot go to a `
-          + 'gate (req 16). Publish it as a claude.ai artifact first and register the URL',
+          + `gate (req 16). Publish it as a claude.ai artifact, then register the URL: `
+          + `\`harness doc url ${id} <https://claude.ai/...>\``,
         ko: `문서 ${id} 에 아티팩트 URL 이 없다 — 로컬에만 있는 문서로는 게이트에 올릴 수 없다(요구 16). `
-          + 'claude.ai 아티팩트로 먼저 발행하고 setDocArtifactUrl 로 URL 을 등록하라',
+          + `claude.ai 아티팩트로 발행한 뒤 URL 을 등록하라: `
+          + `\`harness doc url ${id} <https://claude.ai/...>\``,
       }),
     );
   }

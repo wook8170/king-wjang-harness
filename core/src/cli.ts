@@ -746,7 +746,22 @@ export function run(argv: string[], root: string): number {
                 ),
               );
             }
-            const content = fs.readFileSync(path.resolve(root, from), 'utf8');
+            // [UX-162] 예전에는 없는 파일에 대해 가공 없는 `ENOENT: ...` 원시 에러가 나갔다 —
+            // 다른 명령이 전부 세공된 에러를 내는 것과 대조적이라 사람이 도구가 깨졌다고 읽는다.
+            const fromAbs = path.resolve(root, from);
+            let content: string;
+            try {
+              content = fs.readFileSync(fromAbs, 'utf8');
+            } catch {
+              throw new Error(L(
+                `Cannot read the canvas content file: ${fromAbs} — the core never touches the network, `
+                + 'so an agent must fetch the canvas (WebFetch) and save it to a file first. '
+                + 'Check the path, then pass it with `--from <file>`.',
+                `캔버스 내용 파일을 읽을 수 없다: ${fromAbs} — 코어는 네트워크를 쓰지 않으므로 `
+                + '에이전트가 캔버스를 WebFetch 로 받아 파일로 저장해 두어야 한다. '
+                + '경로를 확인한 뒤 `--from <파일>` 로 넘겨라.',
+              ));
+            }
             const r = syncCanvas(root, uxNodeId, content);
             // [PROD-112] **세 가지 결과를 세 문장으로 말한다.** 예전에는 「개정했는가」 하나로
             // 갈라서, draft 노드는 내용이 완전히 달라져도 "unchanged (same hash)" 를 냈다 —
@@ -965,7 +980,14 @@ export function run(argv: string[], root: string): number {
             };
             upsertDoc(root, node);
             appendEvent(root, 'doc-upserted', { id });
-            console.log(id);
+            // [UX-120] bare id 는 **생성인지 갱신인지**를 안 알려 준다 — 같은 id 로 두 번 부른
+            // 사람이 자기가 무엇을 덮었는지 모른다. 다음 수(발행·URL 등록)까지 함께 말한다.
+            console.log(L(
+              `${id} ${prev ? 'updated' : 'created'} → ${node.path}\n`
+              + `Next: publish it as a claude.ai artifact, then \`harness doc url ${id} <url>\``,
+              `${id} ${prev ? '갱신' : '생성'} → ${node.path}\n`
+              + `다음: claude.ai 아티팩트로 발행한 뒤 \`harness doc url ${id} <url>\``,
+            ));
             return 0;
           }
           case 'url': {
@@ -1062,7 +1084,9 @@ export function run(argv: string[], root: string): number {
             doc_anchor: flag(args, 'anchor'),
             status: statusFlag as LedgerNode['status'] | undefined,
           });
-          console.log(id);
+          // [UX-120] 노드도 마찬가지다 — bare id 로는 새로 등록됐는지 기존 것을 덮었는지 모른다.
+          console.log(L(`${id} ${prev ? 'updated' : 'created'} in the design ledger`,
+                        `${id} ${prev ? '갱신' : '등록'} — 설계 원장`));
           return 0;
         }
         if (sub === 'bump') {

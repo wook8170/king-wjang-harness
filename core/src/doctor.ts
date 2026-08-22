@@ -199,9 +199,12 @@ export function runDoctor(
   // 7. 훅 에러 로그 — 침묵한 판정 실패는 여기서만 드러난다
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
+    // [UX-163] 「원인을 확인하라」면서 **어디를 볼지** 안 알려 줬다. 경로는 README 지원 표에만
+    // 있었고, doctor 를 돌린 사람은 그 표를 안 보고 있다. 처방은 손이 닿는 곳에 있어야 한다.
+    const log = path.join(runtimeDir(root), 'hook-errors.log');
     warnings.push(t({
-      en: `${hookErrors} hook decision failure(s) recorded — find out why`,
-      ko: `훅 판정 실패 ${hookErrors}건 기록됨 — 원인 확인 필요`,
+      en: `${hookErrors} hook decision failure(s) recorded — read ${log} to find out why`,
+      ko: `훅 판정 실패 ${hookErrors}건 기록됨 — 원인은 ${log} 에서 확인하라`,
     }));
   }
 
