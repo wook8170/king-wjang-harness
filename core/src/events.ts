@@ -150,6 +150,21 @@ export function readJournalForReplay(root: string): Journal {
     if (!line.trim()) continue;
     const t = eventType(line);
     if (t && !REPLAY_TYPES.has(t)) continue;          // 상태 무변이 — 파싱할 이유가 없다
+    /**
+     * [COST-177] **타입을 못 찾은 줄은 파싱하지 않는다.**
+     *
+     * 예전에는 여기서 `JSON.parse` 로 내려갔고, 손상 줄마다 **예외가 하나씩** 났다.
+     * 예외는 싸지 않다 — 100k 줄이 전부 손상이면 인프로세스 p95 가 **420ms** 까지 튀었다
+     * (정상 저널은 21.8ms). 폴백은 **바로 이 손상 상태를 살아남으려고** 있는 경로인데,
+     * 가장 필요한 순간에 가장 느렸다.
+     *
+     * 안전한 이유: `HarnessEvent` 는 `type: string` 을 **반드시** 갖는다. `eventType` 이
+     * 리터럴과 정규식 두 경로로도 못 찾았다면 그 줄은 파싱해도 이벤트가 될 수 없고,
+     * 아래 타입 검사에서 어차피 `corruptLines` 로 떨어진다. 결과는 같고 예외만 없앤 것이다.
+     * (한계: `"\u0074ype"` 처럼 키를 이스케이프한 JSON 은 손상으로 센다. 하네스는
+     * `JSON.stringify` 로만 쓰므로 그런 줄을 만들지 않는다.)
+     */
+    if (!t) { corruptLines++; continue; }
     let parsed: unknown;
     try { parsed = JSON.parse(line); } catch { corruptLines++; continue; }
     if (typeof parsed !== 'object' || parsed === null || typeof (parsed as any).type !== 'string') {

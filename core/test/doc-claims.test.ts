@@ -12,10 +12,46 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { toolDefinitions } from '../src/mcp';
 
 const repo = path.resolve(__dirname, '../..');
 const READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh.md'];
 const read = (f: string) => fs.readFileSync(path.join(repo, f), 'utf8');
+
+/**
+ * [PROD-171] **없는 것을 있다고 광고하면 문서가 아니라 함정이다.**
+ *
+ * README 4종이 `harness_gate_verify`·`harness_doc_upsert` 를 MCP 도구로 광고했는데
+ * 서버에는 없었다(실제 16종). 같은 기능이 CLI 에만 있어서 생긴 어긋남이고, **세 축의 감정자가
+ * 각자 이것을 찾아 왔다** — 사람이 읽고 「있다」로 적는 방식이 세 번 실패했다는 뜻이다.
+ *
+ * 그래서 이름을 하나 고치는 대신 **부류를 막는다**: README 에 등장하는 `harness_*` 이름을
+ * 기계로 뽑아 서버의 도구 목록과 전수 대조한다. 도구가 늘거나 이름이 바뀌면 문서가 먼저 깨진다.
+ */
+describe('PROD-171: README 가 말하는 MCP 도구가 실재한다', () => {
+  const actual = new Set(toolDefinitions().map(d => d.name));
+
+  it('README 에 등장하는 harness_* 이름이 전부 서버에 있다', () => {
+    for (const f of READMES) {
+      const text = read(f);
+      // 접미 표기(`_activate`)는 앞선 완전 이름의 접두를 잇는 것이라 따로 세지 않는다 —
+      // 여기서 잡으려는 것은 **완전한 이름으로 적힌 유령**이다.
+      const named = [...text.matchAll(/`(harness_[a-z_]+)`/g)].map(m => m[1]);
+      expect(named.length, `${f} 에 MCP 도구 이름이 하나도 없다`).toBeGreaterThan(0);
+      const ghosts = [...new Set(named)].filter(n => !actual.has(n));
+      expect(ghosts, `${f} 가 실재하지 않는 MCP 도구를 광고한다`).toEqual([]);
+    }
+  });
+
+  it('도구 개수 표기가 실제와 같다', () => {
+    for (const f of READMES) {
+      // 「정확히 N개」 꼴만 본다 — 문서 곳곳의 다른 숫자(토큰 수 등)를 잡지 않게.
+      const m = /(?:exactly|정확히|ちょうど|恰好是)\s*(\d+)/.exec(read(f));
+      expect(m, `${f} 에 MCP 도구 개수 표기가 없다`).not.toBeNull();
+      expect(Number(m![1]), `${f} 의 도구 개수 표기가 낡았다`).toBe(actual.size);
+    }
+  });
+});
 
 describe('PROD: README 가 광고하는 계량이 사실과 맞는다', () => {
   const actualFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.ts')).length;

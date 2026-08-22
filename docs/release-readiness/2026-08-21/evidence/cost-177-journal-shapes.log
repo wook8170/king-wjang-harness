@@ -1,0 +1,9 @@
+# [COST-177] 저널 부류별 폴백 비용 — 수정 전/후 (같은 프로세스·같은 머신)
+# node v22.22.2 · arm64 · 10 cores · load 3.76 9.32 9.14
+# 저널 100,000줄 · n=30 · 워밍업 3회 제외 · 인프로세스(함수 호출) 측정
+# 소스: evidence/cost-177-bench.ts
+
+real      수정후 p95   14.6ms   수정전 p95   14.2ms
+allstate  수정후 p95   49.4ms   수정전 p95   49.1ms
+half      수정후 p95    8.0ms   수정전 p95  269.2ms
+corrupt   수정후 p95   11.6ms   수정전 p95  573.1ms

@@ -61,6 +61,100 @@ const looksLikePath = (t: string): boolean =>
   t !== '' && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes('/') || /\.[A-Za-z0-9]+$/.test(t));
 
 /**
+ * [SEC-170] **`cd` 는 판정 대상을 바꾼다 — 그래서 판정 전에 정규화해야 한다.**
+ *
+ * 지난 네 라운드의 우회는 전부 **열거의 실패**였다(`SEC-49`→`SEC-A`→`SEC-100`→`SEC-135`):
+ * 빠진 도구 이름이 통로가 됐고, 처방은 부류를 넓히는 것이었다. 이번 것은 다르다 —
+ * 도구는 이미 잡혀 있는데 **경로가 다른 이름으로 불렸을 뿐**이다:
+ *
+ *   `tee .harness/events.jsonl`            → DENY  (보호 목록과 문자열이 같다)
+ *   `cd .harness && tee events.jsonl`      → 통과  (같은 파일인데 문자열이 다르다)
+ *
+ * 보호 대상을 **리터럴 상대경로**로 대조하면 `cd` 한 줄이 그 대조를 통째로 무력화한다.
+ * 도구를 아무리 더 열거해도 닫히지 않는다 — 부류가 다르기 때문이다. 그래서 여기서는
+ * 세그먼트를 순서대로 걸으며 **가상 작업 디렉토리**를 추적하고, 뽑은 대상을 전부 그 기준으로
+ * 정규화한 뒤 판정에 넘긴다.
+ *
+ * `cd` 대상이 정적으로 안 읽히면(`cd $D`) 그 뒤의 상대경로가 **어디에 떨어지는지 알 수 없다**.
+ * 변수 한 줄로 이 방어가 다시 풀리면 안 되므로, 그런 대상은 버리지 않고
+ * `unresolvedTargets` 로 올려 호출측이 **파일 이름만으로** 하네스 소유 파일을 지키게 한다.
+ * (경로 전체가 아니라 이름만 보는 이유는 과차단을 최소로 두기 위해서다.)
+ */
+export type Cwd = string | null;
+
+/** 정적으로 못 읽는 `cd` 대상 — 변수·치환·글롭·홈. */
+const DYNAMIC_CD = /[$`*?~]/;
+
+/** `.`·`..` 를 접어 경로를 한 가지 표기로 만든다. 같은 파일이 두 이름을 갖지 않게. */
+function normalizePath(p: string): string {
+  const abs = p.startsWith('/');
+  const parts: string[] = [];
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.') continue;
+    if (seg === '..') {
+      const top = parts[parts.length - 1];
+      if (parts.length > 0 && top !== '..') parts.pop();
+      else if (!abs) parts.push('..');
+      continue;
+    }
+    parts.push(seg);
+  }
+  return (abs ? '/' : '') + parts.join('/');
+}
+
+/** `cd` 세그먼트를 만나면 가상 cwd 를 옮긴다. 못 읽는 대상이면 「알 수 없음」으로 떨어진다. */
+function advanceCwd(cwd: Cwd, op: string | undefined): Cwd {
+  if (op === undefined || op === '-' || DYNAMIC_CD.test(op)) return null;
+  if (op.startsWith('/')) return normalizePath(op);
+  if (cwd === null) return null;
+  return normalizePath((cwd ? cwd + '/' : '') + op);
+}
+
+/**
+ * 대상을 가상 cwd 기준으로 정규화한다.
+ * `null` 은 「어디에 쓰는지 알 수 없다」는 사실이고, 통과가 아니다 — 호출측이 그 사실을 받는다.
+ */
+function resolveIn(cwd: Cwd, p: string): string | null {
+  if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈 — cwd 와 무관하다
+  if (cwd === null) return null;
+  if (cwd === '') return p; // 프로젝트 루트 — 기존 표기 그대로 둔다(거부문이 명령과 같아 보이게)
+  return normalizePath(cwd + '/' + p);
+}
+
+/** 세그먼트를 **위치와 함께** 끊는다 — 리다이렉트는 원문 위치로 자기 cwd 를 찾아야 한다. */
+function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cwd: Cwd }> {
+  const out: Array<{ text: string; start: number; cwd: Cwd }> = [];
+  const re = new RegExp(SEGMENT_SPLIT.source, 'g');
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cmd)) !== null) {
+    out.push({ text: cmd.slice(last, m.index), start: last, cwd: '' });
+    last = m.index + m[0].length;
+  }
+  out.push({ text: cmd.slice(last), start: last, cwd: '' });
+
+  let cwd: Cwd = '';
+  for (const seg of out) {
+    seg.cwd = cwd;
+    const tokens = tokenize(seg.text);
+    if (tokens.length === 0) continue;
+    const { name, args } = commandName(tokens);
+    if (name === 'cd' || name === 'pushd') cwd = advanceCwd(cwd, args.find(a => !isFlag(a)));
+  }
+  return out;
+}
+
+/** 원문 위치가 속한 세그먼트의 가상 cwd. */
+function cwdAt(segs: ReadonlyArray<{ start: number; cwd: Cwd }>, index: number): Cwd {
+  let cwd: Cwd = '';
+  for (const seg of segs) {
+    if (seg.start > index) break;
+    cwd = seg.cwd;
+  }
+  return cwd;
+}
+
+/**
  * **접두 명령** — 뒤에 오는 진짜 명령을 감싸기만 하는 것들. 독립 감정이 실증한 구멍의
  * 원인이다: `sudo tee src/app.ts` 는 명령 이름이 `sudo` 로 잡혀 `tee` 규칙을 타지 않았고,
  * 그래서 **소스·코어·정책 파일 쓰기가 전 페이즈에서 열렸다**(`sudo tee .harness/events.jsonl`
@@ -147,6 +241,13 @@ export interface BashWriteScan {
    * 「감싸인 것을 꺼내 같은 스캐너로 다시」가 되는 것은 통과시키고, **꺼낼 수 없는 것만** 막는다.
    */
   opaqueExec?: string;
+  /**
+   * [SEC-170] **어디에 쓰는지 알 수 없는 대상.** `cd $D && tee events.jsonl` 처럼 `cd` 대상을
+   * 정적으로 못 읽으면 뒤따르는 상대경로가 어느 디렉토리에 떨어지는지 알 수 없다.
+   * 「못 봤으면 통과」는 못 본 만큼 구멍이므로 버리지 않고 사실로 올린다 —
+   * 호출측은 이 목록의 **파일 이름**만 보고 하네스 소유 파일을 지킨다(과차단 최소화).
+   */
+  unresolvedTargets: string[];
 }
 
 /** 프로그램 텍스트를 받아 실행하는 해석기. 셸만이 아니다 — `python3` 도 stdin 을 읽는다. */
@@ -212,8 +313,8 @@ function opaqueExecOf(cmd: string): string | undefined {
  * 리다이렉트 대상을 뽑는다. `2>&1`·`>&2` 같은 **fd 복제는 파일이 아니다** — `&` 로 시작하는
  * 대상을 걸러내지 않으면 `2>&1` 이 `1` 이라는 파일로 잡혀 오탐이 된다.
  */
-function redirectTargets(segment: string): string[] {
-  const out: string[] = [];
+function redirectTargets(segment: string): Array<{ path: string; index: number }> {
+  const out: Array<{ path: string; index: number }> = [];
   // `>|` 는 noclobber 를 무시하는 리다이렉트다 — `>` 와 같은 자리에서 같은 일을 하므로
   // 같은 판정을 받아야 한다. 한 글자 차이로 차단이 풀리면 그건 차단이 아니라 우연이다.
   // `>&` 는 두 얼굴이다: `2>&1` 은 **fd 복제**(파일 아님), `echo x >& out.txt` 는 파일 쓰기다.
@@ -225,7 +326,7 @@ function redirectTargets(segment: string): string[] {
     const amp = m[1] === '&';
     const t = m[2] ?? m[3] ?? m[4] ?? '';
     if (amp && /^\d+$/.test(t)) continue; // fd 복제(`2>&1`) — 파일이 아니다
-    if (t && !t.startsWith('&')) out.push(t);
+    if (t && !t.startsWith('&')) out.push({ path: t, index: m.index });
   }
   return out;
 }
@@ -326,16 +427,33 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   const patchFiles: string[] = [];
   let opaqueExec = opaqueExecOf(cmd);
 
-  // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니다.
+  const unresolvedTargets: string[] = [];
+  const segs = segmentsWithIndex(cmd);
+
+  // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니고,
+  // `2>&1` 의 `&` 가 분해 기준이라 세그먼트로 끊으면 리다이렉트가 반토막 난다.
+  // 대신 **매치 위치**로 자기 세그먼트의 cwd 를 찾아 정규화한다([SEC-170]).
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
-  targets.push(...redirects);
+  for (const r of redirects) {
+    const resolved = resolveIn(cwdAt(segs, r.index), r.path);
+    if (resolved === null) unresolvedTargets.push(r.path);
+    else targets.push(resolved);
+  }
 
-  for (const segment of cmd.split(SEGMENT_SPLIT)) {
+  for (const seg of segs) {
+    const segment = seg.text;
+    const firstNew = targets.length;
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
     if (MUTATING_TOKENS.includes(name)) mutating = true;
+
+    // [SEC-170] `cd` 대상을 정적으로 못 읽으면 이 세그먼트의 상대경로가 **어디에 떨어지는지
+    // 알 수 없다**. 변수 한 줄(`D=.harness; cd $D && tee events.jsonl`)로 방어가 다시 풀리면
+    // 안 되므로, 경로처럼 생긴 인자를 전부 미해결로 올린다 — 호출측은 그중 **하네스 소유
+    // 파일 이름**만 막는다(경로 전체가 아니라 이름만 보는 것이 과차단을 최소로 두는 선택이다).
+    if (seg.cwd === null) unresolvedTargets.push(...args.filter(looksLikePath));
 
     const paths = args.filter(looksLikePath);
     // **위치가 경로임을 말해 주는 자리**(cp/mv 의 목적지 등)에서는 `looksLikePath` 를 요구하지
@@ -498,6 +616,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         for (const chunk of inner) {
           const sub = scanBashWrites(chunk);
           targets.push(...sub.targets);
+          unresolvedTargets.push(...sub.unresolvedTargets);
           if (sub.mutating) mutating = true;
           if (sub.patchesWorkingTree) patchesWorkingTree = true;
           if (sub.appliesPatch) { appliesPatch = true; patchFiles.push(...sub.patchFiles); }
@@ -533,7 +652,11 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         // xargs 는 진짜 명령을 한 겹 감싼다. 감싼 명령을 그대로 다시 판정하지 않으면
         // `xargs -I{} cp {} src/app.ts` 한 줄로 cp 규칙이 통째로 무의미해진다.
         const inner = innerCommandOf(args);
-        if (inner.length > 0) targets.push(...scanBashWrites(inner.join(' ')).targets);
+        if (inner.length > 0) {
+          const sub = scanBashWrites(inner.join(' '));
+          targets.push(...sub.targets);
+          unresolvedTargets.push(...sub.unresolvedTargets);
+        }
         break;
       }
       default: {
@@ -563,6 +686,15 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         break;
       }
     }
+
+    // [SEC-170] 이 세그먼트가 올린 대상을 **그 세그먼트의 가상 cwd 기준으로** 정규화한다.
+    // 여기서 한 번에 하는 이유: 위 `case` 는 스무 곳이 넘고, 각자 정규화하게 두면
+    // 언젠가 한 곳이 빠진다 — 그리고 빠진 한 곳이 그대로 통로가 된다.
+    for (let i = firstNew; i < targets.length; i++) {
+      const resolved = resolveIn(seg.cwd, targets[i]);
+      if (resolved === null) { unresolvedTargets.push(targets[i]); targets[i] = ''; }
+      else targets[i] = resolved;
+    }
   }
 
   // 중복 제거 — 같은 대상으로 두 번 deny 사유를 만들 이유가 없다.
@@ -570,6 +702,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
     targets: [...new Set(targets.filter(Boolean))],
     mutating, patchesWorkingTree, appliesPatch, opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
+    unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
   };
 }
 
@@ -647,17 +780,45 @@ const SUBSTITUTION_SCRIPT = /^[sy]\/[^/]*\/[^/]*\/[gimIpe0-9]*$/;
 
 export function pathLikeMentions(cmd: string): string[] {
   const out: string[] = [];
-  const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(cmd)) !== null) {
-    const t = m[0];
-    if (isFlag(t) || !looksLikePath(t)) continue;
-    // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 는 슬래시가 있어 이 안전망에
-    // 잡혔고, 출하 트랙의 「새 파일 금지」가 존재하지 않는 그 「경로」를 두고 발화했다 —
-    // 원인을 오도하는 거부는 사람을 엉뚱한 곳으로 보낸다. 주 추출기(`scriptFiles`)만
-    // 고치면 이쪽이 남으므로 **두 곳 다** 같은 사실을 알아야 한다.
-    if (SUBSTITUTION_SCRIPT.test(t)) continue;
-    if (!out.includes(t)) out.push(t);
+  const add = (t: string): void => { if (t && !out.includes(t)) out.push(t); };
+
+  for (const seg of segmentsWithIndex(cmd)) {
+    const re = /[A-Za-z0-9_.\-]*\/[A-Za-z0-9_.\-\/]+/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(seg.text)) !== null) {
+      const t = m[0];
+      if (isFlag(t) || !looksLikePath(t)) continue;
+      // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 는 슬래시가 있어 이 안전망에
+      // 잡혔고, 출하 트랙의 「새 파일 금지」가 존재하지 않는 그 「경로」를 두고 발화했다 —
+      // 원인을 오도하는 거부는 사람을 엉뚱한 곳으로 보낸다. 주 추출기(`scriptFiles`)만
+      // 고치면 이쪽이 남으므로 **두 곳 다** 같은 사실을 알아야 한다.
+      if (SUBSTITUTION_SCRIPT.test(t)) continue;
+      // [EFF-173] **슬래시가 있다고 파일인 것은 아니다.** 컨테이너 이미지 참조·URL·스코프
+      // 패키지는 전부 슬래시를 갖는다. 그것들이 이 안전망에 잡히면 출하 트랙의 「신규 파일
+      // 금지」가 **게이트 승인 뒤에도** `docker push registry.io/app:v1` 을 막았다 —
+      // 그것도 존재하지 않는 「파일」을 사유로 들면서. 과차단은 이 제품에서 결함과 같은
+      // 무게다. 토큰만 봐서는 못 가리므로 **앞뒤 한 글자**를 본다(정규식이 `:`·`@` 에서
+      // 끊기기 때문에 토큰 자체에는 그 흔적이 남지 않는다).
+      const before = seg.text[m.index - 1] ?? '';
+      const after = seg.text[m.index + t.length] ?? '';
+      if (after === ':') continue;                       // `registry.io/app:v1` · `host:port`
+      if (before === '@' || before === ':') continue;    // `@scope/pkg` · `https://host/path`
+      const resolved = resolveIn(seg.cwd, t);
+      if (resolved !== null) add(resolved);
+    }
+
+    // [SEC-170] **`cd` 안에서는 낱말도 경로다.** 슬래시만 보는 규칙은 `cd src` 뒤의 `app.ts`
+    // 를 못 본다 — 그리고 그것이 이 안전망을 통째로 끄는 한 줄이었다. 여기서만 확장자 낱말을
+    // 받아들이는 이유는 **`cd` 로 디렉토리가 정해진 세그먼트에서만** 그 낱말이 진짜 경로임을
+    // 알 수 있기 때문이다(루트에서는 커밋 메시지·로그 문구가 경로로 잡혀 오탐이 폭증한다).
+    if (seg.cwd !== null && seg.cwd !== '') {
+      for (const t of tokenize(seg.text)) {
+        if (t.includes('/') || isFlag(t) || !looksLikePath(t)) continue;
+        if (SUBSTITUTION_SCRIPT.test(t)) continue;
+        const resolved = resolveIn(seg.cwd, t);
+        if (resolved !== null) add(resolved);
+      }
+    }
   }
   return out;
 }

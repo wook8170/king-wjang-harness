@@ -434,6 +434,29 @@ export function run(argv: string[], root: string): number {
           console.log(L(`Phase → ${phase} (--force: gate check skipped)`, `페이즈 → ${phase} (--force: 게이트 검사를 건너뛰었다)`));
           return 0;
         }
+        /**
+         * [UTIL-176] **되돌아가는 것은 전진의 반대말이 아니라 다른 사건이다.**
+         *
+         * `phase set` 은 앞으로 갈 때만 게이트를 검사한다. 뒤로 갈 때는 검사할 것이 없어
+         * 조용히 통과했고, 그래서 **P7 → P3 에서 설계를 고치고 다시 P7 로 돌아오는 경로가
+         * 아무 흔적 없이** 성립했다 — 올라올 때 쓰는 게이트는 이미 approved 이므로 재검증도
+         * 일어나지 않는다. 「승인된 설계 위에서만 빌드된다」는 중심 보증이 자연 명령 두 줄로 빈다.
+         *
+         * 새 강제를 만들지 않는다. 역행을 위한 명령은 **이미 있다**(`harness backtrack`) —
+         * 사유를 받고 저널에 남기고 STALE 전파를 건다(§5). 여기서는 그 문으로 보낸다.
+         */
+        const cur = readState(root).phase;
+        if (PHASES.indexOf(phase) < PHASES.indexOf(cur)) {
+          throw new Error(L(
+            `Going back from ${cur} to ${phase} is a backtrack, not a phase change — approved gates `
+            + 'stay approved, so a silent step back lets the design be revised and re-entered with no '
+            + `record. Use \`harness backtrack ${phase} --reason "<why>"\`, which records it and marks `
+            + 'what went stale.',
+            `${cur} 에서 ${phase} 로 돌아가는 것은 페이즈 변경이 아니라 역행이다 — 승인된 게이트는 `
+            + '그대로 남으므로, 조용히 뒤로 가면 설계를 고치고 아무 기록 없이 되돌아올 수 있다. '
+            + `\`harness backtrack ${phase} --reason "<사유>"\` 를 쓰라 — 기록이 남고 무엇이 낡았는지 표시된다.`,
+          ));
+        }
         setPhaseViaGate(root, phase);
         console.log(L(`Phase → ${phase}`, `페이즈 → ${phase}`));
         return 0;

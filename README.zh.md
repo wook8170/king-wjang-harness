@@ -116,7 +116,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 | 指标 | 数值 |
 |---|---|
 | 钩子延迟（p95） | 进程内 **2.6 ms**；10 万条（15 MB）日志重放回退路径为 **18.9 ms**。钩子以独立 `node` 进程运行，因此端到端还要付出你机器的 Node 启动开销 —— 本机实测挂钟时间 133 ms / 162 ms，其中 **99 ms 是 `node` 启动**。挂钟绝对值是机器的属性，不是本工具的属性。 |
-| 测试套件 | **1193 项通过**（51 个文件） |
+| 测试套件 | **1223 项通过**（53 个文件）—— 其中 16 项是仅限仓库的检查，在发布包中会被跳过（发布包为 1207 项） |
 | 每会话新增上下文 | 启用时 **约 240 令牌**；没有 `.harness/` 的项目为 **0** |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
@@ -192,9 +192,10 @@ npm install          # prepare hook builds core/dist via tsup
 ### MCP 工具 —— 无需 shell 的同一引擎
 
 插件同时注册了一个 MCP 服务器，智能体可以用类型化的工具调用代替 `Bash` 来驱动本工具：
-`harness_status`、`harness_wave_create`／`_activate`／`_update`／`_complete`、
-`harness_node_upsert`／`_bump`、`harness_gate_submit`／`_status`／`_verify`、`harness_doc_upsert`、
-`harness_trace`、`harness_doctor` 等。
+服务器暴露的工具恰好是 16 个：`harness_status`、
+`harness_wave_create`／`_activate`／`_update`／`_complete`／`_list`、`harness_node_upsert`／`_bump`、
+`harness_gate_submit`／`_status`、`harness_report_rtm`／`_hub`、`harness_ship_verdict`、
+`harness_trace`、`harness_doctor` —— 以及 `harness_gate_approve`，它只用于**拒绝并指向终端**。
 
 **有两件事是刻意做不到的**：无法批准关卡（最终点击永远属于人 §4-3），也无法越过未批准的关卡推进阶段。
 通过 MCP 能做的事，本来通过 CLI 也能做 —— 关卡还是同一批关卡。
@@ -226,7 +227,7 @@ npm install          # prepare hook builds core/dist via tsup
 
 ## 状态与路线图
 
-**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1193 项测试）。但出货就绪审计的判定
+**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1223 项测试）。但出货就绪审计的判定
 仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
 
 - ✅ 事件日志、状态重放、doctor 恢复
@@ -246,7 +247,7 @@ npm install          # prepare hook builds core/dist via tsup
 - **没有 P7–P9（构建轨道）技能** —— 智能体有，阶段手册没有。
 - 关卡衡量的是**数量而非质量**。它拒绝非散文的内容，也拒绝那些相对已审关卡带来不足 80 个新字符的提交 —— 灌水凑字数、改一个字符的副本、往已批准集合上加薄文件，这些路都被堵上了（实测 13/13 → 分别开启 0、1、2 个）。剩下的是「新带来的 80 个字符是否**够好**」，那属于人 —— 评审包会把每一条提交路径及其大小摆在人面前。
 - 人工手改 `.harness/events.jsonl` **不在威胁模型内** —— 钩子拦的是智能体，不是项目主人。
-- 钩子只看 **它能解析的部分** —— `sh -c`、最多 3 层的脚本、`npm run` 脚本。**不解析 `make <target>`**（解析 Makefile 超出范围），也不追踪 4 层以上的脚本链。
+- 钩子只看 **它能解析的部分** —— `sh -c`、最多 3 层的脚本、`npm run` 脚本。**不解析 `make <target>`**（解析 Makefile 超出范围），对 4 层以上的脚本链不再追踪而是**拒绝** —— 看不到最后一步写了什么，并不等于它是安全的。
 - **有意不提供日志压缩命令。** `events.jsonl` 是审计记录，重写它的命令等于在**唯一不允许删除的地方**提供删除原语。没有它的代价是有界的 —— 10 万条 / 15 MB（数十年用量）重放实测 p95 ≈ 19 ms（进程内；挂钟时间 +29 ms），而且只在状态降级期间发生，`doctor --repair` 即可结束。
 
 ---

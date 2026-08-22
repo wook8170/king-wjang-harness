@@ -75,7 +75,10 @@ describe('scanBashWrites: 쓰기 대상 추출', () => {
 
   it('세그먼트 분해 — 연쇄·파이프·서브셸', () => {
     expect(t('npm run build && touch src/a.ts')).toContain('src/a.ts');
-    expect(t('(cd x; touch src/b.ts)')).toContain('src/b.ts');
+    // [SEC-170] `cd` 는 대상을 바꾼다 — 서브셸 안에서 `cd x` 를 했으면 `src/b.ts` 는
+    // 프로젝트의 `src/` 가 아니라 `x/src/` 다. 예전 기대값(`src/b.ts`)은 **구멍을 고정**하고
+    // 있었다: 같은 규칙을 뒤집으면 `cd .harness; tee events.jsonl` 이 통과한다.
+    expect(t('(cd x; touch src/b.ts)')).toContain('x/src/b.ts');
   });
 
   it('읽기 전용 명령은 mutating 이 아니다', () => {

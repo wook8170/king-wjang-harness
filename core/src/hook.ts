@@ -180,6 +180,18 @@ const STATE_FILES = [
 const CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 
 /**
+ * [SEC-170] 하네스 소유 파일의 **이름만** 모은 집합.
+ *
+ * `cd $D && tee events.jsonl` 처럼 `cd` 대상을 정적으로 못 읽으면 그 뒤의 상대경로가 어느
+ * 디렉토리에 떨어지는지 알 수 없다. 경로로는 판정할 수 없지만 **이름은 볼 수 있다** —
+ * 그리고 이 이름들은 하네스가 소유하는 것이라, 에이전트가 셸로 쓸 이유가 없다.
+ *
+ * 이름만 보는 것은 의도한 절충이다: 경로 전체를 모른 채 막으면 과차단이 넓어지고,
+ * 아무것도 안 막으면 변수 한 줄로 [SEC-170] 이 되살아난다. 그 사이에서 **가장 좁은 문**을 고른다.
+ */
+const OWNED_BASENAMES = new Set(CORE_FILES.map(f => f.split('/').pop() ?? ''));
+
+/**
  * 턴 로그 헤딩은 **파싱 앵커**다 — 표시 문자열이 아니다. 지시서 본문은 생성 시점의 `lang` 을
  * 따라가므로(`## Turn log` / `## 턴 로그`) 한쪽만 찾으면 다른 쪽 프로젝트에서 발췌가
  * **조용히 빈다**. 게다가 프로젝트가 도중에 `lang` 을 바꾸면 과거 파일이 통째로 안 읽힌다 —
@@ -664,6 +676,12 @@ function isOutsideRoot(rel: string): boolean {
  */
 const SCRIPT_RUNNERS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
 const SCRIPT_MAX_BYTES = 64 * 1024;
+/**
+ * [SEC-175] 사슬 깊이 상한. **[SEC-B3] 이 크기 캡에 한 처방을 깊이 캡에도 적용한다.**
+ * 두 캡은 형제다 — 둘 다 비용을 아끼려고 「안 본다」를 고르는 지점이다. 크기 쪽만
+ * fail-closed 로 고쳐 두면, 같은 우회가 **파일을 하나 더 겹치는 것**으로 되살아난다.
+ */
+const SCRIPT_MAX_DEPTH = 3;
 
 /**
  * [SEC-B3] **못 읽은 스크립트는 사실로 올린다.** 예전에는 크기 캡을 넘으면 `continue` 로
@@ -676,16 +694,23 @@ export interface InvokedScripts {
   bodies: string[];
   /** 크기 캡을 넘어 **읽지 못한** 스크립트 경로. 비어 있지 않으면 무엇을 실행하는지 알 수 없다. */
   unread: string[];
+  /** [SEC-175] 깊이 캡을 넘어 **따라가지 않은** 스크립트. 같은 이유로 통과가 아니다. */
+  tooDeep: string[];
 }
 
 function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Set<string>()): InvokedScripts {
   const out: string[] = [];
   const unread: string[] = [];
+  const tooDeep: string[] = [];
   // [SEC-97] **깊이 1 로는 부족했다.** 스크립트가 스크립트를 부르면(`a.sh` → `b.sh`) 그대로
   // 통과해 `P0 → P7` 강제가 성립했다(실측). 사슬을 따라가되 상한을 둔다 — 순환은 `seen` 이,
   // 비용은 깊이 3 과 64KB 상한이 막는다. 완전하지는 않다(깊이 4 는 열려 있다). 그러나
   // **한 겹 늘릴 때마다 공격자의 비용은 늘고 방어의 비용은 파일 두어 개 읽기뿐**이다.
-  if (depth >= 3) return { bodies: out, unread };
+  // [SEC-175] 상한을 넘으면 **조용히 빈손으로 돌아가지 않는다.** 예전에는 여기서 즉시
+  // 반환해, 4겹째 스크립트가 무엇을 쓰든 판정 자체가 일어나지 않았다(실측: a→b→c→d 의 d 가
+  // 저널을 써도 ALLOW). 이제는 「거기에 스크립트가 있는데 안 읽었다」는 **사실을 올린다** —
+  // 크기 캡([SEC-B3])과 같은 태도다.
+  const atLimit = depth >= SCRIPT_MAX_DEPTH;
   // 러너 + 파일, 그리고 `./x.sh`·`scripts/x.sh` 처럼 직접 실행하는 형태를 함께 본다.
   const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
   let m: RegExpExecArray | null;
@@ -700,31 +725,36 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
       const abs = path.resolve(root, candidate);
       const st = fs.statSync(abs);
       if (!st.isFile()) continue;
+      if (atLimit) { tooDeep.push(candidate); continue; }                     // [SEC-175] 사실로 올린다
       if (st.size > SCRIPT_MAX_BYTES) { unread.push(candidate); continue; }   // [SEC-B3] 사실로 올린다
       const body = fs.readFileSync(abs, 'utf8');
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);            // 스크립트가 부르는 스크립트
-      out.push(...sub.bodies); unread.push(...sub.unread);
+      out.push(...sub.bodies); unread.push(...sub.unread); tooDeep.push(...sub.tooDeep);
     } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
   }
   // `npm run <script>` 는 `package.json` 이 정의한 명령을 실행한다 — 그 정의를 읽어 같은 규칙으로
   // 본다. `make <target>` 도 같은 부류지만 Makefile 문법 해석은 범위를 넘어 **한계로 남긴다**
   // (README 「알려진 한계」에 적었다).
   const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
-  if (npmRun && depth < 3) {
+  if (npmRun) {
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as
         { scripts?: Record<string, string> };
       const script = pkg.scripts?.[npmRun[1]];
       if (typeof script === 'string' && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
-        out.push(script);
-        const sub = invokedScriptBodies(root, script, depth + 1, seen);
-        out.push(...sub.bodies); unread.push(...sub.unread);
+        if (atLimit) {
+          tooDeep.push(`npm run ${npmRun[1]}`);                                 // [SEC-175]
+        } else {
+          out.push(script);
+          const sub = invokedScriptBodies(root, script, depth + 1, seen);
+          out.push(...sub.bodies); unread.push(...sub.unread); tooDeep.push(...sub.tooDeep);
+        }
       }
     } catch { /* package.json 없음·손상 — 판정할 것이 없다 */ }
   }
-  return { bodies: out, unread };
+  return { bodies: out, unread, tooDeep };
 }
 
 /**
@@ -1025,6 +1055,23 @@ function preTool(
       ), degraded, lang);
     }
 
+    /**
+     * [SEC-175] 깊이 캡도 같은 태도로 답한다. 크기 캡만 fail-closed 로 고쳐 두면 같은 우회가
+     * **파일을 한 겹 더 겹치는 것**으로 되살아난다 — 실측으로 그랬다(a→b→c→d 의 d 가 저널을
+     * 써도 ALLOW). 사유는 크기와 다르므로 문구도 나눈다: 사람이 무엇을 고쳐야 할지 달라진다.
+     */
+    if (scripts.tooDeep.length > 0) {
+      return deny(L(
+        `This runs a script chain deeper than ${SCRIPT_MAX_DEPTH} levels `
+        + `(${scripts.tooDeep.join(', ')}), so the harness stopped following it and cannot tell what `
+        + 'the last step writes — including the event journal that decides whether a gate is approved. '
+        + 'Flatten the chain, or run it yourself in your terminal.',
+        `스크립트 사슬이 ${SCRIPT_MAX_DEPTH}겹을 넘어(${scripts.tooDeep.join(', ')}) 하네스가 `
+        + '따라가기를 멈췄다 — 마지막 단계가 무엇을 쓰는지 알 길이 없고, 거기에는 게이트 승인 여부를 '
+        + '정하는 이벤트 저널도 포함된다. 사슬을 평평하게 만들거나 사용자가 직접 터미널에서 실행하라.',
+      ), degraded, lang);
+    }
+
     // (SEC-49·SEC-50·SEC-51) 셸 쓰기를 Write 와 **같은 판정 함수**로 보낸다.
     // 여기가 비어 있던 것이 출하 검증의 차단 결함 2건이었다: `echo x > src/app.ts` 로 설계
     // 트랙이 풀리고, `echo '{...}' >> .harness/events.jsonl` + `doctor --repair` 로 사람 승인
@@ -1121,6 +1168,19 @@ function preTool(
         const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
         if (verdict) return verdict;
       }
+      // [SEC-170] **어디에 쓰는지 모르는 쓰기**는 통과가 아니다. `cd` 대상을 못 읽어
+      // 대상 경로가 미해결로 남은 것 중, 하네스 소유 파일 **이름**을 가진 것을 막는다.
+      const blind = scan.unresolvedTargets.find(t => OWNED_BASENAMES.has(t.split('/').pop() ?? ''));
+      if (blind) {
+        return deny(L(
+          `This command changes \`${blind}\` after a \`cd\` whose target cannot be read here `
+          + '(a variable or substitution), so where the write lands is unknown — and that name belongs '
+          + 'to the harness. Write it with a literal path, or use harness commands.',
+          `\`cd\` 대상을 여기서 읽을 수 없어(변수·치환) \`${blind}\` 이(가) 어디에 쓰이는지 알 수 없다 — `
+          + '그리고 그 이름은 하네스 소유 파일이다. 경로를 리터럴로 적거나 harness 명령을 쓰라.',
+        ), degraded, lang);
+      }
+
       const named = mentionsPath(cmd, CORE_FILES);
       if (named) {
         return deny(L(
@@ -1254,7 +1314,11 @@ function preTool(
         // 구축 트랙에서는 빌드가 본업이므로 설계 트랙에서만 본다.
         if (inDesign) {
           const build = commandFor(profile, 'build');
-          if (build && cmd.includes(build.trim().replace(/\s+/g, ' '))) {
+          // [ENG-172] **「명령을 실행하는가」는 한 벌이어야 한다.** 여기만 `cmd.includes` 였고,
+          // 그래서 같은 질문에 두 답이 나왔다 — 언급만 해도 막히고(`echo "npm run build"`),
+          // 공백을 두 번 주면 안 막혔다(`npm  run  build`). [EFF-108] 이 배포 명령에서 고친
+          // 것과 같은 부류인데 빌드 쪽만 남아 있었다. 규칙이 두 벌이면 느슨한 쪽이 정본이 된다.
+          if (build && runsCommand(cmd, build)) {
             return deny(L(
               `The build command (${build}) cannot run in the design track — there is nothing to build `
               + 'before the P6 design approval.',
