@@ -27,6 +27,17 @@ changes them, in their own terminal.
 
 ## Bootstrapping
 
+**The CLI ships with the plugin and is not on your PATH.** It lives at `<plugin root>/bin/harness` —
+the same path the plugin's own hook wiring uses (`${CLAUDE_PLUGIN_ROOT}/bin/harness`, see
+`hooks/hooks.json`). Call it by path, or put it on PATH once per shell:
+
+```bash
+export PATH="${CLAUDE_PLUGIN_ROOT}/bin:$PATH"   # then `harness ...` works as written below
+```
+
+Every `harness ...` line in this skill and in the phase skills assumes that. If `harness: command not
+found` comes back, this is why — it is not a broken install.
+
 Run this **in the target project's root**:
 
 ```bash

@@ -80,6 +80,7 @@ export const COMMANDS: CommandGroup[] = [
     subs: [
       { name: 'upsert', args: '--id <id> --title <t> [--parent <id>] [--anchor <file#h>] [--status <s>]', summary: M('Create or update a ledger node (version is preserved).', '원장 노드를 등록·수정한다(version 은 보존된다).') },
       { name: 'bump', args: '<id>', summary: M('Revise a node (version++, stale) and propagate STALE to waves that cite it.', '노드를 개정하고(version++·stale) 참조 웨이브에 STALE 을 전파한다.') },
+      { name: 'list', summary: M('Print the whole design ledger as JSON.', '설계 원장 전체를 JSON 으로 출력한다.') },
     ],
   },
   {
@@ -172,7 +173,11 @@ export const COMMANDS: CommandGroup[] = [
     name: 'ship',
     summary: M('Ship track — defect ledger, deployments, final verdict.', '출하 트랙 — 결함 대장·배포 기록·최종 판정.'),
     subs: [
-      { name: 'defect', args: '<add|update|list> ...', summary: M('Defect ledger. Findings without evidence are refused.', '결함 대장. 근거 없는 지적은 거부된다.') },
+      // [UX-A2] 인자를 적지 않으면 **알아낼 방법이 없다** — 미지 플래그 오류가 이 도움말을
+      // 가리키는데 여기 인자가 없으면 그 안내도 막다른 길이 된다(같은 군의 deploy 는 이미 적고 있다).
+      { name: 'defect add', args: '--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>', summary: M('Add a defect to the ledger. Findings without evidence are refused.', '결함을 대장에 올린다. 근거 없는 지적은 거부된다.') },
+      { name: 'defect update', args: '<id> --status <open|fixing|fixed|verified|rejected|deferred> [--defer-reason <why>] [--evidence <e>]', summary: M('Change a defect’s status.', '결함의 상태를 바꾼다.') },
+      { name: 'defect list', summary: M('Print the defect ledger as JSON.', '결함 대장을 JSON 으로 출력한다.') },
       { name: 'deploy', args: '--env <env> --version <v> --sha <commit> [--evidence <e>]', summary: M('Record a deployment.', '배포를 기록한다.') },
       { name: 'deployments', summary: M('Print deployment history as JSON.', '배포 이력을 JSON 으로 출력한다.') },
       { name: 'verdict', summary: M('Final go/no-go. Never passes without measured evidence.', '최종 go/no-go. measured 근거 없이는 통과하지 않는다.') },

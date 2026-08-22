@@ -336,3 +336,46 @@ describe('UTIL-A2: state.json 만 없는 상태를 열화로 안내한다', () =
     expect(capture(() => run(['status'], root)).code).toBe(0);
   });
 });
+
+/**
+ * [UX-A4·UX-A2] **안내가 가리키는 곳에 답이 있어야 한다.**
+ * `trace <미지 id>` 는 `report rtm` 을 가리켰는데 rtm 은 F- 노드만 싣는다 — UX-·FEAT- 노드는
+ * 어느 명령으로도 볼 수 없었다. `ship defect add` 는 플래그를 알아낼 방법 자체가 없었다.
+ */
+describe('UX-A4: 등록된 노드를 볼 수 있다', () => {
+  it('`node list` 가 원장 전체를 낸다 — 종류를 가리지 않는다', () => {
+    const root = init();
+    for (const id of ['F-1', 'UX-3', 'FEAT-9']) {
+      capture(() => run(['node', 'upsert', '--id', id, '--title', 't'], root));
+    }
+    const { code, text } = capture(() => run(['node', 'list'], root));
+    expect(code).toBe(0);
+    for (const id of ['F-1', 'UX-3', 'FEAT-9']) expect(text).toContain(id);
+  });
+
+  it('미지 노드 안내가 실제로 답이 있는 곳을 가리킨다', () => {
+    const root = init();
+    const { text } = capture(() => run(['trace', 'NOPE-7'], root));
+    expect(text).toContain('harness node list');
+    expect(text).not.toContain('report rtm');
+  });
+
+  it('`node --help` 에 list 가 있다', () => {
+    expect(capture(() => run(['node', '--help'], init())).text).toContain('list');
+  });
+});
+
+describe('UX-A2: ship defect 의 인자를 알아낼 수 있다', () => {
+  it('`ship --help` 가 defect 의 플래그를 적는다', () => {
+    const { text } = capture(() => run(['ship', '--help'], init()));
+    expect(text).toContain('--severity');
+    expect(text).toContain('--title');
+    expect(text).toContain('--evidence');
+  });
+
+  it('요약 누락 오류가 어떤 플래그인지 말한다', () => {
+    const root = init();
+    const { text } = capture(() => run(['ship', 'defect', 'add', '--id', 'SEC-01'], root));
+    expect(text).toContain('--title');
+  });
+});

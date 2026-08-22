@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { wavesDir, wavePath, evidenceDir } from './paths';
+import { getNode } from './ledger';
 import { tr, langFor } from './tr';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { readState, writeState } from './state';
@@ -127,6 +128,21 @@ export function createWave(
   // [API-92] 목표 필수도 **여기**에 산다 — CLI 만 막고 MCP 는 `goal ?? UNSPECIFIED` 로
   // 빈 껍데기 웨이브를 만들었다(독립 감정이 실측). 목표 없는 지시서는 다음 세션이
   // 이어받을 수 없으므로 [API-29] 가 CLI 에서 막은 것인데, 표면 하나가 그대로 열려 있었다.
+  /**
+   * [ENG-D] **유령 참조 검증도 여기 산다.** 예전에는 `cli.ts` 와 `mcp.ts` 가 각자 같은 검사를
+   * 들고 있었다 — 이 리포가 [LOGIC-93]·[API-92] 로 두 번 고친 바로 그 형태다(어댑터마다
+   * 복제하면 세 번째 호출면이 생기는 순간 빠진다). 원장에 없는 id 를 조용히 받으면 STALE
+   * 전파도 UX 증적 게이트도 걸리지 않는 참조가 된다(게이트는 `UX-` 접두만 본다).
+   */
+  const missing = opts.design_refs.filter(id => !getNode(root, id));
+  if (missing.length > 0) {
+    throw new Error(tr(root, {
+      en: `Design refs not in the ledger: ${missing.join(', ')} — register them first with `
+        + '`harness node upsert --id <id> --title <title>`',
+      ko: `원장에 없는 설계 참조: ${missing.join(', ')} — `
+        + '`harness node upsert --id <id> --title <제목>` 로 먼저 등록하라',
+    }));
+  }
   if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
     throw new Error(tr(root, {
       en: 'A wave needs a goal — an instruction sheet without one cannot be picked up by the next session',

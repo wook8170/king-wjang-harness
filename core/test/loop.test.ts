@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { initHarness } from '../src/state';
 import { readEvents } from '../src/events';
 import { createWave, activateWave, logTurn, completeWave, markStale } from '../src/wave';
-import { upsertNode } from '../src/ledger';
+import { getNode, loadLedger, saveLedger, upsertNode } from '../src/ledger';
 import { wavePath, evidenceDir } from '../src/paths';
 import {
   recordAttempt, attemptCount, raiseCritical, clearCritical, pendingCritical,
@@ -22,7 +22,7 @@ const setup = () => {
 const wave = (
   root: string,
   opts: Partial<{ milestone: string; design_refs: string[]; acceptance: string[]; goal: string }> = {},
-) => createWave(root, {
+) => mkWave(root, {
   milestone: opts.milestone ?? 'M1',
   design_refs: opts.design_refs ?? [],
   acceptance: opts.acceptance ?? ['테스트 그린'],
@@ -31,6 +31,21 @@ const wave = (
 
 const countEvents = (root: string, type: string) =>
   readEvents(root).filter(e => e.type === type).length;
+
+/**
+ * [ENG-D] 유령 참조 검증이 어댑터 두 벌에서 **도메인(`createWave`)** 으로 내려왔다.
+ * 그래서 픽스처도 참조를 **먼저 원장에 등록한 뒤** 웨이브를 만든다 — 예전 픽스처는 어느
+ * 표면에서도 만들 수 없는 웨이브를 도메인으로 직접 만들고 있었다.
+ */
+const mkWave = (
+  root: string,
+  opts: { milestone: string; design_refs: string[]; acceptance: string[]; goal: string },
+) => {
+  for (const id of opts.design_refs) {
+    if (!getNode(root, id)) upsertNode(root, { id, title: id, version: 1, status: 'approved' });
+  }
+  return createWave(root, opts);
+};
 
 describe('attempt 집계 (저널 파생)', () => {
   it('연속 실패를 세고 pass 에서 초기화된다', () => {
@@ -359,7 +374,11 @@ describe('buildExecutorBrief', () => {
 
   it('원장에 없는 참조 노드는 감추지 않고 표시한다', () => {
     const root = setup();
+    // [ENG-D] 이제 유령 참조로는 웨이브를 **만들 수 없다**(도메인이 거부한다). 그래도 이
+    // 상황 자체는 실재한다 — 웨이브를 만든 뒤 그 노드가 원장에서 사라지는 경우다.
+    // 픽스처를 그 실제 경로로 바꾼다: 등록 → 웨이브 생성 → 노드 제거.
     const id = wave(root, { design_refs: ['F-99'] });
+    saveLedger(root, loadLedger(root).filter(n => n.id !== 'F-99'));
     expect(buildExecutorBrief(root, id)).toMatch(/F-99.*원장에 없다/);
   });
 

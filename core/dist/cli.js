@@ -7568,6 +7568,7 @@ var BUILD_PHASES = ["P7", "P8", "P9"];
 var SHIP_PHASES = ["P10", "P11", "P12"];
 var EVIDENCE_GRADES = ["claimed", "code", "measured"];
 var isEvidenceGrade = (v) => EVIDENCE_GRADES.includes(v);
+var LEDGER_STATUSES = ["draft", "approved", "stale"];
 var DOC_STATUSES = ["draft", "submitted", "approved", "superseded"];
 var isDocStatus = (v) => DOC_STATUSES.includes(v);
 
@@ -7746,33 +7747,112 @@ function replayState(events) {
 }
 
 // core/src/wave.ts
-var fs5 = __toESM(require("fs"));
-var path4 = __toESM(require("path"));
-var YAML2 = __toESM(require_dist());
+var fs6 = __toESM(require("fs"));
+var path5 = __toESM(require("path"));
+var YAML3 = __toESM(require_dist());
 
-// core/src/runtime.ts
+// core/src/ledger.ts
 var fs4 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
-var f = (root, name) => path3.join(runtimeDir(root), name);
+var YAML2 = __toESM(require_dist());
+function loadLedger(root) {
+  if (!fs4.existsSync(ledgerPath(root))) return [];
+  const doc = YAML2.parse(fs4.readFileSync(ledgerPath(root), "utf8"));
+  const nodes = doc?.nodes;
+  return Array.isArray(nodes) ? nodes : [];
+}
+function saveLedger(root, nodes) {
+  const target = ledgerPath(root);
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs4.writeFileSync(tmp, YAML2.stringify({ nodes }));
+  fs4.renameSync(tmp, target);
+}
+function getNode(root, id) {
+  return loadLedger(root).find((n) => n.id === id);
+}
+function upsertNode(root, node) {
+  const nodes = loadLedger(root);
+  const parent = node.parent === "" ? void 0 : node.parent;
+  if (parent !== void 0) {
+    if (parent === node.id) {
+      throw new Error(tr(root, {
+        en: `A node cannot be its own parent: ${node.id}`,
+        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
+      }));
+    }
+    if (!nodes.some((n) => n.id === parent)) {
+      throw new Error(tr(root, {
+        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
+        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
+      }));
+    }
+  }
+  const stored = parent === void 0 ? (() => {
+    const { parent: _drop, ...rest } = node;
+    return rest;
+  })() : { ...node, parent };
+  const i = nodes.findIndex((n) => n.id === node.id);
+  if (i >= 0) nodes[i] = stored;
+  else nodes.push(stored);
+  saveLedger(root, nodes);
+}
+function bumpNode(root, id) {
+  const nodes = loadLedger(root);
+  const node = nodes.find((n) => n.id === id);
+  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
+  node.version += 1;
+  node.status = "stale";
+  saveLedger(root, nodes);
+  const affectedWaves = [];
+  const unverifiable = [];
+  if (fs4.existsSync(wavesDir(root))) {
+    for (const f2 of fs4.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+      const stem = f2.replace(/\.md$/, "");
+      let txt;
+      try {
+        txt = fs4.readFileSync(path3.join(wavesDir(root), f2), "utf8");
+      } catch {
+        unverifiable.push(stem);
+        continue;
+      }
+      let meta;
+      try {
+        meta = parseWave(txt).meta;
+      } catch {
+        unverifiable.push(stem);
+        continue;
+      }
+      if (meta.design_refs.includes(id) && meta.status !== "stale") {
+        affectedWaves.push(stem);
+      }
+    }
+  }
+  return { node, affectedWaves, unverifiable };
+}
+
+// core/src/runtime.ts
+var fs5 = __toESM(require("fs"));
+var path4 = __toESM(require("path"));
+var f = (root, name) => path4.join(runtimeDir(root), name);
 function noteActivity(root) {
-  fs4.mkdirSync(runtimeDir(root), { recursive: true });
-  fs4.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
+  fs5.mkdirSync(runtimeDir(root), { recursive: true });
+  fs5.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function noteTurnLogged(root) {
-  fs4.mkdirSync(runtimeDir(root), { recursive: true });
-  fs4.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs5.mkdirSync(runtimeDir(root), { recursive: true });
+  fs5.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function clearActivity(root) {
   try {
     const p = f(root, "last-activity");
-    if (fs4.existsSync(p)) fs4.rmSync(p);
+    if (fs5.existsSync(p)) fs5.rmSync(p);
   } catch {
   }
 }
 function readRuntime(root) {
   const read = (name) => {
-    if (!fs4.existsSync(f(root, name))) return void 0;
-    const v = fs4.readFileSync(f(root, name), "utf8").trim();
+    if (!fs5.existsSync(f(root, name))) return void 0;
+    const v = fs5.readFileSync(f(root, name), "utf8").trim();
     return v || void 0;
   };
   return { lastActivityAt: read("last-activity"), lastTurnAt: read("last-turn") };
@@ -7784,7 +7864,7 @@ function parseWave(txt, lang = DEFAULT_LANG) {
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML2.parse(m[1]);
+    raw = YAML3.parse(m[1]);
   } catch {
     raw = null;
   }
@@ -7804,19 +7884,19 @@ function parseWave(txt, lang = DEFAULT_LANG) {
 var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
 function serializeWave(meta, body) {
   return `---
-${YAML2.stringify(meta).trimEnd()}
+${YAML3.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs5.readFileSync(wavePath(root, id), "utf8"), langFor(root));
+  return parseWave(fs6.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs5.existsSync(wavesDir(root))) return [];
+  if (!fs6.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs5.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     try {
-      out.push(parseWave(fs5.readFileSync(path4.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
+      out.push(parseWave(fs6.readFileSync(path5.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -7826,22 +7906,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs5.writeFileSync(tmp, serializeWave(meta, body));
-  fs5.renameSync(tmp, target);
+  fs6.writeFileSync(tmp, serializeWave(meta, body));
+  fs6.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs5.existsSync(dir)) return [];
-  return fs5.readdirSync(dir).filter((f2) => {
+  if (!fs6.existsSync(dir)) return [];
+  return fs6.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs5.statSync(path4.join(dir, f2));
+    const st = fs6.statSync(path5.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs5.existsSync(wavesDir(root))) {
-    for (const f2 of fs5.readdirSync(wavesDir(root))) {
+  if (fs6.existsSync(wavesDir(root))) {
+    for (const f2 of fs6.readdirSync(wavesDir(root))) {
       const m = /^wave-(\d+)\.md$/.exec(f2);
       if (m) nums.push(parseInt(m[1], 10));
     }
@@ -7857,6 +7937,13 @@ function nextWaveId(root) {
 }
 function createWave(root, opts) {
   const lang = langFor(root);
+  const missing = opts.design_refs.filter((id2) => !getNode(root, id2));
+  if (missing.length > 0) {
+    throw new Error(tr(root, {
+      en: `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first with \`harness node upsert --id <id> --title <title>\``,
+      ko: `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
+    }));
+  }
   if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
     throw new Error(tr(root, {
       en: "A wave needs a goal \u2014 an instruction sheet without one cannot be picked up by the next session",
@@ -7864,7 +7951,7 @@ function createWave(root, opts) {
     }));
   }
   const id = nextWaveId(root);
-  if (fs5.existsSync(wavePath(root, id))) {
+  if (fs6.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -7965,81 +8052,6 @@ function markStale(root, id) {
   appendEvent(root, "wave-stale", { id });
   const state = readState(root);
   if (state.activeWave === id) writeState(root, { ...state, activeWave: null });
-}
-
-// core/src/ledger.ts
-var fs6 = __toESM(require("fs"));
-var path5 = __toESM(require("path"));
-var YAML3 = __toESM(require_dist());
-function loadLedger(root) {
-  if (!fs6.existsSync(ledgerPath(root))) return [];
-  const doc = YAML3.parse(fs6.readFileSync(ledgerPath(root), "utf8"));
-  const nodes = doc?.nodes;
-  return Array.isArray(nodes) ? nodes : [];
-}
-function saveLedger(root, nodes) {
-  const target = ledgerPath(root);
-  const tmp = `${target}.tmp-${process.pid}`;
-  fs6.writeFileSync(tmp, YAML3.stringify({ nodes }));
-  fs6.renameSync(tmp, target);
-}
-function getNode(root, id) {
-  return loadLedger(root).find((n) => n.id === id);
-}
-function upsertNode(root, node) {
-  const nodes = loadLedger(root);
-  const parent = node.parent;
-  if (parent !== void 0 && parent !== "") {
-    if (parent === node.id) {
-      throw new Error(tr(root, {
-        en: `A node cannot be its own parent: ${node.id}`,
-        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
-      }));
-    }
-    if (!nodes.some((n) => n.id === parent)) {
-      throw new Error(tr(root, {
-        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
-        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
-      }));
-    }
-  }
-  const i = nodes.findIndex((n) => n.id === node.id);
-  if (i >= 0) nodes[i] = node;
-  else nodes.push(node);
-  saveLedger(root, nodes);
-}
-function bumpNode(root, id) {
-  const nodes = loadLedger(root);
-  const node = nodes.find((n) => n.id === id);
-  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
-  node.version += 1;
-  node.status = "stale";
-  saveLedger(root, nodes);
-  const affectedWaves = [];
-  const unverifiable = [];
-  if (fs6.existsSync(wavesDir(root))) {
-    for (const f2 of fs6.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
-      const stem = f2.replace(/\.md$/, "");
-      let txt;
-      try {
-        txt = fs6.readFileSync(path5.join(wavesDir(root), f2), "utf8");
-      } catch {
-        unverifiable.push(stem);
-        continue;
-      }
-      let meta;
-      try {
-        meta = parseWave(txt).meta;
-      } catch {
-        unverifiable.push(stem);
-        continue;
-      }
-      if (meta.design_refs.includes(id) && meta.status !== "stale") {
-        affectedWaves.push(stem);
-      }
-    }
-  }
-  return { node, affectedWaves, unverifiable };
 }
 
 // core/src/doctor.ts
@@ -8795,7 +8807,8 @@ var COMMANDS = [
     summary: M("Design ledger nodes \u2014 the things waves are allowed to implement.", "\uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC \u2014 \uC6E8\uC774\uBE0C\uAC00 \uAD6C\uD604\uD560 \uC218 \uC788\uB294 \uB300\uC0C1."),
     subs: [
       { name: "upsert", args: "--id <id> --title <t> [--parent <id>] [--anchor <file#h>] [--status <s>]", summary: M("Create or update a ledger node (version is preserved).", "\uC6D0\uC7A5 \uB178\uB4DC\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4(version \uC740 \uBCF4\uC874\uB41C\uB2E4).") },
-      { name: "bump", args: "<id>", summary: M("Revise a node (version++, stale) and propagate STALE to waves that cite it.", "\uB178\uB4DC\uB97C \uAC1C\uC815\uD558\uACE0(version++\xB7stale) \uCC38\uC870 \uC6E8\uC774\uBE0C\uC5D0 STALE \uC744 \uC804\uD30C\uD55C\uB2E4.") }
+      { name: "bump", args: "<id>", summary: M("Revise a node (version++, stale) and propagate STALE to waves that cite it.", "\uB178\uB4DC\uB97C \uAC1C\uC815\uD558\uACE0(version++\xB7stale) \uCC38\uC870 \uC6E8\uC774\uBE0C\uC5D0 STALE \uC744 \uC804\uD30C\uD55C\uB2E4.") },
+      { name: "list", summary: M("Print the whole design ledger as JSON.", "\uC124\uACC4 \uC6D0\uC7A5 \uC804\uCCB4\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
@@ -8897,7 +8910,11 @@ ${TOKEN_DOC_SKELETON}`
     name: "ship",
     summary: M("Ship track \u2014 defect ledger, deployments, final verdict.", "\uCD9C\uD558 \uD2B8\uB799 \u2014 \uACB0\uD568 \uB300\uC7A5\xB7\uBC30\uD3EC \uAE30\uB85D\xB7\uCD5C\uC885 \uD310\uC815."),
     subs: [
-      { name: "defect", args: "<add|update|list> ...", summary: M("Defect ledger. Findings without evidence are refused.", "\uACB0\uD568 \uB300\uC7A5. \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uAC70\uBD80\uB41C\uB2E4.") },
+      // [UX-A2] 인자를 적지 않으면 **알아낼 방법이 없다** — 미지 플래그 오류가 이 도움말을
+      // 가리키는데 여기 인자가 없으면 그 안내도 막다른 길이 된다(같은 군의 deploy 는 이미 적고 있다).
+      { name: "defect add", args: "--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>", summary: M("Add a defect to the ledger. Findings without evidence are refused.", "\uACB0\uD568\uC744 \uB300\uC7A5\uC5D0 \uC62C\uB9B0\uB2E4. \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uAC70\uBD80\uB41C\uB2E4.") },
+      { name: "defect update", args: "<id> --status <open|fixing|fixed|verified|rejected|deferred> [--defer-reason <why>] [--evidence <e>]", summary: M("Change a defect\u2019s status.", "\uACB0\uD568\uC758 \uC0C1\uD0DC\uB97C \uBC14\uAFBC\uB2E4.") },
+      { name: "defect list", summary: M("Print the defect ledger as JSON.", "\uACB0\uD568 \uB300\uC7A5\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
       { name: "deploy", args: "--env <env> --version <v> --sha <commit> [--evidence <e>]", summary: M("Record a deployment.", "\uBC30\uD3EC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
       { name: "deployments", summary: M("Print deployment history as JSON.", "\uBC30\uD3EC \uC774\uB825\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
       { name: "verdict", summary: M("Final go/no-go. Never passes without measured evidence.", "\uCD5C\uC885 go/no-go. measured \uADFC\uAC70 \uC5C6\uC774\uB294 \uD1B5\uACFC\uD558\uC9C0 \uC54A\uB294\uB2E4.") },
@@ -13373,7 +13390,7 @@ function addDefect(root, input) {
     throw new Error(tr(root, { en: `Invalid defect status: ${String(status)} (one of ${DEFECT_STATUSES.join(", ")})`, ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uACB0\uD568 \uC0C1\uD0DC: ${String(status)} (${DEFECT_STATUSES.join(", ")} \uC911 \uD558\uB098)` }));
   }
   const title = String(input.title ?? "").trim();
-  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary \u2014 say what is wrong in one line`, ko: `\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uBB34\uC5C7\uC774 \uC798\uBABB\uB410\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C` }));
+  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary \u2014 pass it with \`--title <one line>\`: say what is wrong in one line`, ko: `\uACB0\uD568 ${id} \uC758 \uD55C \uC904 \uC694\uC57D\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \`--title <\uD55C \uC904>\` \uB85C \uB118\uACA8\uB77C: \uBB34\uC5C7\uC774 \uC798\uBABB\uB410\uB294\uC9C0 \uD55C \uC904\uB85C \uC801\uC5B4\uB77C` }));
   const evidence = String(input.evidence ?? "").trim();
   if (!evidence) {
     throw new Error(
@@ -14553,15 +14570,6 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
         switch (sub) {
           case "create": {
             const refs = csv(flag(args, "refs"));
-            const missing = refs.filter((id) => !getNode(root, id));
-            if (missing.length > 0) {
-              throw new Error(
-                L(
-                  `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first with \`harness node upsert --id <id> --title <title>\``,
-                  `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
-                )
-              );
-            }
             const goal = (flag(args, "goal") ?? "").trim();
             if (!goal) {
               throw new Error(lang === "ko" ? '\uC6E8\uC774\uBE0C \uBAA9\uD45C\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 `harness wave create --goal "<\uC774 \uC6E8\uC774\uBE0C\uAC00 \uBB34\uC5C7\uC744 \uB05D\uB0B4\uB294\uAC00>"`. \uBAA9\uD45C \uC5C6\uB294 \uC9C0\uC2DC\uC11C\uB294 \uB2E4\uC74C \uC138\uC158\uC774 \uC774\uC5B4\uBC1B\uC744 \uC218 \uC5C6\uB2E4' : 'A wave needs a goal \u2014 `harness wave create --goal "<what this wave finishes>"`. An instruction sheet without a goal cannot be picked up by the next session');
@@ -14602,28 +14610,20 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
       }
       case "node": {
         const args = [sub, ...rest];
+        if (sub === "list") {
+          console.log(JSON.stringify(loadLedger(root), null, 2));
+          return 0;
+        }
         if (sub === "upsert") {
           const id = flag(args, "id");
           const title = flag(args, "title");
           if (!id || !title) throw new Error(L("Usage: harness node upsert --id <id> --title <title>", "\uC0AC\uC6A9\uBC95: harness node upsert --id <id> --title <\uC81C\uBAA9>"));
           const statusFlag = flag(args, "status");
-          const LEDGER_STATUSES = ["draft", "approved", "stale"];
           if (statusFlag !== void 0 && !LEDGER_STATUSES.includes(statusFlag)) {
             throw new Error(L(`Invalid status: ${statusFlag} (one of ${LEDGER_STATUSES.join(", ")})`, `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 status: ${statusFlag} (${LEDGER_STATUSES.join(", ")} \uC911 \uD558\uB098)`));
           }
           const prev = getNode(root, id);
           const parentFlag = flag(args, "parent");
-          if (parentFlag !== void 0) {
-            if (parentFlag === id) {
-              throw new Error(L(`A node cannot be its own parent: ${id}`, `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${id}`));
-            }
-            if (!getNode(root, parentFlag)) {
-              throw new Error(L(
-                `Parent ${parentFlag} is not in the design ledger \u2014 register it first with \`harness node upsert --id ${parentFlag} --title "<title>"\``,
-                `\uBD80\uBAA8 ${parentFlag} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \`harness node upsert --id ${parentFlag} --title "<\uC81C\uBAA9>"\` \uB85C \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C`
-              ));
-            }
-          }
           const node = {
             id,
             title,
@@ -14688,7 +14688,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
         if (!id) throw new Error(renderGroupHelp(findGroup("trace"), lang));
         const t = traceNode(root, id);
         if (!t) {
-          throw new Error(lang === "ko" ? `\uB178\uB4DC ${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \`harness node upsert --id ${id} --title <\uC81C\uBAA9>\` \uB85C \uB4F1\uB85D\uD558\uAC70\uB098 \`harness report rtm\` \uC73C\uB85C \uB4F1\uB85D\uB41C \uB178\uB4DC\uB97C \uD655\uC778\uD558\uB77C` : `Node ${id} is not in the design ledger \u2014 register it with \`harness node upsert --id ${id} --title <title>\`, or list known nodes with \`harness report rtm\``);
+          throw new Error(lang === "ko" ? `\uB178\uB4DC ${id} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \`harness node upsert --id ${id} --title <\uC81C\uBAA9>\` \uB85C \uB4F1\uB85D\uD558\uAC70\uB098 \`harness node list\` \uB85C \uB4F1\uB85D\uB41C \uB178\uB4DC\uB97C \uD655\uC778\uD558\uB77C` : `Node ${id} is not in the design ledger \u2014 register it with \`harness node upsert --id ${id} --title <title>\`, or list known nodes with \`harness node list\``);
         }
         console.log(JSON.stringify(t, null, 2));
         return 0;

@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initHarness } from '../src/state';
 import { readEvents } from '../src/events';
-import { upsertNode } from '../src/ledger';
+import { getNode, upsertNode } from '../src/ledger';
 import { createWave } from '../src/wave';
 import { submitGate, approveGate } from '../src/gate';
 import { evidenceDir } from '../src/paths';
@@ -69,7 +69,7 @@ const putCapture = (root: string, waveId: string, name = 'ux-7.png') => {
 const shipReadyRoot = () => {
   const root = setup();
   upsertNode(root, { id: 'UX-7', title: '결제 화면', version: 1, status: 'approved' });
-  createWave(root, {
+  mkWave(root, {
     milestone: 'M2-결제', design_refs: ['UX-7'],
     acceptance: ['결제 e2e 그린'], goal: '결제 화면 구현',
   });
@@ -83,6 +83,21 @@ const defect = (over: Partial<Parameters<typeof addDefect>[1]> = {}) => ({
   id: 'SEC-01', severity: 'blocker' as const, title: '세션 토큰이 로그에 남는다',
   evidence: 'src/auth.ts:88', ...over,
 });
+
+/**
+ * [ENG-D] 유령 참조 검증이 어댑터 두 벌에서 **도메인(`createWave`)** 으로 내려왔다.
+ * 그래서 픽스처도 참조를 **먼저 원장에 등록한 뒤** 웨이브를 만든다 — 예전 픽스처는 어느
+ * 표면에서도 만들 수 없는 웨이브를 도메인으로 직접 만들고 있었다.
+ */
+const mkWave = (
+  root: string,
+  opts: { milestone: string; design_refs: string[]; acceptance: string[]; goal: string },
+) => {
+  for (const id of opts.design_refs) {
+    if (!getNode(root, id)) upsertNode(root, { id, title: id, version: 1, status: 'approved' });
+  }
+  return createWave(root, opts);
+};
 
 describe('결함 대장 — 기계 정본 defects.yaml, readiness.md 는 렌더 사본', () => {
   it('addDefect 가 저널을 먼저 남기고 yaml 과 readiness.md 를 함께 쓴다', () => {
@@ -294,7 +309,7 @@ describe('출하 판정 (P12 go/no-go)', () => {
 
   it('UX 를 참조하지 않는 웨이브는 증적을 요구하지 않는다', () => {
     const root = shipReadyRoot();
-    createWave(root, {
+    mkWave(root, {
       milestone: 'M3-정산', design_refs: ['F-20'], acceptance: ['정산 배치 그린'], goal: '정산 배치',
     });
     expect(shipVerdict(root).ok).toBe(true);

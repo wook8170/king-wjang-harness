@@ -43,7 +43,7 @@ import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
 import { runDoctor } from './doctor';
 import { packetsDir } from './paths';
-import { PHASES, EVIDENCE_GRADES, isPhase, isEvidenceGrade } from './types';
+import { PHASES, EVIDENCE_GRADES, LEDGER_STATUSES, isPhase, isEvidenceGrade } from './types';
 import type { EvidenceGrade, LedgerNode } from './types';
 
 export interface McpToolDef {
@@ -61,7 +61,6 @@ export interface McpToolResult {
   content: string;
 }
 
-const LEDGER_STATUSES: readonly LedgerNode['status'][] = ['draft', 'approved', 'stale'];
 
 const NO_ARGS = { type: 'object' as const, properties: {} };
 
@@ -383,15 +382,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
     }
 
     case 'harness_wave_create': {
-      // 원장에 없는 id 를 받으면 STALE 전파도 UX 게이트도 걸리지 않는 유령 참조가 된다.
+      // [ENG-D] 유령 참조 검증은 도메인(createWave)이 한다 — 어댑터마다 복제하지 않는다.
       const refs = strArr(o, 'design_refs');
-      const missing = refs.filter(id => !getNode(root, id));
-      if (missing.length > 0) {
-        return fail(
-          `Design refs not in the ledger: ${missing.join(', ')} — `
-          + 'register them first with `harness_node_upsert`',
-        );
-      }
       const meta = createWave(root, {
         milestone: str(o, 'milestone') ?? pick(UNSPECIFIED, langFor(root)),
         goal: str(o, 'goal') ?? pick(UNSPECIFIED, langFor(root)),
@@ -475,7 +467,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       if (!t) {
         return fail(
           `Node ${id} is not in the design ledger — register it with \`harness_node_upsert\`, `
-          + 'or list known nodes with `harness_report_rtm`',
+          // [UX-A4] rtm 은 F- 노드만 싣는다 — UX-·FEAT- 를 찾는 사람에게는 답이 없는 곳이다.
+          + 'or list known nodes with `harness node list`',
         );
       }
       return json(t);

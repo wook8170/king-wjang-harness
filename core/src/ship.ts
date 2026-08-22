@@ -220,7 +220,7 @@ export function addDefect(root: string, input: AddDefectInput): DefectRecord {
     throw new Error(tr(root, { en: `Invalid defect status: ${String(status)} (one of ${DEFECT_STATUSES.join(', ')})`, ko: `유효하지 않은 결함 상태: ${String(status)} (${DEFECT_STATUSES.join(', ')} 중 하나)` }));
   }
   const title = String(input.title ?? '').trim();
-  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary — say what is wrong in one line`, ko: `결함 ${id} 의 한 줄 요약이 비어 있다 — 무엇이 잘못됐는지 한 줄로 적어라` }));
+  if (!title) throw new Error(tr(root, { en: `Defect ${id} has no one-line summary — pass it with \`--title <one line>\`: say what is wrong in one line`, ko: `결함 ${id} 의 한 줄 요약이 비어 있다 — \`--title <한 줄>\` 로 넘겨라: 무엇이 잘못됐는지 한 줄로 적어라` }));
   const evidence = String(input.evidence ?? '').trim();
   if (!evidence) {
     throw new Error(

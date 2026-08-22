@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
-import { getNode, upsertNode, bumpNode } from './ledger';
+import { getNode, upsertNode, bumpNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick } from './i18n';
@@ -58,7 +58,7 @@ import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus } from './types';
 import type { DocNode, EvidenceGrade } from './types';
 import { harnessDir, runtimeDir, packetsDir } from './paths';
-import { PHASES, isPhase, DOC_STATUSES } from './types';
+import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
 /** 배선된 훅 이벤트. 이 밖의 값은 오타이거나 미지원 이벤트다 — 침묵하되 기록한다. */
@@ -910,20 +910,8 @@ export function run(argv: string[], root: string): number {
         const args = [sub, ...rest];
         switch (sub) {
           case 'create': {
-            // 원장에 없는 id 를 조용히 받으면 STALE 전파도 UX 게이트도 걸리지 않는 유령
-            // 참조가 된다(게이트는 'UX-' 프리픽스만 본다) — 생성 시점에 거부한다.
+            // [ENG-D] 유령 참조 검증은 도메인(createWave)이 한다 — 어댑터마다 복제하지 않는다.
             const refs = csv(flag(args, 'refs'));
-            const missing = refs.filter(id => !getNode(root, id));
-            if (missing.length > 0) {
-              throw new Error(
-                L(
-                  `Design refs not in the ledger: ${missing.join(', ')} — register them first with `
-                  + '`harness node upsert --id <id> --title <title>`',
-                  `원장에 없는 설계 참조: ${missing.join(', ')} — `
-                  + '`harness node upsert --id <id> --title <제목>` 로 먼저 등록하라',
-                ),
-              );
-            }
             // API-29: 목표 없는 웨이브는 지시서가 아니라 빈 껍데기다 — 다음 세션이
             // `wave-001 (미지정)` 만 보고 무엇을 하려던 웨이브인지 알 수 없다.
             // 예전에는 무인자 `wave create` 가 exit 0 으로 성공했다(침묵 성공).
@@ -963,6 +951,16 @@ export function run(argv: string[], root: string): number {
 
       case 'node': {
         const args = [sub, ...rest];
+        /**
+         * [UX-A4] **등록된 노드를 볼 방법이 없었다.** `trace <미지 id>` 는 「`report rtm` 으로
+         * 확인하라」고 안내했는데 rtm 은 F- 노드만 싣는다 — UX-·FEAT- 노드는 어느 명령으로도
+         * 열람할 수 없었다. 안내가 가리키는 곳에 답이 없으면 그 안내는 막다른 길이다.
+         * `doc list`·`adr list`·`wave list`·`ship defect list` 가 이미 하는 것을 이 군만 안 했다.
+         */
+        if (sub === 'list') {
+          console.log(JSON.stringify(loadLedger(root), null, 2));
+          return 0;
+        }
         if (sub === 'upsert') {
           const id = flag(args, 'id');
           const title = flag(args, 'title');
@@ -970,28 +968,14 @@ export function run(argv: string[], root: string): number {
           // 원장 CLI 는 캐스트만 하던 탓에 열거형 밖 값(예: '승인됨')이 그대로 기록됐다(LOGIC-16).
           // frontmatter(wave.ts)처럼 값이 주어졌을 때만 검증한다 — 미지정이면 prev/기본값 유지.
           const statusFlag = flag(args, 'status');
-          const LEDGER_STATUSES: readonly LedgerNode['status'][] = ['draft', 'approved', 'stale'];
           if (statusFlag !== undefined && !LEDGER_STATUSES.includes(statusFlag as LedgerNode['status'])) {
             throw new Error(L(`Invalid status: ${statusFlag} (one of ${LEDGER_STATUSES.join(', ')})`, `유효하지 않은 status: ${statusFlag} (${LEDGER_STATUSES.join(', ')} 중 하나)`));
           }
           const prev = getNode(root, id);
-          // [USE-96] `--parent` 도 원장에 있어야 한다 — `wave create --refs` 는 검증하는데
-          // 여기만 무검증이라 댕글링 부모가 조용히 생겼다. 부모 없는 사슬은 RTM 의 뼈대를
-          // 끊고, 끊긴 것은 「왜 이게 있나」에 답하지 못한다. 자기 자신을 부모로 두는 것도 막는다.
+          // [USE-96·ENG-E] 부모 검증은 **도메인(upsertNode)** 이 한다 — 여기 두 번째 벌이 있던
+          // 동안 `--parent ""` 를 CLI 는 거부하고 MCP 는 받아 원장에 빈 부모를 남겼다.
+          // 같은 규칙이 두 곳에 있으면 언젠가 갈리고, 갈린 순간 느슨한 쪽이 정본이 된다.
           const parentFlag = flag(args, 'parent');
-          if (parentFlag !== undefined) {
-            if (parentFlag === id) {
-              throw new Error(L(`A node cannot be its own parent: ${id}`, `자기 자신을 부모로 둘 수 없다: ${id}`));
-            }
-            if (!getNode(root, parentFlag)) {
-              throw new Error(L(
-                `Parent ${parentFlag} is not in the design ledger — register it first with `
-                + `\`harness node upsert --id ${parentFlag} --title "<title>"\``,
-                `부모 ${parentFlag} 가 설계 원장에 없다 — `
-                + `\`harness node upsert --id ${parentFlag} --title "<제목>"\` 로 먼저 등록하라`,
-              ));
-            }
-          }
           const node: LedgerNode = {
             id, title,
             parent: parentFlag ?? prev?.parent,
@@ -1057,8 +1041,8 @@ export function run(argv: string[], root: string): number {
         const t = traceNode(root, id);
         if (!t) {
           throw new Error(lang === 'ko'
-            ? `노드 ${id} 가 설계 원장에 없다 — \`harness node upsert --id ${id} --title <제목>\` 로 등록하거나 \`harness report rtm\` 으로 등록된 노드를 확인하라`
-            : `Node ${id} is not in the design ledger — register it with \`harness node upsert --id ${id} --title <title>\`, or list known nodes with \`harness report rtm\``);
+            ? `노드 ${id} 가 설계 원장에 없다 — \`harness node upsert --id ${id} --title <제목>\` 로 등록하거나 \`harness node list\` 로 등록된 노드를 확인하라`
+            : `Node ${id} is not in the design ledger — register it with \`harness node upsert --id ${id} --title <title>\`, or list known nodes with \`harness node list\``);
         }
         console.log(JSON.stringify(t, null, 2));
         return 0;

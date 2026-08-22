@@ -32,8 +32,13 @@ export function upsertNode(root: string, node: LedgerNode): void {
   // [LOGIC-93] 부모 검증은 **여기**에 산다 — CLI 에만 두었더니 MCP 표면으로 댕글링 부모가
   // 그대로 들어왔다(독립 감정이 실측). SEC-50 이 정확히 같은 사고였다: Write 만 막고 Bash 는
   // 비어 있었다. **규칙을 도메인에 두면 표면이 몇 개든 함께 상속한다.**
-  const parent = node.parent;
-  if (parent !== undefined && parent !== '') {
+  /**
+   * [ENG-E] 빈 부모는 **부모 없음**으로 정규화한다. 예전에는 `''` 가 검증만 건너뛰고 그대로
+   * 저장돼, CLI 는 거부하는데 MCP 는 ok 로 빈 부모를 원장에 남기는 표면 비대칭이 됐다.
+   * 값의 해석은 도메인이 한 번에 정한다 — 표면마다 정하면 그때부터 갈린다.
+   */
+  const parent = node.parent === '' ? undefined : node.parent;
+  if (parent !== undefined) {
     if (parent === node.id) {
       throw new Error(tr(root, {
         en: `A node cannot be its own parent: ${node.id}`,
@@ -49,8 +54,13 @@ export function upsertNode(root: string, node: LedgerNode): void {
       }));
     }
   }
+  // 정규화한 값으로 **저장한다** — 검증만 정규화하고 원본을 넣으면 `parent: ''` 가 그대로 남아
+  // 표면 비대칭이 원장에 기록된다(ENG-E 가 정확히 그 모습이었다).
+  const stored: LedgerNode = parent === undefined
+    ? (() => { const { parent: _drop, ...rest } = node; return rest as LedgerNode; })()
+    : { ...node, parent };
   const i = nodes.findIndex(n => n.id === node.id);
-  if (i >= 0) nodes[i] = node; else nodes.push(node);
+  if (i >= 0) nodes[i] = stored; else nodes.push(stored);
   saveLedger(root, nodes);
 }
 

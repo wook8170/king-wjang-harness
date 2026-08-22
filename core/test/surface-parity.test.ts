@@ -31,6 +31,18 @@ const quiet = <T>(fn: () => T): T => {
   try { return fn(); } finally { l.mockRestore(); e.mockRestore(); }
 };
 
+/** stdout·throw 를 한 곳에 모은다 — CLI 표면의 판정은 「사람이 읽는 것」으로 잰다. */
+const capture = (fn: () => number): { code: number; text: string } => {
+  const out: string[] = [];
+  const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
+  const e = vi.spyOn(console, 'error').mockImplementation(m => { out.push(String(m)); });
+  try {
+    return { code: fn(), text: out.join('\n') };
+  } catch (err) {
+    return { code: 1, text: [...out, String(err instanceof Error ? err.message : err)].join('\n') };
+  } finally { l.mockRestore(); e.mockRestore(); }
+};
+
 describe('LOGIC-93: 원장 부모 검증은 CLI·MCP 양쪽에서 같다', () => {
   it('MCP 도 없는 부모를 거부한다', () => {
     const root = init();
@@ -302,5 +314,85 @@ describe('ENG-A: hooks.json matcher 가 판정 대상 도구 집합과 일치한
   it('판정하지 않는 도구를 걸지 않는다 — 비용만 무는 기동이 되지 않게', () => {
     const wired = matchers[0].split('|');
     expect([...wired].sort()).toEqual([...WRITE_TOOLS, 'Bash'].sort());
+  });
+});
+
+/**
+ * [PROD-B1] **플러그인으로 깐 사람의 첫 명령이 실행되지 않았다.** 스킬·README·MCP 오류문구가
+ * 전부 맨 `harness init` 을 지시하는데 그 바이너리는 PATH 에 없다 — 첫 줄에서 막히면
+ * 나머지 문서가 아무리 정확해도 소용이 없다. 배선이 쓰는 경로가 곧 정답이므로 그 둘을 고정한다.
+ */
+describe('PROD-B1: 첫 명령을 실행할 경로가 문서에 있다', () => {
+  const repo = path.resolve(__dirname, '../..');
+  const skill = fs.readFileSync(path.join(repo, 'skills/king-wjang-harness/SKILL.md'), 'utf8');
+
+  it('스킬이 CLI 가 PATH 에 없다는 사실과 그 위치를 말한다', () => {
+    expect(skill).toMatch(/not on your PATH/);
+    expect(skill).toContain('${CLAUDE_PLUGIN_ROOT}/bin');
+  });
+
+  it('스킬이 안내하는 경로가 훅 배선이 실제로 쓰는 경로와 같다', () => {
+    const wiring = fs.readFileSync(path.join(repo, 'hooks', 'hooks.json'), 'utf8');
+    expect(wiring).toContain('${CLAUDE_PLUGIN_ROOT}/bin/');
+  });
+});
+
+/**
+ * [ENG-C·D·E] 엔지니어링 축의 4.8 조건은 「**중복 규칙 0**」이다. 재감정이 세 벌을 더 찾았고,
+ * 셋 다 이 리포가 이미 두 번 고친 형태였다([LOGIC-93]·[API-92]) — 규칙을 어댑터에 두면
+ * 표면이 하나 늘 때마다 빠진다. 처방도 같다: **도메인에 한 벌.**
+ */
+describe('ENG-C: 원장 상태 어휘가 한 벌이다', () => {
+  const repo = path.resolve(__dirname, '../..');
+  it('정본은 types.ts 이고, 어댑터가 자기 목록을 들지 않는다', () => {
+    const types = fs.readFileSync(path.join(repo, 'core/src/types.ts'), 'utf8');
+    expect(types).toContain("export const LEDGER_STATUSES");
+    for (const f of ['core/src/cli.ts', 'core/src/mcp.ts']) {
+      const src = fs.readFileSync(path.join(repo, f), 'utf8');
+      expect(src, `${f} 가 목록을 다시 정의한다`).not.toMatch(/LEDGER_STATUSES\s*[:=][^;]*\[/);
+    }
+  });
+});
+
+describe('ENG-D: 유령 참조 검증이 도메인 한 곳이다', () => {
+  it('두 표면이 같은 문구로 거부한다', () => {
+    const root = init();
+    const cli = capture(() => run(['wave', 'create', '--goal', 'g', '--refs', 'NOPE-9'], root));
+    const mcp = callTool(root, 'harness_wave_create', { goal: 'g', design_refs: ['NOPE-9'] });
+    expect(cli.code).toBe(1);
+    expect(mcp.ok).toBe(false);
+    expect(String(mcp.content)).toContain('NOPE-9');
+    expect(cli.text).toContain('NOPE-9');
+  });
+
+  it('어댑터가 자기 검증을 다시 들지 않는다', () => {
+    const repo = path.resolve(__dirname, '../..');
+    for (const f of ['core/src/cli.ts', 'core/src/mcp.ts']) {
+      const src = fs.readFileSync(path.join(repo, f), 'utf8');
+      expect(src, `${f} 에 유령 참조 검증 사본이 남아 있다`).not.toMatch(/filter\(id => !getNode\(/);
+    }
+  });
+
+  it('등록된 참조는 두 표면 모두 통과한다 (과차단 0)', () => {
+    const root = init();
+    capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 't'], root));
+    expect(capture(() => run(['wave', 'create', '--goal', 'g', '--refs', 'F-1'], root)).code).toBe(0);
+    expect(callTool(root, 'harness_wave_create', { goal: 'g2', design_refs: ['F-1'] }).ok).toBe(true);
+  });
+});
+
+describe('ENG-E: 빈 부모 판정이 표면마다 갈리지 않는다', () => {
+  it('두 표면 모두 「부모 없음」으로 받아들이고 빈 값을 기록하지 않는다', () => {
+    const root = init();
+    expect(capture(() => run(['node', 'upsert', '--id', 'A-1', '--title', 't', '--parent', ''], root)).code).toBe(0);
+    expect(callTool(root, 'harness_node_upsert', { id: 'A-2', title: 't', parent: '' }).ok).toBe(true);
+    const nodes = JSON.parse(capture(() => run(['node', 'list'], root)).text) as Array<Record<string, unknown>>;
+    for (const n of nodes) expect(n.parent).toBeUndefined();
+  });
+
+  it('댕글링 부모는 두 표면 모두 거부한다', () => {
+    const root = init();
+    expect(capture(() => run(['node', 'upsert', '--id', 'A-3', '--title', 't', '--parent', 'NOPE'], root)).code).toBe(1);
+    expect(callTool(root, 'harness_node_upsert', { id: 'A-4', title: 't', parent: 'NOPE' }).ok).toBe(false);
   });
 });

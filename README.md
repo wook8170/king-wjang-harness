@@ -80,9 +80,11 @@ The harness treats **design as enforced, versioned state** — and Claude Design
 
 A wave that references a `UX-` node **cannot be completed without a visual artifact** in `.harness/evidence/<wave-id>/`. Prompt a mockup in Claude Design, export the HTML/PNG, drop it into the evidence folder — the gate opens. No mockup, no completion. **You can't ship a UX feature that was never actually drawn.**
 
-### By design (roadmap): first-class Claude Design integration
+### Claude Design integration — shipped, except the network pull
 
-- **Canvas = the visual source of truth.** One artboard ↔ one UX node (`"UX-7 Checkout"`); the canvas URL lives in the design ledger.
+*(This section used to be titled "roadmap". It was wrong in the quiet direction: everything below except the automatic canvas fetch is implemented and measured. Under-advertising is a documentation defect too — it just does not complain.)*
+
+- **Canvas = the visual source of truth.** One artboard ↔ one UX node (`"UX-7 Checkout"`); the canvas URL lives in the design ledger. **Not shipped:** fetching the canvas over the network — `harness design sync <UX-x> --from <file>` takes content you exported yourself.
 - **`harness design sync`** pulls the canvas, diffs it against the approved hash, and on change **bumps the node's version → propagates STALE.** A canvas edit becomes a *formal design revision* — every downstream build wave is flagged, automatically.
 - **P4 extraction** captures a component inventory and a 2× baseline PNG, later used for visual-regression review.
 - **Feedback loop:** canvas comment threads are collected (`harness gate feedback`) into revisions — an iPad "review → comment → revise → resubmit" loop with no chat.
@@ -114,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **918 passing** (33 files) |
+| Test suite | **976 passing** (33 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -190,7 +192,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (918 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (976 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

@@ -23,6 +23,13 @@ export const isEvidenceGrade = (v: unknown): v is EvidenceGrade =>
   (EVIDENCE_GRADES as readonly string[]).includes(v as string);
 
 export const GATE_STATUSES = ['pending', 'submitted', 'approved', 'invalidated'] as const;
+
+/**
+ * [ENG-C] 설계 원장 노드의 상태. **여기가 유일한 정본이다** — 예전에는 `cli.ts`·`mcp.ts` 가
+ * 각자 인라인으로 들고 있어, 한쪽에 값을 더해도 다른 쪽은 모르고 테스트도 무는 것이 없었다.
+ */
+export const LEDGER_STATUSES = ['draft', 'approved', 'stale'] as const;
+export type LedgerStatus = (typeof LEDGER_STATUSES)[number];
 export type GateStatus = (typeof GATE_STATUSES)[number];
 
 export interface GateRecord {
@@ -90,7 +97,7 @@ export interface LedgerNode {
   parent?: string;
   doc_anchor?: string;
   version: number;
-  status: 'draft' | 'approved' | 'stale';
+  status: LedgerStatus;
 }
 
 export interface HarnessConfig {
