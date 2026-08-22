@@ -1664,7 +1664,18 @@ function preTool(
             ' 배포성 명령은 출하 트랙(P10 이후)에서 해당 페이즈 게이트가 승인되면 열린다. '
             + '지금 위치는 `harness status` 로 확인하라.');
       // [EFF-108] 언급이 아니라 **실행**을 본다 — `grep "npm publish" README.md` 는 배포가 아니다.
-      const hit = config.design_blocked_bash.find(b => runsCommand(cmd, b));
+      /**
+       * [EFF-231] `--dry-run` 도 배포가 아니다 — 아무것도 게시하지 않고, 오히려 **출하 전에
+       * 확인하려고** 쓰는 명령이다. 막으면 사람을 확인 없이 진짜 배포로 밀어 넣는다.
+       *
+       * 판정은 **줄 단위**다. 명령 전체에 한 번 걸면 `npm publish --dry-run; npm publish` 로
+       * 차단이 통째로 꺼진다 — 플래그 하나가 다른 줄의 진짜 배포를 사면하면 안 된다.
+       */
+      const isDryRun = (line: string): boolean => /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
+      const deployLines = commandLines(cmd).filter(l => !isDryRun(l));
+      const hit = config.design_blocked_bash.find(
+        b => b.trim() !== '' && deployLines.some(l => l === b.trim() || l.startsWith(`${b.trim()} `)),
+      );
       if (hit) {
         return deny(L(`Deploy-ish commands (${hit}) cannot run in ${where}.${next}`,
           `${where}에서는 배포성 명령(${hit})을 실행할 수 없다.${next}`), degraded, lang);

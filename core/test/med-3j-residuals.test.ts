@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { pathLikeMentions } from '../src/bashwrite';
+import { pathLikeMentions, SHELLS_TAKING_C } from '../src/bashwrite';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import { run } from '../src/cli';
@@ -376,5 +376,33 @@ describe('[COST-228] 안전망이 입력 길이에 선형이다 — 타임아웃
     expect(pathLikeMentions('cd src && xxd -r -p a.hex app.ts')).toEqual(['src/a.hex', 'src/app.ts']);
     expect(pathLikeMentions('cp /tmp/x .harness/events.jsonl'))
       .toEqual(['/tmp/x', '.harness/events.jsonl']);
+  });
+});
+
+describe('[EFF-231] `--dry-run` 은 배포가 아니다 — 그러나 사면권도 아니다', () => {
+  it('dry-run 은 통과한다 — 출하 전에 확인하려고 쓰는 명령이다', () => {
+    const root = setup('P0');
+    for (const cmd of ['npm publish --dry-run', 'kubectl apply -f x.yaml --dry-run=client']) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('★ 플래그 하나가 다른 줄의 진짜 배포를 사면하지 않는다', () => {
+    // 명령 전체에 한 번 걸면 이 형태로 차단이 통째로 꺼진다.
+    expect(denied(bash(setup('P0'), 'npm publish --dry-run; npm publish'))).toBe(true);
+  });
+
+  it('진짜 배포는 래퍼를 씌워도 막힌다', () => {
+    expect(denied(bash(setup('P0'), "sh -c 'npm publish'"))).toBe(true);
+  });
+});
+
+describe('[ENG-230] 프로세스치환 감지도 정본 셸 목록을 쓴다', () => {
+  it('정본의 모든 셸에서 `<(…)` 형태가 막힌다', () => {
+    const root = setup('P0');
+    for (const sh of SHELLS_TAKING_C) {
+      expect(denied(bash(root, `${sh} <(echo x)`)), `${sh} <(…) 가 통과했다`).toBe(true);
+    }
   });
 });

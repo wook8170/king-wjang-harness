@@ -318,7 +318,10 @@ const startsWithSubstitution = (a: string): boolean => a.startsWith('$(') || a.s
  */
 function opaqueExecOf(cmd: string): string | undefined {
   // 프로세스 치환으로 프로그램을 넘기는 형태 — `bash <(curl …)`·`source <(…)`·`. <(…)`
-  const proc = /(?:^|[\s;&|])(sh|bash|zsh|dash|ksh|fish|source|\.)\s+(?:-\S+\s+)*<\(/.exec(cmd);
+  // [ENG-230] 셸 목록의 **여섯 번째 사본**이 여기 있었다(`ash`·`busybox` 누락).
+  // 정본에서 만든다 — 목록을 손으로 또 적지 않는다.
+  const runners = [...SHELLS_TAKING_C, 'source', '.'].map(r => r.replace(/[.]/g, '\\.')).join('|');
+  const proc = new RegExp(`(?:^|[\\s;&|])(${runners})\\s+(?:-\\S+\\s+)*<\\(`).exec(cmd);
   if (proc) return `${proc[1]} <(…)`;
 
   // `||` 는 파이프가 아니다 — 쪼개기 전에 자리표시자로 감춰 둔다.

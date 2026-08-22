@@ -505,6 +505,13 @@ export function isDeployCommand(profile: Profile, command: string): boolean {
   try {
     const cmd = normCmd(command);
     if (!cmd) return false;
+    /**
+     * [EFF-231] **`--dry-run` 은 배포가 아니다.** 무엇이 나갈지 보는 것이 목적이고
+     * 아무것도 게시하지 않는다 — `npm publish --dry-run` 은 출하 전에 **확인하려고**
+     * 쓰는 명령인데, 그것을 막으면 사람을 확인 없이 진짜 배포로 밀어 넣는다.
+     * 이름이 명확한 플래그만 본다(`-n` 은 도구마다 뜻이 달라 신뢰하지 않는다).
+     */
+    if (/(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(cmd)) return false;
     // [EFF-108] **언급이 아니라 실행**을 본다. `cmd.includes` 였을 때
     // `grep "npm publish" README.md` 같은 순수 조회가 배포로 오판돼 막혔다.
     // 판정은 `runsCommand` 한 곳뿐이고, 그것이 래퍼(`sh -c`)·접두 명령까지 꺼내 본다.

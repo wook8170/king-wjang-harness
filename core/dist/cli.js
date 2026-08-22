@@ -10335,7 +10335,8 @@ var INTERPRETERS = /* @__PURE__ */ new Set([
 var PROGRAM_FLAG = /^-(?:[A-Za-z]*c|e|E|-eval|-command)$/;
 var startsWithSubstitution = (a) => a.startsWith("$(") || a.startsWith("`");
 function opaqueExecOf(cmd) {
-  const proc = /(?:^|[\s;&|])(sh|bash|zsh|dash|ksh|fish|source|\.)\s+(?:-\S+\s+)*<\(/.exec(cmd);
+  const runners = [...SHELLS_TAKING_C, "source", "."].map((r) => r.replace(/[.]/g, "\\.")).join("|");
+  const proc = new RegExp(`(?:^|[\\s;&|])(${runners})\\s+(?:-\\S+\\s+)*<\\(`).exec(cmd);
   if (proc) return `${proc[1]} <(\u2026)`;
   const OR = "\0";
   const parts = cmd.replace(/\|\|/g, OR).split("|");
@@ -11166,6 +11167,7 @@ function isDeployCommand(profile, command) {
   try {
     const cmd = normCmd(command);
     if (!cmd) return false;
+    if (/(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(cmd)) return false;
     return (profile.deployCommands ?? []).some((d) => {
       const needle = normCmd(d);
       return needle.length > 0 && runsCommand(cmd, needle);
@@ -11963,7 +11965,11 @@ function preTool(root, state, config, input, degraded) {
         " Deploy-ish commands open on the ship track (P10 onward), once that phase's gate is approved. Check where you are with `harness status`.",
         " \uBC30\uD3EC\uC131 \uBA85\uB839\uC740 \uCD9C\uD558 \uD2B8\uB799(P10 \uC774\uD6C4)\uC5D0\uC11C \uD574\uB2F9 \uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uBA74 \uC5F4\uB9B0\uB2E4. \uC9C0\uAE08 \uC704\uCE58\uB294 `harness status` \uB85C \uD655\uC778\uD558\uB77C."
       );
-      const hit = config.design_blocked_bash.find((b) => runsCommand(cmd, b));
+      const isDryRun = (line) => /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
+      const deployLines = commandLines(cmd).filter((l) => !isDryRun(l));
+      const hit = config.design_blocked_bash.find(
+        (b) => b.trim() !== "" && deployLines.some((l) => l === b.trim() || l.startsWith(`${b.trim()} `))
+      );
       if (hit) {
         return deny(L(
           `Deploy-ish commands (${hit}) cannot run in ${where}.${next}`,
