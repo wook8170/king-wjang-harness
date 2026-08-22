@@ -377,3 +377,50 @@ describe('report — 읽기 전용 계약', () => {
     expect(fs.existsSync(path.join(root, '.harness', 'packets'))).toBe(false);
   });
 });
+
+/**
+ * [SEC-79] 승인 직전 사람이 읽는 문서가 **실제 게이트에 올라간 것**을 보여 준다.
+ * 이 절이 없어서 필러 13장이 13게이트를 열고 GO 까지 갔다 — 패킷은 레지스트리에 등록된
+ * 문서만 실었고 `--paths` 로 올라간 경로는 승인자가 읽는 어디에도 없었다.
+ */
+describe('SEC-79: 리뷰 패킷이 제출물을 측정해 보여 준다', () => {
+  const REAL = 'The scope of this phase is the onboarding flow. The risk is that users abandon '
+    + 'before the first success, so we measure completion of the first session and record it here.';
+
+  it('제출 이력이 없으면 그렇게 말한다 — 「비어 있다」와 다른 말이다', () => {
+    const root = setup();
+    const packet = buildReviewPacket(root, 'P0');
+    expect(packet).toMatch(/What was submitted|제출된 것/);
+    expect(packet).toMatch(/Nothing has been submitted|아직 제출된 것이 없다/);
+  });
+
+  it('제출 경로와 측정치를 표로 싣는다', () => {
+    const root = setup();
+    writeFile(root, 'docs/p0.md', REAL);
+    submitGate(root, 'P0', { paths: ['docs/p0.md'], evidence: 'measured' });
+    const packet = buildReviewPacket(root, 'P0');
+    expect(packet).toContain('docs/p0.md');
+    expect(packet).toMatch(/\|\s*\d+\s*\|\s*\d+\s*\|\s*\d+\s*\|/);   // 수치 3칸
+  });
+
+  it('최소치 근처면 「직접 열어 보라」고 알린다 — 다만 blocker 로 올리지 않는다', () => {
+    const root = setup();
+    writeFile(root, 'docs/thin.md', 'Onboarding scope note for this phase, kept deliberately short here.');
+    writeFile(root, 'docs/thin2.md', 'Second short note that carries the rest of the minimum characters.');
+    submitGate(root, 'P0', { paths: ['docs/thin.md', 'docs/thin2.md'], evidence: 'measured' });
+    const packet = buildReviewPacket(root, 'P0');
+    expect(packet).toMatch(/near the floor|최소치 근처/);
+    const blockers = packet.slice(packet.search(/## (Blockers|차단)/));
+    expect(blockers).not.toMatch(/near the minimum size|최소치 근처/);
+  });
+
+  it('제출 후 사라진 산출물은 blocker 다 — 없는 파일에 도장이 찍힌다', () => {
+    const root = setup();
+    writeFile(root, 'docs/p0.md', REAL);
+    submitGate(root, 'P0', { paths: ['docs/p0.md'], evidence: 'measured' });
+    fs.rmSync(path.join(root, 'docs/p0.md'));
+    const packet = buildReviewPacket(root, 'P0');
+    const blockers = packet.slice(packet.search(/## (Blockers|차단)/));
+    expect(blockers).toContain('docs/p0.md');
+  });
+});

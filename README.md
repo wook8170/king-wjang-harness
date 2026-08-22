@@ -114,7 +114,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **893 passing** (33 files) |
+| Test suite | **918 passing** (33 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -190,7 +190,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (893 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (918 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -208,7 +208,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.
 - `/remote-control` is **not provided by this plugin**; the session hint is conditional guidance, not an instruction.
 - **No skills for P7–P9** (the build track) — the agents cover it, the phase manuals do not.
-- A gate accepts filler documents: content **quality** is outside a deterministic local core, so human approval is the defence.
+- A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a 4-level script chain is not followed.
 - **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events (decades of use) measured p95 ≈ 101ms, and only while the state store is degraded — `doctor --repair` ends it.

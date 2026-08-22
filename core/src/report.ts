@@ -33,7 +33,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evidenceDir, wavesDir } from './paths';
-import { verifyGate, readGateFeedback } from './gate';
+import { verifyGate, readGateFeedback, submissionSignals, MIN_SUBSTANCE_CHARS } from './gate';
 import { loadLedger, getNode } from './ledger';
 import { docsForPhase, inspectRegistry, staleDocs, loadRegistry } from './registry';
 import { readState } from './state';
@@ -494,6 +494,52 @@ export function buildReviewPacket(root: string, phase: Phase): string {
   out.push(`## ${t(MSG.gateStatusHeading)}`, '');
   out.push(...(gate.lines.length ? gate.lines : [`- ${t(MSG.seeUnreadable)}`]));
   out.push('');
+
+  /**
+   * [SEC-79] **게이트에 실제로 올라간 것**을 사람 앞에 놓는다.
+   *
+   * 이 절이 없어서 필러 13장이 13게이트를 열고 GO 까지 갔다 — 패킷은 레지스트리에 등록된
+   * 문서만 실었고, `gate submit --paths` 로 올라간 경로는 승인자가 읽는 어디에도 없었다.
+   * 내용의 **질**은 이 코어가 판정하지 않는다. 대신 **분량·글자 다양성·낱말 수·존재**를 재서
+   * 놓는다 — 「80자짜리 13장」은 그 표에서 눈에 띈다. 최종 판단은 사람이 한다(§4-3).
+   */
+  const sig = submissionSignals(root, phase);
+  out.push(`## ${t({ en: 'What was submitted to this gate', ko: '이 게이트에 제출된 것' })}`, '');
+  if (!sig) {
+    out.push(t({
+      en: `Nothing has been submitted to gate ${phase} yet — \`harness gate submit ${phase} --paths <a,b>\`.`,
+      ko: `게이트 ${phase} 에 아직 제출된 것이 없다 — \`harness gate submit ${phase} --paths <a,b>\`.`,
+    }), '');
+  } else {
+    out.push(
+      `| ${t({ en: 'Path', ko: '경로' })} | ${t({ en: 'chars', ko: '실질 문자' })} `
+      + `| ${t({ en: 'distinct', ko: '고유 글자' })} | ${t({ en: 'words', ko: '낱말' })} |`,
+      '|---|---:|---:|---:|',
+    );
+    for (const a of sig.paths) {
+      const note = a.missing
+        ? ` — **${t({ en: 'unreadable', ko: '읽을 수 없음' })}**`
+        : (a.binary ? ` — ${t({ en: 'binary', ko: '바이너리' })}` : '');
+      out.push(`| \`${a.rel}\`${note} | ${a.substance} | ${a.distinctChars} | ${a.words} |`);
+    }
+    out.push('');
+    if (sig.nearFloor) {
+      out.push(t({
+        en: `**These artifacts sit near the floor** (${sig.substance} non-whitespace characters, `
+          + `minimum ${MIN_SUBSTANCE_CHARS}; ${sig.distinctChars} distinct letters/digits at most). `
+          + 'The core measures size, not quality — open the files before approving.',
+        ko: `**이 제출물은 최소치 근처다** (공백 제외 ${sig.substance}자, 최소치 ${MIN_SUBSTANCE_CHARS}자 · `
+          + `고유 글자 최대 ${sig.distinctChars}종). 코어가 재는 것은 분량이지 질이 아니다 — `
+          + '승인 전에 파일을 직접 열어 보라.',
+      }), '');
+    }
+    for (const a of sig.paths.filter(x => x.missing)) {
+      blockers.push(t({
+        en: `${a.rel} was submitted to ${phase} but cannot be read now — the gate would approve a file that is not there`,
+        ko: `${a.rel} 은 ${phase} 에 제출됐으나 지금 읽을 수 없다 — 없는 파일에 승인 도장이 찍힌다`,
+      }));
+    }
+  }
 
   out.push(`## ${t(BLOCKERS_HEADING)}`, '');
   out.push(...(blockers.length === 0

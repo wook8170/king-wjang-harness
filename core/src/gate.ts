@@ -108,6 +108,32 @@ function normalizePaths(root: string, relPaths: string[]): string[] {
 export const MIN_SUBSTANCE_CHARS = 80;
 
 /**
+ * [SEC-79] **길이만 채운 도배를 구조로 잡는다.** `MIN_SUBSTANCE_CHARS` 를 넘기는 가장 싼 길은
+ * 한 글자를 80번 치는 것이었고, 그렇게 만든 필러 13장으로 13게이트가 열렸다(실측).
+ *
+ * 여기서 재는 것은 **질이 아니라 구조**다 — 「좋은 문서인가」는 순수·로컬·결정적 코어 밖이지만
+ * 「이것이 산문인가」는 셀 수 있다. 두 지표를 **AND** 로 묶는 것이 핵심이다. 하나만 쓰면 곧 과차단이다:
+ *  - 글자 다양성만 보면 **숫자 위주 표**(자릿수 10종 + 구분자)가 걸린다
+ *  - 낱말 수만 보면 **띄어쓰기 없는 일본어·중국어 문서**가 통째로 걸린다
+ * 둘 다 바닥일 때만 거부하므로, 어느 언어의 어느 산문도 이 문에 걸리지 않는다.
+ *
+ * 하한은 이 리포 실산출물에서 잡았다 — 최소 산출물(213자)은 고유 글자 40+·낱말 30+ 이고
+ * 정당한 한국어 3문장(91자)도 고유 글자 30+ 다. 12·5 는 그 훨씬 아래이면서 공격(2·1)의 위다.
+ */
+export const MIN_DISTINCT_CHARS = 12;
+export const MIN_WORDS = 5;
+
+/** 글자·숫자만 남긴 고유 코드포인트 수 — 스크립트에 중립적이다(한글·가나·한자 모두 잘 늘어난다). */
+export function distinctCharCount(text: string): number {
+  return new Set(text.replace(/[^\p{L}\p{N}]/gu, '')).size;
+}
+
+/** 공백으로 끊은 낱말 수 — 띄어쓰기가 없는 언어에서는 작게 나오므로 **단독 판정에 쓰지 않는다**. */
+export function wordCount(text: string): number {
+  return text.split(/\s+/u).filter(w => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/**
  * 자리표시자 어휘. 길이만 채운 문서를 잡는다 — 이 토큰들과 구두점·기호를 걷어내고 **아무 글자도
  * 남지 않을 때만** 거부한다. 진짜 문서에는 평범한 낱말이 남으므로 오탐이 사실상 없다.
  */
@@ -202,6 +228,25 @@ function assertSubstantive(root: string, arts: ArtifactRead[]): void {
       }),
     );
   }
+  // [SEC-79] 산문이 아닌 것을 거부한다 — 글자 다양성과 낱말 수가 **동시에** 바닥일 때만.
+  // 바이너리는 이 규칙의 대상이 아니다(자리표시자 검사와 같은 이유).
+  if (textual.length > 0) {
+    const joined = textual.map(a => a.text).join('\n');
+    const chars = distinctCharCount(joined);
+    const words = wordCount(joined);
+    if (chars < MIN_DISTINCT_CHARS && words < MIN_WORDS) {
+      throw new Error(
+        tr(root, {
+          en: `The artifacts under review are not prose — ${chars} distinct letters/digits across `
+            + `${words} word(s) (${textual.map(a => a.rel).join(', ')}). Padding a file to the character `
+            + 'minimum is not a document; a gate reviews what the phase actually produced',
+          ko: `심사 대상이 산문이 아니다 — 고유 글자·숫자 ${chars}종, 낱말 ${words}개 `
+            + `(${textual.map(a => a.rel).join(', ')}). 최소 글자수를 채우려고 늘린 파일은 문서가 아니다 — `
+            + '게이트는 그 페이즈가 실제로 만든 것을 심사한다',
+        }),
+      );
+    }
+  }
 }
 
 /**
@@ -284,6 +329,91 @@ function assertDistinct(
         ko: `같은 산출물이 이미 게이트 ${clash.join(', ')} 를 열었다 — 바이트가 같은 내용이 ${phase} `
           + '까지 대신할 수는 없다. 게이트마다 그 페이즈가 실제로 만든 것을 심사한다 — '
           + '개정본이나 새 산출물을 제출하라',
+      }),
+    );
+  }
+}
+
+/**
+ * [SEC-79 계열] **이 제출이 새로 가져온 것이 최소치만큼은 있어야 한다.**
+ *
+ * [SEC-75] 는 「바이트가 같은 내용」만 막았다. 그래서 최저가 경로는 곧 옮겨갔다 — 진짜처럼
+ * 보이는 문서 한 장을 끝 숫자만 바꿔 13장으로 만들면 13게이트가 전부 열리고 `ship verdict` 가
+ * GO 를 냈다(실측).
+ *
+ * 처음에는 유사도 비율(양방향 0.9)로 막았는데, 임계값으로 답하면 **희석 경로**가 남는다:
+ * 진짜 문서 한 장에 35자짜리 얇은 파일을 하나씩 덧붙이자 비율이 내려가며 게이트 5개가 열렸다.
+ * 임계가 있는 한 그 아래로 지나가는 길도 있다. 그래서 **비율이 아니라 절대량**으로 답한다 —
+ * 이미 심사받은 모든 게이트의 텍스트를 한 덩어리로 놓고, 이 제출이 **그 안에 없던 조각**을
+ * `MIN_SUBSTANCE_CHARS` 만큼 가져오는지 본다. 첫 제출에 요구하는 것과 같은 잣대를 「새로 만든
+ * 부분」에 대는 것이다.
+ *
+ * 이 하나로 세 가지가 함께 정리된다:
+ *  - 한 글자만 바꾼 사본(새 조각 ~5) → 막힌다
+ *  - 얇은 파일 덧붙이기(새 조각 ~35) → 막힌다. 희석해도 새 조각의 절대량은 늘지 않는다
+ *  - **P6 총감사가 앞 페이즈 산출물을 동반 제출**(새 리포트 150자+) → 통과한다.
+ *    상위집합 특례를 따로 둘 필요가 없다 — 동반 제출은 새 조각이 실제로 많기 때문에 통과한다.
+ *
+ * 바이너리는 대상이 아니다(스크린샷끼리 텍스트로 견주면 오탐). 텍스트가 하나도 없으면 건너뛴다.
+ */
+const SHINGLE = 5;
+
+/** 표기 흔들림(공백·대소문자)에 흔들리지 않게 정규화한 5글자 조각 집합. */
+function shingles(text: string): Set<string> {
+  const norm = text.toLowerCase().replace(/\s+/gu, ' ').trim();
+  const out = new Set<string>();
+  for (let i = 0; i + SHINGLE <= norm.length; i++) out.add(norm.slice(i, i + SHINGLE));
+  return out;
+}
+
+/** 텍스트 산출물만 이어 붙인다 — 바이너리는 이 판정의 대상이 아니다. */
+function textualJoin(root: string, rels: string[]): string {
+  return readArtifacts(root, rels).filter(a => !a.binary).map(a => a.text).join('\n');
+}
+
+function assertNewMaterial(
+  root: string, phase: Phase, paths: string[], gates: HarnessState['gates'],
+): void {
+  let mine: Set<string>;
+  try {
+    mine = shingles(textualJoin(root, paths));
+  } catch {
+    return;                                     // 읽기 실패는 앞선 검사가 이미 말한다
+  }
+  if (mine.size === 0) return;                  // 바이너리뿐 — 이 잣대의 대상이 아니다
+  const prior = latestSubmissions(root);
+  const seen = new Set<string>();
+  const seenGates: Phase[] = [];
+  for (const p of PHASES) {
+    if (p === phase) continue;                  // 같은 게이트 재제출은 개정 루프다(정상)
+    const g = gates[p];
+    if (!g || (g.status !== 'submitted' && g.status !== 'approved')) continue;
+    const prev = prior.get(p);
+    if (!prev || prev.paths.length === 0) continue;
+    try {
+      // **그때 도장 찍힌 내용**과 지금 디스크가 같을 때만 센다. 어긋나 있으면 그 게이트는
+      // 이미 무효화 대상이라 비교할 근거가 없다.
+      if (computeArtifactHash(root, prev.paths) !== g.artifactHash) continue;
+      for (const sh of shingles(textualJoin(root, prev.paths))) seen.add(sh);
+    } catch {
+      continue;                                 // 산출물이 사라졌으면 세지 않는다
+    }
+    seenGates.push(p);
+  }
+  if (seenGates.length === 0) return;
+  let fresh = 0;
+  for (const sh of mine) if (!seen.has(sh)) fresh++;
+  if (fresh < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `This submission carries only ${fresh} characters of text that gate `
+          + `${seenGates.join(', ')} has not already reviewed — below the ${MIN_SUBSTANCE_CHARS} minimum. `
+          + `Bringing earlier artifacts along is fine, but ${phase} has to add what ${phase} actually `
+          + `produced; editing a few characters does not make a reviewed document a new one`,
+        ko: `이 제출에서 게이트 ${seenGates.join(', ')} 가 이미 심사하지 않은 텍스트는 ${fresh}자뿐이라 `
+          + `최소치 ${MIN_SUBSTANCE_CHARS}자에 못 미친다. 앞 산출물을 동반하는 것은 정상이다 — 다만 `
+          + `${phase} 는 ${phase} 가 실제로 만든 것을 더해야 한다. 몇 글자를 고친다고 이미 심사받은 `
+          + '문서가 새 문서가 되지는 않는다',
       }),
     );
   }
@@ -379,6 +509,70 @@ function recordedPaths(root: string, phase: Phase): string[] | null {
   return s && s.paths.length > 0 ? s.paths : null;
 }
 
+/**
+ * [SEC-79] **승인자가 무엇을 승인하는지 볼 수 있게 한다.**
+ *
+ * 필러 13장으로 13게이트가 열리고 `ship verdict` 가 GO 를 낸 실측의 급소는 「검사가 약하다」가
+ * 아니라 **사람이 승인 직전에 읽는 문서가 실제 제출물을 보여 주지 않는다**는 것이었다 —
+ * 리뷰 패킷은 레지스트리에 등록된 문서만 실었고, 게이트에 올라간 경로는 어디에도 안 나왔다.
+ * 내용의 **질**은 이 코어 밖이지만 **분량·다양성·존재**는 셀 수 있고, 그것을 사람 앞에 놓으면
+ * 「80자짜리 13장」은 눈에 띈다. 판정은 여전히 사람이 한다(§4-3).
+ *
+ * 제출 이력이 없으면 null — 「아직 심사할 것이 없다」와 「비어 있다」는 다른 말이다.
+ */
+export interface ArtifactSignal {
+  rel: string;
+  /** 읽을 수 없으면 true — 나머지 수치는 0 이다. */
+  missing: boolean;
+  binary: boolean;
+  substance: number;
+  distinctChars: number;
+  words: number;
+}
+
+export interface SubmissionSignals {
+  paths: ArtifactSignal[];
+  substance: number;
+  distinctChars: number;
+  words: number;
+  /** 최소치 근처 — 막지 않는다. 「직접 열어 보라」는 신호다. */
+  nearFloor: boolean;
+}
+
+export function submissionSignals(root: string, phase: Phase): SubmissionSignals | null {
+  const rels = recordedPaths(root, phase);
+  if (!rels) return null;
+  const paths: ArtifactSignal[] = rels.map((rel) => {
+    let text: string;
+    try {
+      text = fs.readFileSync(path.resolve(root, rel)).toString('utf8');
+    } catch {
+      return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
+    }
+    return {
+      rel,
+      missing: false,
+      binary: text.includes('\uFFFD') || text.includes('\0'),
+      substance: text.replace(/\s+/gu, '').length,
+      distinctChars: distinctCharCount(text),
+      words: wordCount(text),
+    };
+  });
+  const textual = paths.filter(p => !p.binary && !p.missing);
+  const substance = textual.reduce((n, p) => n + p.substance, 0);
+  const distinctChars = Math.max(0, ...textual.map(p => p.distinctChars), 0);
+  const words = textual.reduce((n, p) => n + p.words, 0);
+  return {
+    paths,
+    substance,
+    distinctChars,
+    words,
+    // 2배·30 은 이 리포 실산출물(213자·고유 글자 40+)이 걸리지 않는 자리다 —
+    // 정당한 문서가 매번 깃발을 달면 그 깃발은 곧 무시된다.
+    nearFloor: textual.length > 0 && (substance < MIN_SUBSTANCE_CHARS * 2 || distinctChars < 30),
+  };
+}
+
 export function submitGate(
   root: string, phase: Phase, opts: { paths: string[]; evidence: EvidenceGrade },
 ): GateRecord {
@@ -413,6 +607,7 @@ export function submitGate(
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
   assertDistinct(root, phase, artifactHash, contentHash, state.gates);
+  assertNewMaterial(root, phase, paths, state.gates);
   const prevStatus = state.gates[phase]?.status ?? 'pending';
   // 재제출은 승인된 게이트도 다시 연다 — 개정된 산출물은 다시 심사받아야 한다.
   // 직전 상태는 이벤트에 남긴다(무엇이 닫혔다 다시 열렸는지가 감사 대상).

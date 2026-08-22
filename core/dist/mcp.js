@@ -7867,6 +7867,14 @@ function normalizePaths(root, relPaths) {
   return [...new Set(canon)].sort();
 }
 var MIN_SUBSTANCE_CHARS = 80;
+var MIN_DISTINCT_CHARS = 12;
+var MIN_WORDS = 5;
+function distinctCharCount(text) {
+  return new Set(text.replace(/[^\p{L}\p{N}]/gu, "")).size;
+}
+function wordCount(text) {
+  return text.split(/\s+/u).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
 var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
@@ -7921,6 +7929,19 @@ function assertSubstantive(root, arts) {
       })
     );
   }
+  if (textual.length > 0) {
+    const joined = textual.map((a) => a.text).join("\n");
+    const chars = distinctCharCount(joined);
+    const words = wordCount(joined);
+    if (chars < MIN_DISTINCT_CHARS && words < MIN_WORDS) {
+      throw new Error(
+        tr(root, {
+          en: `The artifacts under review are not prose \u2014 ${chars} distinct letters/digits across ${words} word(s) (${textual.map((a) => a.rel).join(", ")}). Padding a file to the character minimum is not a document; a gate reviews what the phase actually produced`,
+          ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC0B0\uBB38\uC774 \uC544\uB2C8\uB2E4 \u2014 \uACE0\uC720 \uAE00\uC790\xB7\uC22B\uC790 ${chars}\uC885, \uB0B1\uB9D0 ${words}\uAC1C (${textual.map((a) => a.rel).join(", ")}). \uCD5C\uC18C \uAE00\uC790\uC218\uB97C \uCC44\uC6B0\uB824\uACE0 \uB298\uB9B0 \uD30C\uC77C\uC740 \uBB38\uC11C\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uAC8C\uC774\uD2B8\uB294 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4`
+        })
+      );
+    }
+  }
 }
 function contentDigest(root, relPaths) {
   const each = relPaths.map((rel) => crypto3.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
@@ -7956,6 +7977,53 @@ function assertDistinct(root, phase, hash, contentHash, gates) {
       tr(root, {
         en: `The same artifacts already opened gate ${clash.join(", ")} \u2014 byte-identical content cannot stand in for ${phase} as well. Each gate reviews what that phase actually produced; submit the revised or new artifact`,
         ko: `\uAC19\uC740 \uC0B0\uCD9C\uBB3C\uC774 \uC774\uBBF8 \uAC8C\uC774\uD2B8 ${clash.join(", ")} \uB97C \uC5F4\uC5C8\uB2E4 \u2014 \uBC14\uC774\uD2B8\uAC00 \uAC19\uC740 \uB0B4\uC6A9\uC774 ${phase} \uAE4C\uC9C0 \uB300\uC2E0\uD560 \uC218\uB294 \uC5C6\uB2E4. \uAC8C\uC774\uD2B8\uB9C8\uB2E4 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC774\uB098 \uC0C8 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+}
+var SHINGLE = 5;
+function shingles(text) {
+  const norm = text.toLowerCase().replace(/\s+/gu, " ").trim();
+  const out = /* @__PURE__ */ new Set();
+  for (let i = 0; i + SHINGLE <= norm.length; i++) out.add(norm.slice(i, i + SHINGLE));
+  return out;
+}
+function textualJoin(root, rels) {
+  return readArtifacts(root, rels).filter((a) => !a.binary).map((a) => a.text).join("\n");
+}
+function assertNewMaterial(root, phase, paths, gates) {
+  let mine;
+  try {
+    mine = shingles(textualJoin(root, paths));
+  } catch {
+    return;
+  }
+  if (mine.size === 0) return;
+  const prior = latestSubmissions(root);
+  const seen = /* @__PURE__ */ new Set();
+  const seenGates = [];
+  for (const p of PHASES) {
+    if (p === phase) continue;
+    const g = gates[p];
+    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
+    const prev = prior.get(p);
+    if (!prev || prev.paths.length === 0) continue;
+    try {
+      if (computeArtifactHash(root, prev.paths) !== g.artifactHash) continue;
+      for (const sh of shingles(textualJoin(root, prev.paths))) seen.add(sh);
+    } catch {
+      continue;
+    }
+    seenGates.push(p);
+  }
+  if (seenGates.length === 0) return;
+  let fresh = 0;
+  for (const sh of mine) if (!seen.has(sh)) fresh++;
+  if (fresh < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `This submission carries only ${fresh} characters of text that gate ${seenGates.join(", ")} has not already reviewed \u2014 below the ${MIN_SUBSTANCE_CHARS} minimum. Bringing earlier artifacts along is fine, but ${phase} has to add what ${phase} actually produced; editing a few characters does not make a reviewed document a new one`,
+        ko: `\uC774 \uC81C\uCD9C\uC5D0\uC11C \uAC8C\uC774\uD2B8 ${seenGates.join(", ")} \uAC00 \uC774\uBBF8 \uC2EC\uC0AC\uD558\uC9C0 \uC54A\uC740 \uD14D\uC2A4\uD2B8\uB294 ${fresh}\uC790\uBFD0\uC774\uB77C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4. \uC55E \uC0B0\uCD9C\uBB3C\uC744 \uB3D9\uBC18\uD558\uB294 \uAC83\uC740 \uC815\uC0C1\uC774\uB2E4 \u2014 \uB2E4\uB9CC ${phase} \uB294 ${phase} \uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uB354\uD574\uC57C \uD55C\uB2E4. \uBA87 \uAE00\uC790\uB97C \uACE0\uCE5C\uB2E4\uACE0 \uC774\uBBF8 \uC2EC\uC0AC\uBC1B\uC740 \uBB38\uC11C\uAC00 \uC0C8 \uBB38\uC11C\uAC00 \uB418\uC9C0\uB294 \uC54A\uB294\uB2E4`
       })
     );
   }
@@ -8010,6 +8078,39 @@ function recordedPaths(root, phase) {
   const s = latestSubmissions(root).get(phase);
   return s && s.paths.length > 0 ? s.paths : null;
 }
+function submissionSignals(root, phase) {
+  const rels = recordedPaths(root, phase);
+  if (!rels) return null;
+  const paths = rels.map((rel) => {
+    let text;
+    try {
+      text = fs6.readFileSync(path5.resolve(root, rel)).toString("utf8");
+    } catch {
+      return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
+    }
+    return {
+      rel,
+      missing: false,
+      binary: text.includes("\uFFFD") || text.includes("\0"),
+      substance: text.replace(/\s+/gu, "").length,
+      distinctChars: distinctCharCount(text),
+      words: wordCount(text)
+    };
+  });
+  const textual = paths.filter((p) => !p.binary && !p.missing);
+  const substance = textual.reduce((n, p) => n + p.substance, 0);
+  const distinctChars = Math.max(0, ...textual.map((p) => p.distinctChars), 0);
+  const words = textual.reduce((n, p) => n + p.words, 0);
+  return {
+    paths,
+    substance,
+    distinctChars,
+    words,
+    // 2배·30 은 이 리포 실산출물(213자·고유 글자 40+)이 걸리지 않는 자리다 —
+    // 정당한 문서가 매번 깃발을 달면 그 깃발은 곧 무시된다.
+    nearFloor: textual.length > 0 && (substance < MIN_SUBSTANCE_CHARS * 2 || distinctChars < 30)
+  };
+}
 function submitGate(root, phase, opts) {
   const paths = normalizePaths(root, opts.paths);
   if (paths.length === 0) {
@@ -8035,6 +8136,7 @@ function submitGate(root, phase, opts) {
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
   assertDistinct(root, phase, artifactHash, contentHash, state.gates);
+  assertNewMaterial(root, phase, paths, state.gates);
   const prevStatus = state.gates[phase]?.status ?? "pending";
   const ev = appendEvent(root, "gate-submitted", {
     phase,
@@ -8746,6 +8848,36 @@ function buildReviewPacket(root, phase) {
   out.push(`## ${t(MSG.gateStatusHeading)}`, "");
   out.push(...gate.lines.length ? gate.lines : [`- ${t(MSG.seeUnreadable)}`]);
   out.push("");
+  const sig = submissionSignals(root, phase);
+  out.push(`## ${t({ en: "What was submitted to this gate", ko: "\uC774 \uAC8C\uC774\uD2B8\uC5D0 \uC81C\uCD9C\uB41C \uAC83" })}`, "");
+  if (!sig) {
+    out.push(t({
+      en: `Nothing has been submitted to gate ${phase} yet \u2014 \`harness gate submit ${phase} --paths <a,b>\`.`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uC544\uC9C1 \uC81C\uCD9C\uB41C \uAC83\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <a,b>\`.`
+    }), "");
+  } else {
+    out.push(
+      `| ${t({ en: "Path", ko: "\uACBD\uB85C" })} | ${t({ en: "chars", ko: "\uC2E4\uC9C8 \uBB38\uC790" })} | ${t({ en: "distinct", ko: "\uACE0\uC720 \uAE00\uC790" })} | ${t({ en: "words", ko: "\uB0B1\uB9D0" })} |`,
+      "|---|---:|---:|---:|"
+    );
+    for (const a of sig.paths) {
+      const note = a.missing ? ` \u2014 **${t({ en: "unreadable", ko: "\uC77D\uC744 \uC218 \uC5C6\uC74C" })}**` : a.binary ? ` \u2014 ${t({ en: "binary", ko: "\uBC14\uC774\uB108\uB9AC" })}` : "";
+      out.push(`| \`${a.rel}\`${note} | ${a.substance} | ${a.distinctChars} | ${a.words} |`);
+    }
+    out.push("");
+    if (sig.nearFloor) {
+      out.push(t({
+        en: `**These artifacts sit near the floor** (${sig.substance} non-whitespace characters, minimum ${MIN_SUBSTANCE_CHARS}; ${sig.distinctChars} distinct letters/digits at most). The core measures size, not quality \u2014 open the files before approving.`,
+        ko: `**\uC774 \uC81C\uCD9C\uBB3C\uC740 \uCD5C\uC18C\uCE58 \uADFC\uCC98\uB2E4** (\uACF5\uBC31 \uC81C\uC678 ${sig.substance}\uC790, \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790 \xB7 \uACE0\uC720 \uAE00\uC790 \uCD5C\uB300 ${sig.distinctChars}\uC885). \uCF54\uC5B4\uAC00 \uC7AC\uB294 \uAC83\uC740 \uBD84\uB7C9\uC774\uC9C0 \uC9C8\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC2B9\uC778 \uC804\uC5D0 \uD30C\uC77C\uC744 \uC9C1\uC811 \uC5F4\uC5B4 \uBCF4\uB77C.`
+      }), "");
+    }
+    for (const a of sig.paths.filter((x) => x.missing)) {
+      blockers.push(t({
+        en: `${a.rel} was submitted to ${phase} but cannot be read now \u2014 the gate would approve a file that is not there`,
+        ko: `${a.rel} \uC740 ${phase} \uC5D0 \uC81C\uCD9C\uB410\uC73C\uB098 \uC9C0\uAE08 \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uC5C6\uB294 \uD30C\uC77C\uC5D0 \uC2B9\uC778 \uB3C4\uC7A5\uC774 \uCC0D\uD78C\uB2E4`
+      }));
+    }
+  }
   out.push(`## ${t(BLOCKERS_HEADING)}`, "");
   out.push(...blockers.length === 0 ? [t({
     en: "No blockers \u2014 approval review can proceed on the artifacts above.",

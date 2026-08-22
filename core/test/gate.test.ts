@@ -9,6 +9,7 @@ import { upsertDoc } from '../src/registry';
 import {
   computeArtifactHash, submitGate, approveGate, verifyGate,
   invalidateStaleGates, canEnterPhase, setPhaseViaGate, MIN_SUBSTANCE_CHARS,
+  distinctCharCount, wordCount, submissionSignals,
 } from '../src/gate';
 
 const setup = () => {
@@ -27,9 +28,44 @@ const writeDoc = (root: string, rel: string, body: string) => {
  * 실질성 검사를 통과하는 본문. 태그가 내용을 갈라 게이트마다 다른 해시가 나온다 —
  * 「같은 산출물로 두 게이트」를 픽스처가 우연히 만들지 않게.
  */
-const body = (tag: string) => `# ${tag}\n\n`
-  + `This document is the ${tag} artifact submitted for gate review. `
-  + 'It states the decision, the reasoning behind it, and the consequences the team accepts.\n';
+/**
+ * 픽스처 문서. **태그만 바꾼 사본이 되면 안 된다** — 게이트는 거의 같은 문서로 다른 게이트를
+ * 여는 것을 막으므로(SEC-79 계열), 픽스처도 페이즈마다 실제로 다른 문장을 담아야 한다.
+ * 예전 픽스처는 제목만 달랐고, 그것은 이 리포가 실측으로 막기로 한 바로 그 모습이었다.
+ */
+const TOPIC: Record<string, string> = {
+  P0: 'the problem worth solving, the wedge chosen to enter it, and the users who are left unserved today',
+  P1: 'the entities of the domain, the invariants each one must hold, and the state transitions the rules permit',
+  P2: 'where the module boundaries fall, which ports each module exposes, and what deliberately stays private',
+  P3: 'how the feature behaves, every state it can rest in, and the failure paths a user can actually reach',
+  P4: 'the design tokens, the full set of component states, and the representative screens assembled from them',
+  P5: 'the API contract itself, the error codes callers must handle, and the backward compatibility promised',
+  P6: 'the audit of every earlier phase document read against the code that actually shipped, gap by gap',
+  P7: 'the build scaffolding, the toolchain pinned for it, and the checks wired into the pipeline itself',
+  P8: 'the integration seams between subsystems and the fixtures that keep those seams honest over time',
+  P9: 'behaviour under load, the thresholds that decide pass or fail, and exactly how each was measured',
+  P10: 'the threat model, the guards standing against it, and every bypass that was actually attempted',
+  P11: 'the deployment path end to end, the rollback that undoes it, and what is observed after release',
+  P12: 'the ship verdict, the defects still open at that moment, and what is knowingly deferred past release',
+  concept: 'why this exists at all and who is left unserved without it',
+  domain: 'the entities, their invariants, and which transitions are legal',
+  spec: 'the interface, its preconditions, and the errors callers must handle',
+  contract: 'the wire format, its compatibility promise, and the deprecation path',
+  audit: 'what was re-read against the shipped code and which gaps remain open',
+  A: 'the first branch of the fixture tree and the assertions that hang from it',
+  B: 'the second branch of the fixture tree, deliberately unlike the first one',
+};
+
+const body = (tag: string) => {
+  const key = tag.split(' ')[0];
+  // 태그마다 **80자 이상 다른** 본문이어야 한다 — 게이트는 이미 심사한 텍스트에 최소치만큼의
+  // 새 내용을 얹을 것을 요구하고(SEC-79 계열), 픽스처가 그 잣대를 못 넘으면 규칙이 아니라
+  // 픽스처가 거짓말을 한다. 예전 픽스처는 제목만 달랐다.
+  const topic = TOPIC[key] ?? `the ${key} decision, the alternatives weighed against it, and the cost accepted`;
+  return `# ${tag}\n\nThis document covers ${topic}. `
+    + `It records what ${key} settled, which alternatives were rejected and for what reason, and what `
+    + `the team accepts as a consequence of ${key}. The evidence sits beside it and is cited by path.\n`;
+};
 
 /** 게이트 하나를 승인 상태까지 올린다 — 전환 규칙 테스트의 공통 준비. */
 const approved = (root: string, phase: Parameters<typeof approveGate>[1], rel = 'docs/a.md') => {
@@ -737,5 +773,210 @@ describe('SEC-75 페이즈 적합성 — 레지스트리가 아는 산출물은 
     expect(() => submitGate(root, 'P5', {
       paths: ['docs/concept.md', 'docs/audit-r1.md'], evidence: 'claimed',
     })).toThrow(/P0/);
+  });
+});
+
+/**
+ * [SEC-79] **실 산출물 0장으로 13게이트가 열렸다** — [SEC-75] 가 2바이트 1장을 닫자
+ * 최저가 경로가 「80자짜리 서로 다른 필러 13장」으로 옮겨갔을 뿐 부류는 그대로였다.
+ *
+ * 여기서 재는 것은 질이 아니라 **구조**다. 그리고 차단 측정은 반드시 「막으면 안 되는 것」과
+ * 짝으로 둔다 — 이 리포에서 과차단은 결함과 같은 무게다(사람이 하네스를 꺼 버린다).
+ */
+describe('SEC-79: 길이만 채운 도배를 구조로 잡는다', () => {
+  const PHASES13 = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'] as const;
+
+  it('원 공격 그대로 — 필러 13장으로 13게이트를 열 수 없다', () => {
+    const root = setup();
+    let opened = 0;
+    PHASES13.forEach((ph, i) => {
+      writeDoc(root, `docs/f${i}.md`, 'a'.repeat(80) + String(i));
+      try {
+        submitGate(root, ph, { paths: [`docs/f${i}.md`], evidence: 'measured' });
+        opened++;
+      } catch { /* 막히는 것이 정답 */ }
+    });
+    expect(opened).toBe(0);
+  });
+
+  it('거부 문구가 무엇을 셌는지 밝힌다 — 사람이 다음 수를 알 수 있게', () => {
+    const root = setup();
+    writeDoc(root, 'docs/f.md', 'a'.repeat(120));
+    expect(() => submitGate(root, 'P0', { paths: ['docs/f.md'], evidence: 'measured' }))
+      .toThrow(/distinct|고유/);
+  });
+
+  // ── 막으면 안 되는 것 ──
+  const OK: Array<[string, string]> = [
+    ['한국어 산문', '이 페이즈의 목표는 사용자가 처음 5분 안에 가치를 보게 하는 것이다. 범위는 온보딩 흐름 하나로 좁힌다. 성공 기준은 첫 세션 완주율이며, 실패 조건은 첫 화면에서의 이탈이다. 다음 페이즈로 넘어가는 조건은 완주율을 실제로 측정해 근거로 붙이는 것이다.'],
+    ['일본어(공백 없음)', 'このフェーズの目的は、利用者が最初の五分で価値を体験することである。範囲はオンボーディング導線に絞る。成功基準は初回セッションの完走率とし、失敗条件は最初の画面での離脱とする。'],
+    ['중국어(공백 없음)', '本阶段的目标是让用户在最初五分钟内看到价值。范围收敛到单一的新手引导流程。成功标准是首次会话的完成率，失败条件是在第一屏流失。进入下一阶段的条件是完成率的实测。'],
+    ['영어 산문', 'The scope of this phase is the onboarding flow. The risk is that users abandon before the first success, so we measure completion of the first session.'],
+    ['숫자 위주 표', 'scenario,n,p50,p95\n' + Array.from({ length: 12 }, (_, i) => `row${i},55,${50 + i}.1,${60 + i}.4`).join('\n')],
+    ['숫자만(경계 — 고유 10종이지만 낱말이 있다)', '0123456789 '.repeat(20)],
+  ];
+  it.each(OK)('%s 는 통과한다', (_label, body) => {
+    const root = setup();
+    writeDoc(root, 'docs/a.md', body);
+    expect(() => submitGate(root, 'P0', { paths: ['docs/a.md'], evidence: 'measured' })).not.toThrow();
+  });
+
+  it('바이너리 산출물은 이 규칙의 대상이 아니다 (스크린샷 증적)', () => {
+    const root = setup();
+    const abs = path.join(root, 'docs', 'shot.png');
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(300, 0xab)]));
+    expect(() => submitGate(root, 'P0', { paths: ['docs/shot.png'], evidence: 'measured' })).not.toThrow();
+  });
+
+  it('두 지표는 AND 다 — 하나만 바닥이면 막지 않는다', () => {
+    // 고유 글자는 많지만 낱말이 하나(띄어쓰기 없는 언어의 모습)
+    expect(distinctCharCount('가나다라마바사아자차카타파하거너더러머버서어')).toBeGreaterThan(12);
+    expect(wordCount('가나다라마바사아자차카타파하거너더러머버서어')).toBe(1);
+    // 낱말은 많지만 고유 글자가 적다(숫자 표의 모습)
+    expect(wordCount('0123456789 '.repeat(20))).toBe(20);
+    expect(distinctCharCount('0123456789 '.repeat(20))).toBe(10);
+  });
+
+  it('제출 신호를 잴 수 있다 — 승인자에게 놓을 값', () => {
+    const root = setup();
+    writeDoc(root, 'docs/a.md', 'The scope of this phase is the onboarding flow. The risk is that users '
+      + 'abandon before the first success, so we measure completion of the first session.');
+    expect(submissionSignals(root, 'P0')).toBeNull();          // 제출 전에는 「없다」
+    submitGate(root, 'P0', { paths: ['docs/a.md'], evidence: 'measured' });
+    const sig = submissionSignals(root, 'P0')!;
+    expect(sig.paths).toHaveLength(1);
+    expect(sig.paths[0].rel).toBe('docs/a.md');
+    expect(sig.substance).toBeGreaterThan(MIN_SUBSTANCE_CHARS);
+    expect(sig.paths[0].missing).toBe(false);
+  });
+});
+
+/**
+ * [SEC-79 계열] 구조 검사를 넣자 최저가 경로가 다시 옮겨갔다 — **진짜처럼 보이는 문서 한 장을
+ * 끝 숫자만 바꿔 13장.** 실측으로 13게이트 전건 개통 + `ship verdict` GO 였다.
+ * 여기서도 차단과 과차단을 짝으로 고정한다 — 특히 **문서화된 정상 패턴**(P6 총감사가 자기
+ * 리포트와 함께 앞 페이즈 산출물을 동반 제출)이 막히면 안 된다.
+ */
+describe('SEC-79 계열: 거의 같은 문서로 다른 게이트를 열 수 없다', () => {
+  const HDR = '# Phase document\n\n> Template header shared by every phase document here.\n'
+    + '> Owner: design track. Review: gate. Evidence grade: measured.\n\n';
+  const BASE = 'The scope of this phase is the onboarding flow. The risk is that users abandon '
+    + 'before the first success, so we measure completion of the first session and record it here.';
+
+  it('한 글자만 바꾼 사본으로는 두 번째 게이트가 열리지 않는다', () => {
+    const root = setup();
+    writeDoc(root, 'docs/v0.md', `${BASE}0`);
+    writeDoc(root, 'docs/v1.md', `${BASE}1`);
+    expect(() => submitGate(root, 'P0', { paths: ['docs/v0.md'], evidence: 'measured' })).not.toThrow();
+    expect(() => submitGate(root, 'P1', { paths: ['docs/v1.md'], evidence: 'measured' }))
+      .toThrow(/has not already reviewed|이미 심사하지 않은/);
+  });
+
+  it('원 공격 규모 그대로 — 13장으로는 한 게이트만 열린다', () => {
+    const root = setup();
+    const phases = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'] as const;
+    let opened = 0;
+    phases.forEach((ph, i) => {
+      writeDoc(root, `docs/v${i}.md`, `${BASE}${i}`);
+      try { submitGate(root, ph, { paths: [`docs/v${i}.md`], evidence: 'measured' }); opened++; } catch { /* 기대 */ }
+    });
+    expect(opened).toBe(1);
+  });
+
+  // ── 막으면 안 되는 것 ──
+  const DIFFERENT: Array<[string, string]> = [
+    ['P0', 'Concept. The problem is that new users never reach the first success. The wedge is the onboarding flow, narrowed to one path.'],
+    ['P1', 'Domain. Entities are Account, Session and Step. A Session belongs to one Account and advances through ordered Steps.'],
+    ['P2', 'Module. The onboarding module owns Step transitions and exposes a single reducer. Persistence sits behind a repository.'],
+  ];
+
+  it('공통 템플릿 헤더를 공유하는 서로 다른 문서는 전부 통과한다', () => {
+    const root = setup();
+    for (const [ph, body] of DIFFERENT) {
+      writeDoc(root, `docs/${ph}.md`, HDR + body);
+      expect(() => submitGate(root, ph as never, { paths: [`docs/${ph}.md`], evidence: 'measured' })).not.toThrow();
+    }
+  });
+
+  it('P6 총감사가 앞 페이즈 산출물을 동반 제출하는 정상 패턴이 막히지 않는다', () => {
+    const root = setup();
+    for (const [ph, body] of DIFFERENT) {
+      writeDoc(root, `docs/${ph}.md`, HDR + body);
+      submitGate(root, ph as never, { paths: [`docs/${ph}.md`], evidence: 'measured' });
+    }
+    writeDoc(root, 'docs/audit.md', `${HDR}Audit. Every prior phase document was re-read against the `
+      + 'shipped code. Two gaps were found in the contract layer and both are recorded with evidence.');
+    expect(() => submitGate(root, 'P6', {
+      paths: ['docs/audit.md', 'docs/P0.md', 'docs/P1.md', 'docs/P2.md'], evidence: 'measured',
+    })).not.toThrow();
+  });
+
+  it('같은 게이트 재제출(개정 루프)은 대상이 아니다', () => {
+    const root = setup();
+    writeDoc(root, 'docs/v0.md', `${BASE}0`);
+    submitGate(root, 'P0', { paths: ['docs/v0.md'], evidence: 'measured' });
+    expect(() => submitGate(root, 'P0', { paths: ['docs/v0.md'], evidence: 'measured' })).not.toThrow();
+  });
+
+  it('바이너리끼리는 유사도 판정을 하지 않는다 — 스크린샷 오탐 방지', () => {
+    const root = setup();
+    const png = (n: number) => {
+      const abs = path.join(root, 'docs', `s${n}.png`);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(400, 0xa0 + n)]));
+    };
+    png(1); png(2);
+    submitGate(root, 'P0', { paths: ['docs/s1.png'], evidence: 'measured' });
+    expect(() => submitGate(root, 'P1', { paths: ['docs/s2.png'], evidence: 'measured' })).not.toThrow();
+  });
+});
+
+/**
+ * [SEC-79 계열] 비율 임계로 막던 판을 **절대량**으로 바꾼 이유를 고정한다.
+ * 임계가 있으면 그 아래로 지나가는 희석 경로가 생긴다 — 진짜 문서 한 장에 얇은 파일을
+ * 하나씩 덧붙이자 게이트가 계속 열렸다(실측 13 → 5). 새 텍스트의 **양**을 재면 희석이 통하지 않는다.
+ */
+describe('SEC-79 계열: 새 텍스트의 절대량으로 판정한다', () => {
+  const REAL = 'The scope of this phase is the onboarding flow. The risk is that users abandon '
+    + 'before the first success, so we measure completion of the first session and record it here.';
+
+  it('얇은 파일을 덧붙여도 새 텍스트가 하한 미만이면 열리지 않는다', () => {
+    const root = setup();
+    writeDoc(root, 'docs/real.md', REAL);
+    writeDoc(root, 'docs/t0.md', 'note 0 filler line that is short.');
+    submitGate(root, 'P0', { paths: ['docs/real.md'], evidence: 'measured' });
+    expect(() => submitGate(root, 'P1', { paths: ['docs/real.md', 'docs/t0.md'], evidence: 'measured' }))
+      .toThrow(/has not already reviewed|이미 심사하지 않은/);
+  });
+
+  it('거부 문구가 「얼마나 새로운지」를 수치로 말한다 — 다음 수를 알 수 있게', () => {
+    const root = setup();
+    writeDoc(root, 'docs/real.md', REAL);
+    writeDoc(root, 'docs/t0.md', 'note 0 filler line that is short.');
+    submitGate(root, 'P0', { paths: ['docs/real.md'], evidence: 'measured' });
+    try {
+      submitGate(root, 'P1', { paths: ['docs/real.md', 'docs/t0.md'], evidence: 'measured' });
+      throw new Error('should have thrown');
+    } catch (e) {
+      expect(String((e as Error).message)).toMatch(/\d+/);
+      expect(String((e as Error).message)).toContain(String(MIN_SUBSTANCE_CHARS));
+    }
+  });
+
+  it('새 문서가 하한을 넘으면 동반 제출이 통과한다 — 과차단 0', () => {
+    const root = setup();
+    writeDoc(root, 'docs/real.md', REAL);
+    writeDoc(root, 'docs/new.md', 'Domain model. Entities are Account, Session and Step; a Session '
+      + 'belongs to exactly one Account and advances through ordered Steps until it completes or expires.');
+    submitGate(root, 'P0', { paths: ['docs/real.md'], evidence: 'measured' });
+    expect(() => submitGate(root, 'P1', { paths: ['docs/real.md', 'docs/new.md'], evidence: 'measured' }))
+      .not.toThrow();
+  });
+
+  it('심사받은 게이트가 하나도 없으면 이 잣대를 대지 않는다 — 첫 제출은 자유롭다', () => {
+    const root = setup();
+    writeDoc(root, 'docs/a.md', REAL);
+    expect(() => submitGate(root, 'P7', { paths: ['docs/a.md'], evidence: 'measured' })).not.toThrow();
   });
 });
