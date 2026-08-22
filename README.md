@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1251 passing** (53 files) — 16 are repo-only checks that skip in the published package (1235 there) |
+| Test suite | **1253 passing** (53 files) — 16 are repo-only checks that skip in the published package (1237 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -218,7 +218,7 @@ block feels wrong for your stack, this is the dial, not the source code.
 
 | Key | Default | What it does |
 |---|---|---|
-| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean. **MCP tool descriptions and refusals stay English** (the ko strings are not in the MCP bundle). |
+| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean, or export `HARNESS_LANG=ko` for one run. **MCP tool descriptions and refusals stay English** (the ko strings are not in the MCP bundle). |
 | `profile` | `generic` | Which profile supplies `test` / `build` / `deploy` / `e2e` commands. A project-local `.harness/profile/` always wins over the bundled one. |
 | `remote_control` | `true` | Whether SessionStart mentions remote control. |
 | `terse` | `false` | Shorter hook guidance. |
@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1251 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1253 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

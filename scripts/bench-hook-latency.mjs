@@ -142,8 +142,10 @@ console.log(L('above — a number this tool does not control.',
               '그것은 제품이 통제하는 값이 아니기 때문이다.'));
 console.log(L('`all-state` (every line a state transition) is adversarial input: recorded, not gated. The',
               '`all-state`(전 줄이 상태 전이)는 적대적 입력이라 문턱을 걸지 않고 기록만 한다 —'));
-console.log(L('journal only grows through harness commands, so 100,000 transitions is not reachable.',
-              '저널은 harness 명령으로만 늘어나므로 10만 번의 상태 전이는 도달할 수 없다.'));
+console.log(L('journal only grows through harness commands, so reaching 100,000 transitions means running',
+              '저널은 harness 명령으로만 늘어나므로 10만 번의 상태 전이를 쌓으려면 명령을 10만 번'));
+console.log(L('100,000 of them — hard to reach in practice, though nothing caps it.',
+              '불러야 한다 — 현실적으로 도달하기 어렵지만, 상한이 있는 것은 아니다.'));
 /**
  * [ENG-201] **게이트는 자동으로 검사할 수 있는 형태여야 한다.**
  *

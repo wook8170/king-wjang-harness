@@ -11745,7 +11745,7 @@ function preTool(root, state, config, input, degraded) {
         ), degraded, lang);
       }
     }
-    if (/HARNESS_ALLOW_FORCE/.test(cmd) || invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd)) {
+    if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd) || invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd)) {
       return deny(L(
         "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.",
         "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."

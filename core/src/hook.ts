@@ -1328,7 +1328,9 @@ function preTool(
     // 남기되 **에이전트가 스스로 실행하는 경로는 닫는다** — 열어 두면 설계 트랙 강제가
     // 한 줄로 풀린다(감정서 「구멍 1」이 이름만 바뀐 것). env 를 명령에 인라인으로 붙여
     // 우회하는 것도 같이 막는다: 인라인으로 켤 수 있으면 그건 잠금이 아니다.
-    if (/HARNESS_ALLOW_FORCE/.test(cmd)
+    // [SEC-204] 이름 **전체**로 본다 — 부분 매치는 `HARNESS_ALLOW_FORCED_MIGRATION` 같은
+    // 무관한 이름까지 막는다(실측). 탈출구 이름을 세는 검사는 정확해야 값을 한다.
+    if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd)
         || (invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd))) {
       return deny(L(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '

@@ -329,3 +329,23 @@ describe('[QUAL-200] 시각 증거 게이트는 시각 산출물을 요구한다
     expect(validateEvidence(root, 'wave-001').usable.map(f => f.name)).toEqual(['mockup.html']);
   });
 });
+
+describe('[SEC-204] 탈출구 env 리터럴 백스톱이 실제로 발화한다', () => {
+  it('명령에 `HARNESS_ALLOW_FORCE` 가 보이면 이름 없이도 막는다', () => {
+    const root = setup('P0');
+    // 이 절은 뮤테이션에서 살아남았다 — 다른 규칙이 먼저 잡아 주고 있었기 때문이다.
+    // 그 절만 발화하는 입력으로 재야 가드가 실제로 서 있는지 알 수 있다([ENG-107] 부류).
+    for (const cmd of [
+      'HARNESS_ALLOW_FORCE=1 ./somescript.sh',
+      'export HARNESS_ALLOW_FORCE=1',
+      'env HARNESS_ALLOW_FORCE=1 /tmp/whatever',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('비슷하지만 다른 문자열은 막지 않는다', () => {
+    const out = bash(setup('P7'), 'echo HARNESS_ALLOW_FORCED_MIGRATION=1');
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});
