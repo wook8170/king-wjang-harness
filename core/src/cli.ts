@@ -38,7 +38,7 @@ import {
   linkCanvas, syncCanvas, extractInventory, recordBaseline,
   generateSourceOfTruthHtml, listCanvasLinks,
 } from './design';
-import { loadProfile, inspectProfile, commandFor } from './profile';
+import { loadProfile, inspectProfile, commandFor, localProfileDir } from './profile';
 import { pinPolicy } from './policy';
 import {
   generatePlaywrightSpec, specFileNameFor, validateEvidence, buildComparisonPacket,
@@ -548,7 +548,12 @@ export function run(argv: string[], root: string): number {
           const tier = tierFor(pct);
           const prev = lastTier(root);
           const inject = shouldInject(prev, tier);
-          if (inject) recordTier(root, tier);
+          // [UX-144] **기록은 항상, 주입은 상승에만.** 예전에는 상승할 때만 기록해서, 한 번
+          // 90% 를 찍으면 이후 사용량이 10% 여도 모든 새 세션 SessionStart 가 "usage at 90%"
+          // 를 계속 주입했다(해제 명령 없음 — 유일한 탈출은 미문서 파일 손편집). `usage.ts`
+          // 모듈 주석이 「하강(리셋)은 조용히 기록만 한다」고 적어 둔 바로 그 동작이다 —
+          // **계약은 문서에 있었고 코드만 안 하고 있었다.**
+          recordTier(root, tier);
           console.log(JSON.stringify({ percent: pct, tier, previous: prev, inject }, null, 2));
           if (inject) console.log(guidanceFor(tier, lang));
           return 0;
@@ -645,7 +650,21 @@ export function run(argv: string[], root: string): number {
           case 'packet': {
             const uxNodeId = flag(args, 'ux');
             const waveId = flag(args, 'wave') ?? readState(root).activeWave ?? '';
-            if (!uxNodeId || !waveId) throw new Error(L('Usage: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <path>]', '사용법: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <경로>]'));
+            // [UX-145] 원인 둘을 usage 한 줄로 뭉치지 않는다. help 가 `--wave` 를 **선택**으로
+            // 적어 두었으므로, 활성 웨이브가 없어서 실패한 사람은 자기가 뭘 빠뜨렸는지 알 수
+            // 없다. 형제 명령 `evidence spec` 은 같은 상황을 이미 설명하고 있었다 —
+            // **같은 사실을 표면마다 다르게 말하면 사람은 덜 말하는 쪽을 믿는다.**
+            if (!uxNodeId) throw new Error(L('Usage: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <path>]', '사용법: harness evidence packet --ux <UX-x> [--wave <wave-id>] [--out <경로>]'));
+            if (!waveId) {
+              throw new Error(L(
+                'No active wave — `--wave` is optional only while one is active. Activate it with '
+                + '`harness wave activate <wave-id>`, or pass it explicitly: '
+                + `\`harness evidence packet --ux ${uxNodeId} --wave <wave-id>\`.`,
+                '활성 웨이브가 없다 — `--wave` 는 활성 웨이브가 있을 때만 선택이다. '
+                + '`harness wave activate <wave-id>` 로 활성화하거나 직접 넘겨라: '
+                + `\`harness evidence packet --ux ${uxNodeId} --wave <wave-id>\`.`,
+              ));
+            }
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, 'out');
             if (out) { fs.writeFileSync(path.resolve(root, out), html); console.log(out); }
@@ -678,7 +697,15 @@ export function run(argv: string[], root: string): number {
             const { profile: p, problems } = inspectProfile(root, flag(args, 'name'));
             const c = commandFor(p, rest[0]);
             if (!c) {
-              const where = p.dir ? path.join(p.dir, 'commands.yaml') : 'commands.yaml';
+              // [UX-147] 처방은 **고쳐도 되는 곳**을 가리켜야 한다. 예전에는 해석에 쓰인
+              // 디렉토리를 그대로 안내해서, 번들 프로파일이 쓰이는 흔한 경우에 플러그인
+              // 설치본을 고치라고 했다 — 업데이트에 유실되고 다른 모든 프로젝트에 영향이
+              // 간다. 프로젝트 로컬(`.harness/profile/`)이 **항상 우선**하므로 그것을 먼저
+              // 말하고, 지금 읽고 있는 파일은 참고로 덧붙인다.
+              const localFile = path.join(localProfileDir(root), 'commands.yaml');
+              const where = p.origin === 'local' && p.dir
+                ? path.join(p.dir, 'commands.yaml')
+                : L(`${localFile} (project-local, always wins)`, `${localFile} (프로젝트 로컬 — 항상 우선)`);
               const why = problems.length > 0
                 ? L(`\n  ${problems.join('\n  ')}`, `\n  ${problems.join('\n  ')}`)
                 : '';

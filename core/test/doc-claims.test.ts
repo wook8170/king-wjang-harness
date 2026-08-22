@@ -65,3 +65,36 @@ describe('PROD-114: 받는 사람이 조건과 갈 곳을 알 수 있다', () =>
     }
   });
 });
+
+/**
+ * [UX-146] **차단의 입력을 사용자가 찾을 수 있어야 한다.**
+ *
+ * `design_allowed_prefixes`·`design_blocked_bash`·`design_system_frozen_roots`·
+ * `block_raw_values` 는 훅이 무엇을 막는지를 정하는 값인데, README 4개 언어·스킬·agents
+ * 어디에도 없었고 내부 감정 문서에만 존재했다 — 조정 통로가 **발견 불가능**했다.
+ *
+ * 이름 하나를 적어 넣고 끝내면 다음에 키가 늘 때 같은 일이 반복된다. 그래서 이름이 아니라
+ * **부류**를 막는다: `DEFAULT_CONFIG` 의 모든 키가 4개 언어 전부에 나와야 한다.
+ * 키를 추가하면 문서화하기 전까지 이 검사가 빨강이다.
+ */
+describe('UX-146: 설정 키가 4개 언어 문서에 전부 있다', () => {
+  const src = fs.readFileSync(path.join(repo, 'core/src/config.ts'), 'utf8');
+  const body = src.slice(src.indexOf('export const DEFAULT_CONFIG'), src.indexOf('const asBool'));
+  const keys = [...body.matchAll(/^\s{2}([a-z_]+):/gm)].map(m => m[1]);
+
+  it('검사 대상 키가 실제로 잡힌다 — 빈 집합을 통과시키지 않는다', () => {
+    expect(keys.length).toBeGreaterThanOrEqual(8);
+    expect(keys).toContain('design_allowed_prefixes');
+    expect(keys).toContain('block_raw_values');
+  });
+
+  it.each(READMES)('%s 가 모든 설정 키를 적는다', (f) => {
+    const txt = read(f);
+    const missing = keys.filter(k => !txt.includes(k));
+    expect(missing, `문서화되지 않은 설정 키: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('설정 파일 경로 자체를 말한다 — 어디를 고쳐야 하는지', () => {
+    for (const f of READMES) expect(read(f)).toContain('.harness/config.yaml');
+  });
+});

@@ -116,7 +116,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 | 指标 | 数值 |
 |---|---|
 | 钩子延迟（p95） | **< 150 ms**（实测 62 ms；10 万条日志重放回退路径为 102 ms） |
-| 测试套件 | **1054 项通过**（42 个文件） |
+| 测试套件 | **1073 项通过**（43 个文件） |
 | 每会话新增上下文 | 启用时 **约 240 令牌**；没有 `.harness/` 的项目为 **0** |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
@@ -189,9 +189,32 @@ npm install          # prepare hook builds core/dist via tsup
 
 ---
 
+## 配置 — `.harness/config.yaml`
+
+所有键均为可选；文件缺失时使用下列默认值。
+`design_*` 与 `block_raw_values` 这四个键是 **钩子拦截规则的输入** —— 如果拦截不符合你的技术栈，
+该调整的是这里，而不是源码。
+
+| 键 | 默认值 | 作用 |
+|---|---|---|
+| `lang` | `en` | 工具输出全部文案的语言 —— CLI、钩子 JSON、MCP 与生成文档。韩语为 `ko`。 |
+| `profile` | `generic` | 由哪个 profile 提供 `test`／`build`／`deploy`／`e2e` 命令。项目本地的 `.harness/profile/` 始终优先于内置。 |
+| `remote_control` | `true` | SessionStart 是否提示远程控制。 |
+| `terse` | `false` | 缩短钩子提示。 |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **设计轨道允许写入的位置。** 这些前缀之外的写入在 P6 关卡通过前一律拒绝。 |
+| `design_blocked_bash` | 部署类命令（`npm publish`、`docker push`、`terraform apply` …） | **出货轨道开启前始终被拦截的部署命令。** 采用子串匹配，因此不要写结尾参数。技术栈特有命令交由 profile 的 `deploy_commands`。 |
+| `design_system_frozen_roots` | `[]` | 冻结后设计系统文件不得变更的目录。 |
+| `block_raw_values` | `false` | 拒绝硬编码原始颜色／尺寸而不引用语义 token 的写入。 |
+
+`.harness/config.yaml` 本身就是受保护文件 —— 智能体无法改写它来扩大自己的权限（[SEC-136]）。
+请在你自己的终端里编辑。改完后运行 `harness doctor`：策略变更会写入日志，接受变更需要
+`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`。
+
+---
+
 ## 状态与路线图
 
-**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1054 项测试）。但出货就绪审计的判定
+**v0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1073 项测试）。但出货就绪审计的判定
 仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
 
 - ✅ 事件日志、状态重放、doctor 恢复

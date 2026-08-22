@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **1054 passing** (42 files) |
+| Test suite | **1073 passing** (43 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -190,9 +190,32 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ---
 
+## Configuration — `.harness/config.yaml`
+
+Every key is optional; the defaults below are what you get if the file is missing.
+The four `design_*` / `block_raw_values` keys are **the inputs to what the hook blocks** — if a
+block feels wrong for your stack, this is the dial, not the source code.
+
+| Key | Default | What it does |
+|---|---|---|
+| `lang` | `en` | Language of every message the harness prints — CLI, hook JSON, MCP, and generated documents. Set `ko` for Korean. |
+| `profile` | `generic` | Which profile supplies `test` / `build` / `deploy` / `e2e` commands. A project-local `.harness/profile/` always wins over the bundled one. |
+| `remote_control` | `true` | Whether SessionStart mentions remote control. |
+| `terse` | `false` | Shorter hook guidance. |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **Where writing is allowed on the design track.** Anything outside these prefixes is denied until the P6 gate is approved. |
+| `design_blocked_bash` | deploy commands (`npm publish`, `docker push`, `terraform apply`, …) | **Shipping commands that stay blocked** until the shipping track opens. Substring match, so no trailing flags. Your stack's own commands belong in the profile's `deploy_commands`. |
+| `design_system_frozen_roots` | `[]` | Directories where design-system files must not change once frozen. |
+| `block_raw_values` | `false` | Deny writes that hardcode raw colors/sizes instead of referencing semantic tokens. |
+
+`.harness/config.yaml` is itself a protected file — an agent cannot rewrite it to widen its own
+permissions ([SEC-136]); you edit it in your terminal. Run `harness doctor` afterwards: a policy
+change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`.
+
+---
+
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1054 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1073 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

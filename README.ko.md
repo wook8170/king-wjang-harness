@@ -116,7 +116,7 @@ flowchart LR
 | 지표 | 값 |
 |---|---|
 | 훅 지연 (p95) | **< 150 ms** (실측 62 ms · 10만 건 저널 재생 폴백에서 102 ms) |
-| 테스트 스위트 | **1054 passing** (42 파일) |
+| 테스트 스위트 | **1073 passing** (43 파일) |
 | 세션당 추가 컨텍스트 | 하네스가 켜졌을 때 **~240 토큰** · `.harness/` 없는 프로젝트는 **0** |
 | 런타임 의존성 | **1** (`yaml`, 번들) |
 | 결정성 | 3× 실행 동일 판정 |
@@ -189,9 +189,32 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 
 ---
 
+## 설정 — `.harness/config.yaml`
+
+모든 키는 선택이며, 파일이 없으면 아래 기본값이 쓰인다.
+`design_*`·`block_raw_values` 네 키는 **훅이 무엇을 막는지의 입력**이다 — 차단이 스택과 맞지
+않으면 손댈 곳은 소스가 아니라 여기다.
+
+| 키 | 기본값 | 하는 일 |
+|---|---|---|
+| `lang` | `en` | 하네스가 내는 모든 문구의 언어 — CLI·훅 JSON·MCP·생성 문서까지. 한국어는 `ko`. |
+| `profile` | `generic` | `test`·`build`·`deploy`·`e2e` 명령을 어느 프로파일에서 가져올지. 프로젝트 로컬 `.harness/profile/` 이 번들보다 **항상 우선**한다. |
+| `remote_control` | `true` | SessionStart 가 원격 제어를 안내할지. |
+| `terse` | `false` | 훅 안내를 짧게. |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **설계 트랙에서 쓰기가 허용되는 곳.** 이 접두사 밖은 P6 게이트 승인 전까지 거부된다. |
+| `design_blocked_bash` | 배포 명령들(`npm publish`·`docker push`·`terraform apply` …) | **출하 트랙이 열리기 전까지 막히는 배포성 명령.** 부분문자열 대조라 접미 플래그는 적지 않는다. 스택별 명령은 프로파일의 `deploy_commands` 몫이다. |
+| `design_system_frozen_roots` | `[]` | 동결 후 디자인 시스템 파일이 바뀌면 안 되는 디렉토리. |
+| `block_raw_values` | `false` | 시맨틱 토큰 대신 raw 색상·크기를 박는 쓰기를 거부한다. |
+
+`.harness/config.yaml` 자체가 보호 파일이다 — 에이전트가 이 파일을 고쳐 자기 권한을 넓힐 수
+없다([SEC-136]). 사람이 터미널에서 고친다. 고친 뒤에는 `harness doctor` 를 돌려라 — 정책 변경은
+저널에 남고, 수용에는 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 가 필요하다.
+
+---
+
 ## 상태 & 로드맵
 
-**v0 — 코어 엔진·게이트·구축/출하 트랙까지 구현·실측 완료** (1054 tests). 다만 출하 검증 판정은
+**v0 — 코어 엔진·게이트·구축/출하 트랙까지 구현·실측 완료** (1073 tests). 다만 출하 검증 판정은
 아직 **출하 불가**다 — 무엇이 열려 있는지는 아래 「알려진 한계」를 보라.
 
 - ✅ 이벤트 저널, 상태 재생, doctor 복구
