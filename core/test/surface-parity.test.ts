@@ -17,7 +17,7 @@ import { run } from '../src/cli';
 import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
 import { getNode } from '../src/ledger';
-import { handleHook, WRITE_TOOLS } from '../src/hook';
+import { handleHook, WRITE_TOOLS, isSelfCall, isReadOnlyCommand } from '../src/hook';
 import { initHarness } from '../src/state';
 import { execFileSync } from 'node:child_process';
 
@@ -129,10 +129,25 @@ describe('LOGIC-94: 접두 명령 목록은 한 곳이 정본이다', () => {
   it('진짜 작업 턴을 자기호출로 오판하지 않는다', () => {
     const root = setup();
     const missed = ['git commit -m "harness 도입"', 'echo "harness status" >> notes.md',
-      'grep harness README.md', 'sudo apt-get install harness', 'time make harness',
+      'sudo apt-get install harness', 'time make harness',
       'nice cargo build harness', 'sudo npm install -g harness']
       .filter(c => !stopBlocksAfter(root, c));
     expect(missed).toEqual([]);
+  });
+
+  /**
+   * [COST-111] `grep harness README.md` 는 예전에 이 목록에 있었다 — **자기호출이 아니다**를
+   * 「활동으로 센다」로 재고 있었기 때문이다. 이제 순수 조회는 활동으로 세지 않으므로
+   * (탐색만 한 턴마다 정산 왕복이 붙던 비용), 원래 재려던 것을 **직접** 잰다.
+   * 둘은 다른 질문이다: 「하네스 자기 명령인가」와 「작업을 했는가」.
+   */
+  it('조회 명령은 자기호출도 아니고 활동도 아니다 — 두 질문을 섞지 않는다', () => {
+    expect(isSelfCall('grep harness README.md'), '자기호출로 오판했다').toBe(false);
+    expect(isReadOnlyCommand('grep harness README.md')).toBe(true);
+    // 반대 방향: 같은 낱말이 들어간 진짜 작업은 조회가 아니다.
+    expect(isReadOnlyCommand('git commit -m "harness 도입"')).toBe(false);
+    expect(isReadOnlyCommand('echo "harness status" >> notes.md')).toBe(false);
+    expect(isReadOnlyCommand('sudo npm install -g harness')).toBe(false);
   });
 
   it('목록 자체가 공유된다 — 두 벌로 갈릴 자리를 남기지 않는다', () => {

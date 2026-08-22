@@ -1,0 +1,10 @@
+# [PROD-113] 배포본에 내부 작업물이 실려 나가지 않게 한다.
+#
+# `git archive`(마켓플레이스·태그 배포가 쓰는 경로) 결과에서 아래를 뺀다. 이것들은 이 리포를
+# 만드는 과정의 기록이지 제품이 아니고, 그중 하나(`docs/release-readiness/readiness.md`)는
+# **README 와 반대되는 출하 판정**을 담고 있어 설치자가 무엇을 믿어야 할지 알 수 없게 만든다.
+# 리포에는 그대로 남는다 — 빼는 것은 배포본에서다.
+progress.md            export-ignore
+docs/release-readiness export-ignore
+docs/appraisal         export-ignore
+.codesight             export-ignore

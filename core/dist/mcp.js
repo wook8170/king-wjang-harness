@@ -7501,6 +7501,12 @@ function readState(root) {
   try {
     return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
   } catch (e) {
+    if (isInitialized(root)) {
+      throw new Error(tr(root, {
+        en: `state.json is damaged and could not be parsed (${e.message}) \u2014 the state store is derived, so the event journal can rebuild it: run \`harness doctor --repair\`. \`harness doctor\` alone reports what it finds without changing anything.`,
+        ko: `state.json \uC774 \uC190\uC0C1\uB3FC \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uD30C\uC0DD\uBB3C\uC774\uB77C \uC774\uBCA4\uD2B8 \uC800\uB110\uB85C \uB2E4\uC2DC \uB9CC\uB4E4 \uC218 \uC788\uB2E4: \`harness doctor --repair\` \uB97C \uC2E4\uD589\uD558\uB77C. \`harness doctor\` \uB9CC \uC2E4\uD589\uD558\uBA74 \uC544\uBB34\uAC83\uB3C4 \uBC14\uAFB8\uC9C0 \uC54A\uACE0 \uC9C4\uB2E8\uB9CC \uD55C\uB2E4.`
+      }));
+    }
     if (hasHarness(root) && !isInitialized(root)) {
       throw new Error(tr(root, {
         en: ".harness/ is here but state.json is missing \u2014 the state store is derived, so the event journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses while .harness/ exists",
@@ -7517,6 +7523,11 @@ function writeState(root, state) {
   fs2.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
   fs2.renameSync(tmp, target);
 }
+
+// core/src/gate.ts
+var crypto3 = __toESM(require("crypto"));
+var fs6 = __toESM(require("fs"));
+var path5 = __toESM(require("path"));
 
 // core/src/events.ts
 var fs3 = __toESM(require("fs"));
@@ -7694,11 +7705,6 @@ function replayState(events) {
   if (lastAppliedTs) s.updatedAt = lastAppliedTs;
   return s;
 }
-
-// core/src/gate.ts
-var crypto3 = __toESM(require("crypto"));
-var fs6 = __toESM(require("fs"));
-var path5 = __toESM(require("path"));
 
 // core/src/policy.ts
 var crypto = __toESM(require("crypto"));
@@ -8223,9 +8229,9 @@ function verifyGate(root, phase) {
 }
 
 // core/src/wave.ts
-var fs9 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
-var YAML4 = __toESM(require_dist());
+var fs12 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
+var YAML5 = __toESM(require_dist());
 
 // core/src/ledger.ts
 var fs7 = __toESM(require("fs"));
@@ -8305,6 +8311,50 @@ function bumpNode(root, id) {
   }
   return { node, affectedWaves, unverifiable };
 }
+function reviseNode(root, id) {
+  const { node, affectedWaves, unverifiable } = bumpNode(root, id);
+  appendEvent(root, "node-bumped", {
+    id: node.id,
+    version: node.version,
+    affected: affectedWaves,
+    unverifiable
+  });
+  let activeBefore = null;
+  try {
+    activeBefore = readState(root).activeWave;
+  } catch {
+  }
+  const failed = [];
+  for (const w of affectedWaves) {
+    try {
+      markStale(root, w);
+    } catch {
+      failed.push(w);
+    }
+  }
+  return {
+    node,
+    marked: affectedWaves.filter((w) => !failed.includes(w)),
+    failed,
+    unverifiable,
+    activeBefore
+  };
+}
+function mergeNode(root, patch) {
+  const prev = getNode(root, patch.id);
+  const node = {
+    id: patch.id,
+    title: patch.title,
+    parent: patch.parent ?? prev?.parent,
+    doc_anchor: patch.doc_anchor ?? prev?.doc_anchor,
+    version: prev?.version ?? 1,
+    // bump 이력 보존
+    status: patch.status ?? prev?.status ?? "draft"
+  };
+  upsertNode(root, node);
+  appendEvent(root, "node-upserted", { id: node.id });
+  return node;
+}
 
 // core/src/runtime.ts
 var fs8 = __toESM(require("fs"));
@@ -8315,13 +8365,182 @@ function noteTurnLogged(root) {
   fs8.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 
+// core/src/evidence.ts
+var fs11 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
+
+// core/src/design.ts
+var fs10 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
+var crypto4 = __toESM(require("crypto"));
+var YAML4 = __toESM(require_dist());
+
+// core/src/tokens.ts
+var fs9 = __toESM(require("fs"));
+var path8 = __toESM(require("path"));
+var TOKENS_REL = "design/tokens/design-tokens.json";
+var BANNER = {
+  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
+  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
+};
+
+// core/src/evidence.ts
+var trFor = (lang) => (m) => pick(m, lang);
+var MIN_PNG_BYTES = 1024;
+var EXPECTED_EXTS = /* @__PURE__ */ new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "webm",
+  "mp4",
+  "zip",
+  "json",
+  "html",
+  "txt",
+  "md"
+]);
+var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+function requireWaveId(id) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
+    throw new Error(
+      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
+      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
+    );
+  }
+  return id;
+}
+function pngDimensions(pngPath) {
+  let fd = null;
+  try {
+    fd = fs11.openSync(pngPath, "r");
+    const head = Buffer.alloc(24);
+    if (fs11.readSync(fd, head, 0, 24, 0) < 24) return null;
+    if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
+    if (head.readUInt32BE(8) !== 13) return null;
+    if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
+    const width = head.readUInt32BE(16);
+    const height = head.readUInt32BE(20);
+    if (width === 0 || height === 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) {
+      try {
+        fs11.closeSync(fd);
+      } catch {
+      }
+    }
+  }
+}
+function validateEvidence(root, waveId) {
+  const t = trFor(langFor(root));
+  requireWaveId(waveId);
+  const dir = evidenceDir(root, waveId);
+  const files = [];
+  const problems = [];
+  const unusable = /* @__PURE__ */ new Set();
+  let names;
+  try {
+    names = fs11.readdirSync(dir).sort();
+  } catch {
+    return {
+      ok: false,
+      files,
+      usable: [],
+      problems: [
+        t({
+          en: `the evidence directory is missing or unreadable: ${dir} \u2014 the UX gate opens only once a headless real run has left a 2x screenshot (spec \xA73-5).`,
+          ko: `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
+        })
+      ]
+    };
+  }
+  for (const name of names) {
+    if (name.startsWith(".")) {
+      problems.push(`${name}: ${t({
+        en: "dot files do not count as evidence",
+        ko: "dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
+      continue;
+    }
+    const abs = path10.join(dir, name);
+    let st;
+    try {
+      st = fs11.statSync(abs);
+    } catch {
+      problems.push(`${name}: ${t({
+        en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
+        ko: "\uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4"
+      })}`);
+      continue;
+    }
+    if (st.isDirectory()) {
+      problems.push(t({
+        en: `${name}/: a directory is not evidence \u2014 one empty subdirectory must not pass the UX gate. If there are files inside, move them directly under the evidence directory.`,
+        ko: `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
+      }));
+      continue;
+    }
+    if (!st.isFile()) {
+      problems.push(`${name}: ${t({
+        en: "not a regular file \u2014 it does not count as evidence",
+        ko: "\uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
+      continue;
+    }
+    if (st.size === 0) {
+      problems.push(t({
+        en: `${name}: 0 bytes \u2014 an empty capture does not fail a visual comparison, it silently passes it. Capture it again.`,
+        ko: `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+      }));
+      continue;
+    }
+    const ext = path10.extname(name).slice(1).toLowerCase();
+    const file = { name, path: abs, size: st.size, ext };
+    if (ext === "png") {
+      const d = pngDimensions(abs);
+      if (!d) {
+        unusable.add(name);
+        problems.push(`${name}: ${t({
+          en: "cannot read the PNG header \u2014 it may be a corrupt file that is only named .png",
+          ko: "PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4"
+        })}`);
+      } else {
+        file.dimensions = d;
+        if (st.size < MIN_PNG_BYTES) {
+          problems.push(t({
+            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. Open it and confirm it shows a real run.`,
+            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uD654\uBA74\uC778\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uB77C.`
+          }));
+        }
+      }
+    }
+    if (!EXPECTED_EXTS.has(ext)) {
+      unusable.add(name);
+      problems.push(t({
+        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : "no extension"}) \u2014 only screenshots, videos, traces and reports are treated as visual evidence.`,
+        ko: `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
+      }));
+    }
+    files.push(file);
+  }
+  const usable = files.filter((f2) => !unusable.has(f2.name));
+  return { ok: usable.length > 0, files, usable, problems };
+}
+var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES;
+function hasMeasuredEvidence(root, waveId) {
+  return validateEvidence(root, waveId).files.some(isRealCapture);
+}
+
 // core/src/wave.ts
 function parseWave(txt, lang = DEFAULT_LANG) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML4.parse(m[1]);
+    raw = YAML5.parse(m[1]);
   } catch {
     raw = null;
   }
@@ -8341,19 +8560,19 @@ function parseWave(txt, lang = DEFAULT_LANG) {
 var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
 function serializeWave(meta, body) {
   return `---
-${YAML4.stringify(meta).trimEnd()}
+${YAML5.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs9.readFileSync(wavePath(root, id), "utf8"), langFor(root));
+  return parseWave(fs12.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs9.existsSync(wavesDir(root))) return [];
+  if (!fs12.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs9.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs12.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
     try {
-      out.push(parseWave(fs9.readFileSync(path8.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
+      out.push(parseWave(fs12.readFileSync(path11.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -8363,22 +8582,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs9.writeFileSync(tmp, serializeWave(meta, body));
-  fs9.renameSync(tmp, target);
+  fs12.writeFileSync(tmp, serializeWave(meta, body));
+  fs12.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs9.existsSync(dir)) return [];
-  return fs9.readdirSync(dir).filter((f2) => {
+  if (!fs12.existsSync(dir)) return [];
+  return fs12.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs9.statSync(path8.join(dir, f2));
+    const st = fs12.statSync(path11.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs9.existsSync(wavesDir(root))) {
-    for (const f2 of fs9.readdirSync(wavesDir(root))) {
+  if (fs12.existsSync(wavesDir(root))) {
+    for (const f2 of fs12.readdirSync(wavesDir(root))) {
       const m = /^wave-(\d+)\.md$/.exec(f2);
       if (m) nums.push(parseInt(m[1], 10));
     }
@@ -8408,7 +8627,7 @@ function createWave(root, opts) {
     }));
   }
   const id = nextWaveId(root);
-  if (fs9.existsSync(wavePath(root, id))) {
+  if (fs12.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -8452,6 +8671,12 @@ function activateWave(root, id) {
     );
   }
   if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
+  if (meta.status === "stale") {
+    throw new Error(tr(root, {
+      en: `${id} is STALE \u2014 the design it referenced (${meta.design_refs.join(", ")}) has moved on since. Re-activating it would silently build on an outdated decision. Open a new wave against the current design instead: \`harness wave create --goal "<goal>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`,
+      ko: `${id} \uB294 STALE \uC774\uB2E4 \u2014 \uCC38\uC870\uD55C \uC124\uACC4(${meta.design_refs.join(", ")})\uAC00 \uADF8 \uB4A4\uB85C \uBC14\uB00C\uC5C8\uB2E4. \uB418\uC0B4\uB9AC\uBA74 \uB0A1\uC740 \uACB0\uC815 \uC704\uC5D0 \uC870\uC6A9\uD788 \uC9D3\uAC8C \uB41C\uB2E4. \uD604\uC7AC \uC124\uACC4\uB85C \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uC5F4\uC5B4\uB77C: \`harness wave create --goal "<\uBAA9\uD45C>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`
+    }));
+  }
   meta.status = "active";
   writeWave(root, id, meta, body);
   appendEvent(root, "wave-activated", { id });
@@ -8487,12 +8712,22 @@ function completeWave(root) {
   const { meta, body } = readActiveWave(root, id);
   if (meta.design_refs.some((r) => r.startsWith("UX-"))) {
     const dir = evidenceDir(root, id);
-    const files = evidenceFiles(root, id);
-    if (files.length === 0) {
+    const report = validateEvidence(root, id);
+    if (report.usable.length === 0) {
+      const uxRefs = meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ");
+      const why = report.files.length > 0 ? tr(root, {
+        en: `the files there do not count as evidence:
+  - ${report.problems.join("\n  - ")}`,
+        ko: `\uAC70\uAE30 \uC788\uB294 \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4:
+  - ${report.problems.join("\n  - ")}`
+      }) : tr(root, {
+        en: `there is no visual evidence. Put a screenshot in ${dir}.`,
+        ko: `\uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uB2E4. ${dir} \uC5D0 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB123\uC5B4\uB77C.`
+      });
       throw new Error(
         tr(root, {
-          en: `A wave referencing UX nodes (${meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ")}) cannot be completed without visual evidence. Put a screenshot in ${dir}.`,
-          ko: `UX \uB178\uB4DC(${meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ")})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801 \uC5C6\uC774 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4. ${dir} \uC5D0 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB123\uC5B4\uB77C.`
+          en: `A wave referencing UX nodes (${uxRefs}) cannot be completed \u2014 ${why}`,
+          ko: `UX \uB178\uB4DC(${uxRefs})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4 \u2014 ${why}`
         })
       );
     }
@@ -8512,9 +8747,9 @@ function markStale(root, id) {
 }
 
 // core/src/report.ts
-var fs10 = __toESM(require("fs"));
-var path9 = __toESM(require("path"));
-var trFor = (lang) => (m) => pick(m, lang);
+var fs13 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
+var trFor2 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
   registryUnreadable: { en: "cannot read the artifact registry", ko: "\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -8558,10 +8793,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs10.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs13.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs10.readdirSync(wavesDir(root));
+    files = fs13.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -8577,14 +8812,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs10.readdirSync(dir);
+    files = fs13.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs10.statSync(path9.join(dir, f2));
+      const st = fs13.statSync(path12.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -8685,7 +8920,7 @@ function unreadableSection(unreadable, t) {
   ];
 }
 function renderRtm(root) {
-  const t = trFor(langFor(root));
+  const t = trFor2(langFor(root));
   const { rows, unreadable } = collectRtm(root, t);
   const out = [
     `# ${t({ en: "Requirements Traceability Matrix (RTM)", ko: "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)" })}`,
@@ -8760,7 +8995,7 @@ function gateLines(root, phase, t) {
   return { lines, unreadable: [] };
 }
 function buildReviewPacket(root, phase) {
-  const t = trFor(langFor(root));
+  const t = trFor2(langFor(root));
   const out = [
     `# ${t({ en: "Review packet", ko: "\uB9AC\uBDF0 \uD328\uD0B7" })} \u2014 ${phase}`,
     "",
@@ -8787,8 +9022,8 @@ function buildReviewPacket(root, phase) {
       ko: `**${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4.** \uC2EC\uC0AC\uD560 \uBB38\uC11C\uAC00 \uC5C6\uC73C\uBBC0\uB85C \uC774 \uD328\uD0B7\uC740 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0 \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uACE0 \uC544\uD2F0\uD329\uD2B8\uB97C \uBC1C\uD589\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
     }));
     blockers.push(t({
-      en: `no artifact registered for ${phase} \u2014 an empty packet cannot open a gate`,
-      ko: `${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uBE48 \uD328\uD0B7\uC73C\uB85C\uB294 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC5C6\uB2E4`
+      en: `no artifact registered for ${phase} \u2014 this packet has nothing to review, so approving it now approves something you have not seen. Register it first: \`harness doc upsert --id <DOC-x> --phase ` + phase + " --path <file>`, publish it, then `harness doc url <DOC-x> <artifact-url>` and regenerate this packet.",
+      ko: `${phase} \uC5D0 \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \uC774 \uD328\uD0B7\uC5D0\uB294 \uC2EC\uC0AC\uD560 \uAC83\uC774 \uC5C6\uC73C\uBBC0\uB85C, \uC9C0\uAE08 \uC2B9\uC778\uD558\uBA74 \uBCF4\uC9C0 \uC54A\uC740 \uAC83\uC744 \uC2B9\uC778\uD558\uB294 \uAC83\uC774\uB2E4. \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C: \`harness doc upsert --id <DOC-x> --phase ` + phase + " --path <\uD30C\uC77C>` \u2192 \uBC1C\uD589 \u2192 `harness doc url <DOC-x> <\uC544\uD2F0\uD329\uD2B8-URL>` \uD6C4 \uC774 \uD328\uD0B7\uC744 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C."
     }));
   }
   for (const d of docs) {
@@ -8909,7 +9144,7 @@ function buildReviewPacket(root, phase) {
   return out.join("\n") + "\n";
 }
 function buildHub(root) {
-  const t = trFor(langFor(root));
+  const t = trFor2(langFor(root));
   const out = [`# ${t({ en: "Project hub", ko: "\uD504\uB85C\uC81D\uD2B8 \uD5C8\uBE0C" })}`, "", generatedAt(t), ""];
   const unreadable = [];
   const reg = inspectRegistry(root);
@@ -8980,172 +9215,6 @@ function buildHub(root) {
 var fs14 = __toESM(require("fs"));
 var path13 = __toESM(require("path"));
 var YAML6 = __toESM(require_dist());
-
-// core/src/evidence.ts
-var fs13 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
-
-// core/src/design.ts
-var fs12 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
-var crypto4 = __toESM(require("crypto"));
-var YAML5 = __toESM(require_dist());
-
-// core/src/tokens.ts
-var fs11 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
-var TOKENS_REL = "design/tokens/design-tokens.json";
-var BANNER = {
-  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
-  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
-};
-
-// core/src/evidence.ts
-var trFor2 = (lang) => (m) => pick(m, lang);
-var MIN_PNG_BYTES = 1024;
-var EXPECTED_EXTS = /* @__PURE__ */ new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "webp",
-  "webm",
-  "mp4",
-  "zip",
-  "json",
-  "html",
-  "txt",
-  "md"
-]);
-var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-function requireWaveId(id) {
-  if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
-    throw new Error(
-      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
-      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
-    );
-  }
-  return id;
-}
-function pngDimensions(pngPath) {
-  let fd = null;
-  try {
-    fd = fs13.openSync(pngPath, "r");
-    const head = Buffer.alloc(24);
-    if (fs13.readSync(fd, head, 0, 24, 0) < 24) return null;
-    if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
-    if (head.readUInt32BE(8) !== 13) return null;
-    if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
-    const width = head.readUInt32BE(16);
-    const height = head.readUInt32BE(20);
-    if (width === 0 || height === 0) return null;
-    return { width, height };
-  } catch {
-    return null;
-  } finally {
-    if (fd !== null) {
-      try {
-        fs13.closeSync(fd);
-      } catch {
-      }
-    }
-  }
-}
-function validateEvidence(root, waveId) {
-  const t = trFor2(langFor(root));
-  requireWaveId(waveId);
-  const dir = evidenceDir(root, waveId);
-  const files = [];
-  const problems = [];
-  let names;
-  try {
-    names = fs13.readdirSync(dir).sort();
-  } catch {
-    return {
-      ok: false,
-      files,
-      problems: [
-        t({
-          en: `the evidence directory is missing or unreadable: ${dir} \u2014 the UX gate opens only once a headless real run has left a 2x screenshot (spec \xA73-5).`,
-          ko: `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
-        })
-      ]
-    };
-  }
-  for (const name of names) {
-    if (name.startsWith(".")) {
-      problems.push(`${name}: ${t({
-        en: "dot files do not count as evidence",
-        ko: "dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
-      })}`);
-      continue;
-    }
-    const abs = path12.join(dir, name);
-    let st;
-    try {
-      st = fs13.statSync(abs);
-    } catch {
-      problems.push(`${name}: ${t({
-        en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
-        ko: "\uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4"
-      })}`);
-      continue;
-    }
-    if (st.isDirectory()) {
-      problems.push(t({
-        en: `${name}/: a directory is not evidence \u2014 one empty subdirectory must not pass the UX gate. If there are files inside, move them directly under the evidence directory.`,
-        ko: `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
-      }));
-      continue;
-    }
-    if (!st.isFile()) {
-      problems.push(`${name}: ${t({
-        en: "not a regular file \u2014 it does not count as evidence",
-        ko: "\uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
-      })}`);
-      continue;
-    }
-    if (st.size === 0) {
-      problems.push(t({
-        en: `${name}: 0 bytes \u2014 an empty capture does not fail a visual comparison, it silently passes it. Capture it again.`,
-        ko: `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
-      }));
-      continue;
-    }
-    const ext = path12.extname(name).slice(1).toLowerCase();
-    const file = { name, path: abs, size: st.size, ext };
-    if (ext === "png") {
-      const d = pngDimensions(abs);
-      if (!d) {
-        problems.push(`${name}: ${t({
-          en: "cannot read the PNG header \u2014 it may be a corrupt file that is only named .png",
-          ko: "PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4"
-        })}`);
-      } else {
-        file.dimensions = d;
-        if (st.size < MIN_PNG_BYTES) {
-          problems.push(t({
-            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. Open it and confirm it shows a real run.`,
-            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uD654\uBA74\uC778\uC9C0 \uB208\uC73C\uB85C \uD655\uC778\uD558\uB77C.`
-          }));
-        }
-      }
-    }
-    if (!EXPECTED_EXTS.has(ext)) {
-      problems.push(t({
-        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : "no extension"}) \u2014 only screenshots, videos, traces and reports are treated as visual evidence.`,
-        ko: `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
-      }));
-    }
-    files.push(file);
-  }
-  return { ok: files.length > 0, files, problems };
-}
-var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES;
-function hasMeasuredEvidence(root, waveId) {
-  return validateEvidence(root, waveId).files.some(isRealCapture);
-}
-
-// core/src/ship.ts
 var trFor3 = (lang) => (m) => pick(m, lang);
 var shipDir = (root) => path13.join(harnessDir(root), "ship");
 var defectsPath = (root) => path13.join(shipDir(root), "defects.yaml");
@@ -9779,38 +9848,19 @@ Approve in the terminal with \`harness gate approve ${phase}\` \u2014 the final 
       if (status !== void 0 && !LEDGER_STATUSES.includes(status)) {
         return fail(`Invalid status: ${status} (one of ${LEDGER_STATUSES.join(", ")})`);
       }
-      const prev = getNode(root, id);
-      upsertNode(root, {
+      mergeNode(root, {
         id,
         title,
-        parent: str(o, "parent") ?? prev?.parent,
-        doc_anchor: str(o, "doc_anchor") ?? prev?.doc_anchor,
-        version: prev?.version ?? 1,
-        // bump 이력 보존
-        status: status ?? prev?.status ?? "draft"
+        parent: str(o, "parent"),
+        doc_anchor: str(o, "doc_anchor"),
+        status
       });
-      appendEvent(root, "node-upserted", { id });
       return ok(id);
     }
     case "harness_node_bump": {
       const id = str(o, "id");
       if (!id) return fail("A node id to revise is required");
-      const { node, affectedWaves, unverifiable } = bumpNode(root, id);
-      appendEvent(root, "node-bumped", {
-        id: node.id,
-        version: node.version,
-        affected: affectedWaves,
-        unverifiable
-      });
-      const failed = [];
-      for (const w of affectedWaves) {
-        try {
-          markStale(root, w);
-        } catch {
-          failed.push(w);
-        }
-      }
-      const marked = affectedWaves.filter((w) => !failed.includes(w));
+      const { node, marked, failed, unverifiable } = reviseNode(root, id);
       const head = `${node.id} v${node.version} \u2014 ${pick({
         en: `STALE waves: ${marked.join(", ") || "none"}`,
         ko: `STALE \uC6E8\uC774\uBE0C: ${marked.join(", ") || "\uC5C6\uC74C"}`

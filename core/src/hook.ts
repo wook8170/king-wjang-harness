@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, commandLines } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -1206,6 +1206,43 @@ function preTool(
   return null;
 }
 
+/**
+ * [COST-111] **순수 조회로 인정하는 명령** — 화이트리스트다(블랙리스트가 아니다).
+ *
+ * 처음에 `!scanBashWrites().mutating` 으로 재려다 되돌렸다: 그 판정은 「모르겠으면 참」이
+ * 안전한 방향이라 **부정으로 쓰면 편향이 뒤집힌다** — `git commit` 이 조회로 잡혔다.
+ * 활동 집계에서 빠진 작업 턴은 정산 강제를 조용히 푸므로([SEC-78]), 여기서는
+ * **아는 것만 조회로 인정**하고 나머지는 전부 활동으로 센다.
+ *
+ * 두 조건을 AND 로 묶는다: 이름이 목록에 있고, 스캐너가 변형을 못 봤을 것.
+ * 그래서 `echo hi` 는 조회지만 `echo hi > f` 는 활동이고, `sed`·`awk`·`find` 는
+ * 변형 토큰이라 애초에 조회로 인정되지 않는다.
+ */
+const READ_ONLY_HEADS = [
+  'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'egrep', 'fgrep', 'file', 'stat',
+  'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo', 'jq', 'yq', 'sort',
+  'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
+  'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
+];
+/** `git` 은 하위명령마다 갈린다 — 조회인 것만 적는다(`commit`·`push` 는 여기 없다). */
+const READ_ONLY_GIT = [
+  'status', 'log', 'diff', 'show', 'blame', 'branch', 'remote', 'rev-parse', 'describe',
+  'ls-files', 'shortlog', 'reflog', 'grep', 'cat-file',
+];
+
+export function isReadOnlyCommand(cmd: string): boolean {
+  if (cmd.trim() === '') return false;
+  const scan = scanBashWrites(cmd);
+  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  const lines = commandLines(cmd);
+  if (lines.length === 0) return false;
+  return lines.every(l => {
+    const [head, second] = l.split(/\s+/);
+    if (head === 'git') return second !== undefined && READ_ONLY_GIT.includes(second);
+    return READ_ONLY_HEADS.includes(head);
+  });
+}
+
 // ---- post-tool ----
 
 function postTool(root: string, input: HookInput): null {
@@ -1216,7 +1253,17 @@ function postTool(root: string, input: HookInput): null {
   // 깨우면 "읽기만 한 턴"에도 로그를 요구해 가드가 잡음이 된다.
   // harness 자기 명령은 제외 — 턴 로그를 남기는 행위 자체가 활동으로 집계되면
   // stop 가드가 영원히 자기를 무효화한다(로그 → 활동 갱신 → 또 로그 요구).
-  if (WRITE_TOOLS.includes(tool) || (tool === 'Bash' && !selfCall)) noteActivity(root);
+  /**
+   * [COST-111] **Bash 도 같은 잣대로 본다.** 도구 이름이 Bash 라는 이유만으로 `ls`·`cat`·
+   * `git status` 한 번이 활동으로 집계돼, 탐색만 한 턴마다 정산 왕복이 하나씩 붙었다 —
+   * 위 주석이 「조회로 가드를 깨우면 잡음이 된다」고 적어 놓고 정작 Bash 조회는 깨우고 있었다.
+   *
+   * 판정은 **pre-tool 이 이미 계산하는 것과 같은 것**을 쓴다(`scanBashWrites().mutating`).
+   * 규칙을 새로 만들지 않으므로 두 벌이 되지 않는다. 그리고 **fail-closed** 다 —
+   * 스캐너가 「모르겠다」면 mutating 이 참이므로 활동으로 센다. 방어는 그대로 두고 비용만 뺀다.
+   */
+  const readOnlyBash = tool === 'Bash' && isReadOnlyCommand(cmd);
+  if (WRITE_TOOLS.includes(tool) || (tool === 'Bash' && !selfCall && !readOnlyBash)) noteActivity(root);
   return null;
 }
 

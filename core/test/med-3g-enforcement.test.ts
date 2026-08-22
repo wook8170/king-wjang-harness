@@ -111,3 +111,44 @@ describe('[EFF-109] sed 의 치환 스크립트는 경로가 아니다', () => {
     expect(denied(bash(root, "sed -i '' s/a/b/ .harness/state.json"))).toBe(true);
   });
 });
+
+/**
+ * [ENG-107] **초록 뒤에 숨는 회귀를 꺼낸다.**
+ *
+ * 감정이 15개 규칙에 뮤테이션을 넣어 봤더니 3건이 살아남았다 — 그중 하나가 `CORE_INVOKE_RE`
+ * (`node core/dist/cli.js …` 를 자기호출로 인식하는 가드)였다. SEC-96 회귀 테스트가
+ * **다른 절 덕분에 우연히** 통과하고 있어서, 이 가드를 통째로 지워도 초록이 유지됐다.
+ *
+ * 그래서 여기서는 **그 절만 발화하는 입력**으로 잰다: env 리터럴도, `harness` 라는 이름도
+ * 없는 형태. 이 절이 사라지면 이 테스트만 정확히 빨개진다.
+ */
+describe('[ENG-107] 자기호출 가드가 그 절 하나로도 선다', () => {
+  const onlyCoreInvoke = [
+    'node core/dist/cli.js phase set P5 --force',
+    'npx core/dist/cli.js phase set P5 --force',
+    'bun core/dist/cli.js doctor --accept-policy',
+    'node core/dist/cli.js doctor --accept-policy',
+  ];
+
+  it('이름(harness)도 env 리터럴도 없는 형태를 막는다', () => {
+    // **구축 트랙에서 잰다.** 설계 트랙에서는 `core/dist/cli.js` 가 소스 경로로 보여
+    // 「구현 코드 금지」 규칙이 **먼저** 잡는다 — 감정이 말한 「우연히 통과」가 정확히 그것이라,
+    // 그 페이즈에서 재면 이 가드를 지워도 초록이 유지된다.
+    const root = setup('P7');
+    for (const cmd of onlyCoreInvoke) {
+      // 다른 절이 대신 잡아 주는 것이 아님을 확인한다 — 이름·env 가 명령에 없다.
+      expect(/harness/i.test(cmd), `${cmd} 에 이름 절이 섞였다`).toBe(false);
+      expect(/HARNESS_(ALLOW_FORCE|ACCEPT_POLICY)/.test(cmd), `${cmd} 에 env 절이 섞였다`).toBe(false);
+      const out = bash(root, cmd);
+      expect(denied(out), `${cmd} 가 통과했다`).toBe(true);
+      expect(reason(out)).toMatch(/--force|--accept-policy/);
+    }
+  });
+
+  it('과차단 짝 — 코어와 무관한 node 실행은 통과한다', () => {
+    const root = setup('P7');
+    for (const cmd of ['node scripts/gen.js', 'node --version', 'npx tsx tools/x.ts']) {
+      expect(denied(bash(root, cmd)), `${cmd} 가 막혔다`).toBe(false);
+    }
+  });
+});

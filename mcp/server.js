@@ -38,6 +38,23 @@ try {
 /** bin/harness 와 같은 루트 해석 규칙 — 훅·CLI·MCP 가 같은 .harness/ 를 본다. */
 const projectRoot = () => process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+/**
+ * [COST-110] **비간섭 시 비용 0 은 이 표면에도 적용된다.**
+ *
+ * 훅은 sh 게이트로 「하네스 안 쓰는 프로젝트에서는 3ms·0토큰」까지 줄여 놨는데(PERF-95),
+ * MCP 는 `.harness/` 가 없는 프로젝트에서도 도구 16개(5.8KB 스키마)를 세션마다 노출했다 —
+ * 아낀 것을 옆문으로 지불한 셈이다.
+ *
+ * 처방은 이 파일이 **이미 쓰던 것**과 같다: 코어 번들이 없을 때 「살아 있되 도구를 노출하지
+ * 않고, 호출되면 방법을 알려준다」. 하네스가 안 걸린 프로젝트도 같은 상태로 본다.
+ */
+const harnessPresent = () => {
+  try { return fs.existsSync(path.join(projectRoot(), '.harness')); } catch { return false; }
+};
+
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n');
 }
@@ -62,8 +79,9 @@ function handle(msg) {
       : DEFAULT_PROTOCOL;
     result(id, {
       protocolVersion: requested,
-      // listChanged:false — 도구 목록은 정적이라 변경 알림을 보내지 않는다.
-      capabilities: { tools: { listChanged: false } },
+      // [COST-110] listChanged:true — `.harness/` 가 세션 도중에 생기면(`harness init`)
+      // 도구 목록이 바뀐다. 이걸 false 로 두면 그 세션 내내 도구가 안 보인다.
+      capabilities: { tools: { listChanged: true } },
       serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
     });
     return;
@@ -77,11 +95,20 @@ function handle(msg) {
       return;
 
     case 'tools/list':
-      result(id, { tools: core ? core.toolDefinitions() : [] });
+      result(id, { tools: core && harnessPresent() ? core.toolDefinitions() : [] });
       return;
 
     case 'tools/call': {
       const name = params && typeof params.name === 'string' ? params.name : '';
+      if (core && !harnessPresent()) {
+        textResult(
+          id,
+          `${SERVER_NAME}: this project has no .harness/ — run \`harness init\` in the project root first. `
+          + 'Until then the harness does nothing here, and these tools stay hidden on purpose.',
+          true,
+        );
+        return;
+      }
       if (!core) {
         textResult(
           id,
@@ -130,3 +157,20 @@ process.stdin.on('data', (chunk) => {
   }
 });
 process.stdin.on('end', () => process.exit(0));
+
+/**
+ * [COST-110] `harness init` 이 세션 도중에 실행되면 도구 목록이 「없음」에서 「전부」로 바뀐다.
+ * 그 사실을 알리지 않으면 그 세션에서는 MCP 표면이 영영 비어 있다 — 비용을 줄이려다
+ * 기능을 없애는 것이 되므로, 나타나는 순간 한 번 알린다(감시는 그 뒤 닫는다).
+ * 감시 자체가 실패해도 서버는 계속 살아야 한다(무해 계약).
+ */
+if (core && !harnessPresent()) {
+  try {
+    const watcher = fs.watch(projectRoot(), (_event, name) => {
+      if (name !== '.harness' || !harnessPresent()) return;
+      try { watcher.close(); } catch { /* 이미 닫혔으면 그만이다 */ }
+      send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' });
+    });
+    watcher.unref?.();
+  } catch { /* 감시 불가(권한·플랫폼) — 도구는 다음 세션에 보인다 */ }
+}

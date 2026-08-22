@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **976 passing** (33 files) |
+| Test suite | **1031 passing** (39 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -192,7 +192,7 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (976 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1031 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -229,8 +229,24 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 
 ---
 
+## Support
+
+**Something broke?** Start here — these run locally and need no network:
+
+| Symptom | First command |
+|---|---|
+| A command refused and you don't know why | `harness doctor` — reports drift and damage without changing anything |
+| State looks wrong | `harness doctor --repair` — the event journal rebuilds `state.json` |
+| A hook did nothing | `.harness/.runtime/hook-errors.log` — hook failures are absorbed to exit 0, so this file is the only place they surface |
+| You want to see the whole command map | `harness --help`, then `harness <group> --help` |
+
+**Reporting a bug.** This plugin has no public issue tracker yet — it is distributed
+from the repository you installed it from, so report through that channel. Include
+the output of `harness doctor` and your `harness --version`; both are safe to paste
+(they contain no file contents).
+
 ## License & author
 
-Authored by **장욱 (Wook Jang)**. See the repository for license terms.
+MIT — see [LICENSE](LICENSE). Authored by **장욱 (Wook Jang)**.
 
 <sub>Built with a design → build → ship discipline — enforced by itself.</sub>

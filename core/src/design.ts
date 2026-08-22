@@ -34,7 +34,7 @@ import { designDir } from './paths';
 import { tr, langFor } from './tr';
 import { pick, type Msg } from './i18n';
 import { appendEvent } from './events';
-import { getNode, bumpNode } from './ledger';
+import { getNode, reviseNode } from './ledger';
 import { markStale } from './wave';
 import { loadTokens, generateCss } from './tokens';
 
@@ -64,7 +64,15 @@ export interface SyncResult {
    * 내용이 움직였는지 자체는 `previousHash !== newHash` 로 본다 — draft 노드처럼 승인
    * 기준선이 없어 해시만 갱신하는 경우가 있기 때문이다.
    */
+  /**
+   * [PROD-112] **개정이 일어났는가** — 판이 올라갔는가다. 내용이 바뀌었는가와 다르다.
+   * 예전에는 이 하나로 CLI 가 "unchanged (same hash)" 를 찍었고, 그래서 draft 노드에서는
+   * 내용이 완전히 달라져도 **두 번 다 「변경 없음」**이라고 답했다. 「정직한 판정」이
+   * 정체성인 제품이 거짓을 말한 것이고, 캔버스를 고치는 사람은 sync 가 고장났다고 오판한다.
+   */
   changed: boolean;
+  /** 캔버스 내용의 해시가 달라졌는가 — draft 든 아니든 사실 그대로. */
+  contentChanged: boolean;
   previousHash?: string;
   newHash: string;
   version: number;
@@ -242,7 +250,7 @@ export function syncCanvas(root: string, uxNodeId: string, fetchedContent: strin
 
   if (link.contentHash === newHash) {
     return {
-      changed: false, previousHash: link.contentHash, newHash,
+      changed: false, contentChanged: false, previousHash: link.contentHash, newHash,
       version: node.version, affectedWaves: [], unverifiable: [],
     };
   }
@@ -257,23 +265,18 @@ export function syncCanvas(root: string, uxNodeId: string, fetchedContent: strin
   const affectedWaves: string[] = [];
   const unverifiable: string[] = [];
   if (revise) {
-    const r = bumpNode(root, uxNodeId);
+    // [ENG-106] 개정의 규칙(판 올림 + 저널 + STALE 전파)은 도메인 한 벌이다.
+    // 여기서 사본을 들고 있으면 그 한 벌이 바뀔 때 이 경로만 옛 규칙으로 남는다.
+    const r = reviseNode(root, uxNodeId);
     version = r.node.version;
-    unverifiable.push(...r.unverifiable);
-    appendEvent(root, 'node-bumped', {
-      id: uxNodeId, version, affected: r.affectedWaves, unverifiable: r.unverifiable,
-      source: 'canvas-sync',
-    });
-    // 한 웨이브의 실패가 나머지 마킹을 막지 않는다. 실패한 웨이브는 "STALE 전파를 확신할 수 없는
-    // 웨이브"라 unverifiable 로 보고한다 — 조용히 넘기면 전파가 뚫린 줄 아무도 모른다.
-    for (const w of r.affectedWaves) {
-      try { markStale(root, w); affectedWaves.push(w); } catch { unverifiable.push(w); }
-    }
+    affectedWaves.push(...r.marked);
+    // 표시 못 한 웨이브는 STALE 전파를 확신할 수 없는 웨이브다 — 조용히 넘기면 뚫린 줄 모른다.
+    unverifiable.push(...r.unverifiable, ...r.failed);
   }
 
   doc.links[i] = { ...link, contentHash: newHash, syncedAt: new Date().toISOString() };
   saveDoc(root, doc);
-  return { changed: revise, previousHash: link.contentHash, newHash, version, affectedWaves, unverifiable };
+  return { changed: revise, contentChanged: true, previousHash: link.contentHash, newHash, version, affectedWaves, unverifiable };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

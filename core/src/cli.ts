@@ -692,11 +692,22 @@ export function run(argv: string[], root: string): number {
             }
             const content = fs.readFileSync(path.resolve(root, from), 'utf8');
             const r = syncCanvas(root, uxNodeId, content);
+            // [PROD-112] **세 가지 결과를 세 문장으로 말한다.** 예전에는 「개정했는가」 하나로
+            // 갈라서, draft 노드는 내용이 완전히 달라져도 "unchanged (same hash)" 를 냈다 —
+            // 해시는 실제로 달랐고 저널에는 canvas-synced 가 기록되고 있었다. 「정직한 판정」이
+            // 정체성인 제품이 거짓을 말하면 사람은 도구가 고장났다고 판단한다.
             console.log(
               r.changed
                 ? L(`${uxNodeId} canvas change detected → v${r.version} · STALE waves: ${r.affectedWaves.join(', ') || 'none'}`,
                   `${uxNodeId} 캔버스 변경 감지 → v${r.version} · STALE 웨이브: ${r.affectedWaves.join(', ') || '없음'}`)
-                : L(`${uxNodeId} unchanged (same hash)`, `${uxNodeId} 변경 없음 (해시 동일)`),
+                : r.contentChanged
+                  ? L(`${uxNodeId} synced — content changed, but the node is still a draft so no revision was recorded `
+                      + `(approve it with \`harness node upsert --id ${uxNodeId} --title <title> --status approved\` `
+                      + 'to start tracking revisions)',
+                    `${uxNodeId} 동기화됨 — 내용은 바뀌었지만 노드가 아직 draft 라 개정으로 기록하지 않았다 `
+                      + `(\`harness node upsert --id ${uxNodeId} --title <제목> --status approved\` 로 승인하면 `
+                      + '그때부터 개정을 추적한다)')
+                  : L(`${uxNodeId} unchanged (same hash)`, `${uxNodeId} 변경 없음 (해시 동일)`),
             );
             if (r.unverifiable.length > 0) {
               console.error(L(`Incomplete STALE propagation — unverifiable waves: ${r.unverifiable.join(', ')} — check manually`, `STALE 전파 불완전 — 검증 불가 웨이브: ${r.unverifiable.join(', ')} — 수동 확인 필요`));

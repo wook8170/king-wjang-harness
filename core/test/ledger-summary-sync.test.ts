@@ -177,3 +177,32 @@ describe('QUAL-A: 대장 어휘가 사전 안에 있다', () => {
     expect(bad).toEqual([]);
   });
 });
+
+/**
+ * [QUAL-115] **도구가 무엇을 안 보는지 수치로 못 박는다.**
+ *
+ * 외부 `ledger-lint.sh` 의 ID 패턴(`[A-Z]*-[0-9]*`)은 글자로 끝나는 ID 를 통째로 건너뛴다.
+ * 라운드 3-F 가 그 형식을 쓰기 시작하면서 사각이 8행 → 41행으로 자랐고 **아무도 몰랐다** —
+ * 그러다 BLOCKER 를 그 형식으로 등재하자 lint 가 「open BLOCKER 0」이라는 **거짓 실패**를 냈다.
+ *
+ * 사각 자체는 리포 밖(스킬) 소관이라 여기서 없앨 수 없다. 대신 **조용히 자라는 것**을 막는다:
+ * ① 리포 안 검사는 전 행을 본다는 것, ② lint 가 못 보는 행 수가 지금보다 늘지 않는다는 것.
+ */
+describe('QUAL-115: 외부 lint 의 사각이 조용히 자라지 않는다', () => {
+  const rows = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(l => ROW.test(l));
+  /** 외부 lint 가 세는 ID 형태 — 숫자로 끝나는 것만. */
+  const LINT_VISIBLE = /^[A-Z][A-Z0-9]*-\d+$/;
+
+  it('리포 안 검사는 전 행을 본다 (사각 0)', () => {
+    const ids = rows.map(l => ROW.exec(l)![1]);
+    expect(ids.length).toBeGreaterThan(100);
+    expect(ids.filter(id => !/^[A-Z]/.test(id))).toEqual([]);
+  });
+
+  it('lint 가 못 보는 행 수가 기준선을 넘지 않는다 — 새 행은 숫자 ID 로 등재한다', () => {
+    const invisible = rows.map(l => ROW.exec(l)![1]).filter(id => !LINT_VISIBLE.test(id));
+    // 라운드 3-F 가 남긴 41행이 기준선이다. 라운드 3-G 신규 35행은 숫자 ID 로 등재해
+    // 커버리지를 83/122 → 118/157 로 올렸다. 이 수가 늘면 사각이 다시 자라는 것이다.
+    expect(invisible.length, `lint 사각이 늘었다: ${invisible.join(', ')}`).toBeLessThanOrEqual(41);
+  });
+});
