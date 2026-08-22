@@ -37,7 +37,7 @@ import { submitGate } from './gate';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { pick } from './i18n';
 import { langFor } from './tr';
-import { getNode, upsertNode, reviseNode } from './ledger';
+import { getNode, mergeNode, reviseNode } from './ledger';
 import { loadRegistry } from './registry';
 import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
@@ -422,15 +422,13 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       if (status !== undefined && !LEDGER_STATUSES.includes(status as LedgerNode['status'])) {
         return fail(`Invalid status: ${status} (one of ${LEDGER_STATUSES.join(', ')})`);
       }
-      const prev = getNode(root, id);
-      upsertNode(root, {
+      // 병합 의미론은 도메인 한 벌이다(`mergeNode`) — 표면은 사용자가 준 것만 넘긴다.
+      mergeNode(root, {
         id, title,
-        parent: str(o, 'parent') ?? prev?.parent,
-        doc_anchor: str(o, 'doc_anchor') ?? prev?.doc_anchor,
-        version: prev?.version ?? 1,                       // bump 이력 보존
-        status: (status as LedgerNode['status']) ?? prev?.status ?? 'draft',
+        parent: str(o, 'parent'),
+        doc_anchor: str(o, 'doc_anchor'),
+        status: status as LedgerNode['status'] | undefined,
       });
-      appendEvent(root, 'node-upserted', { id });
       return ok(id);
     }
 

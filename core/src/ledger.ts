@@ -159,3 +159,34 @@ export function reviseNode(root: string, id: string): NodeRevision {
     failed, unverifiable, activeBefore,
   };
 }
+
+/**
+ * [ENG-106] **등록·갱신의 병합 의미론도 한 벌이다.**
+ *
+ * `cli.ts` 와 `mcp.ts` 가 각자 「이전 값을 읽어 합치고, upsert 하고, 저널에 적는다」를
+ * 똑같이 구현하고 있었다. 뮤테이션으로 실증됐다 — MCP 쪽 `version` 보존을 망가뜨려도
+ * 전건 초록이었다(그 사본을 보는 테스트가 없었다). 개정 카운터가 조용히 리셋되면
+ * STALE 전파의 기준이 무너진다.
+ *
+ * 규칙:
+ *  - **version 은 보존한다** — 판을 올리는 것은 `reviseNode` 뿐이다.
+ *  - 주지 않은 필드는 이전 값을 잇는다(부분 갱신).
+ *  - 처음 등록이면 `draft` 로 시작한다.
+ */
+export function mergeNode(
+  root: string,
+  patch: { id: string; title: string; parent?: string; doc_anchor?: string; status?: LedgerNode['status'] },
+): LedgerNode {
+  const prev = getNode(root, patch.id);
+  const node: LedgerNode = {
+    id: patch.id,
+    title: patch.title,
+    parent: patch.parent ?? prev?.parent,
+    doc_anchor: patch.doc_anchor ?? prev?.doc_anchor,
+    version: prev?.version ?? 1,                       // bump 이력 보존
+    status: patch.status ?? prev?.status ?? 'draft',
+  };
+  upsertNode(root, node);
+  appendEvent(root, 'node-upserted', { id: node.id });
+  return node;
+}

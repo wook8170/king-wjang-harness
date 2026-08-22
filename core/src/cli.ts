@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
-import { getNode, upsertNode, reviseNode, loadLedger } from './ledger';
+import { getNode, mergeNode, reviseNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick } from './i18n';
@@ -642,9 +642,22 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'cmd': {
-            const p = loadProfile(root, flag(args, 'name'));
+            // [UX-118] **파스 오류를 삼키지 않는다.** `commands.yaml` 이 깨져 있으면 이 명령은
+            // 「없다 — 채워라」고 답했다. 방금 채운 사람에게 다시 채우라는 순환 처방이고,
+            // 어느 파일인지도 말하지 않았다(`profile show` 는 같은 상태에서 줄·열까지 보여 준다 —
+            // 같은 사실을 표면마다 다르게 말하면 사람은 덜 말하는 쪽을 믿는다).
+            const { profile: p, problems } = inspectProfile(root, flag(args, 'name'));
             const c = commandFor(p, rest[0]);
-            if (!c) throw new Error(L(`Profile ${p.name} has no '${rest[0]}' command — fill it in commands.yaml`, `프로파일 ${p.name} 에 '${rest[0]}' 명령이 없다 — commands.yaml 을 채워라`));
+            if (!c) {
+              const where = p.dir ? path.join(p.dir, 'commands.yaml') : 'commands.yaml';
+              const why = problems.length > 0
+                ? L(`\n  ${problems.join('\n  ')}`, `\n  ${problems.join('\n  ')}`)
+                : '';
+              throw new Error(L(
+                `Profile ${p.name} has no '${rest[0]}' command — set it in ${where}${why}`,
+                `프로파일 ${p.name} 에 '${rest[0]}' 명령이 없다 — ${where} 에 적어라${why}`,
+              ));
+            }
             console.log(c);
             return 0;
           }
@@ -975,16 +988,13 @@ export function run(argv: string[], root: string): number {
           // [USE-96·ENG-E] 부모 검증은 **도메인(upsertNode)** 이 한다 — 여기 두 번째 벌이 있던
           // 동안 `--parent ""` 를 CLI 는 거부하고 MCP 는 받아 원장에 빈 부모를 남겼다.
           // 같은 규칙이 두 곳에 있으면 언젠가 갈리고, 갈린 순간 느슨한 쪽이 정본이 된다.
-          const parentFlag = flag(args, 'parent');
-          const node: LedgerNode = {
+          // 병합 의미론은 도메인 한 벌이다(`mergeNode`) — 표면은 사용자가 준 것만 넘긴다.
+          mergeNode(root, {
             id, title,
-            parent: parentFlag ?? prev?.parent,
-            doc_anchor: flag(args, 'anchor') ?? prev?.doc_anchor,
-            version: prev?.version ?? 1,                       // bump 이력 보존
-            status: (statusFlag as LedgerNode['status']) ?? prev?.status ?? 'draft',
-          };
-          upsertNode(root, node);
-          appendEvent(root, 'node-upserted', { id });
+            parent: flag(args, 'parent'),
+            doc_anchor: flag(args, 'anchor'),
+            status: statusFlag as LedgerNode['status'] | undefined,
+          });
           console.log(id);
           return 0;
         }

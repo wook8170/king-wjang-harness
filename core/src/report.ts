@@ -401,9 +401,19 @@ export function buildReviewPacket(root: string, phase: Phase): string {
       ko: `**${phase} 에 등록된 산출물이 없다.** 심사할 문서가 없으므로 이 패킷은 승인 근거가 아니다 — `
         + '레지스트리에 산출물을 등록하고 아티팩트를 발행한 뒤 다시 생성하라.',
     }));
+    // [UX-116] **없는 강제를 단언하지 않는다.** 예전 문구는 "빈 패킷으로는 게이트를 열 수
+    // 없다"였는데 실제로는 `gate approve` 도 `phase set` 도 성공했다. 리뷰어가 「어차피
+    // 시스템이 거부한다」고 믿게 만드는 문구는, 그 믿음이 틀렸을 때 승인 한 번을 그냥 통과시킨다.
+    // 판단하는 것은 사람이므로 **사람에게 판단 재료와 처방을 준다.**
     blockers.push(t({
-      en: `no artifact registered for ${phase} — an empty packet cannot open a gate`,
-      ko: `${phase} 에 등록된 산출물이 없다 — 빈 패킷으로는 게이트를 열 수 없다`,
+      en: `no artifact registered for ${phase} — this packet has nothing to review, so approving it now `
+        + 'approves something you have not seen. Register it first: '
+        + '`harness doc upsert --id <DOC-x> --phase ' + phase + ' --path <file>`, publish it, then '
+        + '`harness doc url <DOC-x> <artifact-url>` and regenerate this packet.',
+      ko: `${phase} 에 등록된 산출물이 없다 — 이 패킷에는 심사할 것이 없으므로, 지금 승인하면 `
+        + '보지 않은 것을 승인하는 것이다. 먼저 등록하라: '
+        + '`harness doc upsert --id <DOC-x> --phase ' + phase + ' --path <파일>` → 발행 → '
+        + '`harness doc url <DOC-x> <아티팩트-URL>` 후 이 패킷을 다시 생성하라.',
     }));
   }
   for (const d of docs) {

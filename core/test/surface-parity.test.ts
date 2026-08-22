@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import { run } from '../src/cli';
 import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
+import { getNode } from '../src/ledger';
 import { handleHook, WRITE_TOOLS } from '../src/hook';
 import { initHarness } from '../src/state';
 import { execFileSync } from 'node:child_process';
@@ -394,5 +395,54 @@ describe('ENG-E: 빈 부모 판정이 표면마다 갈리지 않는다', () => {
     const root = init();
     expect(capture(() => run(['node', 'upsert', '--id', 'A-3', '--title', 't', '--parent', 'NOPE'], root)).code).toBe(1);
     expect(callTool(root, 'harness_node_upsert', { id: 'A-4', title: 't', parent: 'NOPE' }).ok).toBe(false);
+  });
+});
+
+/**
+ * [ENG-106] **등록·갱신의 병합 의미론이 도메인 한 곳이다.**
+ *
+ * `cli.ts` 와 `mcp.ts` 가 「이전 값을 읽어 합치고 upsert 하고 저널에 적는다」를 각자 들고
+ * 있었다. 뮤테이션으로 실증됐다 — MCP 사본의 `version` 보존을 망가뜨려도 전건 초록이었고,
+ * 그러면 개정 카운터가 조용히 리셋돼 STALE 전파의 기준이 무너진다.
+ * 여기서는 **두 표면의 결과**와 **사본이 남지 않았다는 사실**을 함께 고정한다.
+ */
+describe('ENG-106: 노드 병합 의미론이 도메인 한 곳이다', () => {
+  const seedBumped = (root: string) => {
+    capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 'auth'], root));
+    capture(() => run(['node', 'bump', 'F-1'], root));      // v2
+  };
+
+  it('CLI 로 다시 upsert 해도 개정 카운터가 보존된다', () => {
+    const root = init();
+    seedBumped(root);
+    capture(() => run(['node', 'upsert', '--id', 'F-1', '--title', 'auth v2'], root));
+    expect(getNode(root, 'F-1')?.version).toBe(2);
+  });
+
+  it('MCP 로 다시 upsert 해도 개정 카운터가 보존된다 — 표면이 갈리지 않는다', () => {
+    const root = init();
+    seedBumped(root);
+    expect(callTool(root, 'harness_node_upsert', { id: 'F-1', title: 'auth v2' }).ok).toBe(true);
+    expect(getNode(root, 'F-1')?.version).toBe(2);
+  });
+
+  it('주지 않은 필드는 두 표면 모두 이전 값을 잇는다', () => {
+    const root = init();
+    capture(() => run(['node', 'upsert', '--id', 'P-1', '--title', 'parent'], root));
+    capture(() => run(['node', 'upsert', '--id', 'F-2', '--title', 't', '--parent', 'P-1'], root));
+    callTool(root, 'harness_node_upsert', { id: 'F-2', title: 'renamed' });
+    const n = getNode(root, 'F-2');
+    expect(n?.parent, 'MCP 갱신이 parent 를 지웠다').toBe('P-1');
+    expect(n?.title).toBe('renamed');
+  });
+
+  it('어댑터가 병합 사본을 다시 들지 않는다', () => {
+    const repo = path.resolve(__dirname, '../..');
+    for (const f of ['core/src/cli.ts', 'core/src/mcp.ts']) {
+      const src = fs.readFileSync(path.join(repo, f), 'utf8');
+      // 어댑터가 `upsertNode` 를 직접 부르면 병합을 자기가 한다는 뜻이다 — 그 경로를 닫는다.
+      // (문서 노드의 `version: prev?.version` 은 표면이 하나뿐이라 여기 해당하지 않는다.)
+      expect(src, `${f} 가 upsertNode 를 직접 부른다 = 병합 사본`).not.toMatch(/\bupsertNode\(/);
+    }
   });
 });

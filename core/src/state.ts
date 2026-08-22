@@ -49,6 +49,22 @@ export function readState(root: string): HarnessState {
   try {
     return JSON.parse(fs.readFileSync(statePath(root), 'utf8')) as HarnessState;
   } catch (e) {
+    /**
+     * [UX-117] **손상된 상태 파일에도 처방을 준다.** 예전에는 `state.json` 이 깨져 있으면
+     * `harness status` 가 `Unexpected token 'g' … is not valid JSON` 만 뱉고 끝났다 —
+     * 혼란스러운 순간에 가장 먼저 치는 명령이 원인만 던지고 나가는 길을 안 알려 준 것이다.
+     * 파일이 **없는** 경우(아래)와 원인은 다르지만 처방은 같다: 저널이 진실이므로 재생하면 된다.
+     */
+    if (isInitialized(root)) {
+      throw new Error(tr(root, {
+        en: `state.json is damaged and could not be parsed (${(e as Error).message}) — the state store is `
+          + 'derived, so the event journal can rebuild it: run `harness doctor --repair`. '
+          + '`harness doctor` alone reports what it finds without changing anything.',
+        ko: `state.json 이 손상돼 해석할 수 없다 (${(e as Error).message}) — 상태 저장소는 파생물이라 `
+          + '이벤트 저널로 다시 만들 수 있다: `harness doctor --repair` 를 실행하라. '
+          + '`harness doctor` 만 실행하면 아무것도 바꾸지 않고 진단만 한다.',
+      }));
+    }
     if (hasHarness(root) && !isInitialized(root)) {
       throw new Error(tr(root, {
         en: '.harness/ is here but state.json is missing — the state store is derived, so the event '
