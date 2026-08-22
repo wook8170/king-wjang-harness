@@ -139,3 +139,44 @@ describe('[UX-147] `profile cmd` 처방이 고쳐도 되는 곳을 가리킨다'
     expect(r.err).toMatch(new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 });
+
+/**
+ * [ENG-143] **출하 measured-only 규칙이 두 벌이었다** — `approveGate`(승인 거부)와
+ * `shipVerdict`(NO-GO 사유)가 같은 규칙을 각자 구현했다. 강제는 fail-safe 였지만 **문언이
+ * 갈리면 verdict 와 approve 가 서로 다른 말을 한다** — 사람은 그때 덜 말하는 쪽을 믿는다.
+ * `ship.ts` 머리말이 「다시 구현하지 않는다」고 선언해 둔 것과 코드가 어긋난 것 자체가,
+ * 이 리포가 [LOGIC-93]·[API-92]·[ENG-106] 으로 세 번 물린 「같은 규칙 두 벌」이다.
+ */
+describe('[ENG-143] 두 표면이 같은 한 벌을 쓴다', () => {
+  const setup = (): string => {
+    const root = sandbox();
+    writeState(root, { ...readState(root), phase: 'P10' });
+    fs.writeFileSync(path.join(root, 'ship.md'), `# 출하\n${'실측한 내용을 적는다. '.repeat(12)}\n`);
+    cli(root, ['gate', 'submit', 'P10', '--evidence', 'code', '--paths', 'ship.md']);
+    return root;
+  };
+
+  it('승인 거부문과 verdict 사유가 **같은 문장**이다', () => {
+    const root = setup();
+    process.env.HARNESS_APPROVE_NO_TTY = '1';
+    const approve = cli(root, ['gate', 'approve', 'P10']);
+    const verdict = cli(root, ['ship', 'verdict']);
+    expect(approve.code).toBe(1);
+    // 규칙이 한 벌이므로 사유 문장도 한 벌이다 — 핵심 절을 그대로 공유한다.
+    // (언어는 config 가 정하므로 두 표면이 **같은 언어의 같은 절**을 쓰는지로 본다.)
+    const CORE = /only passes on measured evidence|measured 근거만 통과한다/;
+    expect(approve.err).toMatch(CORE);
+    expect(verdict.out + verdict.err).toMatch(CORE);
+  });
+
+  it('measured 로 재제출하면 두 표면 모두 그 사유를 더 이상 말하지 않는다', () => {
+    const root = setup();
+    cli(root, ['gate', 'submit', 'P10', '--evidence', 'measured', '--paths', 'ship.md']);
+    process.env.HARNESS_APPROVE_NO_TTY = '1';
+    const approve = cli(root, ['gate', 'approve', 'P10']);
+    const verdict = cli(root, ['ship', 'verdict']);
+    for (const msg of [approve.err, verdict.out + verdict.err]) {
+      expect(msg).not.toMatch(/only passes on measured evidence|measured 근거만 통과한다/);
+    }
+  });
+});

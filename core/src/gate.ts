@@ -649,6 +649,31 @@ export function submitGate(
   return record;
 }
 
+/**
+ * [ENG-143] **출하 트랙 measured-only 규칙 — 판정도 문언도 한 벌이다.**
+ *
+ * 예전에는 `approveGate`(승인 거부)와 `shipVerdict`(NO-GO 사유)가 같은 규칙을 각자 들고
+ * 있었다. 강제 자체는 fail-safe 였지만 **문언이 갈리면 verdict 와 approve 가 서로 다른 말을
+ * 한다** — 사람은 그때 덜 말하는 쪽을 믿는다. `ship.ts` 머리말이 「다시 구현하지 않는다」고
+ * 선언해 둔 것과 코드가 어긋나 있던 것 자체가, 이 리포가 [LOGIC-93]·[API-92]·[ENG-106] 으로
+ * 세 번 물린 「같은 규칙 두 벌」 패턴이다.
+ *
+ * 위반이면 사유 문자열을, 아니면 `null` 을 준다 — 던질지 모을지는 부르는 쪽이 정한다.
+ */
+export function measuredOnlyViolation(
+  root: string,
+  phase: Phase,
+  evidence: string | undefined,
+): string | null {
+  if (!SHIP_PHASES.includes(phase) || evidence === 'measured') return null;
+  return tr(root, {
+    en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${evidence ?? 'none'}) — `
+      + 'resubmit with real-run measurements attached (Iron Rule, spec §3-4)',
+    ko: `출하 트랙 게이트 ${phase} 는 measured 근거만 통과한다 (현재: ${evidence ?? '없음'}) — `
+      + '실주행·측정 증적을 붙여 재제출하라 (Iron Rule, 스펙 §3-4)',
+  });
+}
+
 export function approveGate(root: string, phase: Phase): GateRecord {
   const state = readState(root);
   const current = state.gates[phase];
@@ -662,16 +687,8 @@ export function approveGate(root: string, phase: Phase): GateRecord {
       }),
     );
   }
-  if (SHIP_PHASES.includes(phase) && current.evidence !== 'measured') {
-    throw new Error(
-      tr(root, {
-        en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${current.evidence ?? 'none'}) — `
-          + 'resubmit with real-run measurements attached (Iron Rule, spec §3-4)',
-        ko: `출하 트랙 게이트 ${phase} 는 measured 근거만 통과한다 (현재: ${current.evidence ?? '없음'}) — `
-          + '실주행·측정 증적을 붙여 재제출하라 (Iron Rule, 스펙 §3-4)',
-      }),
-    );
-  }
+  const notMeasured = measuredOnlyViolation(root, phase, current.evidence);
+  if (notMeasured) throw new Error(notMeasured);
   const paths = recordedPaths(root, phase);
   if (!paths) {
     throw new Error(

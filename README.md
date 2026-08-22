@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | **< 150 ms** (measured 62 ms; 102 ms on the journal-replay fallback with a 100k-entry journal) |
-| Test suite | **1073 passing** (43 files) |
+| Test suite | **1085 passing** (44 files) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -215,7 +215,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0 — core engine, gates, and both later tracks are implemented and measured** (1073 tests). The
+**v0 — core engine, gates, and both later tracks are implemented and measured** (1085 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery

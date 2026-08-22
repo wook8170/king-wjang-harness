@@ -18,6 +18,30 @@ const LEDGER = path.join(DIR, 'ledger.md');
 const SUMMARY = path.join(DIR, '00-summary.md');
 
 /**
+ * [PROD-141] **배포 아카이브에서도 `npm test` 가 돌아야 한다.**
+ *
+ * `.gitattributes` 는 `docs/release-readiness` 를 export-ignore 한다([PROD-113] — 내부
+ * 작업물을 배포본에 싣지 않는다). 그런데 이 파일은 **함께 배포되면서** 그 디렉토리를
+ * 절대경로로 읽었다. `git archive HEAD` 산출물에서 `npm test` 는 **1 파일 수집 실패(ENOENT)·
+ * 12 테스트 미실행**이었다 — 받는 사람이 「이 패키지는 자기 테스트를 못 돌린다」를 첫 명령에서
+ * 본다. [PROD-113] 을 고정한 검사는 「export-ignore 가 있는가」만 보고 「아카이브가 여전히
+ * 자급하는가」는 안 봤다.
+ *
+ * 여기 있는 검사들은 **리포 안의 대장**을 지키는 것이라 아카이브에는 지킬 대상이 없다.
+ * 그래서 지울 것이 아니라 **없으면 해당 없음으로 건너뛴다** — 없는 것을 실패로 만들면
+ * 배포본이 빨강이고, 조용히 통과시키면 리포에서 검사가 죽어도 모른다(아래 sanity 참조).
+ */
+const HAS_DOCS = fs.existsSync(DIR);
+
+/**
+ * `describe.skipIf` 만으로는 부족하다 — vitest 는 **건너뛸 describe 의 본문도 수집 시점에
+ * 실행**한다. 그래서 본문에서 대장을 읽는 이 파일은 아카이브에서 여전히 수집 오류로 죽었다
+ * (실측: `Test Files 1 failed`). 읽기 자체를 안전하게 만들어야 한다.
+ * 리포 안에서 파일이 사라지는 경우는 아래 sanity 검사가 잡는다.
+ */
+const readDoc = (p: string): string => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+/**
  * 대장 데이터 행. ID 에 숫자가 섞여도(`I18N-72`), **글자로 끝나도**(`UTIL-B`·`PROD-A` —
  * 독립 감정자가 쓰는 번호 체계다) 잡아야 한다. 숫자 접미만 세던 규칙은 그 8행을 통째로
  * 집계 밖에 두었고, **집계 밖의 행은 open 이어도 헤더가 0 이라고 말한다** — 이 가드가
@@ -29,7 +53,7 @@ interface Counts { verified: number; open: number; deferred: number; openHigh: n
 
 function countLedger(): Counts {
   const c: Counts = { verified: 0, open: 0, deferred: 0, openHigh: 0, openBlocker: 0, openIds: [] };
-  for (const line of fs.readFileSync(LEDGER, 'utf8').split('\n')) {
+  for (const line of readDoc(LEDGER).split('\n')) {
     const m = ROW.exec(line);
     if (!m) continue;
     const f = line.split('|').map(x => x.trim());
@@ -47,9 +71,9 @@ function countLedger(): Counts {
 
 /** 판정 블록은 요약 맨 위의 `> ` 인용 블록이다. 거기 적힌 숫자만 계약으로 본다. */
 function summaryBlock(): string {
-  const text = fs.readFileSync(SUMMARY, 'utf8');
+  const text = readDoc(SUMMARY);
   const start = text.indexOf('# 판정');
-  expect(start, '00-summary.md 에 판정 블록이 없다').toBeGreaterThan(-1);
+  if (start === -1) return '';                      // 수집 시점 — 판정은 아래 검사가 한다
   const rest = text.slice(start);
   const end = rest.indexOf('\n## ');
   return end === -1 ? rest : rest.slice(0, end);
@@ -65,10 +89,10 @@ function summaryBlock(): string {
  * 정확성 자체는 기계가 못 재지만 **명백히 쓸모없는 인용**은 잴 수 있다: 닫는 괄호 하나,
  * 주석 종료 기호, 공백. 그것만 거른다 — 더 욕심내면 정상 인용을 막는다.
  */
-describe('VAL-C: 대장 인용 줄이 실재하고 쓸모없지 않다', () => {
+describe.skipIf(!HAS_DOCS)('VAL-C: 대장 인용 줄이 실재하고 쓸모없지 않다', () => {
   const CITE = /`([\w/.\-]+\.(?:ts|md|js|yaml|json)):(\d+)`/;
   const repo = path.resolve(__dirname, '../..');
-  const rows = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(l => ROW.test(l));
+  const rows = readDoc(LEDGER).split('\n').filter(l => ROW.test(l));
 
   it('인용한 파일과 줄이 실재한다', () => {
     const bad: string[] = [];
@@ -101,12 +125,13 @@ describe('VAL-C: 대장 인용 줄이 실재하고 쓸모없지 않다', () => {
   });
 });
 
-describe('VAL-B: 판정 블록이 대장과 갈리지 않는다', () => {
+describe.skipIf(!HAS_DOCS)('VAL-B: 판정 블록이 대장과 갈리지 않는다', () => {
   const led = countLedger();
   const block = summaryBlock();
 
   it('대장 자체 헤더의 집계가 실제 행과 맞는다', () => {
-    const header = fs.readFileSync(LEDGER, 'utf8').split('\n').find(l => l.startsWith('**갱신**'))!;
+    const header = readDoc(LEDGER).split('\n').find(l => l.startsWith('**갱신**'))!;
+    expect(header, '대장 헤더(**갱신** 줄)가 없다').toBeTruthy();
     const num = (label: string): number => {
       const m = new RegExp(`\\*\\*${label}\\*\\* (\\d+)`).exec(header);
       expect(m, `대장 헤더에 ${label} 가 없다`).not.toBeNull();
@@ -153,11 +178,11 @@ describe('VAL-B: 판정 블록이 대장과 갈리지 않는다', () => {
  * 게다가 그 lint 의 ID 패턴(`[A-Z]*-[0-9]*`)은 **글자로 끝나는 ID 를 아예 안 본다** —
  * 같은 위반이 한 건 더 숨어 있었다(UTIL-B). 이 검사는 ROW 정규식을 쓰므로 그 사각이 없다.
  */
-describe('QUAL-A: 대장 어휘가 사전 안에 있다', () => {
+describe.skipIf(!HAS_DOCS)('QUAL-A: 대장 어휘가 사전 안에 있다', () => {
   const SEVERITY = new Set(['BLOCKER', 'HIGH', 'MED', 'LOW', '—', '-']);
   const STATUS = new Set(['open', 'fixing', 'fixed', 'verified', 'rejected', 'deferred']);
   const GRADE = new Set(['claimed', 'code', 'measured']);
-  const rows = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(l => ROW.test(l));
+  const rows = readDoc(LEDGER).split('\n').filter(l => ROW.test(l));
 
   it('데이터 행이 실제로 잡힌다 — 검사가 빈 집합을 통과하지 않게', () => {
     expect(rows.length).toBeGreaterThan(50);
@@ -188,8 +213,8 @@ describe('QUAL-A: 대장 어휘가 사전 안에 있다', () => {
  * 사각 자체는 리포 밖(스킬) 소관이라 여기서 없앨 수 없다. 대신 **조용히 자라는 것**을 막는다:
  * ① 리포 안 검사는 전 행을 본다는 것, ② lint 가 못 보는 행 수가 지금보다 늘지 않는다는 것.
  */
-describe('QUAL-115: 외부 lint 의 사각이 조용히 자라지 않는다', () => {
-  const rows = fs.readFileSync(LEDGER, 'utf8').split('\n').filter(l => ROW.test(l));
+describe.skipIf(!HAS_DOCS)('QUAL-115: 외부 lint 의 사각이 조용히 자라지 않는다', () => {
+  const rows = readDoc(LEDGER).split('\n').filter(l => ROW.test(l));
   /** 외부 lint 가 세는 ID 형태 — 숫자로 끝나는 것만. */
   const LINT_VISIBLE = /^[A-Z][A-Z0-9]*-\d+$/;
 
@@ -204,5 +229,17 @@ describe('QUAL-115: 외부 lint 의 사각이 조용히 자라지 않는다', ()
     // 라운드 3-F 가 남긴 41행이 기준선이다. 라운드 3-G 신규 35행은 숫자 ID 로 등재해
     // 커버리지를 83/122 → 118/157 로 올렸다. 이 수가 늘면 사각이 다시 자라는 것이다.
     expect(invisible.length, `lint 사각이 늘었다: ${invisible.join(', ')}`).toBeLessThanOrEqual(41);
+  });
+});
+
+/**
+ * [PROD-141] 위 `skipIf` 가 **리포 안에서도** 조용히 건너뛰는 일이 없게 못 박는다.
+ * 「없으면 통과」는 이 리포가 [SEC-137] 로 한 번 물린 구조다 — 건너뛴 사실을 사실로 올린다.
+ */
+const IN_REPO = fs.existsSync(path.resolve(__dirname, '../../.git'));
+
+describe.skipIf(!IN_REPO)('PROD-141: 검사가 조용히 사라지지 않는다', () => {
+  it('리포 안에서는 대장 문서가 실재해 검사가 실제로 돈다', () => {
+    expect(HAS_DOCS, `${DIR} 가 없다 — 대장 검사가 통째로 건너뛰어졌다`).toBe(true);
   });
 });

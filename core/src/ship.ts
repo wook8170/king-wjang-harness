@@ -48,6 +48,7 @@ import { tr, langFor } from './tr';
 import { pick, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { hasMeasuredEvidence } from './evidence';
+import { measuredOnlyViolation } from './gate';
 import { renderRtm } from './report';
 import { readState } from './state';
 import { parseWave } from './wave';
@@ -583,14 +584,11 @@ export function shipVerdict(root: string): ShipVerdict {
     for (const phase of SHIP_PHASES) {
       const g = state.value.gates[phase];
       if (!g || g.status === 'pending') continue; // 아직 제출 전 — 위 승인 검사가 이미 말했다
-      if (g.evidence !== 'measured') {
-        reasons.push(t({
-          en: `ship gate ${phase} evidence grade is not measured (currently: ${g.evidence ?? 'none'}) — the ship `
-            + 'track passes on measured only (Iron Rule, spec §3-4). Attach real-run evidence and resubmit',
-          ko: `출하 게이트 ${phase} 의 근거 등급이 measured 가 아니다 (현재: ${g.evidence ?? '없음'}) — `
-            + '출하 트랙은 measured 만 통과한다(Iron Rule, 스펙 §3-4). 실주행·측정 증적을 붙여 재제출하라',
-        }));
-      }
+      // [ENG-143] 규칙도 문언도 `gate.ts` 한 벌에서 온다 — verdict 와 approve 가 다른 말을
+      // 하면 사람은 덜 말하는 쪽을 믿는다. 이 파일 머리말의 「다시 구현하지 않는다」와 코드를
+      // 다시 일치시킨 것이기도 하다.
+      const violation = measuredOnlyViolation(root, phase, g.evidence);
+      if (violation) reasons.push(violation);
     }
   }
 
