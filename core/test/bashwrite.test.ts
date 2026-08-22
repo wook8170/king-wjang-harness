@@ -322,3 +322,42 @@ describe('bashwrite — 목적지 위치 인자(디렉토리 이름 포함)', ()
     expect(scanBashWrites('cp -r /tmp/x /tmp/y').targets).toEqual(['/tmp/y']);
   });
 });
+
+/**
+ * [SEC-A] `git apply` 는 대상이 **패치 안**에 있어 이 스캐너가 경로를 못 뽑는다.
+ * 그러나 **패치 파일 경로는 인자에 드러나 있다** — 그것을 올려 주면 호출측이 읽어
+ * 다른 쓰기와 같은 잣대로 판정할 수 있다. 「감싸인 것을 꺼내 같은 스캐너로 다시」의 패치판.
+ */
+describe('SEC-A: 패치 파일 경로를 올린다', () => {
+  it('git apply <파일> 의 패치 경로를 뽑는다', () => {
+    const s = scanBashWrites('git apply forge.patch');
+    expect(s.appliesPatch).toBe(true);
+    expect(s.patchFiles).toEqual(['forge.patch']);
+  });
+
+  it('git am 과 플래그가 섞여도 뽑는다', () => {
+    expect(scanBashWrites('git am --3way series.mbox').patchFiles).toEqual(['series.mbox']);
+    expect(scanBashWrites('git apply --index --whitespace=fix a.patch').patchFiles).toEqual(['a.patch']);
+  });
+
+  it('stdin 으로 들어오면 patchFiles 가 비어 「알 수 없음」이 된다', () => {
+    const piped = scanBashWrites('cat forge.patch | git apply');
+    expect(piped.appliesPatch).toBe(true);
+    expect(piped.patchFiles).toEqual([]);
+    // `< 파일` 은 파일이 드러나 있으므로 읽어서 판정한다(연산자 `<` 는 파일이 아니다).
+    const redir = scanBashWrites('git apply < forge.patch');
+    expect(redir.appliesPatch).toBe(true);
+    expect(redir.patchFiles).toEqual(['forge.patch']);
+  });
+
+  it('래퍼를 씌워도 재귀로 꺼낸다', () => {
+    const s = scanBashWrites('sh -c "git apply forge.patch"');
+    expect(s.appliesPatch).toBe(true);
+    expect(s.patchFiles).toContain('forge.patch');
+  });
+
+  it('패치가 아닌 git 명령은 appliesPatch 가 아니다', () => {
+    expect(scanBashWrites('git status').appliesPatch).toBe(false);
+    expect(scanBashWrites('git stash pop').appliesPatch).toBe(false);
+  });
+});

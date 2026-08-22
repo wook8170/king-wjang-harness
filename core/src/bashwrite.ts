@@ -110,6 +110,19 @@ export interface BashWriteScan {
    * 설계 트랙에서는 이것만으로 차단 사유가 된다(구현이 금지된 구간이므로).
    */
   patchesWorkingTree: boolean;
+  /**
+   * [SEC-A] `git apply <파일>`·`git am <파일>` 의 **패치 파일 경로**.
+   *
+   * 패치의 대상은 명령이 아니라 패치 **안**에 있다 — 그래서 이 스캐너는 못 뽑는다. 그러나
+   * 패치 파일 자체는 인자로 드러나 있으므로, 호출측이 그것을 읽어 대상을 꺼내면 **다른 쓰기와
+   * 똑같은 잣대**로 판정할 수 있다. 「감싸인 것을 꺼내 같은 스캐너로 다시」의 패치판이다.
+   *
+   * 비어 있는데 `patchesWorkingTree` 가 참이면 **패치가 stdin 으로 들어온다는 뜻**이고,
+   * 그때는 무엇을 쓰는지 알 길이 없다(호출측이 그 사실로 판정한다).
+   */
+  patchFiles: string[];
+  /** `git apply`·`git am` 이 명령에 있었는가 — 패치 파일 유무와 무관하게 참. */
+  appliesPatch: boolean;
   /** 추출된 쓰기 대상 경로(따옴표 제거, 원문 그대로 — 해석은 호출측). */
   targets: string[];
   /** 변형 명령·연산자가 하나라도 있었는가. 안전망 (2) 의 조건. */
@@ -160,6 +173,8 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   const targets: string[] = [];
   let mutating = false;
   let patchesWorkingTree = false;
+  let appliesPatch = false;
+  const patchFiles: string[] = [];
 
   // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니다.
   const redirects = redirectTargets(cmd);
@@ -258,7 +273,16 @@ export function scanBashWrites(cmd: string): BashWriteScan {
       case 'git': {
         // `git apply`·`git am` 은 **패치 파일 안**에 대상이 있어 정적으로 못 뽑는다.
         // 경로가 아니라 「작업트리를 패치한다」는 사실을 올려 호출측이 페이즈로 판정하게 한다.
-        if (args.some(a => a === 'apply' || a === 'am')) { patchesWorkingTree = true; mutating = true; }
+        if (args.some(a => a === 'apply' || a === 'am')) {
+          patchesWorkingTree = true; mutating = true; appliesPatch = true;
+          // [SEC-A] 패치 파일 경로는 인자에 드러나 있다 — 호출측이 그것을 읽어 대상을 꺼낸다.
+          // `apply`/`am` 자신과 서브커맨드 토큰은 뺀다.
+          // 리다이렉트 연산자는 파일이 아니다 — 거르지 않으면 `git apply < ok.patch` 의 `<` 가
+          // 「읽을 수 없는 패치」로 잡혀 **정당한 패치까지 막힌다**(과차단).
+          patchFiles.push(...operands.filter(
+            a => a !== 'apply' && a !== 'am' && a !== 'git' && !/^[<>|&]+$/.test(a),
+          ));
+        }
         // [SEC-97] **복원 계열도 작업트리에 쓴다.** `git checkout -- src`·`git restore src/app.ts`·
         // `git checkout HEAD~1 -- .harness`·`git stash pop` 은 파일을 되돌려 놓는 쓰기다 —
         // 「되돌리기」라는 이름 때문에 쓰기로 안 보이지만, 결과는 덮어쓰기와 같다.
@@ -311,6 +335,7 @@ export function scanBashWrites(cmd: string): BashWriteScan {
           targets.push(...sub.targets);
           if (sub.mutating) mutating = true;
           if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) { appliesPatch = true; patchFiles.push(...sub.patchFiles); }
         }
         break;
       }
@@ -341,7 +366,11 @@ export function scanBashWrites(cmd: string): BashWriteScan {
   }
 
   // 중복 제거 — 같은 대상으로 두 번 deny 사유를 만들 이유가 없다.
-  return { targets: [...new Set(targets.filter(Boolean))], mutating, patchesWorkingTree };
+  return {
+    targets: [...new Set(targets.filter(Boolean))],
+    mutating, patchesWorkingTree, appliesPatch,
+    patchFiles: [...new Set(patchFiles.filter(Boolean))],
+  };
 }
 
 /**

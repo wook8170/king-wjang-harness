@@ -269,3 +269,68 @@ describe('pre-tool: 자기호출 인식이 개행·접두 명령에 뚫리지 �
     }
   });
 });
+
+/**
+ * [SEC-A · BLOCKER] **패치를 꺼내 같은 잣대로 판정한다.**
+ *
+ * `echo >> .harness/events.jsonl` 은 막히는데 같은 일을 하는 패치 한 장은 통과했다 —
+ * 대상이 명령이 아니라 패치 **안**에 있어 경로 판정이 호출되지 않았기 때문이다. 게다가
+ * 「패치를 적용한다」는 사실만으로 막는 규칙이 **설계 트랙에만** 걸려 있어, 배포 게이트가
+ * 사는 출하 트랙이 비어 있었다. 실측 결과 위조 → `doctor --repair` → **사람 승인 없이
+ * P10 approved** → `npm publish` DENY→ALLOW 였다(SEC-49 BLOCKER 의 부활).
+ */
+describe('SEC-A: git apply 로 저널을 위조할 수 없다', () => {
+  const bash = (root: string, command: string) =>
+    handleHook(root, 'pre-tool', { tool_name: 'Bash', tool_input: { command } }) as any;
+
+  const patch = (root: string, name: string, target: string) => {
+    const abs = path.join(root, name);
+    fs.writeFileSync(abs, `--- a/${target}\n+++ b/${target}\n@@ -1 +1,2 @@\n line\n+added\n`);
+    return name;
+  };
+
+  it.each(['P0', 'P4', 'P7', 'P10', 'P12'] as Phase[])(
+    '%s — .harness/ 를 건드리는 패치는 페이즈와 무관하게 막힌다', (phase) => {
+      const root = setup(phase);
+      patch(root, 'forge.patch', '.harness/events.jsonl');
+      expect(bash(root, 'git apply forge.patch')).not.toBeNull();
+      expect(bash(root, 'git am forge.patch')).not.toBeNull();
+      expect(bash(root, 'git apply --index forge.patch')).not.toBeNull();
+    });
+
+  it('래퍼를 씌워도 막힌다 — 감싸인 것을 꺼내 같은 판정으로', () => {
+    const root = setup('P10');
+    patch(root, 'forge.patch', '.harness/events.jsonl');
+    expect(bash(root, 'sh -c "git apply forge.patch"')).not.toBeNull();
+  });
+
+  it('대상을 볼 수 없는 패치(stdin·파이프)는 막고 그 이유를 말한다', () => {
+    const root = setup('P10');
+    const piped = bash(root, 'cat forge.patch | git apply');
+    expect(piped).not.toBeNull();
+    expect(String(piped.hookSpecificOutput.permissionDecisionReason))
+      .toMatch(/pass the patch as a file|패치를 파일로 넘겨라/);
+  });
+
+  it('아직 없는 패치 파일도 「알 수 없음」으로 막는다', () => {
+    const root = setup('P10');
+    expect(bash(root, 'git apply nosuch.patch')).not.toBeNull();
+  });
+
+  // ── 막으면 안 되는 것 ──
+  it('소스를 고치는 정상 패치는 구축 트랙에서 통과한다 — 직접 쓰기와 같은 판정', () => {
+    const root = setup('P7');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'line\n');
+    patch(root, 'ok.patch', 'src/app.ts');
+    expect(write(root, 'src/app.ts')).toBeNull();          // 직접 쓰기: 허용
+    expect(bash(root, 'git apply ok.patch')).toBeNull();    // 패치: 같은 판정
+    expect(bash(root, 'git apply < ok.patch')).toBeNull();  // 리다이렉트도 파일이 보이면 같다
+  });
+
+  it('패치가 아닌 git 명령은 이 규칙에 걸리지 않는다', () => {
+    const root = setup('P7');
+    expect(bash(root, 'git status')).toBeNull();
+    expect(bash(root, 'git diff HEAD~1')).toBeNull();
+  });
+});

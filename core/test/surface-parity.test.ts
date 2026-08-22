@@ -16,7 +16,7 @@ import * as path from 'node:path';
 import { run } from '../src/cli';
 import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
-import { handleHook } from '../src/hook';
+import { handleHook, WRITE_TOOLS } from '../src/hook';
 import { initHarness } from '../src/state';
 import { execFileSync } from 'node:child_process';
 
@@ -266,5 +266,41 @@ describe('PERF-95: 훅 가드 래퍼가 코어와 같은 판정을 한다', () =
     const out = runWrapper('pre-tool', plain, { ...process.env, CLAUDE_PROJECT_DIR: plain }, WRITE('a.ts'));
     expect(out).toBe('');
     expect(fs.readdirSync(plain)).toEqual(before);
+  });
+});
+
+/**
+ * [ENG-A] **배선의 도구 집합과 판정기의 도구 집합은 같은 것의 두 벌이다.**
+ *
+ * `hooks/hooks.json` 의 matcher 에서 도구 하나가 빠지면 그 도구 호출에는 훅이 **아예 뜨지
+ * 않는다** — 코어가 아무리 정확해도 판정할 기회가 없다. 실측으로 matcher 에서 `Bash` 를
+ * 지워도 전건 green 이었다: 두 벌 중 어느 쪽도 다른 쪽을 고정하지 않고 있었고, 그 사이
+ * 실배포에서는 Bash 강제(리다이렉트·`--force`·배포 차단) 전체가 조용히 꺼진다.
+ */
+describe('ENG-A: hooks.json matcher 가 판정 대상 도구 집합과 일치한다', () => {
+  const wiring = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, '../../hooks/hooks.json'), 'utf8'),
+  ) as { hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>> };
+
+  const matchers = Object.values(wiring.hooks)
+    .flat()
+    .filter(e => typeof e.matcher === 'string')
+    .map(e => e.matcher as string);
+
+  it('matcher 를 쓰는 이벤트가 있고, 전부 같은 집합을 건다', () => {
+    expect(matchers.length).toBeGreaterThan(0);
+    expect(new Set(matchers).size).toBe(1);
+  });
+
+  it('경로 판정 도구 전부 + Bash 를 빠짐없이 건다', () => {
+    const wired = new Set(matchers[0].split('|'));
+    for (const t of WRITE_TOOLS) expect(wired).toContain(t);
+    // Bash 는 명령 문자열로 판정한다 — 여기서 빠지면 리다이렉트·래퍼·배포 차단이 통째로 꺼진다.
+    expect(wired).toContain('Bash');
+  });
+
+  it('판정하지 않는 도구를 걸지 않는다 — 비용만 무는 기동이 되지 않게', () => {
+    const wired = matchers[0].split('|');
+    expect([...wired].sort()).toEqual([...WRITE_TOOLS, 'Bash'].sort());
   });
 });

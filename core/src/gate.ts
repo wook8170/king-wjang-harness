@@ -819,24 +819,44 @@ export function invalidateStaleGates(root: string): Phase[] {
  * 언제나 진입 가능. 전환은 하지 않는다: 판정과 변이를 분리해야 훅·CLI 가 같은 규칙을 읽고도
  * 각자 다른 시점에 쓸 수 있다.
  */
+/**
+ * [UTIL-A1] **그 페이즈 앞의 게이트가 전부 승인돼야 들어갈 수 있다.**
+ *
+ * 예전에는 **직전 하나만** 봤다. 그래서 P0 에서 미래 게이트를 선제출·선승인하면
+ * (`gate submit P6` → `gate approve P6` → `phase set P7`) 세 명령으로 설계 트랙 전체를
+ * 건너뛸 수 있었다 — P1~P5 는 pending 그대로다(실측). 제품은 `phase set --force` 를
+ * env 로 잠가 「한 줄로 트랙 강제를 푸는 것」을 막는데, 이 경로는 **그 잠금 아래를 지나갔다.**
+ *
+ * 사고로도 났다: 어떤 페이즈 제출이 실패한 뒤 다음 페이즈를 제출·승인하면 빠진 게이트를
+ * 아무도 말해 주지 않고 출하까지 갔다.
+ *
+ * 사람의 탈출구는 그대로 남는다 — `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.
+ * 그것이 **의도된 탈출구**이고(사람이 책임을 진다), 여기서 막는 것은 에이전트가 조용히
+ * 지나가는 길이다. 그래서 사유 문구가 빠진 게이트를 **전부 이름으로** 말한다.
+ */
 export function canEnterPhase(root: string, phase: Phase): GateVerdict {
   const i = PHASES.indexOf(phase);
   if (i <= 0) return { ok: true };
+  const gates = readState(root).gates;
+  const missing = PHASES.slice(0, i).filter(p => gates[p]?.status !== 'approved');
+  if (missing.length === 0) return { ok: true };
   const prev = PHASES[i - 1];
-  const g = readState(root).gates[prev];
-  if (g?.status === 'approved') return { ok: true };
+  const first = missing[0];
+  const list = missing.join(', ');
   return {
     ok: false,
     reason:
       tr(root, {
-        en: `Cannot move to ${phase} — the gate for the previous phase ${prev} is not approved `
-          + `(currently: ${g?.status ?? 'pending'}). Approve the artifacts: \`harness gate submit ${prev}\` → `
-          + `\`harness gate approve ${prev}\`. `
-          + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2)",
-        ko: `${phase} 로 갈 수 없다 — 직전 페이즈 ${prev} 의 게이트가 승인되지 않았다 `
-          + `(현재: ${g?.status ?? 'pending'}). \`harness gate submit ${prev}\` → `
-          + `\`harness gate approve ${prev}\` 로 산출물을 승인하라. `
-          + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2)",
+        en: `Cannot move to ${phase} — ${missing.length} gate(s) before it are not approved: ${list} `
+          + `(${prev} is currently: ${gates[prev]?.status ?? 'pending'}). Start with the earliest: `
+          + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
+          + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2). "
+          + 'Approving a later gate does not stand in for the ones before it',
+        ko: `${phase} 로 갈 수 없다 — 그 앞의 게이트 ${missing.length}개가 승인되지 않았다: ${list} `
+          + `(${prev} 는 현재 ${gates[prev]?.status ?? 'pending'}). 가장 앞의 것부터 처리하라: `
+          + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
+          + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2). "
+          + '뒤 게이트를 승인한다고 앞 게이트를 대신하지는 못한다',
       }),
   };
 }

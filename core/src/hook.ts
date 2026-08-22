@@ -38,7 +38,14 @@ export interface HookInput {
 
 export type HookEvent = 'session-start' | 'pre-tool' | 'post-tool' | 'stop';
 
-const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
+/**
+ * 훅이 **경로로** 판정하는 쓰기 도구. Bash 는 명령 문자열을 스캔해 따로 판정하므로 여기 없다.
+ * [ENG-A] 이 집합과 `hooks/hooks.json` 의 matcher 는 **같은 것의 두 벌**이다 — matcher 에서
+ * 도구 하나가 빠지면 훅 자체가 뜨지 않아 그 도구의 강제가 통째로 조용히 꺼진다. 실측으로
+ * matcher 에서 `Bash` 를 지워도 테스트가 전건 green 이었다(무는 것이 없었다).
+ * `surface-parity.test.ts` 가 두 벌을 교차 고정한다.
+ */
+export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
 
 /**
  * harness 명령을 **명령 위치에서만** 식별한다 — 줄 처음, `;`/`&`/`|`/**개행** 다음,
@@ -92,7 +99,30 @@ const CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[
 const invokesHarness = (cmd: string): boolean => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
 
 /** 하네스가 스스로만 고쳐야 하는 파일 — 손편집하면 저널과 상태가 어긋나 전부 거짓이 된다. */
-const STATE_FILES = ['.harness/state.json', '.harness/events.jsonl', '.harness/design/ledger.yaml'];
+/**
+ * **하네스가 소유한 상태 파일** — 에이전트 도구 호출로 직접 쓰는 것이 정당한 경우가 없다.
+ * 전부 하네스 명령을 거쳐야 하고, 저널이 그 변경의 원천이다.
+ *
+ * [ENG-B] 예전에는 셋(state·events·설계 원장)뿐이라 **판정이 읽는 다른 정본들이 열려 있었다**:
+ * 결함 대장(`ship/defects.yaml`)을 직접 고쳐 open blocker 를 `verified` 로 바꾸자
+ * `ship verdict` 에서 그 사유가 사라지고 `doctor` 는 ok/issues 0 을 답했다(실측). 저널에는
+ * `status: open` 이 그대로 남아 있는데 **아무도 대조하지 않는다.** 사람이 승인을 누르기 전에
+ * 보는 근거가 바로 그 판정이므로, 근거를 위조할 수 있으면 사람 게이트는 방어가 되지 못한다.
+ *
+ * 문서·증적은 여기 넣지 않는다 — `.harness/design/*.md`·`evidence/` 는 **에이전트가 만드는
+ * 산출물**이고, 그것까지 막으면 설계 트랙 자체가 돌지 않는다(과차단).
+ */
+const STATE_FILES = [
+  '.harness/state.json',
+  '.harness/events.jsonl',
+  '.harness/design/ledger.yaml',
+  '.harness/design/registry.yaml',
+  '.harness/ship/defects.yaml',
+  '.harness/ship/deployments.yaml',
+  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
+  '.harness/.runtime/last-activity',
+  '.harness/.runtime/last-turn',
+];
 
 /**
  * [SEC-69] **판정의 입력이 되는 정책 파일.**
@@ -631,6 +661,45 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
   return out;
 }
 
+/**
+ * [SEC-A] **패치를 꺼내 같은 스캐너로 다시.**
+ *
+ * `git apply <패치>` 는 이 리포 최악의 구멍이었다 — `echo >> .harness/events.jsonl` 은 막히는데
+ * 같은 일을 하는 패치 한 장은 통과했다. 대상이 명령이 아니라 **패치 안**에 있어 경로 판정이
+ * 호출되지 않았기 때문이다. 실측: 출하 트랙에서 위조 `gate-approved` 한 줄을 넣고
+ * `doctor --repair` 를 돌리자 **사람 승인 없이 P10 이 approved** 가 되고 `npm publish` 가
+ * DENY→ALLOW 로 바뀌었다(SEC-49 BLOCKER 의 부활). 「래퍼는 재귀로 판정한다」의 패치판이다.
+ *
+ * 반환 `null` 은 **알 수 없음**이다 — 패치가 stdin 으로 들어오거나(파이프·프로세스 치환),
+ * 파일을 읽을 수 없거나, 캡을 넘었을 때. 알 수 없는 쓰기는 통과시키지 않는다.
+ */
+const PATCH_READ_CAP = 1_000_000;
+
+function readPatchTargets(root: string, files: string[]): string[] | null {
+  if (files.length === 0) return null;                    // stdin 으로 들어온다 = 알 수 없음
+  const out: string[] = [];
+  for (const rel of files) {
+    const abs = path.isAbsolute(rel) ? rel : path.resolve(root, rel);
+    let body: string;
+    try {
+      if (fs.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs.readFileSync(abs, 'utf8');
+    } catch {
+      return null;                                        // 아직 없는 파일·읽기 실패 = 알 수 없음
+    }
+    for (const line of body.split('\n')) {
+      // `--- a/x`·`+++ b/x`(공백·탭 뒤 타임스탬프가 붙을 수 있다) 와 `diff --git a/x b/y`.
+      const m = /^(?:---|\+\+\+)\s+(?:[ab]\/)?([^\t\n]+)/.exec(line)
+        ?? /^diff --git\s+(?:[ab]\/)?(\S+)/.exec(line);
+      if (!m) continue;
+      const target = m[1].trim();
+      if (!target || target === '/dev/null') continue;
+      out.push(target);
+    }
+  }
+  return [...new Set(out)];
+}
+
 function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
@@ -849,6 +918,30 @@ function preTool(
     // `git apply`·`git am` 은 대상이 **패치 파일 안**에 있어 정적으로 못 뽑는다. 설계 트랙은
     // 구현이 금지된 구간이므로, 무엇을 패치하는지 몰라도 「작업트리를 패치한다」는 사실만으로
     // 차단 사유가 된다 — 알 수 없는 쓰기를 통과시키면 트랙 강제가 패치 한 장으로 풀린다.
+    /**
+     * [SEC-A] **패치 대상은 페이즈와 무관하게 판정한다.** 코어 파일 보호가 페이즈 무관이므로
+     * 그 보호를 우회하는 경로도 페이즈 무관이어야 한다 — 설계 트랙에만 걸어 두었더니
+     * 구축·출하 트랙에서 저널 위조가 그대로 열려 있었다(출하 트랙은 배포 게이트가 사는
+     * **최고가치 구간**이다).
+     */
+    if (scan.appliesPatch) {
+      const patched = readPatchTargets(root, scan.patchFiles);
+      if (patched === null) {
+        return deny(L(
+          'This applies a patch whose targets cannot be read here — pass the patch as a file '
+          + '(`git apply <file>`) so the harness can see what it changes. A patch that arrives on '
+          + 'stdin can write anywhere, including the event journal that decides whether a gate is approved.',
+          '패치를 적용하는데 그 대상을 여기서 읽을 수 없다 — 패치를 파일로 넘겨라'
+          + '(`git apply <파일>`). 그래야 무엇을 바꾸는지 하네스가 볼 수 있다. stdin 으로 들어온 '
+          + '패치는 어디에나 쓸 수 있고, 거기에는 게이트 승인 여부를 정하는 이벤트 저널도 포함된다.',
+        ), degraded, lang);
+      }
+      for (const target of patched) {
+        const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
+        if (verdict) return verdict;
+      }
+    }
+
     if (scan.patchesWorkingTree && (DESIGN_PHASES as readonly string[]).includes(state.phase)) {
       return deny(L(
         'Applying a patch writes into the working tree, and its targets live inside the patch file — '

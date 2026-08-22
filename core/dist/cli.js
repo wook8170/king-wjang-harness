@@ -9221,6 +9221,8 @@ function scanBashWrites(cmd) {
   const targets = [];
   let mutating = false;
   let patchesWorkingTree = false;
+  let appliesPatch = false;
+  const patchFiles = [];
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   targets.push(...redirects);
@@ -9297,6 +9299,10 @@ function scanBashWrites(cmd) {
         if (args.some((a) => a === "apply" || a === "am")) {
           patchesWorkingTree = true;
           mutating = true;
+          appliesPatch = true;
+          patchFiles.push(...operands.filter(
+            (a) => a !== "apply" && a !== "am" && a !== "git" && !/^[<>|&]+$/.test(a)
+          ));
         }
         const RESTORE = ["checkout", "restore", "stash", "reset", "revert"];
         const verb = operands.find((a) => RESTORE.includes(a));
@@ -9341,6 +9347,10 @@ function scanBashWrites(cmd) {
           targets.push(...sub.targets);
           if (sub.mutating) mutating = true;
           if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) {
+            appliesPatch = true;
+            patchFiles.push(...sub.patchFiles);
+          }
         }
         break;
       }
@@ -9366,7 +9376,13 @@ function scanBashWrites(cmd) {
         break;
     }
   }
-  return { targets: [...new Set(targets.filter(Boolean))], mutating, patchesWorkingTree };
+  return {
+    targets: [...new Set(targets.filter(Boolean))],
+    mutating,
+    patchesWorkingTree,
+    appliesPatch,
+    patchFiles: [...new Set(patchFiles.filter(Boolean))]
+  };
 }
 function pathLikeMentions(cmd) {
   const out = [];
@@ -9731,7 +9747,17 @@ var HARNESS_CMD_RE = new RegExp(
 var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 var CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
 var invokesHarness = (cmd) => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
-var STATE_FILES = [".harness/state.json", ".harness/events.jsonl", ".harness/design/ledger.yaml"];
+var STATE_FILES = [
+  ".harness/state.json",
+  ".harness/events.jsonl",
+  ".harness/design/ledger.yaml",
+  ".harness/design/registry.yaml",
+  ".harness/ship/defects.yaml",
+  ".harness/ship/deployments.yaml",
+  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
+  ".harness/.runtime/last-activity",
+  ".harness/.runtime/last-turn"
+];
 var CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
 var TURN_LOG_HEADING = /^## (?:Turn log|턴 로그)[ \t]*$/m;
 var EXCERPT_OPEN = {
@@ -10023,6 +10049,29 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   }
   return out;
 }
+var PATCH_READ_CAP = 1e6;
+function readPatchTargets(root, files) {
+  if (files.length === 0) return null;
+  const out = [];
+  for (const rel of files) {
+    const abs = path11.isAbsolute(rel) ? rel : path11.resolve(root, rel);
+    let body;
+    try {
+      if (fs12.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs12.readFileSync(abs, "utf8");
+    } catch {
+      return null;
+    }
+    for (const line of body.split("\n")) {
+      const m = /^(?:---|\+\+\+)\s+(?:[ab]\/)?([^\t\n]+)/.exec(line) ?? /^diff --git\s+(?:[ab]\/)?(\S+)/.exec(line);
+      if (!m) continue;
+      const target = m[1].trim();
+      if (!target || target === "/dev/null") continue;
+      out.push(target);
+    }
+  }
+  return [...new Set(out)];
+}
 function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
@@ -10134,6 +10183,19 @@ function preTool(root, state, config, input, degraded) {
     for (const target of scan.targets) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
       if (verdict) return verdict;
+    }
+    if (scan.appliesPatch) {
+      const patched = readPatchTargets(root, scan.patchFiles);
+      if (patched === null) {
+        return deny(L(
+          "This applies a patch whose targets cannot be read here \u2014 pass the patch as a file (`git apply <file>`) so the harness can see what it changes. A patch that arrives on stdin can write anywhere, including the event journal that decides whether a gate is approved.",
+          "\uD328\uCE58\uB97C \uC801\uC6A9\uD558\uB294\uB370 \uADF8 \uB300\uC0C1\uC744 \uC5EC\uAE30\uC11C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD328\uCE58\uB97C \uD30C\uC77C\uB85C \uB118\uACA8\uB77C(`git apply <\uD30C\uC77C>`). \uADF8\uB798\uC57C \uBB34\uC5C7\uC744 \uBC14\uAFB8\uB294\uC9C0 \uD558\uB124\uC2A4\uAC00 \uBCFC \uC218 \uC788\uB2E4. stdin \uC73C\uB85C \uB4E4\uC5B4\uC628 \uD328\uCE58\uB294 \uC5B4\uB514\uC5D0\uB098 \uC4F8 \uC218 \uC788\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4."
+        ), degraded, lang);
+      }
+      for (const target of patched) {
+        const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
+        if (verdict) return verdict;
+      }
     }
     if (scan.patchesWorkingTree && DESIGN_PHASES.includes(state.phase)) {
       return deny(L(
@@ -10934,14 +10996,17 @@ function invalidateStaleGates(root) {
 function canEnterPhase(root, phase) {
   const i = PHASES.indexOf(phase);
   if (i <= 0) return { ok: true };
+  const gates = readState(root).gates;
+  const missing = PHASES.slice(0, i).filter((p) => gates[p]?.status !== "approved");
+  if (missing.length === 0) return { ok: true };
   const prev = PHASES[i - 1];
-  const g = readState(root).gates[prev];
-  if (g?.status === "approved") return { ok: true };
+  const first = missing[0];
+  const list = missing.join(", ");
   return {
     ok: false,
     reason: tr(root, {
-      en: `Cannot move to ${phase} \u2014 the gate for the previous phase ${prev} is not approved (currently: ${g?.status ?? "pending"}). Approve the artifacts: \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72)`,
-      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uC9C1\uC804 \uD398\uC774\uC988 ${prev} \uC758 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4 (\uD604\uC7AC: ${g?.status ?? "pending"}). \`harness gate submit ${prev}\` \u2192 \`harness gate approve ${prev}\` \uB85C \uC0B0\uCD9C\uBB3C\uC744 \uC2B9\uC778\uD558\uB77C. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72)`
+      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${prev} is currently: ${gates[prev]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${prev} \uB294 \uD604\uC7AC ${gates[prev]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
     })
   };
 }

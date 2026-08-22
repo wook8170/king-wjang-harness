@@ -401,7 +401,7 @@ describe('canEnterPhase / setPhaseViaGate', () => {
 
   it('setPhaseViaGate 는 막힌 이유 그대로 던진다', () => {
     const root = setup();
-    expect(() => setPhaseViaGate(root, 'P1')).toThrow(/게이트가 승인되지 않았다/);
+    expect(() => setPhaseViaGate(root, 'P1')).toThrow(/승인되지 않았다|not approved/);
     expect(readState(root).phase).toBe('P0');
     expect(readEvents(root)).toEqual([]);
   });
@@ -980,3 +980,57 @@ describe('SEC-79 계열: 새 텍스트의 절대량으로 판정한다', () => {
     expect(() => submitGate(root, 'P7', { paths: ['docs/a.md'], evidence: 'measured' })).not.toThrow();
   });
 });
+
+/**
+ * [UTIL-A1 · HIGH] **미래 게이트 선승인으로 트랙을 건너뛸 수 없다.**
+ *
+ * 예전에는 `canEnterPhase` 가 **직전 하나만** 봤다. 그래서 P0 에서 세 명령으로
+ * (`gate submit P6` → `gate approve P6` → `phase set P7`) 설계 트랙 전체를 지나갈 수 있었다 —
+ * 제품이 `--force` 를 env 로 잠가 막으려던 바로 그 일이 **잠금 아래로** 일어났다.
+ */
+describe('UTIL-A1: 앞의 게이트가 전부 승인돼야 페이즈가 열린다', () => {
+  const approveAt = (root: string, phase: Parameters<typeof approveGate>[1], rel: string) => {
+    writeDoc(root, rel, body(String(phase)));
+    submitGate(root, phase, { paths: [rel], evidence: 'measured' });
+    approveGate(root, phase);
+  };
+
+  it('미래 게이트만 승인해서는 다음 페이즈로 못 간다', () => {
+    const root = setup();
+    approveAt(root, 'P6', 'docs/p6.md');
+    expect(() => setPhaseViaGate(root, 'P7')).toThrow(/P0/);
+    expect(readState(root).phase).toBe('P0');
+  });
+
+  it('사유가 빠진 게이트를 전부 이름으로 말한다 — 다음 수를 알 수 있게', () => {
+    const root = setup();
+    approveAt(root, 'P6', 'docs/p6.md');
+    const v = canEnterPhase(root, 'P7');
+    expect(v.ok).toBe(false);
+    for (const p of ['P0', 'P1', 'P2', 'P3', 'P4', 'P5']) expect(v.reason).toContain(p);
+  });
+
+  it('중간 하나가 빠져도 막는다 — 사고로 나던 부류', () => {
+    const root = setup();
+    for (const p of ['P0', 'P1', 'P2'] as const) approveAt(root, p, `docs/${p}.md`);
+    approveAt(root, 'P4', 'docs/P4.md');            // P3 를 건너뛰었다
+    expect(() => setPhaseViaGate(root, 'P5')).toThrow(/P3/);
+  });
+
+  // ── 막으면 안 되는 것 ──
+  it('순차로 승인하면 그대로 진행된다 (과차단 0)', () => {
+    const root = setup();
+    const order = ['P0', 'P1', 'P2', 'P3'] as const;
+    order.forEach((p, i) => {
+      approveAt(root, p, `docs/${p}.md`);
+      setPhaseViaGate(root, PHASES_LIST[i + 1]);
+    });
+    expect(readState(root).phase).toBe('P4');
+  });
+
+  it('P0 은 앞이 없으므로 언제나 들어갈 수 있다', () => {
+    expect(canEnterPhase(setup(), 'P0').ok).toBe(true);
+  });
+});
+
+const PHASES_LIST = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'] as const;
