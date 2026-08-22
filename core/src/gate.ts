@@ -38,9 +38,13 @@
  * 승인·검증 때 되읽어(recordedPaths) 같은 파일 집합으로 해시를 재계산한다. "이벤트가 진실,
  * state 는 파생 캐시"라는 원칙과 같은 방향이며, 재제출하면 가장 최근 제출분이 이긴다.
  *
- * 알려진 미배선: events.ts 의 replayState 는 evidence·submittedAt·invalidated 를 폴드하지 않고
- * `gate-invalidated` 도 KNOWN_EVENT_TYPES 에 없다 — 게이트를 쓴 뒤 doctor 가 gates 발산과
- * 미지 이벤트를 보고한다. 저널 폴드 확장은 events.ts 소유 작업이라 여기서 손대지 않는다.
+ * 저널 폴드는 **배선돼 있다** — `replayState` 가 `evidence`·`submittedAt` 을 폴드하고
+ * `gate-invalidated` 도 `KNOWN_EVENT_TYPES` 에 있다([LOGIC-21]·[LOGIC-56]·[OPS-55] 가 닫았다).
+ *
+ * [ENG-157] 여기에는 오래 「아직 미배선」이라고 적혀 있었고 **현재 사실과 정반대였다.**
+ * 계약 문서가 거짓이면 다음 수리자가 이미 있는 것을 다시 만든다 — 낡은 주석은 없는 주석보다
+ * 비싸다. 이 종류가 다시 생기지 않도록, 실제로 발행하는 이벤트가 전부 등록돼 있는지를
+ * `core/test/eng-3i-residuals.test.ts` 가 전수 대조한다.
  */
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';

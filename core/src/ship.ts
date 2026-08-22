@@ -36,9 +36,12 @@
  *     배열을 돌려주면 "결함 0건 → 출하 가능" 이 되어 **손상이 곧 통과**가 된다. `shipVerdict` 는
  *     그 예외를 잡아 NO-GO 사유로 바꾼다(판정 함수는 던지지 않는다).
  *
- * NOTE(배선): 아래 이벤트 타입은 events.ts 의 KNOWN_EVENT_TYPES 에 아직 없다 — CLI 배선 시
- * 'defect-added' 'defect-updated' 'deployment-recorded' 를 등록해야 doctor 가 "미지 이벤트 타입
- * → 재생 불신" 경고를 내지 않는다. replayState 는 이 이벤트들을 폴드하지 않는다(state 무변이).
+ * NOTE(배선): 이 파일이 발행하는 'defect-added'·'defect-updated'·'deployment-recorded' 는
+ * events.ts 의 KNOWN_EVENT_TYPES 에 **등록돼 있다**([OPS-55] 가 닫았다) — doctor 가 「미지 이벤트
+ * 타입 → 재생 불신」 경고를 내지 않는다. 이 이벤트들은 state 를 변이시키지 않으므로 폴드는 없다.
+ *
+ * [ENG-157] 여기에는 오래 「아직 없다」고 적혀 있었고 현재 사실과 정반대였다. 전수 대조는
+ * `core/test/eng-3i-residuals.test.ts` 가 한다.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

@@ -7,4 +7,9 @@
 progress.md            export-ignore
 docs/release-readiness export-ignore
 docs/appraisal         export-ignore
+# [PROD-167] 라운드 3-I 상품성 감정이 잡은 잔여 두 곳. PROD-113 이 세운 기준
+# (「내부 작업물을 배포본에 싣지 않는다」)에 이 둘이 빠져 있었다 — 한국어 내부
+# 스펙·플랜과 이 리포 전용 개발 레시피라, 설치자에게는 제품이 아니라 소음이다.
+docs/superpowers       export-ignore
+.claude                export-ignore
 .codesight             export-ignore

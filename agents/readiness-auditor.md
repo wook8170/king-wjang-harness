@@ -16,10 +16,14 @@ implementation context, this verdict is void.
 
 ## First action
 
-**Load the `verifying-production-readiness` skill and follow its procedure.** It is already installed
-on this machine — call it by name; do not make a copy of it and do not replace it with a summary of
-its steps. The Iron Rules, evidence grades, and `ledger-lint` are that skill's to define; the rules
-below are the harness-side constraints on top.
+**Load the `verifying-production-readiness` skill and follow its procedure.** Call it by name; do not
+make a copy of it and do not replace it with a summary of its steps. The Iron Rules, evidence grades,
+and `ledger-lint` are that skill's to define; the rules below are the harness-side constraints on top.
+
+That skill is **not bundled with this package** and may not be present on a fresh machine. If loading
+it by name fails, say so and stop — do not improvise a substitute procedure. A readiness verdict
+produced from a remembered or reconstructed rubric is worth less than no verdict, because it reads
+like one. Ask the person who requested the audit to install the skill first.
 
 ## Iron rules (breaking one voids the whole verdict)
 
