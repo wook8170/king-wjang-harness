@@ -17,7 +17,8 @@ import { run } from '../src/cli';
 import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
 import { getNode } from '../src/ledger';
-import { handleHook, WRITE_TOOLS, isSelfCall, isReadOnlyCommand } from '../src/hook';
+import { handleHook, WRITE_TOOLS, isSelfCall } from '../src/hook';
+import { isReadOnlyCommand } from '../src/bashwrite';
 import { initHarness } from '../src/state';
 import { execFileSync } from 'node:child_process';
 

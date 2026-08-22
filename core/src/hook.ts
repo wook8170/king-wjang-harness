@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, commandLines } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -652,13 +652,27 @@ function isOutsideRoot(rel: string): boolean {
 const SCRIPT_RUNNERS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'source', '.']);
 const SCRIPT_MAX_BYTES = 64 * 1024;
 
-function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Set<string>()): string[] {
+/**
+ * [SEC-B3] **못 읽은 스크립트는 사실로 올린다.** 예전에는 크기 캡을 넘으면 `continue` 로
+ * 조용히 건너뛰었고, 그러면 스크립트를 64KB 넘게 패딩하는 것만으로 본문 판정이 통째로
+ * 사라졌다(실측: 같은 첫 줄의 35B 스크립트는 DENY, 70KB 패딩본은 ALLOW).
+ * 비용 캡은 남기되 **「못 봤으니 통과」를 「못 봤으니 말한다」로** 바꾼다 — 판정은 호출측이 한다.
+ */
+export interface InvokedScripts {
+  /** 읽어서 판정에 이어 붙일 본문들. */
+  bodies: string[];
+  /** 크기 캡을 넘어 **읽지 못한** 스크립트 경로. 비어 있지 않으면 무엇을 실행하는지 알 수 없다. */
+  unread: string[];
+}
+
+function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Set<string>()): InvokedScripts {
   const out: string[] = [];
+  const unread: string[] = [];
   // [SEC-97] **깊이 1 로는 부족했다.** 스크립트가 스크립트를 부르면(`a.sh` → `b.sh`) 그대로
   // 통과해 `P0 → P7` 강제가 성립했다(실측). 사슬을 따라가되 상한을 둔다 — 순환은 `seen` 이,
   // 비용은 깊이 3 과 64KB 상한이 막는다. 완전하지는 않다(깊이 4 는 열려 있다). 그러나
   // **한 겹 늘릴 때마다 공격자의 비용은 늘고 방어의 비용은 파일 두어 개 읽기뿐**이다.
-  if (depth >= 3) return out;
+  if (depth >= 3) return { bodies: out, unread };
   // 러너 + 파일, 그리고 `./x.sh`·`scripts/x.sh` 처럼 직접 실행하는 형태를 함께 본다.
   const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
   let m: RegExpExecArray | null;
@@ -672,10 +686,12 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
       if (isOutsideRoot(rel)) continue;
       const abs = path.resolve(root, candidate);
       const st = fs.statSync(abs);
-      if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
+      if (!st.isFile()) continue;
+      if (st.size > SCRIPT_MAX_BYTES) { unread.push(candidate); continue; }   // [SEC-B3] 사실로 올린다
       const body = fs.readFileSync(abs, 'utf8');
       out.push(body);
-      out.push(...invokedScriptBodies(root, body, depth + 1, seen));   // 스크립트가 부르는 스크립트
+      const sub = invokedScriptBodies(root, body, depth + 1, seen);            // 스크립트가 부르는 스크립트
+      out.push(...sub.bodies); unread.push(...sub.unread);
     } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
   }
   // `npm run <script>` 는 `package.json` 이 정의한 명령을 실행한다 — 그 정의를 읽어 같은 규칙으로
@@ -690,11 +706,12 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
       if (typeof script === 'string' && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
         out.push(script);
-        out.push(...invokedScriptBodies(root, script, depth + 1, seen));
+        const sub = invokedScriptBodies(root, script, depth + 1, seen);
+        out.push(...sub.bodies); unread.push(...sub.unread);
       }
     } catch { /* package.json 없음·손상 — 판정할 것이 없다 */ }
   }
-  return out;
+  return { bodies: out, unread };
 }
 
 /**
@@ -937,14 +954,42 @@ function preTool(
     const rawCmd = String(input.tool_input?.command ?? '');
     // [SEC-92] 실행되는 스크립트의 본문을 이어 붙여 **같은 규칙 한 벌**로 판정한다.
     // 사유 문구에는 원문(`rawCmd`)을 쓴다 — 사람이 자기가 친 것을 봐야 한다.
-    const cmd = [rawCmd, ...invokedScriptBodies(root, rawCmd)].join('\n');
+    const scripts = invokedScriptBodies(root, rawCmd);
+    const cmd = [rawCmd, ...scripts.bodies].join('\n');
+    /**
+     * [SEC-B3] 실행되는 스크립트를 **읽지 못했으면 통과시키지 않는다.** 비용 캡(64KB)이
+     * 「못 봤으니 통과」였던 탓에, 스크립트를 패딩하는 것만으로 [SEC-49]·[SEC-A]·[SEC-100]
+     * 이 막던 저널 위조가 투명하게 지나갔다 — **비용 절감이 방어를 되돌린 것**이다.
+     * 캡은 지연을 지키려고 남기고, 못 본 것은 사람에게 말한다(`opaqueExec` 와 같은 태도).
+     */
+    if (scripts.unread.length > 0) {
+      return deny(L(
+        `This runs a script the harness could not read (${scripts.unread.join(', ')} — over `
+        + `${SCRIPT_MAX_BYTES / 1024}KB), so there is no way to tell what it writes, including the event `
+        + 'journal that decides whether a gate is approved. Split it, or run it yourself in your terminal.',
+        `실행하려는 스크립트를 하네스가 읽지 못했다(${scripts.unread.join(', ')} — `
+        + `${SCRIPT_MAX_BYTES / 1024}KB 초과). 무엇을 쓰는지 알 길이 없고, 거기에는 게이트 승인 여부를 `
+        + '정하는 이벤트 저널도 포함된다. 파일을 나누거나 사용자가 직접 터미널에서 실행하라.',
+      ), degraded, lang);
+    }
 
     // (SEC-49·SEC-50·SEC-51) 셸 쓰기를 Write 와 **같은 판정 함수**로 보낸다.
     // 여기가 비어 있던 것이 출하 검증의 차단 결함 2건이었다: `echo x > src/app.ts` 로 설계
     // 트랙이 풀리고, `echo '{...}' >> .harness/events.jsonl` + `doctor --repair` 로 사람 승인
     // 없이 게이트가 열렸다. 페이즈와 무관하게 먼저 본다 — 코어 파일 보호가 페이즈 무관이므로.
     const scan = scanBashWrites(cmd);
-    for (const target of scan.targets) {
+    /**
+     * [SEC-B1] **가장 무거운 사유를 먼저 말한다.**
+     *
+     * 모르는 명령의 경로 인자를 전부 후보로 올리면(위 결함의 처방) 입력 파일도 후보에 섞인다.
+     * 그러면 `openssl -in enc.b64 -out .harness/config.yaml` 이 「enc.b64 는 새 파일이라
+     * 안 된다」로 거부돼 **정책 파일을 건드렸다는 진짜 사유가 안 보인다** — 사람은 오류문이
+     * 가리키는 곳을 고치려 들기 때문에, 틀린 곳을 가리키는 거부는 없느니만 못하다.
+     * 그래서 코어·정책 파일을 겨눈 후보를 먼저 판정한다.
+     */
+    const core = (t: string): boolean =>
+      CORE_FILES.some(f => t.includes(f)) || POLICY_PREFIXES.some(pre => t.includes(pre));
+    for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
       if (verdict) return verdict;
     }
@@ -1204,43 +1249,6 @@ function preTool(
   // 죽은 두 번째 벌은 「고쳤는데 안 고쳐지는」 함정이다: 여기를 고친 사람은 동작이 안 바뀐 이유를
   // 못 찾는다. 규칙은 `judgeWritePath` 한 곳에 둔다.
   return null;
-}
-
-/**
- * [COST-111] **순수 조회로 인정하는 명령** — 화이트리스트다(블랙리스트가 아니다).
- *
- * 처음에 `!scanBashWrites().mutating` 으로 재려다 되돌렸다: 그 판정은 「모르겠으면 참」이
- * 안전한 방향이라 **부정으로 쓰면 편향이 뒤집힌다** — `git commit` 이 조회로 잡혔다.
- * 활동 집계에서 빠진 작업 턴은 정산 강제를 조용히 푸므로([SEC-78]), 여기서는
- * **아는 것만 조회로 인정**하고 나머지는 전부 활동으로 센다.
- *
- * 두 조건을 AND 로 묶는다: 이름이 목록에 있고, 스캐너가 변형을 못 봤을 것.
- * 그래서 `echo hi` 는 조회지만 `echo hi > f` 는 활동이고, `sed`·`awk`·`find` 는
- * 변형 토큰이라 애초에 조회로 인정되지 않는다.
- */
-const READ_ONLY_HEADS = [
-  'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'egrep', 'fgrep', 'file', 'stat',
-  'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo', 'jq', 'yq', 'sort',
-  'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
-  'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
-];
-/** `git` 은 하위명령마다 갈린다 — 조회인 것만 적는다(`commit`·`push` 는 여기 없다). */
-const READ_ONLY_GIT = [
-  'status', 'log', 'diff', 'show', 'blame', 'branch', 'remote', 'rev-parse', 'describe',
-  'ls-files', 'shortlog', 'reflog', 'grep', 'cat-file',
-];
-
-export function isReadOnlyCommand(cmd: string): boolean {
-  if (cmd.trim() === '') return false;
-  const scan = scanBashWrites(cmd);
-  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
-  const lines = commandLines(cmd);
-  if (lines.length === 0) return false;
-  return lines.every(l => {
-    const [head, second] = l.split(/\s+/);
-    if (head === 'git') return second !== undefined && READ_ONLY_GIT.includes(second);
-    return READ_ONLY_HEADS.includes(head);
-  });
 }
 
 // ---- post-tool ----

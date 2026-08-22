@@ -10261,6 +10261,78 @@ function scriptFiles(name, args) {
   const files = programTaken ? operands : operands.slice(1);
   return files.filter(looksLikePath);
 }
+var READ_ONLY_HEADS = [
+  "ls",
+  "pwd",
+  "cat",
+  "head",
+  "tail",
+  "wc",
+  "grep",
+  "rg",
+  "egrep",
+  "fgrep",
+  "file",
+  "stat",
+  "du",
+  "df",
+  "which",
+  "type",
+  "printenv",
+  "date",
+  "whoami",
+  "echo",
+  "jq",
+  "yq",
+  "sort",
+  "uniq",
+  "cut",
+  "column",
+  "nl",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+  "diff",
+  "cmp",
+  "shasum",
+  "tree",
+  "ps",
+  "uname",
+  "hostname",
+  "id",
+  "groups",
+  "less",
+  "more"
+];
+var READ_ONLY_GIT = [
+  "status",
+  "log",
+  "diff",
+  "show",
+  "blame",
+  "branch",
+  "remote",
+  "rev-parse",
+  "describe",
+  "ls-files",
+  "shortlog",
+  "reflog",
+  "grep",
+  "cat-file"
+];
+function isReadOnlyCommand(cmd) {
+  if (cmd.trim() === "") return false;
+  const scan = scanBashWrites(cmd);
+  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  const lines = commandLines(cmd);
+  if (lines.length === 0) return false;
+  return lines.every((l) => {
+    const [head, second] = l.split(/\s+/);
+    if (head === "git") return second !== void 0 && READ_ONLY_GIT.includes(second);
+    return READ_ONLY_HEADS.includes(head);
+  });
+}
 function scanBashWrites(cmd) {
   const targets = [];
   let mutating = false;
@@ -10430,8 +10502,10 @@ function scanBashWrites(cmd) {
         if (inner.length > 0) targets.push(...scanBashWrites(inner.join(" ")).targets);
         break;
       }
-      default:
+      default: {
+        if (name && !READ_ONLY_HEADS.includes(name)) mutating = true;
         break;
+      }
     }
   }
   return {
@@ -11133,7 +11207,8 @@ function isOutsideRoot(rel) {
 var SCRIPT_MAX_BYTES = 64 * 1024;
 function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Set()) {
   const out = [];
-  if (depth >= 3) return out;
+  const unread = [];
+  if (depth >= 3) return { bodies: out, unread };
   const re = /(?:^|[;&|\n`(])\s*(?:(sh|bash|zsh|dash|ksh|source|\.)\s+([^\s;|&<>()]+)|(\.{0,2}\/[^\s;|&<>()]+|[\w.-]+\/[^\s;|&<>()]+))/g;
   let m;
   while ((m = re.exec(cmd)) !== null) {
@@ -11146,10 +11221,16 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
       if (isOutsideRoot(rel)) continue;
       const abs = path13.resolve(root, candidate);
       const st = fs14.statSync(abs);
-      if (!st.isFile() || st.size > SCRIPT_MAX_BYTES) continue;
+      if (!st.isFile()) continue;
+      if (st.size > SCRIPT_MAX_BYTES) {
+        unread.push(candidate);
+        continue;
+      }
       const body = fs14.readFileSync(abs, "utf8");
       out.push(body);
-      out.push(...invokedScriptBodies(root, body, depth + 1, seen));
+      const sub = invokedScriptBodies(root, body, depth + 1, seen);
+      out.push(...sub.bodies);
+      unread.push(...sub.unread);
     } catch {
     }
   }
@@ -11161,12 +11242,14 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
       if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
         out.push(script);
-        out.push(...invokedScriptBodies(root, script, depth + 1, seen));
+        const sub = invokedScriptBodies(root, script, depth + 1, seen);
+        out.push(...sub.bodies);
+        unread.push(...sub.unread);
       }
     } catch {
     }
   }
-  return out;
+  return { bodies: out, unread };
 }
 var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
@@ -11297,9 +11380,17 @@ function preTool(root, state, config, input, degraded) {
   }
   if (tool === "Bash") {
     const rawCmd = String(input.tool_input?.command ?? "");
-    const cmd = [rawCmd, ...invokedScriptBodies(root, rawCmd)].join("\n");
+    const scripts = invokedScriptBodies(root, rawCmd);
+    const cmd = [rawCmd, ...scripts.bodies].join("\n");
+    if (scripts.unread.length > 0) {
+      return deny(L(
+        `This runs a script the harness could not read (${scripts.unread.join(", ")} \u2014 over ${SCRIPT_MAX_BYTES / 1024}KB), so there is no way to tell what it writes, including the event journal that decides whether a gate is approved. Split it, or run it yourself in your terminal.`,
+        `\uC2E4\uD589\uD558\uB824\uB294 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uD558\uB124\uC2A4\uAC00 \uC77D\uC9C0 \uBABB\uD588\uB2E4(${scripts.unread.join(", ")} \u2014 ${SCRIPT_MAX_BYTES / 1024}KB \uCD08\uACFC). \uBB34\uC5C7\uC744 \uC4F0\uB294\uC9C0 \uC54C \uAE38\uC774 \uC5C6\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4. \uD30C\uC77C\uC744 \uB098\uB204\uAC70\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C.`
+      ), degraded, lang);
+    }
     const scan = scanBashWrites(cmd);
-    for (const target of scan.targets) {
+    const core = (t) => CORE_FILES.some((f2) => t.includes(f2)) || POLICY_PREFIXES.some((pre) => t.includes(pre));
+    for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
       if (verdict) return verdict;
     }
@@ -11422,78 +11513,6 @@ function preTool(root, state, config, input, degraded) {
     }
   }
   return null;
-}
-var READ_ONLY_HEADS = [
-  "ls",
-  "pwd",
-  "cat",
-  "head",
-  "tail",
-  "wc",
-  "grep",
-  "rg",
-  "egrep",
-  "fgrep",
-  "file",
-  "stat",
-  "du",
-  "df",
-  "which",
-  "type",
-  "printenv",
-  "date",
-  "whoami",
-  "echo",
-  "jq",
-  "yq",
-  "sort",
-  "uniq",
-  "cut",
-  "column",
-  "nl",
-  "basename",
-  "dirname",
-  "realpath",
-  "readlink",
-  "diff",
-  "cmp",
-  "shasum",
-  "tree",
-  "ps",
-  "uname",
-  "hostname",
-  "id",
-  "groups",
-  "less",
-  "more"
-];
-var READ_ONLY_GIT = [
-  "status",
-  "log",
-  "diff",
-  "show",
-  "blame",
-  "branch",
-  "remote",
-  "rev-parse",
-  "describe",
-  "ls-files",
-  "shortlog",
-  "reflog",
-  "grep",
-  "cat-file"
-];
-function isReadOnlyCommand(cmd) {
-  if (cmd.trim() === "") return false;
-  const scan = scanBashWrites(cmd);
-  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
-  const lines = commandLines(cmd);
-  if (lines.length === 0) return false;
-  return lines.every((l) => {
-    const [head, second] = l.split(/\s+/);
-    if (head === "git") return second !== void 0 && READ_ONLY_GIT.includes(second);
-    return READ_ONLY_HEADS.includes(head);
-  });
 }
 function postTool(root, input) {
   const tool = input.tool_name ?? "";

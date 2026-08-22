@@ -276,6 +276,48 @@ function scriptFiles(name: string, args: string[]): string[] {
   return files.filter(looksLikePath);
 }
 
+/**
+ * [COST-111·SEC-B1] **순수 조회로 인정하는 명령** — 화이트리스트다(블랙리스트가 아니다).
+ *
+ * 이 목록은 두 곳에서 쓰인다: 활동 집계(정산 강제)와 **쓰기 대상 추출의 기본값**.
+ * 쓰기 도구를 이름으로 열거하는 방식이 `xxd`·`openssl`·`csplit`·`split` 에서 뚫렸으므로
+ * (SEC-B1), 이제 **모르는 명령은 쓸 수 있다고 본다** — 여기 적힌 것만 조회다.
+ * 그래서 새 도구가 생겨도 기본값이 안전한 쪽이다.
+ *
+ * 처음에 `!scanBashWrites().mutating` 으로 재려다 되돌렸다: 그 판정은 「모르겠으면 참」이
+ * 안전한 방향이라 **부정으로 쓰면 편향이 뒤집힌다** — `git commit` 이 조회로 잡혔다.
+ * 활동 집계에서 빠진 작업 턴은 정산 강제를 조용히 푸므로([SEC-78]), 여기서는
+ * **아는 것만 조회로 인정**하고 나머지는 전부 활동으로 센다.
+ *
+ * 두 조건을 AND 로 묶는다: 이름이 목록에 있고, 스캐너가 변형을 못 봤을 것.
+ * 그래서 `echo hi` 는 조회지만 `echo hi > f` 는 활동이고, `sed`·`awk`·`find` 는
+ * 변형 토큰이라 애초에 조회로 인정되지 않는다.
+ */
+const READ_ONLY_HEADS = [
+  'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'egrep', 'fgrep', 'file', 'stat',
+  'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo', 'jq', 'yq', 'sort',
+  'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
+  'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
+];
+/** `git` 은 하위명령마다 갈린다 — 조회인 것만 적는다(`commit`·`push` 는 여기 없다). */
+const READ_ONLY_GIT = [
+  'status', 'log', 'diff', 'show', 'blame', 'branch', 'remote', 'rev-parse', 'describe',
+  'ls-files', 'shortlog', 'reflog', 'grep', 'cat-file',
+];
+
+export function isReadOnlyCommand(cmd: string): boolean {
+  if (cmd.trim() === '') return false;
+  const scan = scanBashWrites(cmd);
+  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  const lines = commandLines(cmd);
+  if (lines.length === 0) return false;
+  return lines.every(l => {
+    const [head, second] = l.split(/\s+/);
+    if (head === 'git') return second !== undefined && READ_ONLY_GIT.includes(second);
+    return READ_ONLY_HEADS.includes(head);
+  });
+}
+
 export function scanBashWrites(cmd: string): BashWriteScan {
   const targets: string[] = [];
   let mutating = false;
@@ -494,8 +536,32 @@ export function scanBashWrites(cmd: string): BashWriteScan {
         if (inner.length > 0) targets.push(...scanBashWrites(inner.join(' ')).targets);
         break;
       }
-      default:
+      default: {
+        /**
+         * [SEC-B1] **모르는 명령은 쓸 수 있다고 본다.**
+         *
+         * 예전에는 여기가 `break` 였다 — 위 `case` 에 이름이 없는 도구는 대상 추출이 아예
+         * 안 되고, 리다이렉트도 없으면 `mutating=false` 로 통과했다. 실측으로 뚫린 것들:
+         * `xxd -r -p a.hex src/app.ts` · `openssl enc -out src/b.ts` · `csplit -f src/c …` ·
+         * `split -l1 in src/d` — 그리고 그중 하나로 `.harness/config.yaml` 을 덮으면
+         * **강제 자체가 풀렸다**([SEC-69] 의 재발).
+         *
+         * 「쓰는 도구」를 열거하는 한 빠진 이름은 계속 생긴다. 그래서 **기본값을 뒤집는다**:
+         * 조회라고 아는 것(`READ_ONLY_HEADS`)만 빼고, 나머지 명령의 **경로처럼 생긴 인자**를
+         * 쓰기 후보로 올린다. 판정은 늘 그렇듯 호출측(`judgeWritePath`)이 페이즈·프로파일로 한다 —
+         * 여기서는 「볼 후보」만 넓힌다.
+         *
+         * 입력 파일까지 후보에 들어가는 것은 감수한다(예: `xxd -r -p a.hex src/x.ts` 의 `a.hex`).
+         * 그 값은 판정에서 대개 허용으로 떨어지고, 반대로 놓치면 소스·코어·정책이 열린다.
+         */
+        // 대상을 **직접 올리지는 않는다** — `node build.js` 의 `build.js` 처럼 실행 대상이
+        // 쓰기 대상으로 오인된다. 대신 `mutating` 만 세워 기존 안전망
+        // (`pathLikeMentions` + `mentionsPath(CORE_FILES)`)이 발화하게 한다. 그 안전망은
+        // **슬래시가 있는 토큰만** 보므로 `build.js` 같은 낱말은 걸리지 않고,
+        // `src/app.ts`·`.harness/config.yaml` 처럼 진짜 경로만 판정으로 간다.
+        if (name && !READ_ONLY_HEADS.includes(name)) mutating = true;
         break;
+      }
     }
   }
 
