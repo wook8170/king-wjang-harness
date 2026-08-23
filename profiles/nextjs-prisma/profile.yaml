@@ -1,0 +1,29 @@
+# nextjs-prisma — the real-world profile bundled with v1 (spec §9).
+#
+# Next.js (App Router) + Prisma + Playwright. It covers both the src/ layout and the
+# root layout (app/, components/) — both conventions genuinely coexist, and covering only
+# one leaves the §4-2 source-write block doing nothing on projects using the other.
+name: nextjs-prisma
+description: Next.js (App Router) + Prisma + Playwright stack. Covers both the src/ layout and the root layout.
+
+source_globs:
+  - src/**
+  - app/**
+  - prisma/**
+  - components/**
+
+# Deploy commands (§4-2). Matching is "the command contains this substring", so do not write
+# trailing flags — `vercel deploy` already catches `vercel deploy --prod`.
+deploy_commands:
+  - vercel deploy
+  - vercel --prod
+  - prisma migrate deploy
+  - docker push
+  - fly deploy
+
+# Frozen after the P4 approval (§7). Catches the shadcn/ui convention (components/ui) in both layouts.
+# **These are directory prefixes, not globs** — the single matcher is isFrozenPath in
+# core/src/tokens.ts and it compares prefixes, so adding `/**` makes the freeze silently freeze nothing.
+design_system_roots:
+  - src/components/ui
+  - components/ui

@@ -1,0 +1,7 @@
+# nextjs-prisma command mapping (spec §9).
+# Concrete answers to the core's abstract questions ("run the tests"). An empty value means undefined.
+test: npm test
+build: npm run build
+deploy: vercel deploy
+e2e: npx playwright test
+dev-server: npm run dev

@@ -1,0 +1,92 @@
+<title>king-wjang-harness 코어 엔진 v0 출하 검증 — 경량 모드</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#6b7280;--line:#e5e7eb;--card:#f8fafc;
+  --red:#b91c1c;--amber:#b45309;--green:#15803d;--gray:#6b7280;--redbg:#fef2f2;
+  --amberbg:#fffbeb;--greenbg:#f0fdf4;--graybg:#f3f4f6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#111418;--fg:#e5e7eb;
+  --mut:#9ca3af;--line:#2a2f36;--card:#1a1f26;--red:#f87171;--amber:#fbbf24;--green:#4ade80;
+  --gray:#9ca3af;--redbg:#3b1213;--amberbg:#3a2b0a;--greenbg:#122b18;--graybg:#252a31}}
+:root[data-theme="dark"]{--bg:#111418;--fg:#e5e7eb;--mut:#9ca3af;--line:#2a2f36;--card:#1a1f26;
+  --red:#f87171;--amber:#fbbf24;--green:#4ade80;--gray:#9ca3af;--redbg:#3b1213;--amberbg:#3a2b0a;
+  --greenbg:#122b18;--graybg:#252a31}
+body{background:var(--bg);color:var(--fg);font:15px/1.65 -apple-system,'Apple SD Gothic Neo',
+  'Noto Sans KR',sans-serif;max-width:960px;margin:0 auto;padding:2rem 1.25rem}
+h1,h2,h3,h4{line-height:1.3}h2{margin-top:2rem;border-bottom:1px solid var(--line);padding-bottom:.3rem}
+code{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:.1em .35em;font-size:.9em}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.8rem;overflow-x:auto}
+pre code{border:0;background:none;padding:0}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92em}
+th,td{border:1px solid var(--line);padding:.35rem .55rem;text-align:left;vertical-align:top}
+th{background:var(--card)}
+.badge{display:inline-block;border-radius:999px;padding:.05em .6em;font-size:.85em;font-weight:600}
+.b-BLOCKER,.b-open{color:var(--red);background:var(--redbg)}
+.b-HIGH,.b-fixing,.b-fixed,.b-claimed{color:var(--amber);background:var(--amberbg)}
+.b-verified,.b-measured{color:var(--green);background:var(--greenbg)}
+.b-MED,.b-LOW,.b-rejected,.b-deferred,.b-code{color:var(--gray);background:var(--graybg)}
+figure{margin:1rem 0}figure img{max-width:100%;border:1px solid var(--line);border-radius:8px}
+figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0 .15rem .5rem}
+.quote{border-left:3px solid var(--green);background:var(--card);padding:.5rem .9rem;margin:.3rem 0;font-weight:600}
+.quote+.quote{margin-top:-.3rem;font-weight:400}
+</style>
+<h1>king-wjang-harness 코어 엔진 v0 출하 검증 — 경량 모드</h1>
+<h2>king-wjang-harness 코어 엔진 v0 출하 검증 — 경량 모드</h2>
+<p><strong>갱신</strong> 2026-08-20 · <strong>판정</strong> 출하 가능 · <strong>open BLOCKER</strong> 0 · <strong>open 전체</strong> 0 (deferred 1)</p>
+<p>대상 <code>bbbb9b6</code>(제품코드 <code>8d261d3</code>) · 축: ④⑧⑨ + ②·⑦(변경이 닿는 축) · 뺀 축: ①③⑤⑥⑩⑪ — 아래 「보지 않은 것」</p>
+<div class='quote'><strong>경량 모드.</strong> 기존 11축 정식 감사 산출물은 사용자 지시로 폐기(<code>git rm</code>, <code>bbbb9b6</code>에 커밋되어 있어</div>
+<div class='quote'>필요 시 git 이력에서 복구). 이 파일 하나가 정본이다. Iron Rule 1(게이트 선확정)·2(파일:줄)·</div>
+<div class='quote'>4(재측정)·근거등급·lint 는 그대로 유지했고, <strong>GO 는 measured 근거로만</strong> 냈다.</div>
+<div class='quote'>이번 판정은 정적 감사가 아니라 **빌드된 <code>bin/harness</code> 를 실제 훅 표면(stdin JSON)에서 구동한</div>
+<div class='quote'>E2E 23건**(<code>evidence/e2e.log</code>)으로 뒷받침된다(Iron Rule 3).</div>
+<h3>게이트 (착수 전 확정 — Iron Rule 1)</h3>
+<p>목표 열은 결과를 보기 전에 고정했다. G9 만 이전 감사의 가정치(&lt;150ms)를 이어받았고(⚠가정),</p>
+<p>실측이 이를 충족해 <strong>임계값 완화 없음</strong>.</p>
+<div class="tbl"><table>
+<tr><th>게이트</th><th>목표</th><th>실측</th></tr>
+<tr><td>G1 테스트</td><td>전건 pass·fail0·skip0·<strong>3회 동일</strong></td><td><strong>198 passed ×3 동일</strong> (<code>evidence/gates.log</code>)</td></tr>
+<tr><td>G2 타입</td><td>tsc 오류 0</td><td><strong>exit 0</strong> (<code>evidence/gates.log</code>)</td></tr>
+<tr><td>G3 빌드·CLI</td><td>tsup 성공·init/--version exit0</td><td><strong>Build success·exit0</strong> (<code>evidence/e2e.log</code>)</td></tr>
+<tr><td>G4 훅 무해</td><td>전 이벤트 exit0·미초기화 침묵·깨진·빈·미지 stdin 흡수</td><td><strong>전건 PASS</strong> (<code>evidence/e2e.log</code>)</td></tr>
+<tr><td>G5 훅 강제력</td><td>소스·코어파일·배포Bash·경로우회 deny·미정산 stop block</td><td><strong>전건 관측</strong> (<code>evidence/e2e.log</code>)</td></tr>
+<tr><td>G6 결정성</td><td>3회 동일·결정경로 비결정 원천(Math.random) 0</td><td><strong>동일·실사용 0</strong> (<code>evidence/gates.log</code>)</td></tr>
+<tr><td>G7 자체완결 dist</td><td>node_modules 없는 클론서 --version·deny 동작</td><td><strong>exit0·deny 동작</strong> (<code>evidence/e2e.log</code>)</td></tr>
+<tr><td>G8 공급망</td><td>프로덕션 도달 crit/high 0</td><td><strong>0 vulnerabilities</strong> (<code>evidence/supply.log</code>)</td></tr>
+<tr><td>G9 훅 지연 ⚠가정</td><td>p95 &lt; 150ms</td><td><strong>p95 104ms·max 113ms</strong> (<code>evidence/latency.log</code>)</td></tr>
+</table></div>
+<h3>결함 대장</h3>
+<p>신규 차단 결함 0. 아래는 <strong>확인 대장</strong> — 이번 패스에서 실측으로 확인한 불변식(심각도 —)과,</p>
+<p>알고도 비차단으로 미룬 항목 1건(deferred). 다음 세션은 이 표만 읽으면 무엇이 검증됐는지 안다.</p>
+<div class="tbl"><table>
+<tr><th>ID</th><th>심각도</th><th>축</th><th>한 줄</th><th>상태</th><th>근거등급</th><th>근거</th><th>닫은 증거</th></tr>
+<tr><td>LOGIC-01</td><td>—</td><td>08</td><td>비간섭: .harness 없으면 전 이벤트 완전 침묵</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:108</code></td><td><code>evidence/e2e.log</code> 미초기화 session-start EMPTY·exit0</td></tr>
+<tr><td>LOGIC-02</td><td>—</td><td>08</td><td>무해: 깨진·빈·미지 stdin 전부 exit0 (세션 불파괴)</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:138</code></td><td><code>evidence/e2e.log</code> corrupt·empty·unknown 3케이스 exit0</td></tr>
+<tr><td>LOGIC-03</td><td>—</td><td>08</td><td>설계트랙 소스쓰기 deny·docs 및 루트 md 허용</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:362</code></td><td><code>evidence/e2e.log</code> 소스 deny·docs·README 무간섭</td></tr>
+<tr><td>LOGIC-04</td><td>—</td><td>08</td><td>코어파일 직접편집 deny (페이즈 무관)</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:353</code></td><td><code>evidence/e2e.log</code> state.json 편집 deny</td></tr>
+<tr><td>LOGIC-05</td><td>—</td><td>08</td><td>경로우회(docs 상위 core) 정규화 후 deny</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:321</code></td><td><code>evidence/e2e.log</code> 경로우회 deny</td></tr>
+<tr><td>LOGIC-06</td><td>—</td><td>08</td><td>배포성 Bash deny·일반 Bash 허용</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:393</code></td><td><code>evidence/e2e.log</code> vercel deploy deny·ls 허용</td></tr>
+<tr><td>LOGIC-07</td><td>—</td><td>08</td><td>stop 가드: 미정산 block·정산후 통과·루프가드 통과</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:427</code></td><td><code>evidence/e2e.log</code> block→update→pass</td></tr>
+<tr><td>LOGIC-08</td><td>—</td><td>08</td><td>state.json 삭제해도 저널 폴백으로 강제 유지</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:117</code></td><td><code>evidence/e2e.log</code> rm 후에도 deny</td></tr>
+<tr><td>LOGIC-09</td><td>—</td><td>08</td><td>형태손상 state.json 도 폴백+손상 태그 노출</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:96</code></td><td><code>evidence/e2e.log</code> 빈객체 후 deny·손상태그</td></tr>
+<tr><td>USE-01</td><td>—</td><td>04</td><td>설계→구축 강제 페르소나 흐름 E2E 전건 동작</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>evidence/e2e.log</code></td><td>e2e.sh 전체 PASS=23 FAIL=0</td></tr>
+<tr><td>DET-01</td><td>—</td><td>09</td><td>테스트 3회 동일(198)·결정경로 Math.random 실사용 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/hook.ts:80</code></td><td><code>evidence/gates.log</code> vitest×3 동일·grep 주석뿐</td></tr>
+<tr><td>SHIP-01</td><td>—</td><td>10</td><td>자체완결 dist: node_modules 없이 --version·deny</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/dist/cli.js</code></td><td><code>evidence/e2e.log</code> 클론(무 node_modules) exit0·deny</td></tr>
+<tr><td>API-01</td><td>—</td><td>02</td><td>훅 계약: 미지이벤트·파손 stdin 흔적 기록</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>core/src/cli.ts:66</code></td><td><code>evidence/e2e.log</code> hook-errors 2줄</td></tr>
+<tr><td>DEP-01</td><td>—</td><td>07</td><td>공급망: 프로덕션 도달 취약점 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>evidence/supply.log</code></td><td>npm audit --omit=dev 0 vulnerabilities</td></tr>
+<tr><td>PERF-01</td><td>—</td><td>05</td><td>훅 지연 p95 104ms (목표 150ms 이하 충족)</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>evidence/latency.log</code></td><td>pre-tool 30회 p95=104ms</td></tr>
+<tr><td>SEC-02</td><td><span class="badge b-LOW">LOW</span></td><td>06</td><td>훅 realpath 판정 TOCTOU 잔존</td><td><span class="badge b-deferred">deferred</span></td><td><span class="badge b-code">code</span></td><td><code>core/src/hook.ts:288</code></td><td>출하 후 백로그 — "훅은 보안경계 아닌 사고방지" 계약 범위, 우회는 Bash 표면 이내라 비차단. 문서화로 갈음</td></tr>
+</table></div>
+<h3>보지 않은 것</h3>
+<h4>가. 의도적 제외 (범위 밖 — 결정)</h4>
+<div class='li'>• <strong>① 기능(경쟁 벤치마크)</strong> — v0 는 설계 스펙 약속 범위 검증이 목적. 경쟁 제품 대비 벤치는 범위 밖.</div>
+<div class='li'>• <strong>③ UI·접근성</strong> — GUI·웹 표면 없음(CLI 텍스트뿐). 출력 사용성은 ④ E2E 가 커버.</div>
+<div class='li'>• <strong>⑤ 성능(부하)</strong> — 훅 지연만 G9 로 스팟체크. 대형 저널·동시성 부하 시나리오는 이번 경량 범위 밖.</div>
+<div class='li'>• <strong>⑥ 보안(심층)</strong> — 훅 신뢰 경계·인젝션 중화는 ⑧ 불변식(LOGIC-01~09·경로우회)과 E2E 로 커버.</div>
+<p>  이력 비밀 스캔(gitleaks)·인증(대상에 없음)은 이번 범위 밖.</p>
+<div class='li'>• <strong>⑩ 배포(전체)</strong> — 자체완결 dist 만 G7 로 검증. 마켓플레이스 배포 채널·업그레이드/롤백 전체는 범위 밖.</div>
+<div class='li'>• <strong>⑪ 운영·관측성</strong> — hook-errors 로깅은 E2E(API-01)로 확인. 알림·대시보드는 대상에 없음.</div>
+<h4>나. 확인 불가 (볼 수단이 없었음)</h4>
+<div class='li'>• <strong>이전 11축 정식 감사의 MED/LOW 백로그</strong> — 폐기됨. 재감사하지 않았다. 필요하면</div>
+<p>  <code>git show bbbb9b6:docs/release-readiness/2026-08-20/ledger.md</code> 로 열람(SEC-01 외부심링크·SHIP-02</p>
+<p>  구 gitignore 마이그레이션·OPS-02/10/14·LOGIC-13/14 등). 전부 이전 패스에서 비차단 MED/LOW 로 종결.</p>
+<h3>사용자·제품 결정 사항 (기술 판정 아님)</h3>
+<div class='li'>• <strong>main 병합 경로</strong> — 직전 세션에서 사용자가 <strong>보류</strong> 선택. 병합·push·PR 없음. 이 판정은 병합과 독립.</div>
+<div class='li'>• <strong>폐기한 정식 감사 커밋 처리</strong> — 이번 폐기(<code>git rm</code>)는 워킹트리에만 적용, 커밋 안 함. 커밋 여부는 사용자 결정.</div>

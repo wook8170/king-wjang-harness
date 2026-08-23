@@ -1,0 +1,20 @@
+=== ⑩ 맨 클론(빌드·node_modules 없음) ===
+README.ja.md README.ko.md README.md README.zh.md agents bin core docs hooks mcp package-lock.json package.json profiles progress.md skills tsconfig.json tsup.config.ts vitest.config.ts 
+dist 포함: cli.js mcp.js 
+--version exit=0 :: king-wjang-harness core v0
+init exit=0 :: .harness/ 초기화 완료
+status exit=0 :: {
+doctor exit=0 :: {
+훅 exit: 
+  session-start exit=0
+  pre-tool exit=0
+  post-tool exit=0
+  stop exit=0
+MCP tools/list: 
+{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"harness_status","description
+
+=== dist 없는 클론(빌드본 부재 가드) ===
+일반 명령 exit=1 :: king-wjang-harness: core/dist 빌드본이 없다 — `npm install`(prepare) 또는 `npm run prepare` 로 빌드하라.
+훅 exit=0
+{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}
+ <- dist 없는 MCP

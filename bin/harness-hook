@@ -1,0 +1,27 @@
+#!/bin/sh
+# [PERF-95] Remove the cost of being non-intrusive.
+#
+# In a project that does not use the harness, node still starts twice (pre+post) for every
+# Write/Edit/Bash. The output, the side effects and the token cost are all zero, but the ~107ms
+# startup per call is not (it includes requiring a 594KB bundle). This script makes that same
+# decision in one sh invocation (~4ms).
+#
+# **The condition here must be literally the same decision the core makes.** The core's root is
+# `process.env.CLAUDE_PROJECT_DIR ?? process.cwd()` and it does not walk up to parent directories
+# (cli.ts main). So this is not a guess — it is the same test. If the two ever diverge, the hook
+# silently fails to run in a project that does have the harness, and that is this product's worst
+# possible failure.
+#
+# [COST-130] The test is **existence**, not "is a directory". If `.harness` is a regular file the
+# project is misconfigured, not un-harnessed: the core refuses in that state, so this gate must
+# hand the call over rather than allow everything. Fail closed — the two surfaces must not disagree
+# about whether enforcement applies.
+#
+# Why this is a shebang script instead of `[ -e … ] &&` inlined into hooks.json: so the whole
+# defence does not rest on whether the host interprets the hook command through a shell.
+# An executable runs either way.
+#
+# No output and exit 0 = "no decision (allow)" — the same behaviour a project without the harness
+# has always had.
+[ -e "${CLAUDE_PROJECT_DIR:-.}/.harness" ] || exit 0
+exec "$(dirname "$0")/harness" hook "$@"

@@ -1,0 +1,146 @@
+<title>PERF-26 재측정 결과</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f6f5f2; --surface: #fdfcfa; --surface2: #eeece7;
+    --ink: #23241f; --ink-soft: #5c5e55; --line: #d8d5cc;
+    --accent: #d9640a; --accent-ink: #a34a05;
+    --good: #2e7d43; --warn: #b3830b; --crit: #b3372b;
+    --chip-bg: #e9e6df; --code-bg: #eeece7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #191a17; --surface: #20211d; --surface2: #272822;
+      --ink: #e8e6df; --ink-soft: #a3a297; --line: #3a3b33;
+      --accent: #f08a2d; --accent-ink: #f5a45b;
+      --good: #6cc285; --warn: #d9ad3c; --crit: #e0705f;
+      --chip-bg: #2e2f28; --code-bg: #14150f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #191a17; --surface: #20211d; --surface2: #272822;
+    --ink: #e8e6df; --ink-soft: #a3a297; --line: #3a3b33;
+    --accent: #f08a2d; --accent-ink: #f5a45b;
+    --good: #6cc285; --warn: #d9ad3c; --crit: #e0705f;
+    --chip-bg: #2e2f28; --code-bg: #14150f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15.5px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 44px 22px 70px; }
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.86em;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent-ink); display: flex; align-items: center;
+    gap: 10px; margin-bottom: 14px; }
+  .eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 6px; font-weight: 700;
+    letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--ink-soft); margin: 0 0 8px; }
+  .meta { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-soft); }
+  .verdict { margin: 28px 0 8px; background: var(--surface); border: 1px solid var(--line);
+    border-left: 4px solid var(--good); padding: 18px 22px; }
+  .verdict.hold { border-left-color: var(--warn); margin-top: 12px; }
+  .verdict-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: 6px; }
+  .verdict .headline { font-size: 17px; font-weight: 700; margin: 0; }
+  .verdict p { margin: 8px 0 0; }
+  h2 { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; margin: 42px 0 12px;
+    padding-top: 18px; border-top: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px; }
+  h2 .tag { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent-ink); letter-spacing: 0.1em; }
+  p { margin: 10px 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin: 5px 0; }
+  li::marker { color: var(--accent-ink); }
+  .chip { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    padding: 1px 8px; border-radius: 20px; background: var(--chip-bg);
+    letter-spacing: 0.04em; vertical-align: 1px; }
+  .chip.good { color: var(--good); } .chip.warn { color: var(--warn); }
+  .tblwrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px;
+    font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-family: "IBM Plex Mono", monospace; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft);
+    font-weight: 500; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .pass { color: var(--good); font-weight: 700; }
+  .bar-row { display: grid; grid-template-columns: 150px 1fr 70px; gap: 12px;
+    align-items: center; margin: 7px 0; }
+  .bar-row .name { font-size: 13px; }
+  .bar-track { height: 10px; background: var(--surface2); border-radius: 5px;
+    position: relative; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+  .bar-fill.ctl { background: var(--ink-soft); opacity: 0.55; }
+  .bar-gate { position: relative; height: 0; }
+  .gate-line { border-left: 2px dashed var(--crit); position: absolute; top: -34px;
+    height: 34px; left: 67.3%; }
+  .gate-label { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--crit);
+    text-align: right; padding-right: calc(32.7% - 4px); margin-top: 2px; }
+  .bar-row .val { font-family: "IBM Plex Mono", monospace; font-size: 12px; text-align: right;
+    color: var(--ink-soft); }
+  .foot { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-soft); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Readiness · Round 3 — PERF 분편</div>
+  <h1>PERF-26 재측정 결과</h1>
+  <p class="sub">king-wjang-harness 훅 열화 경로 지연 — 라운드 1·2 에서 두 번 미뤄진 절대 p95 검증의 완결</p>
+  <p class="meta">2026-08-21 18:21~18:23 KST · 대상 HEAD 6a29ed4 커밋 dist · 저널 99,999줄/8.9MB · n=20×4계열×2창</p>
+
+  <div class="verdict">
+    <div class="verdict-label">측정 판정</div>
+    <p class="headline">게이트 G9 통과 — 폴백 p95 최악 101ms &lt; 150ms (여유 33%)</p>
+    <p>state.json 부재 시 저널 10만 건을 재생하는 열화 경로가 2개 독립 창 × 정순·역순 전 계열에서 게이트 안에 들어왔다. 대장 <code>PERF-26</code> 을 <b>fixed → verified</b> 로 올렸다 — 39행 중 비-verified 잔여는 사유 있는 deferred 1건(DEP-32)뿐.</p>
+  </div>
+  <div class="verdict hold" style="border-left-color:var(--crit)">
+    <div class="verdict-label">종합 판정 (철회됨 — 이 문서는 PERF-26 측정 기록으로만 유효)</div>
+    <p class="headline" style="color:var(--crit)">GO 철회 → 정정 판정 출하 불가(NO-GO)</p>
+    <p>이 문서가 한때 실었던 「출하 가능」은 <b>철회됐다.</b> 42-에이전트 적대적 재감정이 BLOCKER 를 찾았고 재현 확인됐다 — 훅의 정책 파일 <code>.harness/config.yaml</code> 이 피판정자 쓰기 영역 안에 있어 <code>design_allowed_prefixes: ['']</code> 한 줄로 설계 트랙 강제가 통째로 꺼지고 <code>doctor</code> 도 탐지하지 못한다(자기 무장해제). <b>이 PERF-26 측정 자체(폴백 p95 82~101ms &lt; 150ms)는 유효하다</b> — G9 게이트는 여전히 통과다. 뒤집힌 것은 종합 판정이지 이 지연 수치가 아니다. 정본 리포트(재게시본)와 갱신되는 대장을 정본으로 본다.</p>
+  </div>
+
+  <h2><span class="tag">01</span>실측 수치</h2>
+  <div class="tblwrap"><table>
+    <tr><th>계열 (각 n=20)</th><th>창 1 정순</th><th>창 1 역순</th><th>창 2 정순</th><th>창 2 역순</th><th>G9 (&lt;150ms)</th></tr>
+    <tr><td>정상 경로 — 통제</td><td class="num">p95 82ms</td><td class="num">p95 65ms</td><td class="num">p95 59ms</td><td class="num">p95 62ms</td><td>창 위생 검증용</td></tr>
+    <tr><td><b>폴백(state.json 부재)</b></td><td class="num"><b>p95 83ms</b></td><td class="num"><b>p95 81ms</b></td><td class="num"><b>p95 82ms</b></td><td class="num"><b>p95 101ms</b></td><td class="pass">전 계열 통과</td></tr>
+  </table></div>
+
+  <div style="margin:18px 0 4px;">
+    <div class="bar-row"><span class="name">통제 p95 (최악 82ms)</span><div class="bar-track"><div class="bar-fill ctl" style="width:54.7%"></div></div><span class="val">82ms</span></div>
+    <div class="bar-row"><span class="name">폴백 p95 (최악 101ms)</span><div class="bar-track"><div class="bar-fill" style="width:67.3%"></div></div><span class="val">101ms</span></div>
+    <div class="bar-gate"><div class="gate-line"></div></div>
+    <div class="gate-label">게이트 150ms</div>
+  </div>
+  <p>폴백이 통제보다 일관되게 높고(재생 비용 실재), 그 격차가 p50 기준 약 20ms — 라운드 1의 <code>readJournalForReplay</code> 수정(상태 변이 8타입만 객체화)이 10만 건 저널에서 의도대로 동작한다는 실측이다. 수정 전 같은 조건의 p95 는 169ms 로 게이트를 넘었었다.</p>
+
+  <h2><span class="tag">02</span>측정 위생 — 「load &lt; 2」 조건 편차와 채택 사유</h2>
+  <p>라운드 2 핸드오프는 재측정 조건으로 1분 load &lt; 2 를 걸었다. OrbStack·Ollama 상주로 그 창은 관측 기간 내 오지 않았고(측정 창 load 3.2~11.3, 10코어), <b>게이트 임계값(150ms)은 그대로 둔 채</b> 다음 세 근거로 채택했다:</p>
+  <ul>
+    <li><span class="chip good">징후 없음</span> 핸드오프가 명시한 창 무효 판정 기준 — 통제가 정상 범위를 이탈하거나 폴백보다 높아지는 역전 — 이 <b>발생하지 않았다.</b> 통제 p95 59~82ms 안정, 순서 정상. (라운드 1·2의 폐기 창은 통제가 기준선의 2.5배로 팽창하고 순서가 뒤집혔다.)</li>
+    <li><span class="chip good">a fortiori</span> G9 는 상한 게이트다. 스케줄링 경합은 수치를 <b>단조 증가</b>시킬 뿐이므로, 오염 가능성이 있는 창에서의 통과(101ms)는 조용한 창에서의 통과를 함의한다. 역은 성립하지 않지만 이번 결과는 통과 방향이다.</li>
+    <li><span class="chip good">2창 재현</span> 독립된 두 창에서 4계열 전부 재현됐다.</li>
+  </ul>
+  <p>참고: 통제 p50 58ms 가 라운드 1 기준선(약 100ms)보다 낮은 것은 당시 창 자체가 load 5.6~7.7 로 팽창돼 있었기 때문으로 해석된다(당시 축 파일에 자인 기록 있음).</p>
+
+  <h2><span class="tag">03</span>부수 실측</h2>
+  <ul>
+    <li><b>페이즈 게이트 강제 확인</b> — 샌드박스에서 <code>harness phase set P7</code> 이 「P6 게이트 미승인」으로 거부됐다. 구버전(0.0.1) 감정서가 최대 구멍으로 지적한 자기해제 경로가 현 HEAD 에서 막혀 있다는 우연한 실측.</li>
+    <li><b>lint 실행 위치 함정</b> — <code>ledger-lint.sh</code> 를 리포 밖 CWD 에서 돌리면 상대경로 인용이 전부 깨져 가짜 R1 위반 10건이 나온다. 리포 루트에서 실행해야 한다.</li>
+    <li><b>동시 편집이 인용을 깨뜨린다</b> — 피어 세션의 미커밋 <code>hook.ts</code> 수정이 대장 2행(SEC-34·LOGIC-37)의 줄 인용을 공백 줄로 밀어냈다. HEAD 기준 유효함을 대조 확인했고, 피어 커밋 시 재앵커를 인계했다.</li>
+  </ul>
+
+  <h2><span class="tag">04</span>남은 것</h2>
+  <ul>
+    <li>라운드 3 본편(피어 세션): USE-59 정정 + 잔여 i18n 8표면 구현 → 대장 반영 → lint 그린.</li>
+    <li>그 뒤 판정 재집계(게이트 전건 포함)와 정본 <code>report.html</code> 재렌더·아티팩트 재게시(URL 유지).</li>
+    <li>피어 커밋 시 SEC-34·LOGIC-37 인용 재앵커 + 대장 대상 커밋 재명시.</li>
+  </ul>
+
+  <div class="foot">round 3 — PERF 분편 · evidence/latency.log 라운드3 절 · fixes-round3-perf.md · measured by claude fable 5 (NFD 세션)</div>
+</div>

@@ -1,0 +1,182 @@
+/**
+ * [PROD-113·PROD-114·PROD-C4] **문서가 말하는 측정치는 조용히 낡는다.**
+ *
+ * README 4종이 「976 passing (33 files)」을 광고하는 동안 실제 스위트는 982 → 1021 로 커졌다.
+ * 아무도 몰랐던 이유는 단순하다 — **그 숫자를 보는 검사가 없었다.**
+ * 전부를 기계로 재기는 어렵지만(테스트 수는 돌려 봐야 안다) **파일 수는 지금 셀 수 있고**,
+ * 4개 언어가 서로 다른 숫자를 말하는 것도 지금 잡을 수 있다.
+ *
+ * 배포 위생도 여기서 함께 고정한다 — 내부 작업물이 배포본에 실려 나가면 설치자가
+ * README 와 반대되는 출하 판정 문서를 동시에 받는다.
+ */
+import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { toolDefinitions } from '../src/mcp';
+
+const repo = path.resolve(__dirname, '../..');
+const READMES = ['README.md', 'README.ko.md', 'README.ja.md', 'README.zh.md'];
+const read = (f: string) => fs.readFileSync(path.join(repo, f), 'utf8');
+
+/**
+ * [PROD-171] **없는 것을 있다고 광고하면 문서가 아니라 함정이다.**
+ *
+ * README 4종이 `harness_gate_verify`·`harness_doc_upsert` 를 MCP 도구로 광고했는데
+ * 서버에는 없었다(실제 16종). 같은 기능이 CLI 에만 있어서 생긴 어긋남이고, **세 축의 감정자가
+ * 각자 이것을 찾아 왔다** — 사람이 읽고 「있다」로 적는 방식이 세 번 실패했다는 뜻이다.
+ *
+ * 그래서 이름을 하나 고치는 대신 **부류를 막는다**: README 에 등장하는 `harness_*` 이름을
+ * 기계로 뽑아 서버의 도구 목록과 전수 대조한다. 도구가 늘거나 이름이 바뀌면 문서가 먼저 깨진다.
+ */
+/**
+ * [PROD-184] **같은 문서 안에서 두 숫자가 다르면 하나는 거짓이다.**
+ *
+ * 헤드라인은 「~0 context tokens」인데 같은 문서의 measured 표는 「~240 tokens」였다.
+ * 둘 다 참인 주장(규칙이 프로세스 밖에 있어 **늘지 않는다** vs 세션당 주입량)이지만,
+ * 읽는 사람에게는 그냥 모순이다 — 그리고 광고 쪽이 더 눈에 띈다.
+ */
+/**
+ * [PROD-180] **재현하라고 적은 명령은 실재해야 한다.**
+ *
+ * 「Measured」 표의 수치를 제3자가 다시 잴 수 있게 `npm run bench:hook` 을 실었다.
+ * 그 명령이 사라지거나 이름이 바뀌면 README 가 **없는 재현 절차를 가리키게** 된다 —
+ * [PROD-171] 의 유령 MCP 도구와 같은 부류다. 그래서 같은 방식으로 막는다.
+ */
+describe('PROD-180: README 가 부르는 npm 스크립트가 실재한다', () => {
+  const scripts = new Set(Object.keys(
+    JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8')).scripts ?? {},
+  ));
+
+  it('문서에 등장하는 `npm run <script>` 가 전부 package.json 에 있다', () => {
+    for (const f of READMES) {
+      const named = [...read(f).matchAll(/npm run ([\w:.-]+)/g)].map(m => m[1]);
+      const ghosts = [...new Set(named)].filter(n => !scripts.has(n));
+      expect(ghosts, `${f} 가 존재하지 않는 npm 스크립트를 가리킨다`).toEqual([]);
+    }
+  });
+
+  it('벤치 스크립트가 배포본에 실린다 — 재현 절차가 패키지 밖에 있으면 재현이 아니다', () => {
+    expect(scripts.has('bench:hook')).toBe(true);
+    expect(fs.existsSync(path.join(repo, 'scripts/bench-hook-latency.mjs'))).toBe(true);
+    const attrs = fs.readFileSync(path.join(repo, '.gitattributes'), 'utf8');
+    expect(attrs, 'scripts/ 가 export-ignore 되면 받는 사람이 못 돌린다').not.toMatch(/^scripts\b.*export-ignore/m);
+  });
+});
+
+describe('PROD-184: README 안의 토큰 수치가 서로 어긋나지 않는다', () => {
+  it('한 문서에 나오는 토큰 수치가 전부 같다', () => {
+    for (const f of READMES) {
+      const nums = [...read(f).matchAll(/~?\s*(\d+)\s*(?:context\s+)?(?:tokens|토큰|トークン|令牌)/g)]
+        .map(m => m[1]);
+      expect(nums.length, `${f} 에 토큰 수치가 없다`).toBeGreaterThan(0);
+      expect([...new Set(nums)], `${f} 가 서로 다른 토큰 수치를 말한다`).toHaveLength(1);
+    }
+  });
+});
+
+describe('PROD-171: README 가 말하는 MCP 도구가 실재한다', () => {
+  const actual = new Set(toolDefinitions().map(d => d.name));
+
+  it('README 에 등장하는 harness_* 이름이 전부 서버에 있다', () => {
+    for (const f of READMES) {
+      const text = read(f);
+      // 접미 표기(`_activate`)는 앞선 완전 이름의 접두를 잇는 것이라 따로 세지 않는다 —
+      // 여기서 잡으려는 것은 **완전한 이름으로 적힌 유령**이다.
+      const named = [...text.matchAll(/`(harness_[a-z_]+)`/g)].map(m => m[1]);
+      expect(named.length, `${f} 에 MCP 도구 이름이 하나도 없다`).toBeGreaterThan(0);
+      const ghosts = [...new Set(named)].filter(n => !actual.has(n));
+      expect(ghosts, `${f} 가 실재하지 않는 MCP 도구를 광고한다`).toEqual([]);
+    }
+  });
+
+  it('도구 개수 표기가 실제와 같다', () => {
+    for (const f of READMES) {
+      // 「정확히 N개」 꼴만 본다 — 문서 곳곳의 다른 숫자(토큰 수 등)를 잡지 않게.
+      const m = /(?:exactly|정확히|ちょうど|恰好是)\s*(\d+)/.exec(read(f));
+      expect(m, `${f} 에 MCP 도구 개수 표기가 없다`).not.toBeNull();
+      expect(Number(m![1]), `${f} 의 도구 개수 표기가 낡았다`).toBe(actual.size);
+    }
+  });
+});
+
+describe('PROD: README 가 광고하는 계량이 사실과 맞는다', () => {
+  const actualFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.ts')).length;
+
+  it('테스트 파일 수가 실제와 같다', () => {
+    for (const f of READMES) {
+      const m = /\((\d+)\s*(?:files|파일|ファイル|个文件)\)|（(\d+)\s*(?:个文件|ファイル)）/.exec(read(f));
+      expect(m, `${f} 에 테스트 파일 수 표기가 없다`).not.toBeNull();
+      expect(Number(m![1] ?? m![2]), `${f} 의 파일 수 표기가 낡았다`).toBe(actualFiles);
+    }
+  });
+
+  it('4개 언어가 같은 테스트 수를 말한다', () => {
+    const counts = READMES.map(f => {
+      const m = /(\d{3,5})\s*(?:passing|passed|件 パス|件 パス|項|项通过|tests|테스트)/.exec(read(f));
+      return m ? m[1] : null;
+    });
+    expect(counts.every(c => c !== null), `계량 표기를 못 찾은 README 가 있다: ${counts}`).toBe(true);
+    expect(new Set(counts).size, `언어별로 다른 수를 말한다: ${counts}`).toBe(1);
+  });
+});
+
+describe('PROD-113: 배포본에 내부 작업물이 실리지 않는다', () => {
+  it('.gitattributes 가 내부 문서를 export-ignore 한다', () => {
+    const attrs = read('.gitattributes');
+    for (const p of ['progress.md', 'docs/release-readiness', 'docs/appraisal']) {
+      expect(attrs, `${p} 가 배포본에서 빠지지 않는다`).toMatch(
+        new RegExp(`^${p.replace('/', '\\/')}\\s+export-ignore`, 'm'),
+      );
+    }
+  });
+});
+
+describe('PROD-114: 받는 사람이 조건과 갈 곳을 알 수 있다', () => {
+  it('package.json 의 라이선스가 LICENSE 파일과 어긋나지 않는다', () => {
+    const pkg = JSON.parse(read('package.json'));
+    expect(pkg.license, 'LICENSE 파일은 있는데 필드가 비어 있다').toBe('MIT');
+    expect(read('LICENSE')).toMatch(/MIT/);
+  });
+
+  it('4개 언어 전부에 지원 안내가 있고, 거기 적힌 명령이 실재한다', () => {
+    for (const f of READMES) {
+      const s = read(f);
+      expect(s, `${f} 에 지원 안내가 없다`).toMatch(/## (Support|지원|サポート|支持)/);
+      expect(s).toContain('harness doctor');
+      expect(s).toContain('.harness/.runtime/hook-errors.log');
+    }
+  });
+});
+
+/**
+ * [UX-146] **차단의 입력을 사용자가 찾을 수 있어야 한다.**
+ *
+ * `design_allowed_prefixes`·`design_blocked_bash`·`design_system_frozen_roots`·
+ * `block_raw_values` 는 훅이 무엇을 막는지를 정하는 값인데, README 4개 언어·스킬·agents
+ * 어디에도 없었고 내부 감정 문서에만 존재했다 — 조정 통로가 **발견 불가능**했다.
+ *
+ * 이름 하나를 적어 넣고 끝내면 다음에 키가 늘 때 같은 일이 반복된다. 그래서 이름이 아니라
+ * **부류**를 막는다: `DEFAULT_CONFIG` 의 모든 키가 4개 언어 전부에 나와야 한다.
+ * 키를 추가하면 문서화하기 전까지 이 검사가 빨강이다.
+ */
+describe('UX-146: 설정 키가 4개 언어 문서에 전부 있다', () => {
+  const src = fs.readFileSync(path.join(repo, 'core/src/config.ts'), 'utf8');
+  const body = src.slice(src.indexOf('export const DEFAULT_CONFIG'), src.indexOf('const asBool'));
+  const keys = [...body.matchAll(/^\s{2}([a-z_]+):/gm)].map(m => m[1]);
+
+  it('검사 대상 키가 실제로 잡힌다 — 빈 집합을 통과시키지 않는다', () => {
+    expect(keys.length).toBeGreaterThanOrEqual(8);
+    expect(keys).toContain('design_allowed_prefixes');
+    expect(keys).toContain('block_raw_values');
+  });
+
+  it.each(READMES)('%s 가 모든 설정 키를 적는다', (f) => {
+    const txt = read(f);
+    const missing = keys.filter(k => !txt.includes(k));
+    expect(missing, `문서화되지 않은 설정 키: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('설정 파일 경로 자체를 말한다 — 어디를 고쳐야 하는지', () => {
+    for (const f of READMES) expect(read(f)).toContain('.harness/config.yaml');
+  });
+});

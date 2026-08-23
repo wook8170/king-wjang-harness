@@ -1,0 +1,68 @@
+# Raw-value rule pack — the **explanation and configuration** file for the "static" share of
+# the triple enforcement in §7.
+#
+# The detection is NOT implemented here. There is exactly one implementation, `findRawValues`
+# in `core/src/tokens.ts`, and both the CI lint and the PreToolUse hook call **that same
+# function**. If this rule pack carried its own regexes you would get "the lint passed but the
+# hook blocks me", and at that moment people start treating whichever side is looser as the
+# real one — that is the concrete path by which the single token source collapses.
+#
+# So this file does exactly two things: (1) explain to a human what is a violation and why,
+# (2) declare the stack-specific exempt paths.
+source_of_truth: core/src/tokens.ts#findRawValues
+enforced_at:
+  - CI lint (red)
+  - PreToolUse hook (warning — blocks when block_raw_values is true in config.yaml)
+
+rules:
+  - id: raw-color
+    kind: color
+    severity: error
+    what: |
+      Hex colours (#rgb, #rgba, #rrggbb, #rrggbbaa) and rgb()/rgba()/hsl()/hsla() calls.
+    why: |
+      A colour nailed into code means changing the one token file leaves that screen unchanged.
+      The invariant "the product's whole visual tone is a function of one token file" breaks here.
+    fix: Reference var(--color-…) or tokens.color["…"] instead.
+
+  - id: raw-space
+    kind: space
+    severity: error
+    what: |
+      px/rem/em nailed into spacing and size properties (margin, padding, gap, inset,
+      top/right/bottom/left, width/height, flex-basis and friends). CSS spelling (margin-top)
+      and JS spelling (marginTop) are treated by the same rule.
+    why: |
+      Spacing rhythm is a scale. One 17px somewhere makes it a coincidence, not a scale.
+    fix: Reference var(--space-…) or a scale constant.
+    allowed:
+      - '0 / 0px / 0rem / 0em — at size zero the visual weight is zero too, so it is not a step on the scale'
+      - '1px / -1px — hairlines. Tokenising them only invents a fake spacing token (--space-hairline)'
+
+  - id: raw-font
+    kind: font
+    severity: error
+    what: |
+      The first family in font-family/font is not a var(), not a dotted reference
+      (tokens.type.body), and not a CSS global keyword (inherit, initial, unset, revert, none, auto).
+    why: |
+      Type is half the tone. One file calling a different family makes that screen a different product.
+    fix: Reference var(--font-…) or tokens.type.
+
+# What findRawValues never flags in the first place — the rule pack does not redefine it.
+not_flagged:
+  - Values inside comments (/* */, //, <!-- -->)
+  - var(--x) references — but the fallback in var(--x, #fff) IS a real violation and is caught
+  - Dotted references such as tokens.color["text.primary"]
+
+# The source holding raw values is not a violation — it is the reason that file exists.
+# isTokenFile in tokens.ts makes the call; the line below just explains the result.
+exempt:
+  - .harness/design/tokens/design-tokens.json
+
+# Generated in this stack, so not to be hand-edited (regenerate rather than lint).
+# Hand-editing these files gets silently overwritten by the next generation.
+generated_targets:
+  - src/styles/tokens.css
+  - src/lib/tokens.ts
+  - tailwind.config.ts

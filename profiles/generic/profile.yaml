@@ -1,0 +1,51 @@
+# generic — the floor profile for when the stack is unknown (spec §9).
+#
+# The core knows "what", a profile knows "how". generic knows the bare minimum of that "how":
+# a conservative guess at where the source lives, and a conservative list of deploy commands.
+# The command mapping (commands.yaml) is empty — answering "undefined" is more honest than
+# inventing `npm test` for a stack we do not know, and the core treats undefined as a signal
+# to ask a human.
+#
+# Spec §12 (honest limitations): a thin profile makes the §4-2 block matrix less precise.
+# For a custom stack, copy this file into `.harness/profile/` as a project-local profile.
+name: generic
+description: Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.
+
+# Paths where Write/Edit is physically blocked on the design track (P0–P6, §4-2).
+# Conventional source roots only.
+source_globs:
+  - src/**
+  - lib/**
+  - app/**
+
+# Deploy commands blocked on the design track and while a gate is unapproved (§4-2).
+# Keep this list identical to DEFAULT_CONFIG.design_blocked_bash in core/src/config.ts —
+# if the two diverge you get "blocked by the config default but not by the profile",
+# and nobody can tell which one is authoritative.
+deploy_commands:
+  - docker push
+  - kubectl apply
+  - helm upgrade
+  - helm install
+  - vercel deploy
+  - vercel --prod
+  - netlify deploy
+  - fly deploy
+  - wrangler deploy
+  - serverless deploy
+  - sst deploy
+  - eb deploy
+  - gcloud app deploy
+  - npm publish
+  - yarn publish
+  - pnpm publish
+  - cargo publish
+  - gem push
+  - twine upload
+  - terraform apply
+  - pulumi up
+
+# Design-system directories frozen after the P4 approval (§7). If the stack is unknown, so is
+# the place to freeze — an empty list means nothing freezes. Fill this in a project-local profile.
+# Write directory prefixes, not globs (e.g. src/components/ui); isFrozenPath does the matching.
+design_system_roots: []

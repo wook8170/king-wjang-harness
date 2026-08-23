@@ -1,0 +1,34 @@
+=== 필수 인자 누락 (정상 분리) ===
+node upsert                exit=1  사용법: harness node upsert --id <id> --title <제목>
+gate submit                exit=1  유효하지 않은 페이즈: undefined (P0, P1, P2, P3, P4, 
+gate approve               exit=1  유효하지 않은 페이즈: undefined (P0, P1, P2, P3, P4, 
+wave create                exit=0  wave-001
+wave activate              exit=1  웨이브 undefined 지시서가 없다 (/tmp/ma.1IMmW3/.harne
+adr propose                exit=1  사용법: harness adr propose --id <ADR-x> --phase <P0..P12> 
+doc upsert                 exit=1  사용법: harness doc upsert --id <DOC-x> --path <경로> --p
+ship defect add            exit=1  결함 id 가 비어 있다 — `SEC-01` 처럼 대장에서 �
+tokens gen                 exit=1  토큰 파일이 없다: /tmp/ma.1IMmW3/.harness/design/tokens
+design link                exit=1  사용법: harness design link --ux <UX-x> --url <캔버스 UR
+evidence check             exit=1  사용법: harness evidence check <wave-id> (활성 웨이브�
+loop next                  exit=0  {
+
+=== 인자 인젝션 (셸 경유 여부) ===
+node upsert --id X-1; touch /tmp/PWNED_HARNESS --title t exit=0  X-1; touch /tmp/PWNED_HARNESS
+인젝션 없음(셸 미경유)
+node upsert --id ../../etc/passwd --title t exit=0  ../../etc/passwd
+gate submit P0 --paths ../../../etc/passwd --evidence claimed exit=0  P0 제출됨 — 해시 f2b23b704ec3 · 근거 claimed
+
+=== migrate 가 사용자 홈을 읽는가 ===
+기존 자작 훅 4건 감지 — 아래는 안내이며 하네스는 사용자의 ~/.claude/ 를 건드리지 않는다.
+중복 등록을 그대로 두면 같은 턴에 두 시스템이 동시에 발화한다. 아래 조치는 직접 수행하라.
+
+- handoff-guard (hook) — /Users/wjang/.claude/handoff-guard
+  조치: 하네스가 Stop 차단·SessionStart 주입을 대체한다(웨이브 상태 기반 정확 판정). settings.json 의 handoff-guard 훅 등록을 지워라 — 두 훅이 같은 턴을 이중으로 막는다.
+- token-guard (hook) — /Users/wjang/.claude/token-guard
+  조치: 하네스가 사용량 티어 판정·지침 주입을 대체한다. settings.json 의 PostToolUse·UserPromptSubmit 훅 등록을 지워라 — 같은 티어 문구가 두 번 주입된다.
+- auto-retry (job) — /Users/wjang/.claude/auto-retry
+  조치: 한도 도달 후 재개는 아직 하네스가 대체하지 않는다(옵션 컴포넌트). 그대로 두어도 충돌하지 않는다 — 다만 하네스가 재개 컴포넌트를 켜면 launchd 잡이 중복되니 그때 한쪽을 꺼라.
+- terse-mode (hook) — /Users/wjang/.claude/hooks/terse-mode.sh
+  조치: 하네스가 `config.yaml: terse: on` 으로 흡수했다(SessionStart 주입에 동봉). settings.json 의 terse-mode.sh 등록을 지워라.
+
+훅 등록은 ~/.claude/settings.json 에 있다. 편집 후 세션을 새로 시작해야 반영된다.

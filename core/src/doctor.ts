@@ -1,0 +1,361 @@
+/**
+ * doctor — 무결성 검사·재생 복구.
+ *
+ * 두 축을 분리한다:
+ *   issues   = state.json 이 이벤트 재생과 발산한 것. 복구(repair) 대상이자 ok 판정 기준.
+ *   warnings = 저널 건강·환경 진단 + 정책 드리프트(OPS-76). 복구로 고쳐지지 않으므로 ok 를
+ *              내리지 않는다 — 버전 스큐로 정상 발생하는 미지 이벤트나, 사람이 정당하게 바꾼
+ *              정책이 영구 red 를 만들면 경보가 죽는다.
+ *
+ * 재생 신뢰도(trustworthy)는 복구 게이트일 뿐 ok 와 무관하다. 손상뿐 아니라 저널 부재·
+ * 절단 의심도 불신으로 친다 — "증거 없음"은 "아무 일 없었다는 증거"가 아니다.
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import {
+  harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir,
+} from './paths';
+import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
+import { tr } from './tr';
+import type { Msg } from './i18n';
+import { readState, writeState, defaultState } from './state';
+import { inspectConfig } from './config';
+import { computePolicyHash, pinnedPolicy, pinPolicy } from './policy';
+import type { HarnessState } from './types';
+
+export interface DoctorReport {
+  /**
+   * **수리 후** 기준으로 깨끗한가.
+   *
+   * [UX-121] 예전에는 수리 **전**에 모은 `issues` 로 계산해서, 성공한 복구가
+   * `repaired: true` + `ok: false` + "state.json is damaged" 를 동시에 찍었다 —
+   * 청정 여부를 알려면 사람이 같은 명령을 한 번 더 돌려야 했다. 진단 도구가 자기 작업의
+   * 결과를 안 알려 주면, 그 도구를 쓰는 사람은 매번 두 번 돌린다.
+   */
+  ok: boolean;
+  repaired: boolean;
+  refused: boolean;
+  /** 발견한 문제 — **수리 전** 상태다. 무엇이 어긋나 있었는지가 보고의 본체이므로 지우지 않는다. */
+  issues: string[];
+  /** 수리했을 때 **남은** 문제. 비어 있으면 복구가 끝난 것이다(`repaired` 가 false 면 `undefined`). */
+  remaining?: string[];
+  warnings: string[];
+  notes: string[];
+}
+
+/** 비교 범위 = 덮어쓰기 범위. 한쪽만 넓으면 감지 못 한 채 날아가는 필드가 생긴다. */
+const COMPARED_FIELDS = ['phase', 'activeWave', 'gates', 'backtrack'] as const;
+
+/** writeState 의 잔해만 고른다 — 숫자 pid 접미사가 아니면 사용자 파일이다. */
+const TMP_RE = /\.tmp-(\d+)$/;
+
+function pidAlive(pid: number): boolean {
+  if (pid <= 0) return true; // 0·음수는 프로세스 그룹 시그널 — 판정하지 않고 보존한다
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM = 남의 소유지만 살아 있다. ESRCH 만 죽은 것으로 친다.
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** 죽은 pid 의 tmp 잔해만 치운다 — 살아있는 프로세스가 쓰는 중일 수 있다. */
+function sweepOrphanTmp(root: string): number {
+  let swept = 0;
+  for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
+    let names: string[];
+    try { names = fs.readdirSync(dir); } catch { continue; }
+    for (const name of names) {
+      const m = TMP_RE.exec(name);
+      if (!m || pidAlive(Number(m[1]))) continue;
+      const p = path.join(dir, name);
+      try {
+        if (!fs.statSync(p).isFile()) continue;
+        fs.rmSync(p);
+        swept++;
+      } catch {
+        // 경합·권한 실패가 진단 전체를 막지는 않는다
+      }
+    }
+  }
+  return swept;
+}
+
+function countHookErrors(root: string): number {
+  const p = path.join(runtimeDir(root), 'hook-errors.log');
+  if (!fs.existsSync(p)) return 0;
+  return fs.readFileSync(p, 'utf8').split('\n').filter((l) => l.trim()).length;
+}
+
+const isPristine = (s: HarnessState): boolean => {
+  const d = defaultState();
+  return COMPARED_FIELDS.every((f) => JSON.stringify(s[f]) === JSON.stringify(d[f]));
+};
+
+export function runDoctor(
+  root: string, opts: { repair?: boolean; force?: boolean; acceptPolicy?: boolean } = {},
+): DoctorReport {
+  // 진단 문자열은 사용자가 읽는 출력이다 — 줄마다 config 를 다시 읽지 않도록 한 번만 해석한다.
+  const t = (m: Msg): string => tr(root, m);
+  const issues: string[] = [];
+  const warnings: string[] = [];
+  const notes: string[] = [];
+
+  // 1. 저널 재생
+  const journalExists = fs.existsSync(eventsPath(root));
+  const { events, corruptLines } = readJournal(root);
+  const replayed = replayState(events);
+
+  // 2. state 읽기
+  let current: HarnessState | null = null;
+  if (!fs.existsSync(statePath(root))) {
+    issues.push(t({
+      en: 'state.json is missing — it must be rebuilt by replaying the journal',
+      ko: 'state.json 이 없다 — 이벤트 재생으로 복구 필요',
+    }));
+  } else {
+    try {
+      const parsed = readState(root) as unknown;
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object');
+      current = parsed as HarnessState;
+    } catch {
+      issues.push(t({ en: 'state.json is damaged — cannot parse', ko: 'state.json 손상 — 파싱 불가' }));
+    }
+  }
+
+  // 3. 저널 건강 → warnings + 재생 신뢰도
+  let trustworthy = true;
+  if (!journalExists) {
+    warnings.push(t({
+      en: 'events.jsonl is missing — there is no evidence to replay',
+      ko: 'events.jsonl 부재 — 재생할 증거가 없다',
+    }));
+    trustworthy = false;
+  }
+  if (corruptLines > 0) {
+    warnings.push(t({
+      en: `${corruptLines} line(s) of events.jsonl are corrupt — the replay is incomplete`,
+      ko: `events.jsonl ${corruptLines}줄 손상 — 재생 불완전`,
+    }));
+    trustworthy = false;
+  }
+  const unknown = events.filter((e) => !KNOWN_EVENT_TYPES.has(e.type));
+  if (unknown.length > 0) {
+    const types = [...new Set(unknown.map((e) => e.type))].join(', ');
+    warnings.push(t({
+      en: `${unknown.length} event(s) of unknown type (${types}) — the replay result is untrustworthy `
+        + '(possible version skew)',
+      ko: `미지 이벤트 타입 ${unknown.length}건(${types}) — 재생 결과 불신(버전 스큐 가능)`,
+    }));
+    trustworthy = false;
+  }
+  if (journalExists && events.length === 0 && current && !isPristine(current)) {
+    warnings.push(t({
+      en: 'the journal is empty but state shows progress — suspect truncation',
+      ko: '저널이 비어 있으나 state 는 진행 상태 — 절단 의심',
+    }));
+    trustworthy = false;
+  }
+
+  // 4. state 발산 → issues (복구 대상)
+  if (current) {
+    for (const field of COMPARED_FIELDS) {
+      const a = JSON.stringify(current[field]);
+      const b = JSON.stringify(replayed[field]);
+      if (a !== b) {
+        issues.push(t({
+          en: `${field} mismatch: state=${a}, journal replay=${b}`,
+          ko: `${field} 불일치: state=${a}, 이벤트 재생=${b}`,
+        }));
+      }
+    }
+  }
+
+  // 5. activeWave 가 가리키는 웨이브 파일 — 없으면 지시 대상이 사라진 것.
+  //    warning 으로 두면 complete/update/activate 가 전부 ENOENT 로 죽는데 복구 수단이
+  //    없어진다(state.json 직접 편집은 훅이 막는다). issue 로 올려 repair 의 대상으로 삼는다.
+  const effective = current ?? replayed;
+  if (effective.activeWave && !fs.existsSync(wavePath(root, effective.activeWave))) {
+    issues.push(
+      tr(root, {
+        en: `The wave file for activeWave ${effective.activeWave} is missing — it may be temporarily absent `
+          + '(a git branch switch, say), so restoring the file comes first. If it really is lost, settle '
+          + 'activeWave to null with `harness doctor --repair`',
+        ko: `activeWave ${effective.activeWave} 의 웨이브 파일 부재 — `
+          + 'git 브랜치 전환 등으로 일시 부재일 수 있으니 파일 복원이 우선이다. '
+          + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라',
+      }),
+    );
+  }
+
+  // 5b. 스키마 버전 — 미래 버전이 쓴 state 를 구 코드가 조용히 읽으면 다운그레이드가
+  //     오독한다. 지금은 v1 하나뿐이라 잠재 결함이지만, 경고가 없으면 갈리는 순간을 놓친다.
+  if (current && current.schemaVersion !== 1) {
+    warnings.push(
+      tr(root, {
+        en: `state.json schemaVersion is ${String(current.schemaVersion)}, but this build only knows 1 — `
+          + 'it was probably written by a newer harness. Upgrade, or the state may be misread.',
+        ko: `state.json 의 schemaVersion 이 ${String(current.schemaVersion)} 인데 이 빌드는 1 만 안다 — `
+          + '더 새 버전의 하네스가 쓴 파일일 수 있다. 업그레이드하지 않으면 상태를 오독한다.',
+      }),
+    );
+  }
+
+  // 6. 고아 tmp 스윕 — 죽은 pid 것만이라 항상 안전하게 수행한다
+  const swept = sweepOrphanTmp(root);
+  if (swept > 0) {
+    notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `고아 임시파일 ${swept}개 정리` }));
+  }
+
+  // [UX-151] 6b. 깨진 config 는 조용히 기본값으로 폴백한다(훅 무해 계약) — 그 사실을 여기서 알린다.
+  //     사용자가 적어 둔 정책이 안 걸린 채 도는 것보다, 안 걸린 줄 모르는 것이 나쁘다.
+  for (const problem of inspectConfig(root).problems) {
+    warnings.push(t({
+      en: `config could not be parsed, so defaults are in effect — ${problem}`,
+      ko: `config 를 해석할 수 없어 기본값으로 동작 중이다 — ${problem}`,
+    }));
+  }
+
+  // 7. 훅 에러 로그 — 침묵한 판정 실패는 여기서만 드러난다
+  const hookErrors = countHookErrors(root);
+  if (hookErrors > 0) {
+    // [UX-163] 「원인을 확인하라」면서 **어디를 볼지** 안 알려 줬다. 경로는 README 지원 표에만
+    // 있었고, doctor 를 돌린 사람은 그 표를 안 보고 있다. 처방은 손이 닿는 곳에 있어야 한다.
+    const log = path.join(runtimeDir(root), 'hook-errors.log');
+    warnings.push(t({
+      en: `${hookErrors} hook decision failure(s) recorded — read ${log} to find out why`,
+      ko: `훅 판정 실패 ${hookErrors}건 기록됨 — 원인은 ${log} 에서 확인하라`,
+    }));
+  }
+
+  // 7b. 정책 무결(OPS-76) — 게이트 산출물 해시와 같은 패턴으로 정책 변경을 관측 가능하게 한다.
+  //
+  //   **왜 issue 가 아니라 warning 인가.** issues 는 이 파일의 정의상 「state 가 이벤트 재생과
+  //   발산한 것 = repair 대상」이다. 정책 드리프트는 재생으로 고칠 수 없고, 고쳐서도 안 된다 —
+  //   `doctor --repair` 가 사용자의 config.yaml 을 되돌리면 SEC-69 가 남긴 «사람의 탈출구»를
+  //   하네스가 도로 빼앗는 셈이다. issue 로 올리면 사용자가 파일을 되돌릴 때까지 ok=false 가
+  //   영구히 박히는데, 이 파일 머리말이 적은 그대로 **영구 red 는 경보를 죽인다.**
+  //   그리고 정책 변경은 정당할 수 있다. 목표는 「금지」가 아니라 「보이게」다.
+  //
+  //   비간섭: `.harness/` 가 없으면 손대지 않는다(하네스 미사용 프로젝트에 파일을 만들지 않는다).
+  if (fs.existsSync(harnessDir(root))) {
+    if (opts.acceptPolicy) {
+      const pin = pinPolicy(root, 'accept');
+      notes.push(
+        pin.changed
+          ? t({
+            en: `policy baseline re-pinned: ${(pin.prevHash ?? 'none').slice(0, 12)} → ${pin.hash.slice(0, 12)} `
+              + `(${pin.files.join(', ') || 'no policy files'})`,
+            ko: `정책 베이스라인 재고정: ${(pin.prevHash ?? '없음').slice(0, 12)} → ${pin.hash.slice(0, 12)} `
+              + `(${pin.files.join(', ') || '정책 파일 없음'})`,
+          })
+          : t({
+            en: 'the policy baseline already matches the files — nothing to accept',
+            ko: '정책 베이스라인이 이미 현재 파일과 같다 — 수용할 변경이 없다',
+          }),
+      );
+    }
+    const pinned = pinnedPolicy(root);
+    const current = computePolicyHash(root);
+    if (!pinned) {
+      // 베이스라인이 없는 것은 «고장»이 아니라 «장치가 아직 꺼져 있음»이다 — 이 하나로
+      // 구 프로젝트 전부가 상시 경고를 달면 진짜 드리프트 경고가 묻힌다. note 로 안내만 한다.
+      notes.push(t({
+        en: 'the policy baseline is not pinned yet — pin it with `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` so that '
+          + 'later changes to the policy files become visible',
+        ko: '정책 베이스라인이 아직 고정되지 않았다 — `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 고정해야 '
+          + '이후의 정책 파일 변경이 보인다',
+      }));
+    } else if (pinned.hash !== current.hash) {
+      const added = current.files.filter(f => !pinned.files.includes(f));
+      const removed = pinned.files.filter(f => !current.files.includes(f));
+      const delta = [
+        added.length ? t({ en: `added: ${added.join(', ')}`, ko: `추가: ${added.join(', ')}` }) : '',
+        removed.length ? t({ en: `removed: ${removed.join(', ')}`, ko: `삭제: ${removed.join(', ')}` }) : '',
+      ].filter(Boolean).join('; ');
+      warnings.push(t({
+        en: `the policy files differ from the pinned baseline — pinned ${pinned.hash.slice(0, 12)} `
+          + `(${pinned.ts}) ≠ current ${current.hash.slice(0, 12)}`
+          + (delta ? ` [${delta}]` : '') + `. Files: ${current.files.join(', ') || 'none'}. `
+          + 'These files decide what the hook blocks, so a change to them changes the enforcement itself. '
+          + 'The change may well be legitimate — review it, then re-pin with `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` (the env prefix is the user\'s own hands — an agent cannot run it)',
+        ko: `정책 파일이 고정된 베이스라인과 다르다 — 고정 ${pinned.hash.slice(0, 12)} `
+          + `(${pinned.ts}) ≠ 현재 ${current.hash.slice(0, 12)}`
+          + (delta ? ` [${delta}]` : '') + `. 대상: ${current.files.join(', ') || '없음'}. `
+          + '이 파일들이 훅이 무엇을 막을지 정하므로, 여기가 바뀌면 강제 자체가 바뀐 것이다. '
+          + '정당한 변경일 수 있다 — 내용을 확인한 뒤 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 재고정하라(env 접두는 사람의 손이다 — 에이전트는 실행할 수 없다)',
+      }));
+    }
+  }
+
+  // 8. repair — 고칠 발산이 있을 때만 움직인다. 저널이 손상이어도 발산이 없으면 할 일이 없다.
+  let repaired = false;
+  let refused = false;
+  if (issues.length > 0 && opts.repair) {
+    if (!trustworthy && !opts.force) {
+      refused = true;
+      warnings.push(
+        tr(root, {
+        en: 'State has diverged but the journal cannot be trusted, so repair is refused — find out why '
+          + 'the journal is damaged first. To repair anyway, use --force',
+        ko: 'state 발산이 있으나 저널을 신뢰할 수 없어 복구 거부 — '
+          + '저널 손상 원인을 먼저 확인하라. 그래도 복구하려면 --force',
+      }),
+      );
+    } else {
+      // 정산 판정은 repair 가 실제로 쓸 상태(replayed) 기준이다 — current 기준으로 정산하면
+      // 발산 복구가 되살릴 activeWave 와 어긋나 다음 doctor 가 다시 발산을 본다.
+      const replayedWave = replayed.activeWave;
+      const settledActiveWave =
+        replayedWave !== null && !fs.existsSync(wavePath(root, replayedWave))
+          ? replayedWave
+          : null;
+      let target = replayed;
+      if (settledActiveWave) {
+        // 순서 계약: 저널이 먼저. writeState 로만 비우면 재생 결과와 발산해 영구 red 가 된다.
+        appendEvent(root, 'wave-stale', {
+          id: settledActiveWave, reason: 'wave-file-missing', via: 'doctor-repair',
+        });
+        target = { ...replayed, activeWave: null }; // = wave-stale 을 포함한 재생 결과
+      }
+      writeState(root, target);
+      // 복구는 흔적을 남긴다 — 나중에 "왜 state 가 이렇게 됐나"의 답이 저널 안에 있어야 한다.
+      appendEvent(root, 'doctor-repaired', {
+        hadCorruptJournal: !trustworthy,
+        forced: !!opts.force,
+        settledActiveWave,
+      });
+      repaired = true;
+    }
+  }
+
+  // 9. 훅 에러 로그 정리 — 비울 수단이 없으면 warning 이 영구히 남아 새 실패를 가린다.
+  //    state 복구와 독립한 유지보수 동작이라 발산(issues)이 없어도 --repair 면 수행한다.
+  //    단 **비우지 않고 .prev 로 회전한다**: `.runtime/` 은 gitignore 라 이 파일이 유일본이고,
+  //    훅 자신이 "doctor --repair 권장"을 뿌리므로 무관한 사고 대응 중에 증거가 지워진다
+  //    (최악은 --force 경로 — 저널 손상 조사 중이라 훅 로그가 교차 증거인 순간이다).
+  //    `.prev` 도 `*` 규칙에 걸려 여전히 커밋되지 않는다.
+  //    복구가 거부된 경우엔 아예 손대지 않고, warning 은 회전 전 건수 그대로 보고한다.
+  if (opts.repair && !refused && hookErrors > 0) {
+    const log = path.join(runtimeDir(root), 'hook-errors.log');
+    try {
+      fs.renameSync(log, `${log}.prev`);
+      notes.push(t({
+        en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
+        ko: `hook-errors.log ${hookErrors}건 → .prev 회전`,
+      }));
+    } catch {
+      // 회전 실패는 진단을 막지 않는다 — 경고가 남아 다음 실행에 다시 보인다
+    }
+  }
+
+  // issues 는 복구 후에도 남긴다 — 무엇이 어긋나 있었는지가 보고의 본체다.
+  // [UX-121] 다만 **판정(ok)은 수리 후 상태로** 낸다. 한 번 더 돌려야 알 수 있는 보고는
+  // 사람에게 같은 일을 두 번 시킨다. 재진단은 수리했을 때만, 수리 없이 한 번만 돈다.
+  if (repaired) {
+    const after = runDoctor(root, {});
+    return { ok: after.issues.length === 0, repaired, refused, issues, remaining: after.issues, warnings, notes };
+  }
+  return { ok: issues.length === 0, repaired, refused, issues, warnings, notes };
+}

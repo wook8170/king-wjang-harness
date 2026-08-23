@@ -1,0 +1,27 @@
+== sandbox: /var/folders/ff/cy1h2lm906z4g4811rgg83500000gn/T/tmp.TZxZqhDTuK ==
+PASS  G4 비간섭: 미초기화 session-start 침묵
+PASS  G3 init 성공
+PASS  기본 페이즈 P0
+PASS  G5 설계트랙 소스쓰기 deny
+PASS  설계트랙 docs/ 쓰기 허용(무간섭)
+PASS  설계트랙 루트 *.md 허용
+PASS  G5 코어파일 state.json 편집 deny
+PASS  G5 설계트랙 배포 Bash deny
+PASS  일반 Bash 허용(무간섭)
+PASS  ⑧ 경로우회 정규화 후 deny
+PASS  G5 stop 가드: 미정산 turn 차단
+PASS  정산 후 stop 통과(무간섭)
+PASS  stop 루프가드 통과
+PASS  ⑧ LOGIC-11 state.json 삭제 후에도 deny(저널폴백)
+PASS  ⑧ LOGIC-10 형태손상 state.json 도 deny(폴백)
+PASS    └ 손상 태그 노출
+PASS  G4 무해: 깨진 stdin exit0
+PASS  G4 무해: 미지 이벤트 exit0
+PASS  G4 무해: 빈 stdin exit0
+PASS    └ corrupt-stdin 기록됨
+PASS    └ unknown-hook-event 기록됨
+  (clone has NO node_modules)
+PASS  G7 자체완결 dist --version(무 node_modules)
+PASS  G7 클론서 실제 pre-tool deny(yaml 인라인)
+
+== E2E 요약: PASS=23 FAIL=0 ==

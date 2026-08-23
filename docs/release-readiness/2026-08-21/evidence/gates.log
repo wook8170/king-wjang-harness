@@ -1,0 +1,66 @@
+=== Fri Aug 21 13:26:15 KST 2026 host=arm64 node=v22.22.2 ===
+--- vitest run #1 ---
+ ✓ core/test/runtime.test.ts (3 tests) 10ms
+ ✓ core/test/config.test.ts (9 tests) 11ms
+ ✓ core/test/hook-pre-tool.test.ts (8 tests) 44ms
+ ✓ core/test/hook-stop.test.ts (4 tests) 32ms
+ ✓ core/test/mcp.test.ts (21 tests) 872ms
+   ✓ mcp: callTool 방어 > 망가진 인자 형태에도 절대 throw 하지 않는다 825ms
+
+ Test Files  25 passed (25)
+      Tests  584 passed (584)
+   Start at  13:26:16
+   Duration  2.44s (transform 845ms, setup 0ms, collect 3.12s, tests 4.73s, environment 4ms, prepare 2.15s)
+
+--- vitest run #2 ---
+ ✓ core/test/hook-pre-tool.test.ts (8 tests) 43ms
+ ✓ core/test/config.test.ts (9 tests) 23ms
+ ✓ core/test/runtime.test.ts (3 tests) 15ms
+ ✓ core/test/hook-stop.test.ts (4 tests) 47ms
+ ✓ core/test/mcp.test.ts (21 tests) 794ms
+   ✓ mcp: callTool 방어 > 망가진 인자 형태에도 절대 throw 하지 않는다 719ms
+
+ Test Files  25 passed (25)
+      Tests  584 passed (584)
+   Start at  13:26:19
+   Duration  2.21s (transform 786ms, setup 0ms, collect 2.80s, tests 4.06s, environment 5ms, prepare 2.13s)
+
+--- vitest run #3 ---
+ ✓ core/test/config.test.ts (9 tests) 36ms
+ ✓ core/test/hook-pre-tool.test.ts (8 tests) 44ms
+ ✓ core/test/runtime.test.ts (3 tests) 9ms
+ ✓ core/test/hook-stop.test.ts (4 tests) 54ms
+ ✓ core/test/mcp.test.ts (21 tests) 1030ms
+   ✓ mcp: callTool 방어 > 망가진 인자 형태에도 절대 throw 하지 않는다 902ms
+
+ Test Files  25 passed (25)
+      Tests  584 passed (584)
+   Start at  13:26:22
+   Duration  2.29s (transform 1.27s, setup 0ms, collect 3.45s, tests 4.50s, environment 3ms, prepare 2.01s)
+
+--- tsc --noEmit ---
+tsc exit=0
+--- npm audit --omit=dev ---
+found 0 vulnerabilities
+audit exit=0
+--- npm audit (all) ---
+  Depends on vulnerable versions of esbuild
+  node_modules/vite
+    @vitest/mocker  <=3.0.0-beta.4
+    Depends on vulnerable versions of vite
+    node_modules/@vitest/mocker
+      vitest  <=3.2.5
+      Depends on vulnerable versions of @vitest/mocker
+      Depends on vulnerable versions of vite
+      Depends on vulnerable versions of vite-node
+      node_modules/vitest
+    vite-node  <=2.2.0-beta.2
+    Depends on vulnerable versions of vite
+    node_modules/vite-node
+
+
+
+5 vulnerabilities (3 moderate, 1 high, 1 critical)
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force

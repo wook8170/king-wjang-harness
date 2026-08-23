@@ -1,0 +1,21 @@
+13:50  up 1 day, 20:10, 2 users, load averages: 4.91 4.88 6.01
+=== 최종 통합 검증 — 단일 창 재실측 Fri Aug 21 13:50:25 KST 2026 ===
+--- G1/G2 ---
+ Test Files  25 passed (25)
+      Tests  584 passed (584)
+tsc exit=0
+--- G8 ---
+found 0 vulnerabilities
+--- G10 ---
+[90m1:50PM[0m [32mINF[0m [1mno leaks found[0m
+--- G3/G13 맨 클론 ---
+  --version exit=0
+  init exit=0
+  status exit=0
+--- G6 MCP 승인 불가 재확인 ---
+"isError":true
+  MCP 후 상태: status:submitted
+--- 🔴 BLOCKER 재현 확인 (수정 전이므로 재현되어야 정상) ---
+  위조 후 phase: phase:P7
+  소스쓰기: ALLOW (SEC-49 재현)
+  Bash 소스쓰기: ALLOW (SEC-50 재현)

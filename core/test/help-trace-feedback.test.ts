@@ -1,0 +1,285 @@
+/**
+ * UX-24 · API-27 · API-29 · FEAT-22 · FEAT-23 회귀 테스트.
+ * 출하 검증 대장의 사용성·효용성 항목을 고정한다.
+ */
+import { describe, it, expect, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { run } from '../src/cli';
+import { COMMANDS, renderHelp, unknownSub, unknownCommand } from '../src/help';
+import { loadConfig } from '../src/config';
+
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-help-'));
+const capture = () => {
+  const out: string[] = [];
+  const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
+  const e = vi.spyOn(console, 'error').mockImplementation(m => { out.push(String(m)); });
+  return { out, text: () => out.join('\n'), restore: () => { l.mockRestore(); e.mockRestore(); } };
+};
+
+describe('UX-24: 진입점이 존재한다', () => {
+  it('--help·-h·help·무인자가 전부 exit 0 으로 사용법을 낸다', () => {
+    const root = tmp();
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
+    for (const argv of [[], ['--help'], ['-h'], ['help']]) {
+      const c = capture();
+      const code = run(argv, root);
+      c.restore();
+      expect(code, `argv=${JSON.stringify(argv)}`).toBe(0);
+      expect(c.text()).toContain('Usage: harness');
+    }
+    process.env.HARNESS_LANG = prev;
+  });
+
+  it('사용법이 13개 이상의 명령군을 **전부** 나열한다', () => {
+    const text = renderHelp('en');
+    for (const g of COMMANDS) expect(text, `${g.name} 누락`).toContain(`  ${g.name}`);
+    expect(COMMANDS.length).toBeGreaterThanOrEqual(13);
+  });
+
+  it('명령군별 --help 가 하위명령을 낸다', () => {
+    const root = tmp();
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
+    const c = capture();
+    expect(run(['gate', '--help'], root)).toBe(0);
+    c.restore();
+    process.env.HARNESS_LANG = prev;
+    expect(c.text()).toContain('submit');
+    expect(c.text()).toContain('approve');
+  });
+
+  it('미지 명령은 exit 1 이되 가능한 명령군을 함께 준다 — 막다른 골목 금지', () => {
+    const root = tmp();
+    const c = capture();
+    expect(run(['nosuchcmd'], root)).toBe(1);
+    c.restore();
+    expect(c.text()).toContain('nosuchcmd');
+    expect(c.text()).toContain('gate');
+  });
+});
+
+describe('API-27: 하위명령 안내가 모든 군에서 동일하다', () => {
+  it('하위명령을 가진 군은 전부 목록을 안내한다 (절반만 안내하던 회귀 방지)', () => {
+    for (const g of COMMANDS.filter(g => g.subs?.length)) {
+      const msg = unknownSub(g.name, 'zzz', 'en');
+      expect(msg, `${g.name}`).toContain('expected one of:');
+      for (const s of g.subs!) expect(msg, `${g.name}.${s.name}`).toContain(s.name);
+    }
+  });
+
+  it('하위명령 누락(undefined)도 같은 안내를 받는다', () => {
+    expect(unknownSub('node', undefined, 'en')).toContain('upsert');
+    expect(unknownSub('node', undefined, 'ko')).toContain('upsert');
+  });
+});
+
+describe('i18n: 기본은 영어, lang: ko 로 전환', () => {
+  it('기본 config 의 lang 은 en', () => {
+    // 스위트 전역은 ko 로 고정돼 있다(core/test/setup.ts) — 기본값 자체를 보려면 해제한다.
+    const prev = process.env.HARNESS_LANG;
+    delete process.env.HARNESS_LANG;
+    try { expect(loadConfig(tmp()).lang).toBe('en'); } finally { process.env.HARNESS_LANG = prev; }
+  });
+
+  it('config 의 lang: ko 가 출력을 바꾼다', () => {
+    const root = tmp();
+    run(['init'], root);
+    fs.appendFileSync(path.join(root, '.harness/config.yaml'), '\nlang: ko\n');
+    const c = capture();
+    run(['--help'], root);
+    c.restore();
+    expect(c.text()).toContain('사용법: harness');
+  });
+
+  it('번역이 없는 자리는 영어로 떨어진다 (깨지지 않는다)', () => {
+    // ko 가 비어 있는 Msg 를 흉내 — pick 의 폴백 계약
+    expect(unknownCommand('x', 'ko')).toContain('알 수 없는 명령');
+    expect(unknownCommand('x', 'en')).toContain('Unknown command');
+  });
+});
+
+describe('FEAT-22: harness trace', () => {
+  it('노드→웨이브→문서를 조인해 돌려준다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    run(['node', 'upsert', '--id', 'UX-1', '--title', 'login'], root);
+    run(['wave', 'create', '--goal', 'g', '--refs', 'UX-1'], root);
+    c.out.length = 0;
+    expect(run(['trace', 'UX-1'], root)).toBe(0);
+    c.restore();
+    const parsed = JSON.parse(c.text());
+    expect(parsed.node.id).toBe('UX-1');
+    expect(parsed.waves).toHaveLength(1);
+    expect(parsed.waves[0].design_refs).toContain('UX-1');
+  });
+
+  it('없는 노드는 등록 방법을 안내하며 exit 1', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    expect(run(['trace', 'NOPE-1'], root)).toBe(1);
+    c.restore();
+    expect(c.text()).toContain('node upsert');
+  });
+
+  it('인자 누락은 「알 수 없는 명령」이 아니라 사용법이다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    run(['trace'], root);
+    c.restore();
+    expect(c.text()).toContain('harness trace <node-id>');
+    expect(c.text()).not.toContain('알 수 없는 명령');
+  });
+});
+
+describe('FEAT-23: harness gate feedback', () => {
+  it('코멘트를 수집해 리뷰 패킷에 개정 근거로 싣는다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    const file = path.join(root, 'comments.txt');
+    fs.writeFileSync(file, 'label truncated\ncontrast below AA\n\nmove submit button\n');
+    expect(run(['gate', 'feedback', 'P0', '--from', file], root)).toBe(0);
+    c.out.length = 0;
+    run(['report', 'packet', 'P0'], root);
+    c.restore();
+    expect(c.text()).toContain('리뷰 피드백');
+    expect(c.text()).toContain('label truncated');
+    expect(c.text()).toContain('move submit button');
+  });
+
+  it('--from 없이 부르면 수집된 것을 보여 준다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    c.out.length = 0;
+    run(['gate', 'feedback', 'P0'], root);
+    c.restore();
+    expect(c.text()).toContain('수집된 리뷰 피드백이 없다');
+  });
+
+  it('빈 피드백은 거부된다 — 빈 것은 개정 근거가 아니다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    const file = path.join(root, 'empty.txt');
+    fs.writeFileSync(file, '\n\n   \n');
+    expect(run(['gate', 'feedback', 'P0', '--from', file], root)).toBe(1);
+    c.restore();
+  });
+
+  it('수집 내용은 중화된다 — 패킷은 심사자·모델이 읽는 지시 채널이다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    const file = path.join(root, 'evil.txt');
+    fs.writeFileSync(file, 'ok comment\u001b[31m with ansi');
+    run(['gate', 'feedback', 'P0', '--from', file], root);
+    c.out.length = 0;
+    run(['report', 'packet', 'P0'], root);
+    c.restore();
+    expect(c.text()).not.toContain('\u001b');
+    expect(c.text()).toContain('ok comment');
+  });
+});
+
+/**
+ * [API-80] 도움말이 광고하는 인자 형태가 구현과 갈리면, 도움말을 그대로 따라 친 사람이
+ * 실패한다 — `doc url` 은 위치인자만 받는데 도움말은 `--url <주소>` 를 적고 있어서
+ * 「artifact URL 이 https 가 아니다: "--url"」이 나왔다. API-30 과 같은 처방: **둘 다 받는다.**
+ */
+describe('API-80: doc url 은 도움말대로 쳐도 먹는다', () => {
+  const seed = (root: string) => {
+    run(['init'], root);
+    fs.writeFileSync(path.join(root, 'c.md'), '# concept\n');
+    run(['doc', 'upsert', '--id', 'DOC-P0', '--path', 'c.md', '--phase', 'P0'], root);
+  };
+  const URL_A = 'https://claude.ai/public/artifacts/aaaa';
+  const URL_B = 'https://claude.ai/public/artifacts/bbbb';
+
+  it('위치인자 형태', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0', URL_A], root);
+    c.restore();
+    expect(code).toBe(0);
+    expect(c.text()).toContain(URL_A);
+  });
+
+  it('--url 플래그 형태 — 도움말이 오래 광고해 온 쪽', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0', '--url', URL_B], root);
+    c.restore();
+    expect(code).toBe(0);
+    expect(c.text()).toContain(URL_B);
+  });
+
+  it('도움말이 실제로 먹는 형태를 적는다', () => {
+    const doc = COMMANDS.find(x => x.name === 'doc')!;
+    const sub = doc.subs!.find(x => x.name === 'url')!;
+    expect(sub.args).toBe('<DOC-x> <artifact-url>');
+  });
+
+  it('URL 이 없으면 침묵 성공하지 않는다', () => {
+    const root = tmp(); const c = capture();
+    seed(root);
+    const code = run(['doc', 'url', 'DOC-P0'], root);
+    c.restore();
+    expect(code).toBe(1);
+  });
+});
+
+describe('API-29: 침묵 성공이 없다', () => {
+  it('wave create 는 목표 없이 성공하지 않는다', () => {
+    const root = tmp();
+    const c = capture();
+    run(['init'], root);
+    const code = run(['wave', 'create'], root);
+    c.restore();
+    expect(code).toBe(1);
+    expect(c.text()).toContain('--goal');
+  });
+});
+
+/**
+ * [PROD-D] 저장 형식이 「한 코멘트 = 한 불릿」이라 수집할 때 `- ` 를 붙인다 — 그런데 리뷰
+ * 코멘트는 **마크다운 목록 그대로 붙여넣는 것**이 가장 흔한 입력이라 `- - 코멘트` 가
+ * 기본값이었다. 사람이 읽는 개정 근거 문서라 표시가 곧 품질이다.
+ */
+describe('PROD-D: 수집한 피드백에 불릿이 겹치지 않는다', () => {
+  const collect = (root: string, body: string): string => {
+    const file = path.join(root, 'fb.txt');
+    fs.writeFileSync(file, body);
+    run(['gate', 'feedback', 'P0', '--from', file], root);
+    const c = capture();
+    run(['gate', 'feedback', 'P0'], root);
+    c.restore();
+    return c.text();
+  };
+
+  it('이미 불릿인 입력을 이중 불릿으로 만들지 않는다', () => {
+    const root = tmp();
+    const c0 = capture(); run(['init'], root); c0.restore();
+    const text = collect(root, '- already bulleted\n* star bullet\n+ plus bullet\nplain line\n');
+    expect(text).not.toContain('- - ');
+    expect(text).not.toContain('- * ');
+    expect(text).not.toContain('- + ');
+    expect(text).toContain('- already bulleted');
+    expect(text).toContain('- star bullet');
+    expect(text).toContain('- plain line');
+  });
+
+  it('불릿을 벗겨도 코멘트 수는 그대로다 — 내용을 잃지 않는다', () => {
+    const root = tmp();
+    const c0 = capture(); run(['init'], root); c0.restore();
+    const text = collect(root, '- one\n- two\n- three\n');
+    expect(text).toContain('3');
+    for (const w of ['one', 'two', 'three']) expect(text).toContain(w);
+  });
+});

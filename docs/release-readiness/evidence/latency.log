@@ -1,0 +1,2 @@
+# G9 훅 지연 — pre-tool 30회 (node cold start 포함)
+p95=104ms max=113ms min=95ms

@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// core/dist is committed so a plugin clone works without a build step. If someone deleted dist,
+// or took only the sources, the bundle may be missing — and even then the hook must not break the
+// session, so the hook path stays silent: one line of guidance and exit 0 (the do-no-harm contract).
+// Ordinary CLI calls do not hide failure (exit 1).
+let cli;
+try {
+  cli = require('../core/dist/cli.js');
+} catch {
+  console.error('king-wjang-harness: no build in core/dist — run `npm install` (prepare) or `npm run prepare` to build it.');
+  process.exit(process.argv[2] === 'hook' ? 0 : 1);
+}
+cli.main(process.argv.slice(2));

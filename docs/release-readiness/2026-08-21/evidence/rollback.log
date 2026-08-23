@@ -1,0 +1,14 @@
+=== ⑩ 롤백 리허설: 신버전으로 상태 생성 → 구버전 실행 ===
+신버전 상태 생성 완료
+--- 구버전(dist있음) 실행 ---
+--version exit=0 :: king-wjang-harness core v0 
+status exit=0 :: {   "schemaVersion": 1,   "phase": "P0", 
+doctor exit=1 :: {   "ok": false,   "repaired": false, 
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"설계 트랙(P0)에서는 소스 코드를 쓸 수 없다 (P6 설계 승인 전 구현 금지). 허용: .harness/, docs/, 루트 *.md. 설계 산출물을 먼저 완성하라."}}
+구버전 훅 exit=0
+--- 데이터 보존: 구버전 실행 후 신버전이 여전히 읽는가 ---
+신버전 gate status exit=0 :: {"P0":{"status":"approved","artifactHash":"df12f02852ac76c81b5f602cf75a046716c6b
+
+=== schemaVersion 미래값 내성 ===
+status exit=0 :: {   "schemaVersion": 99, 
+doctor exit=1 :: "ok": false
