@@ -196,3 +196,91 @@ describe('[SEC-233] 읽지 못한 페이로드는 통과가 아니다', () => {
     expect(out.trim()).toBe('');
   });
 });
+
+/**
+ * [COST-260] **판정이 2차면 그것은 성능 문제가 아니라 방어 구멍이다.**
+ *
+ * 훅 타임아웃은 10초이고 **타임아웃은 fail-open** 이다 — 그래서 상한 없는 2차는
+ * 「충분히 긴 입력 하나로 강제를 끄는 방법」이 된다. 실제로 `cd x > f` 를 800번 이어 붙인
+ * 8KB 명령 하나가 훅을 **15초** 멈췄다(경로 해석이 조상을 재귀로 훑어 O(R²) syscall).
+ *
+ * 같은 부류가 이 리포에서 두 번째다([COST-228] 은 `pathLikeMentions` 였다) — 그래서
+ * 이 검사는 함수가 아니라 **판정 전체**를 잰다. 절대 상한을 넉넉히 두는 이유는 머신마다
+ * 속도가 다르기 때문이고, **2차가 살아나면 이 여유로는 못 덮는다**(수십 초가 된다).
+ */
+describe('[COST-260] 긴 명령에서도 판정이 끝난다 — 멈추는 훅은 통과하는 훅이다', () => {
+  it('★ `cd` + 리다이렉트 800세그먼트가 상한 안에 끝난다', () => {
+    const root = setup('P0');
+    const cmd = Array.from({ length: 800 }, () => 'cd x > f').join(' ; ');
+    const t0 = process.hrtime.bigint();
+    bash(root, cmd);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    // 수정 전 실측 ~15,000ms · 수정 후 ~200ms. 2초는 느린 머신까지 덮되 2차는 못 덮는 여유다.
+    expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 — 2차가 살아났다`).toBeLessThan(2000);
+  }, 30_000);
+
+  it('세그먼트를 두 배로 늘려도 시간이 네 배로 뛰지 않는다', () => {
+    const root = setup('P0');
+    const timeOf = (n: number): number => {
+      const cmd = Array.from({ length: n }, () => 'cd x > f').join(' ; ');
+      const t0 = process.hrtime.bigint();
+      bash(root, cmd);
+      return Number(process.hrtime.bigint() - t0) / 1e6;
+    };
+    timeOf(200);                                   // 워밍업 — JIT 이 첫 회를 부풀린다
+    const small = timeOf(400);
+    const large = timeOf(800);
+    // 2차면 비율이 ~4다. 선형이면 ~2. 3을 넘으면 2차로 본다(측정 잡음 여유 포함).
+    expect(large / Math.max(small, 1), `배가 비율 ${(large / small).toFixed(1)}배 — 2차 의심`)
+      .toBeLessThan(3);
+  }, 30_000);
+
+  it('긴 명령이 판정을 흐리지 않는다 — 위반은 그대로 잡힌다', () => {
+    // 성능만 재면 「전부 통과」로도 초록이 된다. 짝을 함께 잰다.
+    const root = setup('P0');
+    const pad = Array.from({ length: 400 }, () => 'cd x > f ; cd ..').join(' ; ');
+    expect(denied(bash(root, `${pad} ; echo boom > .harness/config.yaml`)), '위반을 놓쳤다').toBe(true);
+  }, 30_000);
+});
+
+/**
+ * [SEC-259] **위치 가정은 `cp` 에만 있던 것이 아니다.**
+ *
+ * [SEC-232] 가 `cp -t` 를 고쳤지만 같은 모양이 세 도구에 더 있었다 — `tar --directory=DIR`
+ * (짧은 `-C` 만 보고 있었다) · `rsync --backup-dir=DIR`(rsync 는 목적지 말고도 백업본·배치
+ * 파일·로그·부분파일을 **플래그로** 지정받는다) · `git clone --separate-git-dir=DIR`.
+ *
+ * rsync 를 [SEC-232] 처방에서 뺀 이유는 「rsync 의 `-t` 는 `--times`」였는데, 그것은
+ * **위치 가정이 안전하다는 뜻이 아니었다** — 예외로 남겨 둔 자리가 그대로 구멍이었다.
+ * 도구마다 따로 적으면 그것이 아홉 번째 사본이므로 네 표기를 아는 헬퍼 하나로 모았다.
+ */
+describe('[SEC-259] 플래그가 지정하는 쓰기 자리 — 도구를 가리지 않는다', () => {
+  it('플래그로 하네스 소유 자리를 겨누면 막힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'tar --directory=.harness -xf /tmp/x.tar',
+      'tar --directory .harness -xf /tmp/x.tar',
+      'tar -C .harness -xf /tmp/x.tar',
+      'rsync --backup-dir=.harness -b src/ dst/',
+      'rsync --write-batch=.harness/events.jsonl src/ dst/',
+      'rsync --log-file=.harness/config.yaml src/ dst/',
+      'git clone --separate-git-dir=.harness https://x/y.git z',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 같은 플래그가 밖을 겨누면 그대로 통과한다 — `rsync -t` 는 `--times` 다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'tar --directory=/tmp/out -xf /tmp/x.tar',
+      'rsync --backup-dir=/tmp/bak -b src/ dst/',
+      'rsync --log-file=/tmp/r.log src/ dst/',
+      'rsync -t src/a.ts /tmp/x',
+      'git clone https://x/y.git /tmp/z',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});

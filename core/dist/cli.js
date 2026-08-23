@@ -11880,10 +11880,12 @@ function normalizePath(p) {
   }
   return (abs ? "/" : "") + parts.join("/");
 }
+var CWD_MAX = 4096;
 function advanceCwd(cwd, op) {
   if (op === void 0 || op === "-" || DYNAMIC_CD.test(op)) return null;
   if (op.startsWith("/")) return normalizePath(op);
   if (cwd === null) return null;
+  if (cwd.length + op.length + 1 > CWD_MAX) return null;
   return normalizePath((cwd ? cwd + "/" : "") + op);
 }
 function resolveIn(cwd, p) {
@@ -11926,10 +11928,17 @@ function segmentsWithIndex(cmd) {
   return out;
 }
 function cwdAt(segs, index) {
+  let lo = 0;
+  let hi = segs.length - 1;
   let cwd = "";
-  for (const seg of segs) {
-    if (seg.start > index) break;
-    cwd = seg.cwd;
+  while (lo <= hi) {
+    const mid = lo + hi >> 1;
+    if (segs[mid].start <= index) {
+      cwd = segs[mid].cwd;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
   return cwd;
 }
@@ -12231,14 +12240,28 @@ function expandStaticVars(rawCmd, env = {}) {
     (whole, a, b) => lookup(a ?? b ?? "") ?? whole
   );
 }
-function targetDirectory(args) {
+function flagValues(args, names) {
+  const out = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === "-t" || a === "--target-directory") return args[i + 1] ?? null;
-    if (a.startsWith("--target-directory=")) return a.slice("--target-directory=".length);
-    if (a.startsWith("-t") && a.length > 2 && !a.startsWith("--")) return a.slice(2);
+    for (const nm of names) {
+      if (nm.length === 1) {
+        if (a === `-${nm}`) {
+          const v = args[i + 1];
+          if (v !== void 0 && !isFlag(v)) out.push(v);
+        } else if (!a.startsWith("--") && a.startsWith(`-${nm}`) && a.length > 2) out.push(a.slice(2));
+      } else {
+        if (a === `--${nm}`) {
+          const v = args[i + 1];
+          if (v !== void 0 && !isFlag(v)) out.push(v);
+        } else if (a.startsWith(`--${nm}=`)) out.push(a.slice(nm.length + 3));
+      }
+    }
   }
-  return null;
+  return out;
+}
+function targetDirectory(args) {
+  return flagValues(args, ["t", "target-directory"])[0] ?? null;
 }
 function sourcesFor(operands, dir) {
   let dropped = false;
@@ -12354,15 +12377,22 @@ function scanBashWrites(rawCmd, env = {}) {
       case "tar":
       case "unzip":
       case "bsdtar": {
-        const dirFlag = name === "unzip" ? "-d" : "-C";
-        for (let i = 0; i < args.length - 1; i++) {
-          if (args[i] === dirFlag && !isFlag(args[i + 1])) targets.push(args[i + 1]);
-        }
+        targets.push(...name === "unzip" ? flagValues(args, ["d"]) : flagValues(args, ["C", "directory"]));
         break;
       }
       case "rsync":
       case "scp":
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (name === "rsync") {
+          targets.push(...flagValues(args, [
+            "backup-dir",
+            "write-batch",
+            "only-write-batch",
+            "log-file",
+            "partial-dir",
+            "temp-dir"
+          ]));
+        }
         break;
       case "sponge":
         targets.push(...operands);
@@ -12400,6 +12430,7 @@ function scanBashWrites(rawCmd, env = {}) {
         if (ci >= 0) {
           const rest = operands.slice(ci + 1).filter((a) => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes("@"));
           if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+          targets.push(...flagValues(args, ["separate-git-dir"]));
         }
         break;
       }
@@ -12972,6 +13003,7 @@ function isHarnessStateShape(s) {
   return isPhase(o.phase) && (o.activeWave === null || typeof o.activeWave === "string");
 }
 function handleHook(root, event, input) {
+  realCache = /* @__PURE__ */ new Map();
   try {
     if (!fs18.existsSync(harnessDir(root))) return null;
     let state;
@@ -13001,6 +13033,8 @@ function handleHook(root, event, input) {
   } catch (err) {
     logHookError(root, event, err);
     return null;
+  } finally {
+    realCache = null;
   }
 }
 function logHookError(root, event, err) {
@@ -13203,7 +13237,15 @@ function deny(reason, degraded, lang = "en") {
     }
   };
 }
+var realCache = null;
 function realOrSelf(p) {
+  const hit = realCache?.get(p);
+  if (hit !== void 0) return hit;
+  const out = realOrSelfUncached(p);
+  realCache?.set(p, out);
+  return out;
+}
+function realOrSelfUncached(p) {
   try {
     return fs18.realpathSync.native(p);
   } catch {
@@ -14863,7 +14905,7 @@ function readAllStdin() {
   const WAIT_MS = 2;
   const IDLE_MS = 200;
   const DRAIN_MS = 2e3;
-  const MAX_BYTES = 32 * 1024 * 1024;
+  const MAX_BYTES = 4 * 1024 * 1024;
   const buf = Buffer.alloc(CHUNK);
   const chunks = [];
   let waited = 0;

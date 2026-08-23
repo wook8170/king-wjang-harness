@@ -107,10 +107,24 @@ function normalizePath(p: string): string {
 }
 
 /** `cd` 세그먼트를 만나면 가상 cwd 를 옮긴다. 못 읽는 대상이면 「알 수 없음」으로 떨어진다. */
+/**
+ * [COST-260] **가상 cwd 에 길이 상한을 둔다.**
+ *
+ * `cd x` 를 이어 붙이면 cwd 문자열이 세그먼트 수에 비례해 자라고, 그 문자열을 리다이렉트마다
+ * 정규화·결합하므로 전체가 다시 2차가 된다(이진탐색만으로는 안 없어진다).
+ * 상한을 넘으면 `null` 을 낸다 — `null` 은 **「어디에 쓰는지 모른다」는 사실**이고 통과가
+ * 아니다(`resolveIn` 계약). 즉 상한이 **방어를 되돌리지 않는다**: 모르면 미해결로 올라가고
+ * 호출측이 하네스 소유 이름을 그 자리에서 막는다.
+ *
+ * 4096자는 흔한 `PATH_MAX` 다 — 그보다 깊은 실제 경로는 OS 가 먼저 거절한다.
+ */
+const CWD_MAX = 4096;
+
 function advanceCwd(cwd: Cwd, op: string | undefined): Cwd {
   if (op === undefined || op === '-' || DYNAMIC_CD.test(op)) return null;
   if (op.startsWith('/')) return normalizePath(op);
   if (cwd === null) return null;
+  if (cwd.length + op.length + 1 > CWD_MAX) return null;
   return normalizePath((cwd ? cwd + '/' : '') + op);
 }
 
@@ -169,12 +183,22 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
   return out;
 }
 
-/** 원문 위치가 속한 세그먼트의 가상 cwd. */
+/**
+ * 원문 위치가 속한 세그먼트의 가상 cwd.
+ *
+ * [COST-260] **리다이렉트마다 전 세그먼트를 재순회하면 O(R·S) 다.** `cd x > f` 를 800번
+ * 이어 붙인 8KB 명령 하나로 훅이 **15초** 걸렸고, 훅 타임아웃은 10초이며 **타임아웃은
+ * fail-open** 이다 — 즉 상한 없는 2차는 그 자체로 방어를 끄는 입력이 된다([COST-228] 이
+ * `pathLikeMentions` 에서 고친 것과 **같은 부류가 함수만 옮겨 앉은 것**이다).
+ * `segs` 는 `start` 오름차순이므로 이진탐색으로 O(log S) 에 찾는다.
+ */
 function cwdAt(segs: ReadonlyArray<{ start: number; cwd: Cwd }>, index: number): Cwd {
+  let lo = 0;
+  let hi = segs.length - 1;
   let cwd: Cwd = '';
-  for (const seg of segs) {
-    if (seg.start > index) break;
-    cwd = seg.cwd;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (segs[mid].start <= index) { cwd = segs[mid].cwd; lo = mid + 1; } else { hi = mid - 1; }
   }
   return cwd;
 }
@@ -596,15 +620,34 @@ export function expandStaticVars(rawCmd: string, env: Record<string, string | un
  * `--times`, 즉 수정시각 보존이다). 플래그 의미는 도구마다 다르다는 것이 [SEC-221] 이
  * 「모든 형태에서 조회인 것만 목록에 둔다」로 정리한 교훈이고, 여기도 같은 선이다.
  */
-function targetDirectory(args: readonly string[]): string | null {
+/**
+ * [SEC-259] **플래그가 값으로 지정하는 경로**를 한 곳에서 모은다.
+ *
+ * [SEC-232] 가 `cp -t` 하나를 고쳤지만 같은 모양이 다른 도구에도 있었다 —
+ * `tar --directory=DIR`(=`-C` 의 긴 형태) · `rsync --backup-dir=DIR` ·
+ * `git clone --separate-git-dir=DIR`. 도구마다 따로 적으면 그것이 곧 다음 사본이고,
+ * 이 리포는 사본 드리프트로 여덟 번 뚫렸다. **세 표기를 한 함수가 안다**:
+ * `-x VAL` · `-xVAL` · `--name VAL` · `--name=VAL`.
+ */
+function flagValues(args: readonly string[], names: readonly string[]): string[] {
+  const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '-t' || a === '--target-directory') return args[i + 1] ?? null;
-    if (a.startsWith('--target-directory=')) return a.slice('--target-directory='.length);
-    // `-tDIR` 붙여쓰기. `--` 로 시작하는 긴 플래그는 위에서 이미 갈렸다.
-    if (a.startsWith('-t') && a.length > 2 && !a.startsWith('--')) return a.slice(2);
+    for (const nm of names) {
+      if (nm.length === 1) {
+        if (a === `-${nm}`) { const v = args[i + 1]; if (v !== undefined && !isFlag(v)) out.push(v); }
+        else if (!a.startsWith('--') && a.startsWith(`-${nm}`) && a.length > 2) out.push(a.slice(2));
+      } else {
+        if (a === `--${nm}`) { const v = args[i + 1]; if (v !== undefined && !isFlag(v)) out.push(v); }
+        else if (a.startsWith(`--${nm}=`)) out.push(a.slice(nm.length + 3));
+      }
+    }
   }
-  return null;
+  return out;
+}
+
+function targetDirectory(args: readonly string[]): string | null {
+  return flagValues(args, ['t', 'target-directory'])[0] ?? null;
 }
 
 /** `-t DIR` 형태에서 소스들 — 그 DIR 자신(따로 온 피연산자일 때)만 한 번 뺀다. */
@@ -757,16 +800,28 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // 전개 디렉토리(`-C` / `-d`)가 대상이다. 아카이브 자체는 읽기다.
         // 플래그 자체가 「여기가 디렉토리다」라고 말하므로 `looksLikePath` 를 요구하지 않는다 —
         // `-C src` 의 `src` 는 슬래시도 확장자도 없지만 분명한 쓰기 대상이다.
-        const dirFlag = name === 'unzip' ? '-d' : '-C';
-        for (let i = 0; i < args.length - 1; i++) {
-          if (args[i] === dirFlag && !isFlag(args[i + 1])) targets.push(args[i + 1]);
-        }
+        // [SEC-259] 긴 형태도 같은 뜻이다 — `tar --directory=DIR` 은 `-C DIR` 이고,
+        // 예전에는 짧은 형태만 봐서 긴 형태로 쓰면 전개 위치가 판정에서 사라졌다.
+        targets.push(...(name === 'unzip'
+          ? flagValues(args, ['d'])
+          : flagValues(args, ['C', 'directory'])));
         break;
       }
       case 'rsync':
       case 'scp':
         // 목적지는 마지막 피연산자다(cp 와 같은 규칙).
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        /**
+         * [SEC-259] rsync 는 **목적지 말고도 파일을 쓴다.** 백업본·배치파일·로그·부분파일이
+         * 전부 플래그로 자리를 지정받는다. `-t` 처방([SEC-232])을 여기 못 쓰는 이유는
+         * rsync 의 `-t` 가 `--times` 라서이지, **위치 가정이 안전해서가 아니다** —
+         * 그 구분을 안 하면 「rsync 는 예외」로 남겨 둔 자리가 그대로 구멍이 된다.
+         */
+        if (name === 'rsync') {
+          targets.push(...flagValues(args, [
+            'backup-dir', 'write-batch', 'only-write-batch', 'log-file', 'partial-dir', 'temp-dir',
+          ]));
+        }
         break;
       case 'sponge':
         // moreutils. 파이프 결과를 파일에 **덮어쓴다** — 이름만 보면 쓰기처럼 안 생겼다.
@@ -816,6 +871,8 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         if (ci >= 0) {
           const rest = operands.slice(ci + 1).filter(a => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes('@'));
           if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+          // [SEC-259] `--separate-git-dir=DIR` 은 저장소 실체를 그 자리에 만든다 — 위치가 아니라 플래그다.
+          targets.push(...flagValues(args, ['separate-git-dir']));
         }
         break;
       }

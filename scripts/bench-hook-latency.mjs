@@ -212,6 +212,57 @@ for (const shape of Object.keys(SHAPES)) {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
+
+/**
+ * [COST-262] **명령 파싱 경로에도 게이트를 건다.**
+ *
+ * 위 표는 **저널 재생**만 잰다 — 페이로드가 `ls` 하나로 고정돼 있어서, 명령을 뜯어보는
+ * 경로(세그먼트 분해·cwd 추적·경로 추출·안전망)는 벤치가 **한 번도 실행하지 않았다.**
+ * 그 사이 그 경로에서 2차 폭발이 두 번 났다: [COST-228](`pathLikeMentions`)과
+ * [COST-260](경로 해석 조상 재귀). 둘 다 **훅 타임아웃을 넘겨 fail-open** 을 만드는 종류인데,
+ * 벤치가 안 보니 CI 에 걸릴 방법이 없었다 — 게이트가 없는 자리에서 회귀는 사람이 안 볼 때 지나간다.
+ *
+ * 문턱은 훅 타임아웃(10초)의 1/10 이다. 정상 명령은 수십 ms 라 여유가 크고, 2차가 살아나면
+ * 입력을 조금만 키워도 이 문턱을 넘는다.
+ */
+const CMD_GATE_MS = 1000;
+const CMD_SHAPES = {
+  plain: 'ls',
+  'long-noslash': `echo ${'a'.repeat(200_000)}`,
+  'cd-redirect': Array.from({ length: 1000 }, () => 'cd x > f').join(' ; '),
+  quoted: Array.from({ length: 1000 }, (_, i) => `echo 'a && b; c' > out${i}.txt`).join(' ; '),
+};
+
+console.log();
+console.log(L('| Command shape | p95 | Gate |', '| 명령 부류 | p95 | 게이트 |'));
+console.log('|---|---|---|');
+{
+  const root = makeProject('realistic');
+  for (const [shape, command] of Object.entries(CMD_SHAPES)) {
+    const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
+    const one = () => execFileSync(hook, ['pre-tool'], {
+      cwd: root, input: payload, env: { ...process.env, CLAUDE_PROJECT_DIR: root },
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    const r = timeIt(one);
+    let verdict;
+    if (r.p95 < CMD_GATE_MS) {
+      verdict = BUSY ? L('pass — machine busy', '충족 — 머신 부하') : L('PASS', '충족');
+    } else {
+      verdict = BUSY ? L('over — machine busy', '초과 — 머신 부하') : L('**FAIL**', '**미충족**');
+      if (!BUSY) failed++;
+    }
+    console.log(`| ${shape} | ${r.p95.toFixed(1)}ms | ${verdict} |`);
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+}
+console.log(L(`Command parsing must stay under ${CMD_GATE_MS}ms p95 — these shapes are the ones that`,
+              `명령 파싱은 p95 ${CMD_GATE_MS}ms 미만이어야 한다 — 이 부류들이 과거에 2차 폭발이`));
+console.log(L('went quadratic before (long paths without slashes, repeated `cd` with redirects).',
+              '났던 자리다(슬래시 없는 긴 문자열, `cd` + 리다이렉트 반복).'));
+console.log(L('A hook that exceeds its 10s timeout is killed — and a killed hook allows the call.',
+              '10초 타임아웃을 넘긴 훅은 kill 되고, kill 된 훅은 그 호출을 **통과시킨다**.'));
+
 console.log();
 console.log(L(`Gate G9 is on the last column — **the fallback must add less than ${GATE_MS}ms p95**.`,
               `게이트(G9)는 마지막 열에 걸린다 — **폴백이 더하는 p95 < ${GATE_MS}ms**.`));

@@ -238,6 +238,7 @@ function isHarnessStateShape(s: unknown): s is HarnessState {
 }
 
 export function handleHook(root: string, event: HookEvent, input: HookInput): object | null {
+  realCache = new Map();                        // [COST-260] 수명은 이 판정 한 번이다
   try {
     // 불변식(1) 비간섭: `.harness/` 자체가 없어야 "하네스 미사용 프로젝트"다 — 완전 침묵.
     // state.json(파생 캐시)만 사라진 걸 미사용으로 오판하면(구 isInitialized 게이트) events.jsonl·
@@ -283,6 +284,8 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
   } catch (err) {
     logHookError(root, event, err);
     return null; // 불변식(2) 무해: 판정 실패가 세션을 깨뜨리지 않는다
+  } finally {
+    realCache = null;                           // [COST-260] 판정 밖으로 새어 나가지 않게
   }
 }
 
@@ -613,7 +616,30 @@ function deny(reason: string, degraded: Degraded | null, lang: Lang = 'en'): obj
  * 올라가 정규화하고, 아직 존재하지 않는 나머지 구성요소는 원본 그대로 이어 붙인다.
  * 최상위(`dirname(p) === p`)까지 못 풀면 원본을 그대로 반환한다 — 무해 불변식.
  */
+/**
+ * [COST-260] **판정 한 번 동안만 사는 경로 해석 캐시.**
+ *
+ * `realOrSelf` 는 조상을 **재귀로** 해석한다 — 깊이 D 인 경로 하나에 D번의 realpath·readlink
+ * 시도가 든다(전부 실패하는 경우가 보통이다). 대상이 R개이고 `cd x` 로 깊이가 R 에 비례해
+ * 자라면 전체가 **O(R²) syscall** 이 되고, 8KB 짜리 명령 하나가 훅을 15초 멈춘다.
+ * 훅 타임아웃은 10초이고 **타임아웃은 fail-open** 이므로, 이 2차는 그 자체로 방어를 끄는 입력이다.
+ *
+ * 조상은 대상들 사이에서 **공유된다** — 그래서 캐시 하나로 O(R+D) 로 떨어진다.
+ * 수명을 판정 1회로 묶는 이유: 파일시스템은 판정 도중에는 안 바뀌지만 **판정 사이에는
+ * 바뀐다**(테스트가 파일을 만들고 다시 판정하는 것이 정확히 그 경우다). 오래 사는 캐시는
+ * 낡은 답을 주고, 낡은 답은 이 제품에서 **잘못된 통과**가 된다.
+ */
+let realCache: Map<string, string> | null = null;
+
 function realOrSelf(p: string): string {
+  const hit = realCache?.get(p);
+  if (hit !== undefined) return hit;
+  const out = realOrSelfUncached(p);
+  realCache?.set(p, out);
+  return out;
+}
+
+function realOrSelfUncached(p: string): string {
   try {
     return fs.realpathSync.native(p);
   } catch {
