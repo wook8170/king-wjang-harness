@@ -191,16 +191,6 @@ const CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
  */
 const OWNED_BASENAMES = new Set(CORE_FILES.map(f => f.split('/').pop() ?? ''));
 
-/**
- * [SEC-213] **보호 파일이 사는 디렉토리.** `.harness/` 자체는 쓰기가 허용된 자리다
- * (웨이브 지시서·증거·패킷이 거기 산다) — 보호되는 것은 **그 안의 특정 파일들**이다.
- * 그래서 이름을 실행 시점에 조립하면(`\`.harness/$a$b\``) 디렉토리 판정만으로는 못 잡는다.
- * 그 자리에 놓일 이름 모를 파일이 **보호 파일일 수도** 있으므로, 이 디렉토리들에서는
- * 「모르는 이름」을 거부한다. 목록은 `CORE_FILES` 에서 파생한다 — 두 벌로 두지 않는다.
- */
-const OWNED_DIRS = new Set(
-  CORE_FILES.map(f => (f.includes('/') ? f.slice(0, f.lastIndexOf('/') + 1) : '')),
-);
 
 /**
  * 턴 로그 헤딩은 **파싱 앵커**다 — 표시 문자열이 아니다. 지시서 본문은 생성 시점의 `lang` 을
@@ -1500,10 +1490,15 @@ function preTool(
         const prefix = raw.split(/[$`{*?]/)[0];
         const dir = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/') + 1) : '';
         if (dir === '') continue;                       // 정적 부분이 없다 — 말할 수 있는 게 없다
-        const ownedDir = OWNED_DIRS.has(dir);
-        const verdict = ownedDir
-          ? true
-          : judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
+        /**
+         * [QUAL-229] 예전에는 여기에 「보호 파일이 사는 디렉토리면 무조건 거부」 절이 하나 더
+         * 있었다. 감정자가 그 절의 뮤테이션이 **생존**함을 실증했고, 구현자가 **그 절만 발화하는
+         * 입력을 찾으려다 실패**했다 — 만들 수 있는 8개 벡터가 전부 다른 절(`opaqueExec`·
+         * 경로 안전망·아래 판정)에 먼저 걸렸다. **발화하지 않는 방어는 유지 비용만 남기고
+         * 다음 사람을 오도한다**(그 절이 지킨다고 착각하게 만든다). 그래서 지웠다.
+         * 되살릴 근거는 하나뿐이다 — **그 절만 막는 입력을 실제로 보이는 것.**
+         */
+        const verdict = judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
         if (verdict) {
           return deny(L(
             `This builds the file name at run time (\`${raw}\`), so the harness cannot tell which file `

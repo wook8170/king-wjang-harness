@@ -104,7 +104,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 
 ## Guarantees (the invariants we actually hold)
 
-- **Non-interference** — In any project *without* a `.harness/` directory, every hook returns silence. Installing it globally is zero-risk; it activates **per project**, only after `harness init`.
+- **Non-interference** — In any project *without* a `.harness/` directory, every hook returns silence — no output, no files, no context tokens. What it does cost is time: a shell gate exits in **~4 ms p95** before Node ever starts. Installing it globally is zero-risk; it activates **per project**, only after `harness init`.
 - **Harmless** — A hook **never crashes your session.** Every internal failure is absorbed to `exit 0` and logged. A broken verdict degrades to silence, never to a dead session.
 - **Deterministic** — No wall-clock, no randomness in any decision path. Same input → same verdict, every run. (Verified across 3 identical test runs.)
 - **Observable fail-open** — When the harness *does* fall silent, it leaves a trace in `.harness/.runtime/hook-errors.log`; `harness doctor` counts and surfaces it. An unobserved fail-open is worse than none.
@@ -218,7 +218,7 @@ block feels wrong for your stack, this is the dial, not the source code.
 
 | Key | Default | What it does |
 |---|---|---|
-| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean, or export `HARNESS_LANG=ko` for one run. **MCP tool descriptions and refusals stay English** (the ko strings are not in the MCP bundle). |
+| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean, or export `HARNESS_LANG=ko` for one run. **MCP tool descriptions and refusals stay English** — measured with `lang: ko` and `HARNESS_LANG=ko` both set. |
 | `profile` | `generic` | Which profile supplies `test` / `build` / `deploy` / `e2e` commands. A project-local `.harness/profile/` always wins over the bundled one. |
 | `remote_control` | `true` | Whether SessionStart mentions remote control. |
 | `terse` | `false` | Shorter hook guidance. |

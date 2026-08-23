@@ -104,7 +104,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 
 ## 保证（我们实际持有的不变量）
 
-- **互不干扰** —— 在任何*没有* `.harness/` 目录的项目中，每个钩子都保持静默返回。全局安装它是零风险的；它**按项目**激活，且只在执行 `harness init` 之后才会激活。
+- **互不干扰** —— 在任何*没有* `.harness/` 目录的项目中，每个钩子都保持静默返回 —— 没有输出、没有文件、没有上下文令牌。真正的开销是**时间**：shell 门在 Node 启动前就以 **p95 约 4ms** 退出。全局安装它是零风险的；它**按项目**激活，且只在执行 `harness init` 之后才会激活。
 - **无害** —— 钩子**绝不会让你的会话崩溃。** 每一个内部错误都会被吸收为 `exit 0` 并记录下来。一个失效的判定会降级为静默，而不会导致会话卡死。
 - **确定性** —— 任何决策路径中都没有挂钟时间，也没有随机性。相同输入 → 相同判定，每次运行皆然。（已在 3 次相同的测试运行中验证。）
 - **可观测的 fail-open** —— 当 harness *确实*陷入静默时，它会在 `.harness/.runtime/hook-errors.log` 中留下痕迹；`harness doctor` 会统计并呈现它。一个无法被观测到的 fail-open，比根本没有还糟糕。
@@ -214,7 +214,7 @@ npm install          # prepare hook builds core/dist via tsup
 
 | 键 | 默认值 | 作用 |
 |---|---|---|
-| `lang` | `en` | 工具自身输出文案的语言 —— CLI、钩子 JSON 与生成文档。韩语为 `ko`。只想临时切换可用 `HARNESS_LANG=ko`。**MCP 的工具说明与拒绝文案仍为英文**（ko 字符串不在 MCP 包内）。 |
+| `lang` | `en` | 工具自身输出文案的语言 —— CLI、钩子 JSON 与生成文档。韩语为 `ko`。只想临时切换可用 `HARNESS_LANG=ko`。**MCP 的工具说明与拒绝文案仍为英文** —— 已在 `lang: ko` 与 `HARNESS_LANG=ko` 两种设置下实测。 |
 | `profile` | `generic` | 由哪个 profile 提供 `test`／`build`／`deploy`／`e2e` 命令。项目本地的 `.harness/profile/` 始终优先于内置。 |
 | `remote_control` | `true` | SessionStart 是否提示远程控制。 |
 | `terse` | `false` | 缩短钩子提示。 |
