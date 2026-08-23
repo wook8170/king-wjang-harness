@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, isDryRun } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -682,6 +682,12 @@ function isOutsideRoot(rel: string): boolean {
  * **「모았다」는 주장은 모은 것만 말한다.** 정본에서 파생시켜 세 번째가 다시 생기지 않게 한다.
  */
 const SCRIPT_RUNNERS = new Set<string>([...SHELLS_TAKING_C, 'source', '.']);
+
+/**
+ * [ENG-N1] 직접 실행되는 스크립트의 「셸 스크립트인가」 판정 — **정본 파생**.
+ * `busybox` 는 확장자로 쓰이지 않지만 목록에서 빼면 그 자체가 두 번째 사본이 된다.
+ */
+const DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join('|')})$`);
 const SCRIPT_MAX_BYTES = 64 * 1024;
 /**
  * [SEC-175] 사슬 깊이 상한. **[SEC-B3] 이 크기 캡에 한 처방을 깊이 캡에도 적용한다.**
@@ -738,7 +744,11 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
     const candidate = (m[1] !== undefined ? m[2] : m[3]) ?? '';
     if (!candidate || seen.has(candidate)) continue;
     seen.add(candidate);
-    if (m[1] === undefined && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue; // 직접 실행은 셸 스크립트만
+    // [ENG-N1] 확장자 목록도 **정본에서 파생**한다. 손으로 적은 네 개(`sh|bash|zsh|ksh`)는
+    // 정본에서 갈려 `.fish`·`.dash`·`.ash` 를 건너뛰었고, 확장자는 **이름일 뿐**이라
+    // `#!/bin/sh` 본문을 `x.fish` 로 이름 붙이는 것만으로 [SEC-219] 의 본문 검사가 꺼졌다
+    // (fish 를 설치할 필요조차 없다). 러너 형태는 이미 정본 파생이었는데 직접실행만 남아 있었다.
+    if (m[1] === undefined && !DIRECT_SCRIPT_EXT.test(candidate)) continue; // 직접 실행은 셸 스크립트만
     try {
       const rel = relPath(root, candidate);
       /**
@@ -1666,8 +1676,7 @@ function preTool(
        * 판정은 **줄 단위**다. 명령 전체에 한 번 걸면 `npm publish --dry-run; npm publish` 로
        * 차단이 통째로 꺼진다 — 플래그 하나가 다른 줄의 진짜 배포를 사면하면 안 된다.
        */
-      const isDryRun = (line: string): boolean => /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
-      const deployLines = commandLines(cmd).filter(l => !isDryRun(l));
+      const deployLines = commandLines(cmd).filter(l => !isDryRun(l));   // [ENG-N2] 정본은 bashwrite
       const hit = config.design_blocked_bash.find(
         b => b.trim() !== '' && deployLines.some(l => l === b.trim() || l.startsWith(`${b.trim()} `)),
       );

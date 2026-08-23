@@ -563,6 +563,53 @@ export function expandStaticVars(cmd: string, env: Record<string, string | undef
     (whole, a?: string, b?: string) => lookup(a ?? b ?? '') ?? whole);
 }
 
+/**
+ * [SEC-232] **목적지는 위치가 아니라 플래그가 정한다.**
+ *
+ * `cp`·`install`·`ln`·`mv` 의 목적지를 「마지막 피연산자」로 고정해 두었는데, GNU 의
+ * `-t DIR`(`--target-directory`)은 목적지를 **앞에** 둔다: `cp -t DEST SRC…`.
+ * 그래서 훅은 **소스**를 대상으로 오인하고(대개 `/tmp/…` = 루트 밖 = 통과) **진짜 목적지**는
+ * 아예 추출하지 않았다 — `cp -t .harness /tmp/config.yaml` 한 줄로 정책 파일이 덮였다.
+ *
+ * 같은 혼동이 **반대 방향으로도** 틀렸다: `cp -t /tmp/bak src/app.ts` 는 정상 백업(읽기)인데
+ * `src/app.ts` 를 쓰기 대상으로 잡아 설계 트랙에서 과차단했다. 방향이 둘 다 틀린 것은
+ * 「위치로 목적지를 정한다」는 가정 자체가 틀렸다는 뜻이다.
+ *
+ * `-T`/`--no-target-directory` 는 「마지막이 목적지」를 명시하는 플래그라 기본 경로 그대로다.
+ *
+ * **이 헬퍼를 `rsync`·`scp` 에 쓰지 마라 — `-t` 의 뜻이 다르다**(rsync 의 `-t` 는
+ * `--times`, 즉 수정시각 보존이다). 플래그 의미는 도구마다 다르다는 것이 [SEC-221] 이
+ * 「모든 형태에서 조회인 것만 목록에 둔다」로 정리한 교훈이고, 여기도 같은 선이다.
+ */
+function targetDirectory(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-t' || a === '--target-directory') return args[i + 1] ?? null;
+    if (a.startsWith('--target-directory=')) return a.slice('--target-directory='.length);
+    // `-tDIR` 붙여쓰기. `--` 로 시작하는 긴 플래그는 위에서 이미 갈렸다.
+    if (a.startsWith('-t') && a.length > 2 && !a.startsWith('--')) return a.slice(2);
+  }
+  return null;
+}
+
+/** `-t DIR` 형태에서 소스들 — 그 DIR 자신(따로 온 피연산자일 때)만 한 번 뺀다. */
+function sourcesFor(operands: readonly string[], dir: string): string[] {
+  let dropped = false;
+  return operands.filter(o => {
+    if (!dropped && o === dir) { dropped = true; return false; }
+    return true;
+  });
+}
+
+/**
+ * `-t DIR` 이 실제로 만드는 이름들 — 디렉토리 자신과, 그 아래 생기는 각 소스의 basename.
+ * 디렉토리만 올리면 `.harness/config.yaml` 같은 **파일 단위** 보호가 발화하지 않는다.
+ */
+function underDir(dir: string, sources: readonly string[]): string[] {
+  const base = dir.replace(/\/+$/, '');
+  return [dir, ...sources.map(sourcePath => `${base}/${sourcePath.split('/').pop() ?? sourcePath}`)];
+}
+
 export function scanBashWrites(rawCmd: string, env: Record<string, string | undefined> = {}): BashWriteScan {
   // [SEC-216] 볼 수 있는 대입은 먼저 편다 — 그래야 남는 것이 진짜 신호가 된다.
   const cmd = expandStaticVars(rawCmd, env);
@@ -628,11 +675,21 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         }
         break;
       case 'cp':
-      case 'install':
+      case 'install': {
         // 목적지는 마지막 피연산자다. 원본은 읽기이므로 대상이 아니다.
+        const dir = targetDirectory(args);            // [SEC-232] 단, 플래그가 있으면 그것이 정본이다
+        if (dir !== null) { targets.push(...underDir(dir, sourcesFor(operands, dir))); break; }
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         break;
-      case 'mv':
+      }
+      case 'mv': {
+        const dir = targetDirectory(args);            // [SEC-232]
+        if (dir !== null) {
+          const srcs = sourcesFor(operands, dir);
+          targets.push(...underDir(dir, srcs));
+          targets.push(...srcs);                      // [SEC-101] 원본도 사라진다
+          break;
+        }
         // 목적지는 마지막 피연산자다.
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         // [SEC-101] **원본도 대상이다 — mv 는 원본을 없앤다.** `cp` 와 갈리는 지점이 여기다.
@@ -641,14 +698,18 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // **보호 대상이 사라지는 것**을 본다.
         if (operands.length >= 2) targets.push(...operands.slice(0, -1));
         break;
+      }
       case 'rmdir':
         // 비우는 것도 없애는 것이다(SEC-101 과 같은 이유).
         targets.push(...paths);
         break;
-      case 'ln':
+      case 'ln': {
+        const dir = targetDirectory(args);            // [SEC-232]
+        if (dir !== null) { targets.push(...underDir(dir, sourcesFor(operands, dir))); break; }
         // 심링크는 **링크 이름**이 생기는 자리다(마지막 인자). 대상 파일은 건드리지 않는다.
         if (paths.length >= 2) targets.push(paths[paths.length - 1]);
         break;
+      }
       case 'dd':
         for (const a of args) if (a.startsWith('of=')) targets.push(a.slice(3));
         break;
@@ -894,6 +955,21 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
  * (`sh -c "npm publish"`). 그래서 `scanBashWrites` 와 **같은 꺼내기 규칙**을 쓴다:
  * 접두 명령을 벗기고, `sh -c`·`eval`·`xargs`·`find -exec` 의 안쪽을 꺼내 함께 돌려준다.
  */
+/**
+ * [ENG-N2] **`--dry-run` 이 배포가 아니라는 규칙은 한 벌이어야 한다.**
+ *
+ * [EFF-231] 이 이 예외를 두 곳에 구현했고 **적용 범위가 갈렸다** — 훅은 줄 단위로 걸러
+ * `A --dry-run && A` 의 둘째 줄을 잡았는데, 프로파일 경로는 명령 전체를 한 번에 봐서
+ * 플래그가 **어디든** 있으면 전부 사면했다. 그래서 프로파일에만 있는 배포 명령
+ * (`prisma migrate deploy` 등)이 그 형태로 출하 전에 실행됐다.
+ * 규칙이 두 벌이면 **느슨한 쪽이 정본이 된다** — 이 리포가 셸 목록에서 여섯 번 겪은 것과 같다.
+ *
+ * 이름이 명확한 플래그만 본다(`-n` 은 도구마다 뜻이 달라 신뢰하지 않는다).
+ */
+export function isDryRun(line: string): boolean {
+  return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
+}
+
 export function commandLines(cmd: string): string[] {
   const out: string[] = [];
   for (const segment of cmd.split(SEGMENT_SPLIT)) {

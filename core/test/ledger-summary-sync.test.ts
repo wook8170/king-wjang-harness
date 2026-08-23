@@ -243,3 +243,33 @@ describe.skipIf(!IN_REPO)('PROD-141: 검사가 조용히 사라지지 않는다'
     expect(HAS_DOCS, `${DIR} 가 없다 — 대장 검사가 통째로 건너뛰어졌다`).toBe(true);
   });
 });
+
+/**
+ * [QUAL-234] **감정 보고서 한 장이 통째로 트리아지에서 빠져도 아무도 몰랐다.**
+ *
+ * 3-N 가치 축이 「open BLOCKER 0 이 거짓」이라고 판정했고, 원인은 코드가 아니라 **절차**였다:
+ * 3-L 사용성 · 3-M 가치 · 3-M 사용성 보고서가 **대장에 인용 0건**이었다. 즉 그 보고서들이
+ * 낸 결함(그중 하나가 BLOCKER 였다)은 등재되지도, 기각되지도, 유예되지도 않고 **떨어졌다**.
+ * 그 상태에서 대장은 「open BLOCKER 0」을 말했고 그것이 요약·README·커밋 메시지로 번졌다.
+ *
+ * 이 검사는 **결함 하나하나**를 세지 않는다(그건 사람의 판단이다). 대신 **보고서 한 장이
+ * 통째로 사라지는 것**만 막는다 — 실제로 일어난 실패가 정확히 그 부류였고, 기계가 확실히
+ * 셀 수 있는 것도 그것이다. 인용이 하나라도 있으면 「이 보고서를 읽고 처리했다」는 흔적이다.
+ */
+describe.skipIf(!HAS_DOCS)('QUAL-234: 감정 보고서가 트리아지에서 통째로 빠지지 않는다', () => {
+  it('모든 라운드 보고서가 대장에 최소 한 번 인용된다', () => {
+    const rounds = fs.readdirSync(DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory() && /^round/.test(d.name))
+      .map(d => d.name);
+    const reports: string[] = [];
+    for (const r of rounds) {
+      for (const f of fs.readdirSync(path.join(DIR, r))) {
+        if (/^appraisal.*\.md$/.test(f)) reports.push(`${r}/${f}`);
+      }
+    }
+    expect(reports.length, '보고서를 하나도 못 찾았다 — 경로 가정이 깨졌다').toBeGreaterThan(0);
+    const ledger = readDoc(LEDGER);
+    const uncited = reports.filter(rel => !ledger.includes(rel.split('/')[1]));
+    expect(uncited, '대장에 인용 0건인 감정 보고서 — 트리아지에서 빠졌다').toEqual([]);
+  });
+});

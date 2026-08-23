@@ -38,7 +38,7 @@ import * as YAML from 'yaml';
 import { harnessDir } from './paths';
 import { loadConfig } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
-import { runsCommand } from './bashwrite';
+import { runsCommand, commandLines, isDryRun } from './bashwrite';
 
 /**
  * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
@@ -511,13 +511,18 @@ export function isDeployCommand(profile: Profile, command: string): boolean {
      * 쓰는 명령인데, 그것을 막으면 사람을 확인 없이 진짜 배포로 밀어 넣는다.
      * 이름이 명확한 플래그만 본다(`-n` 은 도구마다 뜻이 달라 신뢰하지 않는다).
      */
-    if (/(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(cmd)) return false;
+    // [ENG-N2] **판정은 줄 단위다.** 명령 전체에 한 번 걸면 `A --dry-run && A` 로 차단이
+    // 통째로 꺼진다 — 플래그 하나가 다른 줄의 진짜 배포를 사면하면 안 된다. 훅 쪽은 이미
+    // 줄 단위였는데 이 형제 구현만 전체 단위라, 프로파일에만 있는 배포 명령
+    // (`prisma migrate deploy` 등)이 그 형태로 출하 전에 실행됐다. 규칙은 `isDryRun` 한 벌.
+    const lines = commandLines(cmd).filter(l => !isDryRun(l));
+    if (lines.length === 0) return false;
     // [EFF-108] **언급이 아니라 실행**을 본다. `cmd.includes` 였을 때
     // `grep "npm publish" README.md` 같은 순수 조회가 배포로 오판돼 막혔다.
     // 판정은 `runsCommand` 한 곳뿐이고, 그것이 래퍼(`sh -c`)·접두 명령까지 꺼내 본다.
     return (profile.deployCommands ?? []).some(d => {
       const needle = normCmd(d);
-      return needle.length > 0 && runsCommand(cmd, needle); // 빈 항목이 전체 차단으로 번지지 않게
+      return needle.length > 0 && lines.some(l => runsCommand(l, needle)); // 빈 항목이 전체 차단으로 번지지 않게
     });
   } catch {
     return false;

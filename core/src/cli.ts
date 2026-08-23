@@ -10,6 +10,7 @@
  *      여기서는 CLI 가 직접 쓰는 phase-set·backtrack 두 분기가 대상이다.
  */
 import * as fs from 'node:fs';
+import * as tty from 'node:tty';
 import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent, resolveState } from './events';
@@ -181,6 +182,80 @@ function logHookIssue(root: string, msg: string): void {
   }
 }
 
+/**
+ * [SEC-233] stdin 을 **끝까지** 읽는다 — 못 읽으면 `null` 을 내고 호출측이 거부한다.
+ *
+ * `readFileSync(0)` 한 번으로는 부족하다. fd 0 이 비블로킹이면(다른 코드가 `process.stdin` 을
+ * 만졌거나 호출자가 그렇게 물려줬으면) 파이프 버퍼를 넘는 페이로드에서 `EAGAIN` 이 나고,
+ * 부분 읽기면 잘린 JSON 이 나온다. 둘 다 예전에는 「빈 입력」으로 흡수돼 **무판정 통과**가 됐다.
+ *
+ * 그래서 직접 드레인한다: `EAGAIN` 은 실패가 아니라 **아직 안 왔다**는 뜻이므로 잠깐 자고
+ * 다시 읽는다. 동기 sleep 은 `Atomics.wait` 로 한다(훅은 동기 경로다). 상한을 두는 이유는
+ * 훅 타임아웃(10초)에 걸려 호출자가 판정을 못 받는 쪽이 더 나쁘기 때문이다 — 상한에 닿으면
+ * `null` 을 내고 **거부**로 간다(통과가 아니라).
+ */
+function readAllStdin(): string | null {
+  const CHUNK = 64 * 1024;
+  const WAIT_MS = 2;
+  /** 아직 **한 바이트도** 안 왔을 때의 상한. 이건 「입력이 없다」이지 사고가 아니다. */
+  const IDLE_MS = 200;
+  /** 받는 중일 때의 상한. 훅 타임아웃(10초)보다 훨씬 짧아야 호출자가 판정을 받는다. */
+  const DRAIN_MS = 2000;
+  /**
+   * **총량 상한.** 시간 상한만 두면 「계속 오고 있다」는 입력(`/dev/zero` 같은)에서 영원히
+   * 읽는다 — 진전이 있으므로 시간 상한이 매번 초기화되기 때문이다. 실제 훅 페이로드가
+   * 32MB 를 넘을 이유는 없고, 넘는다면 그건 판정할 페이로드가 아니라 사고다.
+   */
+  const MAX_BYTES = 32 * 1024 * 1024;
+  const buf = Buffer.alloc(CHUNK);
+  const chunks: Buffer[] = [];
+  let waited = 0;
+  let total = 0;
+  const sleep = (ms: number): void => {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+      // SharedArrayBuffer 가 막힌 환경 — 그냥 다시 시도한다(바쁜 대기지만 상한이 있다).
+    }
+  };
+  /**
+   * **fd 0 을 일부러 비블로킹으로 만든다.** `process.stdin` 을 만지는 부작용이 정확히
+   * 그것이고([SEC-233] 이 처음에 이걸 원인으로 짚었다), 여기서는 그 부작용이 **필요하다**:
+   * 블로킹인 채로 `readSync` 를 부르면 **닫히지 않는 파이프에서 영원히 멈춘다**.
+   * 실제로 그렇게 만들었다가 테스트 스위트가 4시간 정지했고, 같은 일이 실제 훅에서 나면
+   * 호출자가 타임아웃까지 기다린 뒤 **판정 없이 통과**한다 — 고치려던 그 결함이 그대로 돌아온다.
+   * 비블로킹의 대가인 `EAGAIN` 은 아래에서 재시도로 처리한다. 즉 부작용을 **없애는** 대신
+   * **감당한다** — 없애려던 시도가 더 나쁜 실패를 만들었기 때문이다.
+   */
+  try { void process.stdin.isTTY; } catch { /* 접근 자체가 실패해도 아래 읽기는 시도한다 */ }
+  for (;;) {
+    let n: number;
+    try {
+      n = fs.readSync(0, buf, 0, CHUNK, null);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EAGAIN') {
+        // **아직 아무것도 안 왔으면 「입력 없음」이다.** 짧게 기다려 보고 비운 채로 돌려준다 —
+        // 여기서 거부하면 손으로 실행한 사람과 입력을 안 주는 호출자를 전부 막게 된다.
+        const cap = chunks.length === 0 ? IDLE_MS : DRAIN_MS;
+        if (waited >= cap) return chunks.length === 0 ? '' : null;
+        waited += WAIT_MS;
+        sleep(WAIT_MS);
+        continue;
+      }
+      // EOF 는 「다 읽었다」다 — 일부 플랫폼이 빈 파이프에서 이렇게 낸다.
+      if (code === 'EOF') break;
+      return null;
+    }
+    if (n === 0) break;
+    chunks.push(Buffer.from(buf.subarray(0, n)));
+    total += n;
+    if (total > MAX_BYTES) return null;           // 끝나지 않는 입력 — 통과가 아니라 거부다
+    waited = 0;                                   // 진전이 있으면 상한을 다시 센다
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 const csv = (v: string | undefined): string[] =>
   (v ?? '').split(',').map(s => s.trim()).filter(Boolean);
 
@@ -282,22 +357,67 @@ export function run(argv: string[], root: string): number {
         return 0;
       }
       let input: HookInput = {};
+      let unread = false;
       try {
         // TTY 는 읽지 않는다 — 사람이 손으로 실행했을 때 EOF 를 기다리며 멈추지 않도록.
         // 실제 훅 호출에서 stdin 은 Claude Code 가 물려주는 파이프다.
-        if (!process.stdin.isTTY) {
-          const raw = fs.readFileSync(0, 'utf8');
-          if (raw.trim()) {
+        //
+        // [SEC-233] **`process.stdin` 을 만지지 않는다.** `process.stdin.isTTY` 를 한 번만
+        // 읽어도 node 가 stdin 스트림을 초기화하며 **fd 0 을 O_NONBLOCK 으로 바꾼다**.
+        // 그 뒤 `readFileSync(0)` 은 페이로드가 파이프 버퍼(64KB)를 넘는 순간 `EAGAIN` 을
+        // 던졌고, 예전의 바깥 catch 가 그것을 「stdin 없음」으로 삼켜 **빈 입력 = 무판정 =
+        // 통과**가 됐다. 즉 명령 뒤에 주석으로 64KB 를 붙이기만 하면 훅이 통째로 꺼졌다.
+        // `tty.isatty(0)` 은 fd 를 그대로 두고 묻기만 한다.
+        if (!tty.isatty(0)) {
+          const raw = readAllStdin();
+          if (raw === null) {
+            unread = true;
+          } else if (raw.trim()) {
             try {
               input = JSON.parse(raw);
             } catch {
               // stdin 부재·빈 입력은 정상이라 기록하지 않는다. 내용이 있는데 해석 못 하는
               // 것만 사고다 — 훅이 빈 입력으로 오판정하는 원인이 된다.
               logHookIssue(root, `cli corrupt-stdin ${String(sub)}`);
+              unread = true;
             }
           }
         }
-      } catch { /* stdin 없음(EAGAIN·EOF) → 빈 입력 */ }
+      } catch {
+        // 여기까지 오는 것도 「페이로드를 못 읽었다」다 — 조용히 통과시키지 않는다.
+        unread = true;
+      }
+      /**
+       * [SEC-233] **못 읽었으면 거부한다.** 「훅은 절대 세션을 안 깨뜨린다」는 계약은 옳지만,
+       * 그것이 **읽지 못한 페이로드를 통과시키는 근거**가 되면 강제는 한 줄로 꺼진다 —
+       * 그것도 **아무 신호 없이**. 스크립트 캡에서 [SEC-175] 가 내린 결론과 같다:
+       * 못 읽은 것은 사실로 올려 거부한다.
+       *
+       * 범위를 최소로 둔다 — 비간섭 불변식을 지키려 `.harness/` 가 있는 프로젝트에서만,
+       * 그리고 쓰기를 가르는 `pre-tool` 에서만 거부한다. 나머지 이벤트는 기록만 남긴다
+       * (거부해도 막을 쓰기가 없고, 세션 종료를 못 읽은 입력으로 막으면 해가 더 크다).
+       */
+      if (unread) {
+        logHookIssue(root, `cli unread-stdin ${String(sub)}`);
+        if (sub === 'pre-tool' && hasHarness(root)) {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: pick({
+                en: 'The harness hook could not read this tool call (payload unreadable or too large), '
+                  + 'so it could not judge it — and a call it cannot read is not a call it may allow. '
+                  + 'Retry with a smaller payload. If this repeats, see `.harness/.runtime/hook-errors.log` '
+                  + 'and run `harness doctor`.',
+                ko: '하네스 훅이 이 도구 호출을 읽지 못해(페이로드 손상 또는 과대) 판정할 수 없었다 — '
+                  + '읽지 못한 호출은 통과시킬 수 있는 호출이 아니다. 페이로드를 줄여 다시 시도하라. '
+                  + '반복되면 `.harness/.runtime/hook-errors.log` 를 보고 `harness doctor` 를 돌려라.',
+              }, langFor(root)),
+            },
+          }));
+          return 0;
+        }
+      }
       const out = handleHook(root, sub as HookEvent, input);
       if (out) console.log(JSON.stringify(out));
     } catch { /* 훅 경로는 절대 실패를 전파하지 않는다 */ }

@@ -7368,6 +7368,7 @@ __export(cli_exports, {
 });
 module.exports = __toCommonJS(cli_exports);
 var fs22 = __toESM(require("fs"));
+var tty = __toESM(require("tty"));
 var path20 = __toESM(require("path"));
 
 // core/src/state.ts
@@ -10534,6 +10535,29 @@ function expandStaticVars(cmd, env = {}) {
     (whole, a, b) => lookup(a ?? b ?? "") ?? whole
   );
 }
+function targetDirectory(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "-t" || a === "--target-directory") return args[i + 1] ?? null;
+    if (a.startsWith("--target-directory=")) return a.slice("--target-directory=".length);
+    if (a.startsWith("-t") && a.length > 2 && !a.startsWith("--")) return a.slice(2);
+  }
+  return null;
+}
+function sourcesFor(operands, dir) {
+  let dropped = false;
+  return operands.filter((o) => {
+    if (!dropped && o === dir) {
+      dropped = true;
+      return false;
+    }
+    return true;
+  });
+}
+function underDir(dir, sources) {
+  const base = dir.replace(/\/+$/, "");
+  return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
+}
 function scanBashWrites(rawCmd, env = {}) {
   const cmd = expandStaticVars(rawCmd, env);
   const targets = [];
@@ -10578,19 +10602,39 @@ function scanBashWrites(rawCmd, env = {}) {
         }
         break;
       case "cp":
-      case "install":
+      case "install": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          targets.push(...underDir(dir, sourcesFor(operands, dir)));
+          break;
+        }
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         break;
-      case "mv":
+      }
+      case "mv": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          const srcs = sourcesFor(operands, dir);
+          targets.push(...underDir(dir, srcs));
+          targets.push(...srcs);
+          break;
+        }
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         if (operands.length >= 2) targets.push(...operands.slice(0, -1));
         break;
+      }
       case "rmdir":
         targets.push(...paths);
         break;
-      case "ln":
+      case "ln": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          targets.push(...underDir(dir, sourcesFor(operands, dir)));
+          break;
+        }
         if (paths.length >= 2) targets.push(paths[paths.length - 1]);
         break;
+      }
       case "dd":
         for (const a of args) if (a.startsWith("of=")) targets.push(a.slice(3));
         break;
@@ -10765,6 +10809,9 @@ function scanBashWrites(rawCmd, env = {}) {
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
     blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
   };
+}
+function isDryRun(line) {
+  return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
 }
 function commandLines(cmd) {
   const out = [];
@@ -11167,10 +11214,11 @@ function isDeployCommand(profile, command) {
   try {
     const cmd = normCmd(command);
     if (!cmd) return false;
-    if (/(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(cmd)) return false;
+    const lines = commandLines(cmd).filter((l) => !isDryRun(l));
+    if (lines.length === 0) return false;
     return (profile.deployCommands ?? []).some((d) => {
       const needle = normCmd(d);
-      return needle.length > 0 && runsCommand(cmd, needle);
+      return needle.length > 0 && lines.some((l) => runsCommand(l, needle));
     });
   } catch {
     return false;
@@ -11483,6 +11531,7 @@ function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path13.sep}`) || path13.isAbsolute(rel);
 }
 var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
+var DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join("|")})$`);
 var SCRIPT_MAX_BYTES = 64 * 1024;
 var SCRIPT_MAX_DEPTH = 3;
 function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Set()) {
@@ -11503,7 +11552,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
     const candidate = (m[1] !== void 0 ? m[2] : m[3]) ?? "";
     if (!candidate || seen.has(candidate)) continue;
     seen.add(candidate);
-    if (m[1] === void 0 && !/\.(sh|bash|zsh|ksh)$/.test(candidate)) continue;
+    if (m[1] === void 0 && !DIRECT_SCRIPT_EXT.test(candidate)) continue;
     try {
       const rel = relPath(root, candidate);
       if (isOutsideRoot(rel)) {
@@ -11961,7 +12010,6 @@ function preTool(root, state, config, input, degraded) {
         " Deploy-ish commands open on the ship track (P10 onward), once that phase's gate is approved. Check where you are with `harness status`.",
         " \uBC30\uD3EC\uC131 \uBA85\uB839\uC740 \uCD9C\uD558 \uD2B8\uB799(P10 \uC774\uD6C4)\uC5D0\uC11C \uD574\uB2F9 \uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uBA74 \uC5F4\uB9B0\uB2E4. \uC9C0\uAE08 \uC704\uCE58\uB294 `harness status` \uB85C \uD655\uC778\uD558\uB77C."
       );
-      const isDryRun = (line) => /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
       const deployLines = commandLines(cmd).filter((l) => !isDryRun(l));
       const hit = config.design_blocked_bash.find(
         (b) => b.trim() !== "" && deployLines.some((l) => l === b.trim() || l.startsWith(`${b.trim()} `))
@@ -14739,6 +14787,50 @@ function logHookIssue(root, msg) {
   } catch {
   }
 }
+function readAllStdin() {
+  const CHUNK = 64 * 1024;
+  const WAIT_MS = 2;
+  const IDLE_MS = 200;
+  const DRAIN_MS = 2e3;
+  const MAX_BYTES = 32 * 1024 * 1024;
+  const buf = Buffer.alloc(CHUNK);
+  const chunks = [];
+  let waited = 0;
+  let total = 0;
+  const sleep = (ms) => {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+    }
+  };
+  try {
+    void process.stdin.isTTY;
+  } catch {
+  }
+  for (; ; ) {
+    let n;
+    try {
+      n = fs22.readSync(0, buf, 0, CHUNK, null);
+    } catch (err) {
+      const code = err.code;
+      if (code === "EAGAIN") {
+        const cap = chunks.length === 0 ? IDLE_MS : DRAIN_MS;
+        if (waited >= cap) return chunks.length === 0 ? "" : null;
+        waited += WAIT_MS;
+        sleep(WAIT_MS);
+        continue;
+      }
+      if (code === "EOF") break;
+      return null;
+    }
+    if (n === 0) break;
+    chunks.push(Buffer.from(buf.subarray(0, n)));
+    total += n;
+    if (total > MAX_BYTES) return null;
+    waited = 0;
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 var csv = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 function requirePhase(raw, cmd, lang) {
   const L = (en, ko) => pick({ en, ko }, lang);
@@ -14796,18 +14888,39 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         return 0;
       }
       let input = {};
+      let unread = false;
       try {
-        if (!process.stdin.isTTY) {
-          const raw = fs22.readFileSync(0, "utf8");
-          if (raw.trim()) {
+        if (!tty.isatty(0)) {
+          const raw = readAllStdin();
+          if (raw === null) {
+            unread = true;
+          } else if (raw.trim()) {
             try {
               input = JSON.parse(raw);
             } catch {
               logHookIssue(root, `cli corrupt-stdin ${String(sub)}`);
+              unread = true;
             }
           }
         }
       } catch {
+        unread = true;
+      }
+      if (unread) {
+        logHookIssue(root, `cli unread-stdin ${String(sub)}`);
+        if (sub === "pre-tool" && hasHarness(root)) {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "deny",
+              permissionDecisionReason: pick({
+                en: "The harness hook could not read this tool call (payload unreadable or too large), so it could not judge it \u2014 and a call it cannot read is not a call it may allow. Retry with a smaller payload. If this repeats, see `.harness/.runtime/hook-errors.log` and run `harness doctor`.",
+                ko: "\uD558\uB124\uC2A4 \uD6C5\uC774 \uC774 \uB3C4\uAD6C \uD638\uCD9C\uC744 \uC77D\uC9C0 \uBABB\uD574(\uD398\uC774\uB85C\uB4DC \uC190\uC0C1 \uB610\uB294 \uACFC\uB300) \uD310\uC815\uD560 \uC218 \uC5C6\uC5C8\uB2E4 \u2014 \uC77D\uC9C0 \uBABB\uD55C \uD638\uCD9C\uC740 \uD1B5\uACFC\uC2DC\uD0AC \uC218 \uC788\uB294 \uD638\uCD9C\uC774 \uC544\uB2C8\uB2E4. \uD398\uC774\uB85C\uB4DC\uB97C \uC904\uC5EC \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C. \uBC18\uBCF5\uB418\uBA74 `.harness/.runtime/hook-errors.log` \uB97C \uBCF4\uACE0 `harness doctor` \uB97C \uB3CC\uB824\uB77C."
+              }, langFor(root))
+            }
+          }));
+          return 0;
+        }
       }
       const out = handleHook(root, sub, input);
       if (out) console.log(JSON.stringify(out));
