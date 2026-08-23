@@ -61,7 +61,7 @@ function tokenize(segment: string): string[] {
 const isFlag = (t: string): boolean => t.startsWith('-');
 
 /** 경로처럼 보이는 토큰만 후보로 본다 — `sed` 의 스크립트 인자를 파일로 오인하지 않게. */
-const looksLikePath = (t: string): boolean =>
+export const looksLikePath = (t: string): boolean =>
   t !== '' && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes('/') || /\.[A-Za-z0-9]+$/.test(t));
 
 /**
@@ -635,8 +635,22 @@ function flagValues(args: readonly string[], names: readonly string[]): string[]
     const a = args[i];
     for (const nm of names) {
       if (nm.length === 1) {
-        if (a === `-${nm}`) { const v = args[i + 1]; if (v !== undefined && !isFlag(v)) out.push(v); }
-        else if (!a.startsWith('--') && a.startsWith(`-${nm}`) && a.length > 2) out.push(a.slice(2));
+        /**
+         * [SEC-264] **묶음 단축플래그도 같은 플래그다.** `cp -rt DIR SRC` 는 `-r -t DIR` 이고
+         * GNU 가 실제로 그렇게 받는다 — 그런데 `-t` 만 정확히 찾으면 `-rt`·`-ft`·`-Dt`·`-st` 가
+         * 통째로 비껴간다([SEC-232]→[SEC-259] 를 잇는 아홉 번째 변종이 정확히 이것이었다).
+         * 묶음 안에서 값을 받는 문자가 나오면 **그 뒤 문자열이 값**이고, 뒤가 비면 다음 인자가 값이다.
+         * 열거가 아니라 **파싱 규칙**을 따르는 이유는 이 리포가 아홉 번 배운 것과 같다 —
+         * 표기를 세는 방식은 항상 다음 표기를 놓친다.
+         */
+        if (!a.startsWith('--') && a.startsWith('-') && a.length > 1) {
+          const at = a.indexOf(nm, 1);
+          if (at > 0) {
+            const tail = a.slice(at + 1);
+            if (tail !== '') out.push(tail);
+            else { const v = args[i + 1]; if (v !== undefined && !isFlag(v)) out.push(v); }
+          }
+        }
       } else {
         if (a === `--${nm}`) { const v = args[i + 1]; if (v !== undefined && !isFlag(v)) out.push(v); }
         else if (a.startsWith(`--${nm}=`)) out.push(a.slice(nm.length + 3));
@@ -761,11 +775,27 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // 비우는 것도 없애는 것이다(SEC-101 과 같은 이유).
         targets.push(...paths);
         break;
-      case 'ln': {
+      case 'ln':
+      case 'link': {
         const dir = targetDirectory(args);            // [SEC-232]
         if (dir !== null) { targets.push(...underDir(dir, sourcesFor(operands, dir))); break; }
         // 심링크는 **링크 이름**이 생기는 자리다(마지막 인자). 대상 파일은 건드리지 않는다.
         if (paths.length >= 2) targets.push(paths[paths.length - 1]);
+        /**
+         * [SEC-263] **하드링크의 소스도 대상이다 — 새 이름이 곧 그 파일이기 때문이다.**
+         *
+         * 심링크는 `realpath` 가 풀어 주므로 앨리어스에 쓰면 원본이 판정에 올라온다.
+         * **하드링크는 풀 링크가 없다** — 같은 inode 를 가리키는 대등한 이름이라
+         * `realpath('./alias')` 는 `./alias` 자신을 낸다. 그래서 여섯 라운드 동안 쌓은
+         * 경로 문자열 층의 방어가 **원리상 닿지 못한다**(열두 번째 표기).
+         *
+         * `-s` 가 없으면 하드링크다. 그때는 **소스를 대상으로 올린다** — 「이 파일에 쓸 수
+         * 있는 새 이름을 만든다」는 것은 그 파일에 쓰는 것과 같은 무게다.
+         * 이미 만들어져 있는 링크는 이 절이 못 잡으므로, 쓰기 시점의 inode 대조가 짝이다.
+         */
+        const symbolic = args.some(a => a === '-s' || a === '--symbolic'
+          || (!a.startsWith('--') && a.startsWith('-') && a.includes('s')));
+        if (!symbolic && paths.length >= 2) targets.push(...paths.slice(0, -1));
         break;
       }
       case 'dd':

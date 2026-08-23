@@ -219,21 +219,12 @@ describe('[COST-260] 긴 명령에서도 판정이 끝난다 — 멈추는 훅�
     expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 — 2차가 살아났다`).toBeLessThan(2000);
   }, 30_000);
 
-  it('세그먼트를 두 배로 늘려도 시간이 네 배로 뛰지 않는다', () => {
-    const root = setup('P0');
-    const timeOf = (n: number): number => {
-      const cmd = Array.from({ length: n }, () => 'cd x > f').join(' ; ');
-      const t0 = process.hrtime.bigint();
-      bash(root, cmd);
-      return Number(process.hrtime.bigint() - t0) / 1e6;
-    };
-    timeOf(200);                                   // 워밍업 — JIT 이 첫 회를 부풀린다
-    const small = timeOf(400);
-    const large = timeOf(800);
-    // 2차면 비율이 ~4다. 선형이면 ~2. 3을 넘으면 2차로 본다(측정 잡음 여유 포함).
-    expect(large / Math.max(small, 1), `배가 비율 ${(large / small).toFixed(1)}배 — 2차 의심`)
-      .toBeLessThan(3);
-  }, 30_000);
+  /**
+   * 「배가 비율이 3배 미만」 검사도 넣어 봤으나 **뺐다** — 시간 비율은 다른 테스트와 병렬로
+   * 돌 때의 부하에 흔들려 초록·빨강이 갈렸다. 흔들리는 검사는 이 리포가 싫어하는 부류다
+   * (우연을 고정하고, 사람이 빨강을 무시하게 만든다). 2차 회귀는 **절대 상한**이 확실히
+   * 잡는다 — 2차면 800세그먼트가 15초이고, 위 2초 문턱을 부하로 설명할 수 없다.
+   */
 
   it('긴 명령이 판정을 흐리지 않는다 — 위반은 그대로 잡힌다', () => {
     // 성능만 재면 「전부 통과」로도 초록이 된다. 짝을 함께 잰다.
@@ -281,6 +272,146 @@ describe('[SEC-259] 플래그가 지정하는 쓰기 자리 — 도구를 가리
     ]) {
       const out = bash(root, cmd);
       expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * [SEC-263] **하드링크 — 열두 번째 표기. 경로 문자열 층 아래에서 우회한다.**
+ *
+ * 여섯 라운드의 봉인이 전부 경로 문자열 층에서 이뤄졌다. 심링크는 `realpath` 가 풀어 주므로
+ * 그 층에서 잡히지만, **하드링크는 풀 링크가 없다** — 같은 inode 를 가리키는 대등한 이름이라
+ * `realpath('./alias')` 는 `./alias` 자신을 낸다. 그래서 `ln .harness/config.yaml ./alias` 뒤
+ * `echo … > ./alias` 로 정책 파일이 덮였다(끝단에서 게이트 승인 위조까지 실증됐다).
+ *
+ * 방어는 두 겹이다: **생성 차단**(에이전트가 새 이름을 못 만든다)과 **inode 대조**(이미 있는
+ * 이름도 코어 파일이면 잡는다). 소스의 「이미 존재하는」 하드링크는 의도적으로 안 막는다 —
+ * 시도해 봤더니 문서 파일 하드링크가 함께 막혀 과차단이 났고, 과차단은 이 제품에서 결함과
+ * 같은 무게다. 그 한계는 `hook.ts` 주석과 README 「알려진 한계」에 적혀 있다.
+ */
+describe('[SEC-263] 하드링크 앨리어싱', () => {
+  const linked = (): { root: string; dir: string } => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'export const a = 1;\n');
+    fs.writeFileSync(path.join(root, 'docs/n.md'), '# doc\n');
+    fs.linkSync(path.join(root, '.harness/config.yaml'), path.join(root, 'alias'));
+    fs.linkSync(path.join(root, 'docs/n.md'), path.join(root, 'benign'));
+    return { root, dir: root };
+  };
+
+  it('이미 있는 하드링크로 코어 파일에 쓰지 못한다 — inode 로 앵커한다', () => {
+    const { root } = linked();
+    for (const cmd of ['echo x > ./alias', 'cat /tmp/x > ./alias', 'tee ./alias']) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('보호 파일의 새 이름을 만들지 못한다 — 생성 자체가 쓰기와 같은 무게다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
+    for (const cmd of [
+      'ln .harness/config.yaml ./z',
+      'ln .harness/events.jsonl /tmp/j',
+      'link .harness/state.json ./q',
+      'ln src/app.ts ./a',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 심링크와 무해한 하드링크는 그대로 통과한다', () => {
+    const { root } = linked();
+    for (const cmd of [
+      'echo x > ./benign',            // 문서 하드링크 — 정상 작업
+      'echo x > docs/new.md',
+      'ln -s .harness/config.yaml ./slink',   // 심링크 **생성**은 읽기 경로다
+      'ln docs/n.md ./n2',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * [SEC-264] **묶음 단축플래그도 같은 플래그다.**
+ *
+ * [SEC-232]→[SEC-259] 로 `-t`/`--target-directory` 를 잡았는데 `cp -rt DIR` 형태가 남아 있었다 —
+ * GNU 는 `-rt` 를 `-r -t` 로 받는다. 표기를 세는 방식이 아홉 번째로 놓친 자리라, 이번에는
+ * **파싱 규칙**을 따르게 했다: 묶음 안에서 값을 받는 문자가 나오면 그 뒤가 값이고, 비면 다음 인자가 값.
+ */
+describe('[SEC-264] 묶음 단축플래그로 목적지를 숨기지 못한다', () => {
+  it('묶음 형태 전부에서 목적지가 잡힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'cp -rt .harness /tmp/config.yaml',
+      'cp -ft .harness /tmp/events.jsonl',
+      'install -Dt .harness /tmp/state.json',
+      'ln -st .harness /tmp/config.yaml',
+      'cp -avt .harness /tmp/x',
+      'cp -rt src /tmp/app.ts',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 같은 묶음이 밖을 겨누면 통과한다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'cp -rt /tmp/out src',
+      'cp -ft /tmp/bak src/a.ts',
+      'cp -r src /tmp/out',
+      'tar -xzf /tmp/a.tgz',
+      'rsync -avz src/ /tmp/d/',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * [SEC-265] **도구 이름도, 인자 이름도 열거하면 다음 것을 놓친다.**
+ *
+ * 쓰기 도구를 `Write|Edit|MultiEdit|NotebookEdit` 로, 대상 필드를 `file_path`/`notebook_path`
+ * 로 열거해 뒀다. 그래서 파일시스템 MCP 서버가 붙는 순간 — 흔한 구성이다 — 그 도구는 판정
+ * 대상이 아니고 대상 경로도 안 보여서 **여섯 라운드의 방어가 통째로 비껴갔다.**
+ * [SEC-152] 가 `notebook_path` 하나를 더한 것과 같은 부류의 재발이다.
+ *
+ * 근본 한계는 남는다(임의 MCP 스키마를 다 알 수는 없다) — 그래서 README 「알려진 한계」에 적었다.
+ */
+describe('[SEC-265] MCP 쓰기 표면도 같은 잣대로 판정한다', () => {
+  const mcp = (root: string, name: string, args: Record<string, unknown>): object | null =>
+    handleHook(root, 'pre-tool', { tool_name: name, tool_input: args });
+
+  it('이름이 쓰기를 뜻하는 MCP 도구가 코어·소스에 닿지 못한다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['mcp__filesystem__write_file', { path: '.harness/config.yaml', content: 'x' }],
+      ['mcp__fs__write', { file_path: '.harness/state.json', content: 'x' }],
+      ['mcp__x__put', { destination: 'src/app.ts', content: 'x' }],
+      ['mcp__y__edit', { target_file: '.harness/events.jsonl', content: 'x' }],
+    ];
+    for (const [name, args] of cases) {
+      expect(denied(mcp(root, name, args)), `통과했다: ${name}`).toBe(true);
+    }
+  });
+
+  it('★ 조회 도구와 정상 대상은 통과한다 — 과차단은 결함과 같은 무게다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['mcp__filesystem__read_file', { path: '.harness/config.yaml' }],
+      ['mcp__z__search', { path: 'src', pattern: 'foo' }],
+      ['mcp__filesystem__write_file', { path: 'docs/n.md', content: 'x' }],
+    ];
+    for (const [name, args] of cases) {
+      const out = mcp(root, name, args);
+      expect(denied(out), `과차단: ${name} — ${reason(out)}`).toBe(false);
     }
   });
 });

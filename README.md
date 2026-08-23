@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1301 passing** (54 files) — 17 are repo-only checks that skip in the published package (1284 there) |
+| Test suite | **1307 passing** (54 files) — 17 are repo-only checks that skip in the published package (1290 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1301 tests). The
+**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1307 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -248,6 +248,9 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
 
 ### Known limits (measured, still open)
+
+- **Arbitrary MCP server schemas cannot all be known.** Tools whose names read as writes (`write`, `edit`, `put`, …) are judged, and every path-shaped argument is checked — but a server that names neither its tool nor its argument that way is outside what the hook can see.
+- **Hard links that already exist are only checked against the core files.** Creating a new name for a protected file is refused, and an existing alias of `config.yaml`/`state.json`/`events.jsonl` is caught by inode. An alias of a *source* file made before the harness was installed is not — matching every source by inode would cost a directory walk on every write, and a slow verdict is a hook that times out, which is a hook that allows.
 
 - The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed separately.
 - **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.

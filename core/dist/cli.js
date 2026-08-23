@@ -12246,10 +12246,17 @@ function flagValues(args, names) {
     const a = args[i];
     for (const nm of names) {
       if (nm.length === 1) {
-        if (a === `-${nm}`) {
-          const v = args[i + 1];
-          if (v !== void 0 && !isFlag(v)) out.push(v);
-        } else if (!a.startsWith("--") && a.startsWith(`-${nm}`) && a.length > 2) out.push(a.slice(2));
+        if (!a.startsWith("--") && a.startsWith("-") && a.length > 1) {
+          const at = a.indexOf(nm, 1);
+          if (at > 0) {
+            const tail = a.slice(at + 1);
+            if (tail !== "") out.push(tail);
+            else {
+              const v = args[i + 1];
+              if (v !== void 0 && !isFlag(v)) out.push(v);
+            }
+          }
+        }
       } else {
         if (a === `--${nm}`) {
           const v = args[i + 1];
@@ -12345,13 +12352,16 @@ function scanBashWrites(rawCmd, env = {}) {
       case "rmdir":
         targets.push(...paths);
         break;
-      case "ln": {
+      case "ln":
+      case "link": {
         const dir = targetDirectory(args);
         if (dir !== null) {
           targets.push(...underDir(dir, sourcesFor(operands, dir)));
           break;
         }
         if (paths.length >= 2) targets.push(paths[paths.length - 1]);
+        const symbolic = args.some((a) => a === "-s" || a === "--symbolic" || !a.startsWith("--") && a.startsWith("-") && a.includes("s"));
+        if (!symbolic && paths.length >= 2) targets.push(...paths.slice(0, -1));
         break;
       }
       case "dd":
@@ -12948,6 +12958,7 @@ function commandFor(profile, key) {
 
 // core/src/hook.ts
 var WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+var MCP_WRITE_MATCHER = "mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*";
 var PREFIX_SET = /* @__PURE__ */ new Set([...PREFIX_COMMANDS, "xargs"]);
 var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 var PREFIX_FLAG_RE = /^-\S+$/;
@@ -13500,6 +13511,32 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
+  const aliasOfCore = (() => {
+    try {
+      const abs = path17.resolve(root, raw);
+      const st = fs18.statSync(abs);
+      if (!st.isFile() || st.nlink < 2) return void 0;
+      for (const core of CORE_FILES) {
+        try {
+          const cs = fs18.statSync(path17.join(root, core));
+          if (cs.dev === st.dev && cs.ino === st.ino) return core;
+        } catch {
+        }
+      }
+    } catch {
+    }
+    return void 0;
+  })();
+  if (aliasOfCore !== void 0) {
+    return deny(
+      L(
+        `${sanitizeUntrusted(raw)} is another name for ${aliasOfCore} \u2014 the same file, reached through a hard link. Writing here writes there, and that file decides whether a gate is approved. A hard link is not a shortcut the harness can follow: it is a second, equal name for one file, so the check is on the file itself, not on the path you typed.`,
+        `${sanitizeUntrusted(raw)} \uC740(\uB294) ${aliasOfCore} \uC758 **\uB2E4\uB978 \uC774\uB984**\uC774\uB2E4 \u2014 \uD558\uB4DC\uB9C1\uD06C\uB85C \uC774\uC5B4\uC9C4 \uAC19\uC740 \uD30C\uC77C\uC774\uACE0, \uC5EC\uAE30\uC5D0 \uC4F0\uBA74 \uAC70\uAE30\uC5D0 \uC4F0\uC778\uB2E4. \uADF8 \uD30C\uC77C\uC774 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD55C\uB2E4. \uD558\uB4DC\uB9C1\uD06C\uB294 \uD558\uB124\uC2A4\uAC00 \uB530\uB77C\uAC08 \uC218 \uC788\uB294 \uC9C0\uB984\uAE38\uC774 \uC544\uB2C8\uB77C \uD55C \uD30C\uC77C\uC758 **\uB300\uB4F1\uD55C \uB450 \uBC88\uC9F8 \uC774\uB984**\uC774\uB77C, \uAC80\uC0AC\uB294 \uB124\uAC00 \uCE5C \uACBD\uB85C\uAC00 \uC544\uB2C8\uB77C **\uD30C\uC77C \uC790\uCCB4**\uC5D0 \uAC74\uB2E4.`
+      ),
+      degraded,
+      lang
+    );
+  }
   const stateFile = [rel, realRel].find((r) => STATE_FILES.includes(r)) ?? STATE_FILES.find((sf) => spaces.some((r) => coversPath(r, sf)));
   const namesFileDirectly = [rel, realRel].some((r) => STATE_FILES.includes(r));
   const removesHarness = stateFile !== void 0 && !namesFileDirectly;
@@ -13605,9 +13642,20 @@ function preTool(root, state, config, input, degraded) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
   const tool = input.tool_name ?? "";
-  const isWrite = WRITE_TOOLS.includes(tool);
+  const isMcpWrite = new RegExp(`^${MCP_WRITE_MATCHER}$`, "i").test(tool) && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
+  const isWrite = WRITE_TOOLS.includes(tool) || isMcpWrite;
   const inDesign = DESIGN_PHASES.includes(state.phase);
-  const raw = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? "");
+  const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? "");
+  const extraTargets = [];
+  if (namedTarget === "" && input.tool_input && typeof input.tool_input === "object") {
+    for (const [key, value] of Object.entries(input.tool_input)) {
+      if (typeof value !== "string" || value === "") continue;
+      if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
+      if (value.length > 4096 || value.includes("\n")) continue;
+      if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+    }
+  }
+  const raw = namedTarget !== "" ? namedTarget : extraTargets[0] ?? "";
   const rel = raw ? relPath(root, raw) : "";
   const realRel = raw ? realRelPath(root, raw) : "";
   let profileCache = null;

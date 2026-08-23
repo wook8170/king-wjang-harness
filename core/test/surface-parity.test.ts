@@ -17,7 +17,7 @@ import { run } from '../src/cli';
 import { callTool } from '../src/mcp';
 import { PREFIX_COMMANDS } from '../src/bashwrite';
 import { getNode } from '../src/ledger';
-import { handleHook, WRITE_TOOLS, isSelfCall } from '../src/hook';
+import { handleHook, WRITE_TOOLS, isSelfCall, MCP_WRITE_MATCHER } from '../src/hook';
 import { isReadOnlyCommand } from '../src/bashwrite';
 import { initHarness } from '../src/state';
 import { execFileSync } from 'node:child_process';
@@ -329,7 +329,16 @@ describe('ENG-A: hooks.json matcher 가 판정 대상 도구 집합과 일치한
   });
 
   it('판정하지 않는 도구를 걸지 않는다 — 비용만 무는 기동이 되지 않게', () => {
-    const wired = matchers[0].split('|');
+    /**
+     * [SEC-265] MCP 쓰기 도구도 판정 대상이라 매처에 들어간다. **그 패턴은 코어가 정본**이고
+     * (`MCP_WRITE_MATCHER`) 배선은 그것을 그대로 쓴다 — 손으로 넓히면 두 표면이 갈리고,
+     * 그 드리프트가 이 리포를 아홉 번 뚫었다. 여기서 대조하는 것이 그 일치다.
+     *
+     * 패턴 안에 `|` 가 있으므로 순진하게 `split('|')` 하면 조각난다. 정본을 먼저 떼고 나머지를 센다.
+     */
+    const raw = matchers[0];
+    expect(raw.endsWith(MCP_WRITE_MATCHER), 'MCP 매처가 코어 정본과 다르다').toBe(true);
+    const wired = raw.slice(0, -(MCP_WRITE_MATCHER.length + 1)).split('|');
     expect([...wired].sort()).toEqual([...WRITE_TOOLS, 'Bash'].sort());
   });
 });

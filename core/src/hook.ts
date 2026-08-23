@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, isDryRun } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, isDryRun, looksLikePath } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -46,6 +46,19 @@ export type HookEvent = 'session-start' | 'pre-tool' | 'post-tool' | 'stop';
  * `surface-parity.test.ts` 가 두 벌을 교차 고정한다.
  */
 export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
+
+/**
+ * [SEC-265] **hooks.json 매처와 코어 판정이 같은 규칙을 쓰게 하는 정본.**
+ *
+ * 매처를 손으로 넓히면 두 표면이 갈린다 — 이 리포가 셸 목록에서 아홉 번 겪은 부류다.
+ * 그래서 MCP 쓰기 도구의 이름 규칙을 **여기 한 곳에** 두고, 배선(`hooks/hooks.json`)과
+ * 판정(`isMcpWrite`)이 둘 다 이것을 쓴다. `surface-parity` 테스트가 그 일치를 고정한다.
+ *
+ * 매처가 판정보다 **조금 넓은 것은 의도**다: 배선은 「기동할까」만 정하고, 조회 도구를
+ * 걸러내는 정확한 판정은 코어가 한다(정규식 매처로는 부정 조건을 쓸 수 없다).
+ */
+export const MCP_WRITE_MATCHER =
+  'mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*';
 
 /**
  * harness 명령을 **명령 위치에서만** 식별한다 — 줄 처음, `;`/`&`/`|`/**개행** 다음,
@@ -1119,6 +1132,48 @@ function judgeWritePath(
       degraded, lang,
     );
   }
+  /**
+   * [SEC-263] **경로가 아니라 파일 실체로 앵커한다 — 하드링크는 경로 층 아래에 있다.**
+   *
+   * 여섯 라운드의 봉인이 전부 **경로 문자열** 층에서 이뤄졌다. 심링크는 `realpath` 가 풀어
+   * 주므로 그 층에서 잡히지만, **하드링크는 풀 링크가 없다** — 같은 inode 를 가리키는 대등한
+   * 이름이라 `realpath('./alias')` 는 `./alias` 자신을 낸다. 그래서 `ln .harness/config.yaml
+   * ./alias; echo … > ./alias` 로 정책 파일이 덮였다(열두 번째 표기).
+   *
+   * 그래서 **대상이 이미 여러 이름을 가진 파일이면**(`nlink > 1`) 보호 파일의 `(dev, ino)` 와
+   * 대조한다. 이 검사가 도는 조건이 좁은 것이 요점이다 — 링크가 하나뿐인 보통 파일은
+   * `stat` 한 번으로 끝나고, 보호 파일 쪽 `stat` 은 그 뒤에만 돈다. 과차단도 원리상 없다:
+   * 보호 파일과 **같은 inode** 가 아니면 그냥 통과한다.
+   */
+  const aliasOfCore = ((): string | undefined => {
+    try {
+      const abs = path.resolve(root, raw);
+      const st = fs.statSync(abs);
+      if (!st.isFile() || st.nlink < 2) return undefined;
+      for (const core of CORE_FILES) {
+        try {
+          const cs = fs.statSync(path.join(root, core));
+          if (cs.dev === st.dev && cs.ino === st.ino) return core;
+        } catch { /* 그 코어 파일이 아직 없다 — 대조할 것이 없다 */ }
+      }
+    } catch { /* 대상이 아직 없다 = 하드링크일 수 없다 */ }
+    return undefined;
+  })();
+  if (aliasOfCore !== undefined) {
+    return deny(
+      L(
+        `${sanitizeUntrusted(raw)} is another name for ${aliasOfCore} — the same file, reached through `
+        + 'a hard link. Writing here writes there, and that file decides whether a gate is approved. '
+        + 'A hard link is not a shortcut the harness can follow: it is a second, equal name for one '
+        + 'file, so the check is on the file itself, not on the path you typed.',
+        `${sanitizeUntrusted(raw)} 은(는) ${aliasOfCore} 의 **다른 이름**이다 — 하드링크로 이어진 `
+        + '같은 파일이고, 여기에 쓰면 거기에 쓰인다. 그 파일이 게이트 승인 여부를 정한다. '
+        + '하드링크는 하네스가 따라갈 수 있는 지름길이 아니라 한 파일의 **대등한 두 번째 이름**이라, '
+        + '검사는 네가 친 경로가 아니라 **파일 자체**에 건다.',
+      ),
+      degraded, lang,
+    );
+  }
   const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r))
     ?? STATE_FILES.find(sf => spaces.some(r => coversPath(r, sf)));
   /**
@@ -1270,6 +1325,21 @@ function judgeWritePath(
   // 여기만 한쪽을 고르면 비대칭이 구멍이 된다 — 적대적 검증이 `config/settings.yaml -> src/app.ts`
   // 심링크로 **실제로 `src/app.ts` 를 덮어썼다**(리터럴 경로는 `.yaml` 이라 구현이 아니라고 판정).
   // `realRelPath` 주석이 「두 공간을 함께 본다」를 계약으로 적어 두었고, 이것이 그 계약이다.
+  /**
+   * [SEC-263] **설계 트랙 소스의 「이미 존재하는」 하드링크는 여기서 안 막는다 — 알려진 한계다.**
+   *
+   * 코어 파일은 위에서 inode 로 대조한다(게이트 승인을 정하는 파일이라 무게가 다르다).
+   * 소스는 개수가 많아 같은 대조를 하려면 소스 트리를 훑어야 하는데, 그 비용이 곧
+   * [COST-260] 이 만든 부류(느린 판정 → 타임아웃 → fail-open)를 다시 부른다.
+   *
+   * 「설계 트랙에서 `nlink > 1` 이면 무조건 거부」도 시도했으나 **과차단이 나왔다** —
+   * 문서 파일이 하드링크인 정상 작업(`echo x > ./benign`)이 막혔다. 과차단은 이 제품에서
+   * 결함과 같은 무게다(사람이 하네스를 끄면 방어는 그 순간 0).
+   *
+   * 그래서 이 자리의 방어는 **앨리어스 생성 차단**이다(`bashwrite.ts` 의 `ln` 케이스) —
+   * 에이전트가 소스의 새 이름을 만들 수 없다. 이미 있는 하드링크는 **사람이 만든 것**이고,
+   * 사람은 애초에 소스를 직접 고칠 수 있다(루브릭 개정 1 의 위협 모델).
+   */
   const profile = getProfile();
   const hit = [rel, realRel]
     .filter(r => r !== '' && !isOutsideRoot(r))
@@ -1321,13 +1391,48 @@ function preTool(
   const lang = config.lang;
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const tool = input.tool_name ?? '';
-  const isWrite = WRITE_TOOLS.includes(tool);
+  /**
+   * [SEC-265] **도구 이름 목록도 열거다.** `Write|Edit|MultiEdit|NotebookEdit` 만 쓰기로 보면
+   * 파일시스템 MCP 서버(`mcp__filesystem__write_file` 등)가 붙는 순간 그 도구는 판정 대상이
+   * 아니게 된다 — 흔한 구성 하나로 여섯 라운드의 방어가 비껴간다. 이름이 **쓰기를 뜻하는**
+   * MCP 도구도 같은 잣대로 본다. 조회 도구(`read`·`list`·`search`·`grep`)는 제외한다 —
+   * 과차단은 이 제품에서 결함과 같은 무게다.
+   *
+   * 근본 한계는 남는다: 임의의 MCP 스키마를 다 알 수는 없다. 그래서 대상 추출도 이름 열거가
+   * 아니라 **경로처럼 생긴 필드 전부**로 넓혔고(아래), 남는 한계는 README 「알려진 한계」에 적었다.
+   */
+  const isMcpWrite = new RegExp(`^${MCP_WRITE_MATCHER}$`, 'i').test(tool)
+    && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
+  const isWrite = WRITE_TOOLS.includes(tool) || isMcpWrite;
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
   // [SEC-152] `NotebookEdit` 의 대상은 `file_path` 가 아니라 `notebook_path` 다 — 도구는
   // WRITE_TOOLS 에 있는데 경로를 못 꺼내서 **빈 문자열로 판정**됐고, 그러면 아무 규칙에도
   // 안 걸린다. 도구를 목록에 넣는 것과 그 도구의 대상을 아는 것은 다른 일이다([SEC-135] 와
   // 같은 부류 — 열거는 언제나 빠진 것을 남긴다).
-  const raw = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? '');
+  /**
+   * [SEC-265] **도구 스키마를 열거하면 다음 도구를 놓친다.**
+   *
+   * 대상을 `file_path`/`notebook_path` 두 이름으로만 뽑았다. 그래서 파일시스템 MCP 서버
+   * (`mcp__filesystem__write_file` 은 `path`, 다른 서버는 또 다른 이름)가 붙으면 **훅이 대상을
+   * 하나도 못 보고 통과**시킨다 — 흔한 구성 하나로 여섯 라운드의 방어가 통째로 비껴간다.
+   * [SEC-152] 가 `notebook_path` 하나를 더한 것과 같은 부류이고, 이름을 세는 방식이 또 놓쳤다.
+   *
+   * 그래서 **경로처럼 생긴 문자열 필드를 전부** 후보로 올린다(Bash 안전망과 같은 태도).
+   * 알려진 이름이 먼저이고, 나머지는 그 뒤에 이어 붙는다 — 거부문이 사람이 친 이름을
+   * 그대로 인용하게 하려는 것이다.
+   */
+  const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? '');
+  const extraTargets: string[] = [];
+  if (namedTarget === '' && input.tool_input && typeof input.tool_input === 'object') {
+    for (const [key, value] of Object.entries(input.tool_input as Record<string, unknown>)) {
+      if (typeof value !== 'string' || value === '') continue;
+      // 내용(`content`·`new_string` 등)은 대상이 아니다 — 경로처럼 생긴 **짧은** 값만 본다.
+      if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
+      if (value.length > 4096 || value.includes('\n')) continue;
+      if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+    }
+  }
+  const raw = namedTarget !== '' ? namedTarget : (extraTargets[0] ?? '');
   // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산해, 아래 모든 프리픽스/파일명
   // 매치(CORE_FILES 보호, 설계 allowlist, 구축 트랙 `.harness/design/` 보호)에 "두 공간 중
   // 하나라도 걸리면 매치"로 쓴다. root 자체가 심링크면 리터럴 공간이 새고(C3), root
