@@ -115,16 +115,16 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 
 | Metric | Value |
 |---|---|
-| Hook latency (p95) | **2.6 ms** in-process; **18.9 ms** on the journal-replay fallback with a 100k-entry (15 MB) journal. The hook runs as its own `node` process, so end-to-end it also pays your machine's Node startup — here that is 133 ms / 162 ms wall-clock, of which **99 ms is `node` booting**. Absolute wall-clock is a property of your machine, not of this tool. |
-| Test suite | **1282 passing** (53 files) — 16 are repo-only checks that skip in the published package (1266 there) |
+| Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
+| Test suite | **1284 passing** (53 files) — 16 are repo-only checks that skip in the published package (1268 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
 
 **Re-measure it yourself** — `npm run bench:hook` ships with the package. It synthesises 100k-entry
-journals in three shapes (realistic, corrupted, adversarial), times the real hook process, and prints
-your machine's `node` startup floor alongside, because a large part of any absolute number is that
-floor and not this tool.
+journals in three shapes (realistic, corrupted, adversarial), times **both surfaces** — the judgement
+in-process and the real hook process end-to-end — and prints your machine's `node` startup floor
+alongside, because a large part of any absolute number is that floor and not this tool.
 
 ---
 
@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1282 tests). The
+**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1284 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -256,7 +256,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a script chain deeper than 3 levels is **not followed — it is denied**, because not seeing what the last step writes is not the same as it being safe.
-- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events / 15 MB (decades of use) measured p95 ≈ 19 ms in-process (+29 ms wall-clock), and only while the state store is degraded — `doctor --repair` ends it.
+- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events / 15 MB (decades of use) measured at +17.7 ms p95 in-process (+24.7 ms wall-clock) over the normal path, and only while the state store is degraded — `doctor --repair` ends it.
 
 ---
 

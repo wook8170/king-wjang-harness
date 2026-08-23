@@ -406,3 +406,44 @@ describe('[ENG-230] 프로세스치환 감지도 정본 셸 목록을 쓴다', (
     }
   });
 });
+
+/**
+ * [EFF-209] **설계 트랙에서 소스를 「읽는」 것은 구현이 아니다.**
+ *
+ * 라운드 3-L 이 지적한 과차단인데, 처방은 [SEC-221] 이 이미 냈다 — 「모든 형태에서 조회인
+ * 도구」와 「플래그로 갈리는 도구」를 나눈 순간 `sed -n`·`awk`·`perl` 의 조회 형태가
+ * 조회로 돌아왔다. 그래서 이 블록은 **고침이 아니라 못이다**: 다음에 누가 과차단을 막으려
+ * 목록을 다시 손대면(그것이 [EFF-214] 가 만든 사고다) 여기가 먼저 깨진다.
+ *
+ * 짝을 함께 잰다 — 과차단만 재면 「전부 통과」가 초록이 되기 때문이다.
+ */
+describe('[EFF-209] 설계 트랙의 소스 조회는 막지 않는다 — 변형만 막는다', () => {
+  it('조회 형태는 통과한다 (`.ts`·`.sql` 양쪽)', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "sed -n '1,20p' src/a.ts",
+      "sed -n '/CREATE TABLE/,/;/p' db/schema.sql",
+      "awk '/CREATE/{print}' db/schema.sql",
+      "perl -ne 'print if /export/' src/a.ts",
+      "perl -pe 's/a/b/' src/a.ts",          // `-i` 가 없으면 표준출력이다
+      "awk -f tools/q.awk db/schema.sql",    // `-f` 는 스크립트 입력이지 출력이 아니다
+      'sort db/schema.sql',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('같은 도구의 변형 형태는 그대로 막힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      "sed -i '' 's/a/b/' src/a.ts",
+      "sed -i.bak 's/1/2/' db/schema.sql",
+      "perl -i -pe 's/a/b/' src/a.ts",
+      "awk -i inplace '{print}' src/a.ts",
+      'sort -o db/schema.sql db/schema.sql',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+});
