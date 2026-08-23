@@ -46,8 +46,8 @@
 >
 > ### 남은 것
 >
-> **가성비 축(5) 미착수** · open 1건([PROD-224] 태그·머지는 사용자 결정).
-> 대장: **verified 272 · open 1 · deferred 5 · open BLOCKER 0 · HIGH 0**.
+> **가성비 축(5) 미착수**. [PROD-224] 는 사용자 결정으로 전건 수행됐다 — 푸시·머지·`v0.1.0` 태그 완료. **open 0**.
+> 대장: **verified 273 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
 
 ---
 
@@ -57,7 +57,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 272 · **open** 1 (MED 1 · LOW 0) · deferred 5 ·
+> 대장 집계: **verified** 273 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -161,7 +161,7 @@
 >
 > ### 남은 open 0건 — 대장의 모든 결함이 닫혔다
 >
-> **MED (1)** `PROD-224`
+> **MED (0)** 
 >
 > **LOW (0)** 
 > 전부 닫았다. 그중 둘은 **고치지 않고 `rejected`** 다 — 결함이 아니라 이미 내린
