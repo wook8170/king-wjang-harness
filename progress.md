@@ -1,6 +1,73 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-23 (라운드 3-M **7축 전건 완주**) — 아홉·열 번째 부류 + O(n²) 봉인
+## 2026-08-23 (라운드 3-M **잔여 전건 소진**) — ★ **3-N 재감정 6축 디스패치됨**
+
+**정본.** 메인 `a08ec18` (+ 이 progress.md 단독 커밋) · **1284 tests green ×3 · tsc 0 · build OK ·
+대장 lint R1–R13 통과(254행)** · 워킹트리 clean · `core/dist/cli.js` sha256 `d9c601d5…`.
+대장: **verified 243 · open 3 · deferred 5 · open BLOCKER 0 · HIGH 0 · LOW 0**.
+
+### 이번 웨이브에 닫은 것 (6건)
+
+- **[PROD-211] 동봉 벤치가 게이트에 적힌 두 표면을 다 잰다.** G9 은 처음부터
+  「인프로세스·프로세스 wall-time **두 표면 모두**」인데 실려 나간 벤치는 wall-time 만 쟀다 —
+  그래서 README 의 인프로세스 수치를 **받는 사람이 다시 잴 수 없었다**(축7 이 3라운드 연속
+  지적한 것). 자식 프로세스에서 번들의 `run(['hook','pre-tool'], root)` 를 직접 호출해 잰다.
+  유휴 실측(load 3.32 · node 바닥 39.8ms): 인프로세스 0.9 → 18.6ms(**+17.7**) ·
+  wall 77.0 → 101.7ms(**+24.7**) — 둘 다 문턱 50ms 충족. README 4개 언어를 이 값으로 교체.
+- **[PROD-212] 부하 표기를 대칭으로.** 초과만 유보하고 충족은 그냥 `PASS` 로 찍으면 바쁜
+  머신에서 돌린 사람이 **통과만 확정으로 읽는다**. load 24.66/10코어 실측 — 전부 `pass — machine busy`.
+- **[EFF-209] 처방은 이미 나와 있었다 — [SEC-221].** 설계 트랙 13벡터 재측정: 조회 7건 전부
+  통과 · 변형 6건 전부 차단(`.ts`·`.sql`). 고침이 아니라 **못을 박았다**(과차단 수정이 구멍을
+  만든 [EFF-214] 사고 재발 방지).
+- **[QUAL-229] 답을 냈다: 중복이었다.** `OWNED_DIRS` 절만 발화하는 입력을 8벡터로 찾았으나
+  **전부 다른 절에 먼저 걸렸다**(절을 꺼도 16/16 동일) → **지웠다**. 되살릴 근거는 하나뿐이라고
+  코드에 적어 뒀다: 그 절만 막는 입력을 실제로 보이는 것.
+- **[PROD-225]** MCP 언어 주장 — 본체는 참(`lang: ko`·`HARNESS_LANG=ko` 양쪽에서 영어 유지),
+  틀린 건 괄호 안 부연(번들에 한글 토큰 102개 있음) → 실측 사실로 교체.
+- **[COST-220]** 「비간섭」 뒤에 **드는 것은 시간**임을 명시 — 출력·파일·컨텍스트 0,
+  셸 게이트 **p95 ~4ms**(실측 p50 3.7 · p95 4.7). 4개 언어.
+
+**배포본 테스트 수도 실측했다**(`.gitattributes` export-ignore 를 복사본에 적용해 재현):
+**1268 passing + 리포 전용 16 skipped = 1284**. README 4개 언어 갱신.
+
+### 다음 즉시 할 일
+
+1. **3-N 6축 보고 대기** — `docs/release-readiness/2026-08-21/round3n/appraisal7-<n>-<axis>.md`
+   (축 1·2·3·4·6·7). 대상 HEAD `a08ec18`.
+2. 도착하면 **가성비 축(5) 단독 디스패치** — 지연 측정 오염 때문에 **이 순서는 필수**다.
+3. 3-N 결과 등재 → 남은 결함 처리 → `[QUAL-197]`·`[QUAL-210]` 은 3-N 이 그 목록을 다시 짚으면
+   함께 닫는다.
+4. **`[PROD-224]` 는 사용자 결정 대기** — `git remote add` · 푸시 · `v0.1.0` 태그 · `main` 머지.
+   원격은 만들어져 있다(`https://github.com/wook8170/king-wjang-harness`, **PRIVATE**).
+   **내가 임의로 하지 않는다.**
+
+### 미해결 · 확인 대기
+
+- open 3건: `QUAL-197`(3-K 잔여 목록 — 대장이 완전한 척하지 않게 열어 둠) ·
+  `QUAL-210`(3-L 한도 중단 — 3-N 이 대체) · `PROD-224`(사용자 결정).
+- deferred 5건은 그대로(`DEP-32`·`PERF-96`·`COST-178` 등 — 전제가 「리스닝 dev 서버」거나
+  적대적 입력).
+
+### 시스템 지식 (함정·환경)
+
+- ★ **훅 이벤트 이름은 `session-start` · `pre-tool` · `post-tool` · `stop`** 이다.
+  `hook PreToolUse` 처럼 부르면 **조용히 무판정 exit 0** 이 되고 `.harness/.runtime/hook-errors.log`
+  에 `unknown-hook-event` 만 쌓인다 — 이번 웨이브에 이 함정에 한 번 빠져 **「차단이 전부
+  풀렸다」는 잘못된 결론**을 냈다. 판정 매트릭스를 돌리기 전에 **막혀야 할 것 하나가 실제로
+  deny 되는지** 먼저 확인할 것.
+- 벤치는 **부하에 민감**하다. `os.getloadavg()[0] < 4.0` 을 기다렸다가 돌려라(코어 10).
+  서브에이전트·테스트와 겹치면 wall-time 이 통째로 오염된다.
+- 대장 행 편집 시 **파이썬 `split('|')` 인덱스**: 0=`''` · 1=id · 2=severity · 3=축 ·
+  4=finding · **5=status · 6=evidence · 7=anchor · 8=resolution** · 9=`''`.
+  한 칸 밀리면 `근거등급 어휘가 전부 사전 안이다` 테스트가 잡는다.
+- 인용 앵커가 어긋나면 `ledger-summary-sync` 의 VAL-C 가 깨진다 →
+  `round3i/reanchor-citations.py` 실행. 요약 동기화는 `round3i/sync-ledger-summary.py`.
+- 검증 한 벌: `npx tsc --noEmit` · `npx vitest run` ×3 · `npm run build` ·
+  `bash ~/.claude/skills/verifying-production-readiness/bin/ledger-lint.sh docs/release-readiness/2026-08-21`.
+
+---
+
+## (이전) 2026-08-23 (라운드 3-M **7축 전건 완주**) — 아홉·열 번째 부류 + O(n²) 봉인
 
 **정본.** 메인 (아래 커밋) · **1277 tests green ×3 · tsc 0 · build OK · 대장 lint R1–R13 통과(251행)** · 워킹트리 clean.
 대장: **verified 235 · open 8 · deferred 5 · open BLOCKER 0 · HIGH 0**.
