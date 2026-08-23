@@ -551,7 +551,22 @@ function staticAssignments(cmd: string, env: Record<string, string | undefined> 
  * **프로젝트 밖 쓰기가 과차단되지 않는다**(그 값은 훅이 실제로 알고 있는 사실이다).
  * 값에 공백·메타문자가 있으면 경로로 보지 않는다 — 펼 수 없는 것을 편 척하지 않는다.
  */
-export function expandStaticVars(cmd: string, env: Record<string, string | undefined> = {}): string {
+/**
+ * [UTIL-239] `${VAR:-기본값}` 의 **기본값은 정적이다.**
+ *
+ * `${TMPDIR:-/tmp}/x` 는 값을 몰라도 **어디에 떨어지는지는 안다** — 둘 중 하나이고 둘 다
+ * 프로젝트 밖이다. 그런데 브레이스 확장을 통째로 「못 보는 것」으로 취급해 전 페이즈에서
+ * 막았다. [EFF-227] 이 `mktemp` 관용구에 쓴 논리와 같다: **못 보는 것과 안 보이는 것은 다르다.**
+ * 환경변수에 값이 있으면 그것을, 없으면 기본값을 쓴다 — 어느 쪽이든 정적 성분이 생긴다.
+ */
+function expandBraceDefaults(cmd: string, env: Record<string, string | undefined>): string {
+  return cmd.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-)([^}]*)\}/g,
+    (_m, name: string, fallback: string) => env[name] ?? fallback);
+}
+
+export function expandStaticVars(rawCmd: string, env: Record<string, string | undefined> = {}): string {
+  // [UTIL-239] 브레이스 기본값을 먼저 편다 — 그래야 아래 치환이 볼 수 있는 정적 성분이 된다.
+  const cmd = expandBraceDefaults(rawCmd, env);
   const vars = staticAssignments(cmd, env);
   const lookup = (name: string): string | undefined => {
     const local = vars.get(name);

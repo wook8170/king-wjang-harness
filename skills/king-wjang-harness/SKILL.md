@@ -23,7 +23,7 @@ changes them, in their own terminal.
 - **Use it**: putting the harness on a project, driving phases/nodes/waves, hitting a hook deny or
   block, inspecting state or recovering it.
 - **Do not**: ordinary work in a project with no `.harness/` (the hooks stay completely silent) /
-  developing **king-wjang-harness itself** (→ the `verify` skill).
+  developing **king-wjang-harness itself** (that work lives in this repository, not in the package).
 
 ## Bootstrapping
 
@@ -95,8 +95,9 @@ automatically** — you never type them (they always exit 0).
 - **The ids in `wave create --refs` must already exist in the ledger** — otherwise it is rejected.
   Register them first with `harness node upsert`. Separate several with commas and no spaces
   (`--refs F-1,F-2`).
-- **The UX gate**: a wave that references a `UX-` prefixed node needs a **file of size > 0**
-  (directories are ignored) in `.harness/evidence/<wave-id>/` before it will `complete`. No harness
+- **The UX gate**: a wave that references a `UX-` prefixed node needs **actual visual evidence** in
+  `.harness/evidence/<wave-id>/` before it will `complete` — an image with real dimensions, or an
+  exported HTML page. A text file does not open it, and neither does a 1x1 PNG. No harness
   command puts evidence there — create the file (a screenshot, say) **directly** in that path. The
   hand-edit ban covers the core and policy files only, so adding evidence is not a breach of discipline.
 - **A gate needs real artifacts.** `gate submit` rejects empty or placeholder files, a submission set
@@ -109,5 +110,11 @@ automatically** — you never type them (they always exit 0).
 
 ## Verification
 
-When you are **developing king-wjang-harness itself** and need to verify a change, use the `verify`
-skill (sandbox init and the hook-over-stdin recipe).
+When you are **developing king-wjang-harness itself** and need to verify a change, follow the
+verification set the repository uses: `npx tsc --noEmit`, `npx vitest run` three times, `npm run
+build`, and the defect-ledger lint. That workflow lives in the repository, not in this package —
+this file no longer points at a skill the package does not ship.
+
+Driving a hook by hand: pipe the payload on stdin and use the **real event names** —
+`session-start`, `pre-tool`, `post-tool`, `stop`. Any other name is silently ignored, which reads
+as "everything passed" when nothing was judged.

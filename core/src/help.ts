@@ -11,6 +11,7 @@
  */
 import { pick, type Lang, type Msg } from './i18n';
 import { TOKEN_DOC_SKELETON, TOKEN_DOC_SHAPE_HINT } from './tokens';
+import { DEFECT_STATUSES } from './ship';
 
 export interface SubCommand {
   name: string;
@@ -179,7 +180,7 @@ export const COMMANDS: CommandGroup[] = [
       // [UX-A2] 인자를 적지 않으면 **알아낼 방법이 없다** — 미지 플래그 오류가 이 도움말을
       // 가리키는데 여기 인자가 없으면 그 안내도 막다른 길이 된다(같은 군의 deploy 는 이미 적고 있다).
       { name: 'defect add', args: '--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>', summary: M('Add a defect to the ledger. Findings without evidence are refused.', '결함을 대장에 올린다. 근거 없는 지적은 거부된다.') },
-      { name: 'defect update', args: '<id> --status <open|fixing|fixed|verified|rejected|deferred> [--defer-reason <why>] [--evidence <e>]', summary: M('Change a defect’s status.', '결함의 상태를 바꾼다.') },
+      { name: 'defect update', args: `<id> --status <${DEFECT_STATUSES.join('|')}> [--defer-reason <why>] [--evidence <e>]`, summary: M('Change a defect’s status.', '결함의 상태를 바꾼다.') },
       { name: 'defect list', summary: M('Print the defect ledger as JSON.', '결함 대장을 JSON 으로 출력한다.') },
       { name: 'deploy', args: '--env <env> --version <v> --sha <commit> [--evidence <e>]', summary: M('Record a deployment.', '배포를 기록한다.') },
       { name: 'deployments', summary: M('Print deployment history as JSON.', '배포 이력을 JSON 으로 출력한다.') },
@@ -263,6 +264,28 @@ export function renderHelp(lang: Lang): string {
       'Language: set `lang: ko` in .harness/config.yaml, or HARNESS_LANG=ko',
     ];
   return [...head, ...body, ...tail].join('\n');
+}
+
+/**
+ * [USE-241] **명령군이 광고하는 플래그 어휘** — 도움말의 `args` 문자열이 정본이다.
+ *
+ * 예전에는 미지 플래그 판정이 **전역** 어휘(CLI 전체 ~30종)로 이뤄져서, 다른 명령군의
+ * 플래그를 써도 「아는 플래그」로 통과한 뒤 **조용히 버려졌다** — `harness wave create
+ * --goal g --reason r` 이 exit 0 으로 성공하고 `--reason` 만 사라진다. 가드 자신이
+ * 「An unknown flag is never applied」라고 인쇄하면서 정확히 그 일을 하고 있었다.
+ *
+ * 어휘를 도움말에서 뽑는 이유: 그래야 **광고한 것과 받는 것이 같아진다.** 손으로 목록을
+ * 하나 더 만들면 그것이 [ENG-235] 가 일곱 번 겪은 「두 번째 사본」이 된다.
+ */
+export function flagsOfGroup(g: CommandGroup): Set<string> {
+  const out = new Set<string>();
+  const collect = (text?: string): void => {
+    if (!text) return;
+    for (const m of text.matchAll(/--([a-z][a-z0-9-]*)/g)) out.add(m[1]);
+  };
+  collect(g.args);
+  for (const sub of g.subs ?? []) collect(sub.args);
+  return out;
 }
 
 export function findGroup(name: string): CommandGroup | undefined {

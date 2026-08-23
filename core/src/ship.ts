@@ -602,10 +602,21 @@ export function shipVerdict(root: string): ShipVerdict {
     if (ux.length === 0) continue;
     if (hasMeasuredEvidence(root, id)) continue;
     reasons.push(t({
+      /**
+       * [USE-251] **잣대가 둘인 것을 여기서 말한다.** `wave complete` 는 목업(내보낸 HTML)도
+       * 증적으로 인정하는데 출하 판정은 **실주행 캡처**를 따로 요구한다 — 이유가 있다(목업은
+       * 「그리려던 것」이고 출하 판정이 묻는 것은 「실제로 도는 것」이다). 그러나 그 이유를
+       * 말하지 않으면, 웨이브를 이미 통과시킨 사람은 같은 웨이브가 여기서 다시 걸리는 것을
+       * **일관성 없음**으로 읽는다. 다른 잣대라는 사실 자체가 안내의 일부다.
+       */
       en: `${id} references UX nodes (${ux.join(', ')}) but has no real-run capture — leave headless 2x `
-        + `screenshots in ${evidenceDir(root, id)} before claiming measured (§3-5)`,
+        + `screenshots in ${evidenceDir(root, id)} before claiming measured. This is a stricter bar than `
+        + `\`wave complete\`, which accepts an exported HTML mockup: a mockup shows what you intended, `
+        + `a capture shows what actually runs.`,
       ko: `UX 노드(${ux.join(', ')})를 참조하는 ${id} 에 실주행 캡처 증적이 없다 — `
-        + `headless 2x 스크린샷을 ${evidenceDir(root, id)} 에 남겨야 measured 를 주장할 수 있다(§3-5)`,
+        + `headless 2x 스크린샷을 ${evidenceDir(root, id)} 에 남겨야 measured 를 주장할 수 있다. `
+        + `이것은 \`wave complete\` 보다 엄격한 잣대다(그쪽은 내보낸 HTML 목업도 받는다) — `
+        + `목업은 «그리려던 것»이고 캡처는 «실제로 도는 것»이다.`,
     }));
   }
   reasons.push(...waves.unreadable);

@@ -99,9 +99,11 @@ with tests that fail when a copy reappears.
 - A 1×1 PNG opened the UX evidence gate. Evidence is now measured by **dimensions**, not bytes.
 - Gate evidence and submission timestamps survive `doctor --repair`; a repaired project now
   reports `ok` from the state **after** the repair instead of before it.
-- Latency claims now state the measurement surface. In-process p95 is 2.6 ms (18.9 ms on the
-  journal-replay fallback with a 100k-entry journal); end-to-end wall-clock adds your machine's
-  Node startup, which dominates the number and is not a property of this tool.
+- Latency claims now state the measurement surface. Measured at the time of this change: 2.6 ms p95
+  in-process (18.9 ms on the journal-replay fallback with a 100k-entry journal); end-to-end
+  wall-clock adds your machine's Node startup, which dominates the number and is not a property of
+  this tool. **Absolute figures belong to the machine that produced them** — run `npm run
+  bench:hook` for yours. The README quotes the most recent run, so the two differ by design.
 
 ### Fixed — messages
 

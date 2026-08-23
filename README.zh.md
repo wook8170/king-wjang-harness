@@ -202,7 +202,7 @@ npm install          # prepare hook builds core/dist via tsup
 `harness_gate_submit`／`_status`、`harness_report_rtm`／`_hub`、`harness_ship_verdict`、
 `harness_trace`、`harness_doctor` —— 以及 `harness_gate_approve`，它只用于**拒绝并指向终端**。
 
-**有两件事是刻意做不到的**：无法批准关卡（最终点击永远属于人 §4-3），也无法越过未批准的关卡推进阶段。
+**有两件事是刻意做不到的**：无法批准关卡（最终点击永远属于人 —— 这是设计，不是疏漏），也无法越过未批准的关卡推进阶段。
 通过 MCP 能做的事，本来通过 CLI 也能做 —— 关卡还是同一批关卡。
 
 ---
@@ -215,11 +215,11 @@ npm install          # prepare hook builds core/dist via tsup
 
 | 键 | 默认值 | 作用 |
 |---|---|---|
-| `lang` | `en` | 工具自身输出文案的语言 —— CLI、钩子 JSON 与生成文档。韩语为 `ko`。只想临时切换可用 `HARNESS_LANG=ko`。**MCP 的工具说明与拒绝文案仍为英文** —— 已在 `lang: ko` 与 `HARNESS_LANG=ko` 两种设置下实测。 |
+| `lang` | `en` | 工具自身输出文案的语言 —— CLI、钩子 JSON 与生成文档。韩语为 `ko`。只想临时切换可用 `HARNESS_LANG=ko`。**MCP 的工具说明、拒绝文案与错误文案仍为英文** —— 已在同时开启 `lang: ko` 与 `HARNESS_LANG=ko` 的条件下，对工具列表、关卡批准拒绝以及未知工具/未知输入错误逐一实测。 |
 | `profile` | `generic` | 由哪个 profile 提供 `test`／`build`／`deploy`／`e2e` 命令。项目本地的 `.harness/profile/` 始终优先于内置。 |
 | `remote_control` | `true` | SessionStart 是否提示远程控制。 |
 | `terse` | `false` | 缩短钩子提示。 |
-| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **设计轨道可以写实现代码的位置。** 这些前缀之外的**源文件**在 P6 关卡通过前会被拒绝 —— 测试、配置与文档不受此规则阻挡。 |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **设计轨道可以写实现代码的位置。** 这些前缀之外的**源文件**在 P6 关卡通过前会被拒绝。配置与文档不受阻挡，**以测试命名**的文件（`*.test.*`、`*_test.*`、`test_*`）同样不受阻挡 —— 但有一个例外值得知道：配置档声明的源路径**优先于**命名规则。因此 `src/app.test.ts` 仍会被拒绝，而 `test/app.test.ts` 可以通过。 |
 | `design_blocked_bash` | 部署类命令（`npm publish`、`docker push`、`terraform apply` …） | **出货轨道开启前始终被拦截的部署命令。** 采用子串匹配，因此不要写结尾参数。技术栈特有命令交由 profile 的 `deploy_commands`。 |
 | `design_system_frozen_roots` | `[]` | 冻结后设计系统文件不得变更的目录。 |
 | `block_raw_values` | `false` | 拒绝硬编码原始颜色／尺寸而不引用语义 token 的写入。 |

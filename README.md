@@ -205,7 +205,7 @@ instead of `Bash`. The server exposes exactly 16 tools: `harness_status`, `harne
 point you at the terminal.
 
 Two things it deliberately does **not** do: it cannot approve a gate (the final click is always a
-human's, §4-3), and it cannot set a phase past an unapproved gate. Everything an agent can do through
+human's — that is the design, not an accident), and it cannot set a phase past an unapproved gate. Everything an agent can do through
 MCP, it could already do through the CLI — the gates are the same gates.
 
 ---
@@ -218,11 +218,11 @@ block feels wrong for your stack, this is the dial, not the source code.
 
 | Key | Default | What it does |
 |---|---|---|
-| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean, or export `HARNESS_LANG=ko` for one run. **MCP tool descriptions and refusals stay English** — measured with `lang: ko` and `HARNESS_LANG=ko` both set. |
+| `lang` | `en` | Language of the harness's own messages — CLI, hook JSON, and generated documents. Set `ko` for Korean, or export `HARNESS_LANG=ko` for one run. **MCP tool descriptions, refusals and errors stay English** — measured with `lang: ko` and `HARNESS_LANG=ko` both set, across the tool listing, the gate-approval refusal, and unknown-tool/unknown-input errors. |
 | `profile` | `generic` | Which profile supplies `test` / `build` / `deploy` / `e2e` commands. A project-local `.harness/profile/` always wins over the bundled one. |
 | `remote_control` | `true` | Whether SessionStart mentions remote control. |
 | `terse` | `false` | Shorter hook guidance. |
-| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **Where implementation code may be written on the design track.** Source files outside these prefixes are denied until the P6 gate is approved — tests, config, and docs are not blocked by this rule. |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **Where implementation code may be written on the design track.** Source files outside these prefixes are denied until the P6 gate is approved. Config and docs are not blocked by this rule, and neither are files **named** as tests (`*.test.*`, `*_test.*`, `test_*`) — with one exception worth knowing: the profile's declared source paths win over the naming rule, so `src/app.test.ts` is still denied while `test/app.test.ts` passes. |
 | `design_blocked_bash` | deploy commands (`npm publish`, `docker push`, `terraform apply`, …) | **Shipping commands that stay blocked** until the shipping track opens. Substring match, so no trailing flags. Your stack's own commands belong in the profile's `deploy_commands`. |
 | `design_system_frozen_roots` | `[]` | Directories where design-system files must not change once frozen. |
 | `block_raw_values` | `false` | Deny writes that hardcode raw colors/sizes instead of referencing semantic tokens. |

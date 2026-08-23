@@ -203,7 +203,7 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 `harness_trace`, `harness_doctor` — 그리고 `harness_gate_approve` 는 **거절하고 터미널을 가리키는**
 용도로만 있다.
 
-**의도적으로 못 하는 것 둘**: 게이트를 승인할 수 없고(최종 클릭은 항상 사람이다 §4-3),
+**의도적으로 못 하는 것 둘**: 게이트를 승인할 수 없고(최종 클릭은 항상 사람이다 — 사고가 아니라 설계다),
 승인되지 않은 게이트를 지나 페이즈를 옮길 수 없다. MCP 로 할 수 있는 것은 CLI 로도 할 수 있던
 것뿐이다 — 게이트는 같은 게이트다.
 
@@ -217,11 +217,11 @@ npm install          # prepare 훅이 tsup으로 core/dist 빌드
 
 | 키 | 기본값 | 하는 일 |
 |---|---|---|
-| `lang` | `en` | 하네스 자신이 내는 문구의 언어 — CLI·훅 JSON·생성 문서. 한국어는 `ko`, 한 번만 바꾸려면 `HARNESS_LANG=ko`. **MCP 도구 설명·거절문은 영어로 남는다** — `lang: ko`·`HARNESS_LANG=ko` 양쪽에서 실측했다. |
+| `lang` | `en` | 하네스 자신이 내는 문구의 언어 — CLI·훅 JSON·생성 문서. 한국어는 `ko`, 한 번만 바꾸려면 `HARNESS_LANG=ko`. **MCP 도구 설명·거절문·오류문은 영어로 남는다** — `lang: ko`·`HARNESS_LANG=ko` 양쪽을 켜고 도구 목록·게이트 승인 거절·미지 도구/미지 입력 오류까지 실측했다. |
 | `profile` | `generic` | `test`·`build`·`deploy`·`e2e` 명령을 어느 프로파일에서 가져올지. 프로젝트 로컬 `.harness/profile/` 이 번들보다 **항상 우선**한다. |
 | `remote_control` | `true` | SessionStart 가 원격 제어를 안내할지. |
 | `terse` | `false` | 훅 안내를 짧게. |
-| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **설계 트랙에서 구현 코드를 쓸 수 있는 곳.** 이 접두사 밖의 **소스 파일**은 P6 게이트 승인 전까지 거부된다 — 테스트·설정·문서는 이 규칙으로 막히지 않는다. |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **설계 트랙에서 구현 코드를 쓸 수 있는 곳.** 이 접두사 밖의 **소스 파일**은 P6 게이트 승인 전까지 거부된다. 설정·문서는 막히지 않고, **이름이 테스트인** 파일(`*.test.*`·`*_test.*`·`test_*`)도 막히지 않는다 — 다만 알아 둘 예외가 하나 있다: 프로파일이 선언한 소스 경로가 이름 규칙보다 **앞선다**. 그래서 `src/app.test.ts` 는 여전히 거부되고 `test/app.test.ts` 는 통과한다. |
 | `design_blocked_bash` | 배포 명령들(`npm publish`·`docker push`·`terraform apply` …) | **출하 트랙이 열리기 전까지 막히는 배포성 명령.** 부분문자열 대조라 접미 플래그는 적지 않는다. 스택별 명령은 프로파일의 `deploy_commands` 몫이다. |
 | `design_system_frozen_roots` | `[]` | 동결 후 디자인 시스템 파일이 바뀌면 안 되는 디렉토리. |
 | `block_raw_values` | `false` | 시맨틱 토큰 대신 raw 색상·크기를 박는 쓰기를 거부한다. |

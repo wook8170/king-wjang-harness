@@ -203,7 +203,7 @@ npm install          # prepare hook builds core/dist via tsup
 `harness_trace`、`harness_doctor` — そして `harness_gate_approve` は**拒否してターミナルを指す**
 ためだけに存在する。
 
-**意図的にできないこと が二つ**: ゲートの承認はできない（最終クリックは常に人間だ §4-3）し、
+**意図的にできないこと が二つ**: ゲートの承認はできない（最終クリックは常に人間だ —— 事故ではなく設計だ）し、
 未承認ゲートを越えてフェーズを進めることもできない。MCP でできることは CLI でもできたことだけだ ——
 ゲートは同じゲートである。
 
@@ -217,11 +217,11 @@ npm install          # prepare hook builds core/dist via tsup
 
 | キー | 既定値 | 役割 |
 |---|---|---|
-| `lang` | `en` | ハーネス自身が出力する文言の言語 — CLI・フック JSON・生成ドキュメント。一度だけ切り替えるなら `HARNESS_LANG=ko`。**MCP のツール説明と拒否文は英語のまま** —— `lang: ko`・`HARNESS_LANG=ko` の両方で実測した。日本語環境では `ko`（韓国語）も選べる。 |
+| `lang` | `en` | ハーネス自身が出力する文言の言語 — CLI・フック JSON・生成ドキュメント。一度だけ切り替えるなら `HARNESS_LANG=ko`。**MCP のツール説明・拒否文・エラー文は英語のまま** —— `lang: ko`・`HARNESS_LANG=ko` の両方を有効にし、ツール一覧・ゲート承認の拒否・未知ツール/未知入力のエラーまで実測した。日本語環境では `ko`（韓国語）も選べる。 |
 | `profile` | `generic` | `test`・`build`・`deploy`・`e2e` コマンドの供給元プロファイル。プロジェクトローカルの `.harness/profile/` が常に優先。 |
 | `remote_control` | `true` | SessionStart でリモート制御を案内するか。 |
 | `terse` | `false` | フック案内を短くする。 |
-| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **設計トラックで実装コードを書ける場所。** この接頭辞の外の**ソースファイル**は P6 ゲート承認まで拒否される —— テスト・設定・ドキュメントはこの規則では止まらない。 |
+| `design_allowed_prefixes` | `['.harness/', 'docs/']` | **設計トラックで実装コードを書ける場所。** この接頭辞の外の**ソースファイル**は P6 ゲート承認まで拒否される。設定・ドキュメントは止まらず、**名前がテストの**ファイル（`*.test.*`・`*_test.*`・`test_*`）も止まらない —— ただし知っておくべき例外が一つある: プロファイルが宣言したソースパスが命名規則より**優先する**。したがって `src/app.test.ts` は依然として拒否され、`test/app.test.ts` は通る。 |
 | `design_blocked_bash` | デプロイ系コマンド（`npm publish`・`docker push`・`terraform apply` …） | **出荷トラックが開くまでブロックされるデプロイ系コマンド。** 部分文字列一致のため末尾フラグは書かない。スタック固有はプロファイルの `deploy_commands` が担う。 |
 | `design_system_frozen_roots` | `[]` | 凍結後にデザインシステムファイルを変更してはいけないディレクトリ。 |
 | `block_raw_values` | `false` | セマンティックトークンを参照せず raw な色・サイズを直書きする書き込みを拒否する。 |

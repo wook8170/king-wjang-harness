@@ -20,7 +20,7 @@ import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick, type Lang } from './i18n';
 import { langFor } from './tr';
-import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand } from './help';
+import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand, flagsOfGroup } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
 import {
   submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate,
@@ -122,10 +122,12 @@ function editDistance(a: string, b: string): number {
   return prev[b.length];
 }
 
-function nearestFlag(name: string): string | undefined {
+function nearestFlag(name: string, allowed?: ReadonlySet<string>): string | undefined {
   let best: string | undefined;
   let bestD = 3; // 3 이상 벌어지면 추측이 아니라 헛짚음이다 — 말하지 않는다
-  for (const cand of [...VALUE_FLAGS, ...BOOL_FLAGS]) {
+  // [USE-241] 후보는 **그 명령군의 어휘**다. 전역에서 고르면 그 군에 없는 플래그를 권한다.
+  const pool = allowed !== undefined ? [...allowed] : [...VALUE_FLAGS, ...BOOL_FLAGS];
+  for (const cand of pool) {
     const d = editDistance(name, cand);
     if (d < bestD) { bestD = d; best = cand; }
   }
@@ -139,28 +141,58 @@ function nearestFlag(name: string): string | undefined {
  * **정당한 값**이 있기 때문이다(flag() 가 값을 거르지 않는 것과 같은 이유). 즉 확실히
  * 아는 것만 실패로 판정하고, 애매하면 통과시킨다(과차단 0 방향).
  */
-export function unknownFlags(argv: string[]): string[] {
+export function unknownFlags(argv: string[], allowed?: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (typeof tok !== 'string' || !tok.startsWith('--') || tok === '--') continue;
     const name = tok.slice(2);
-    if (VALUE_FLAGS.has(name)) { i++; continue; }
-    if (BOOL_FLAGS.has(name)) continue;
+    const takesValue = VALUE_FLAGS.has(name);
+    /**
+     * [USE-241] `allowed` 가 오면 **그 명령군이 광고한 어휘**로 판정한다. 전역 어휘로 재면
+     * 다른 군의 플래그가 「아는 플래그」로 통과한 뒤 조용히 버려진다 — exit 0 이라 알 길이 없다.
+     * `ALWAYS_OK` 는 군을 가리지 않는 공통 플래그다(도움말 args 에 매번 적지 않는다).
+     */
+    const known = allowed === undefined
+      ? (takesValue || BOOL_FLAGS.has(name))
+      : (allowed.has(name) || ALWAYS_OK.has(name));
+    if (known) { if (takesValue) i++; continue; }
     out.push(tok);
   }
   return out;
 }
 
-/** 모르는 토큰 하나를 「무엇이 잘못됐고 무엇이었어야 하나」로 바꾼다. */
-function explainUnknownFlag(tok: string): string {
+/**
+ * 어느 명령군에서도 뜻이 같은 플래그. 도움말 `args` 에 매번 적지 않는다.
+ *
+ * `force`·`accept-policy` 는 **일부러 광고하지 않는** 탈출구다(에이전트에게 알려 주면
+ * 그것이 곧 우회 안내가 된다). 광고하지 않는다는 것과 받지 않는다는 것은 다르므로
+ * 여기 둔다 — 이걸 빼면 `phase set P8 --force` 같은 정식 부트스트랩 경로가 막힌다.
+ */
+const ALWAYS_OK: ReadonlySet<string> = new Set([
+  'help', 'json', 'quiet', 'verbose', 'force', 'accept-policy',
+]);
+
+/**
+ * 모르는 토큰 하나를 「무엇이 잘못됐고 무엇이었어야 하나」로 바꾼다.
+ *
+ * [USE-241] 제안도 **그 명령군의 어휘**에서 고른다. 전역 어휘로 고르면 `--reason` 을 두고
+ * 「did you mean --reason?」 같은 자기 자신을 가리키는 안내가 나온다 — 실제로 그랬다.
+ * 그리고 그 플래그가 **다른 군에는 있는** 경우가 이 결함의 본체이므로, 그때는 그 사실을
+ * 그대로 말해 준다(사람이 「오타인가」를 한참 들여다보지 않게).
+ */
+function explainUnknownFlag(tok: string, allowed?: ReadonlySet<string>): string {
   const eq = tok.indexOf('=');
   if (eq > 2) {
     const base = tok.slice(2, eq);
     // `--title=x` 는 지금까지 조용히 무시됐다 — flag() 는 `--title` 을 정확히 찾기 때문이다.
     if (VALUE_FLAGS.has(base)) return `${tok} (values take a space: \`--${base} <value>\`)`;
   }
-  const near = nearestFlag(tok.slice(2));
+  const name = tok.slice(2);
+  if (allowed !== undefined && (VALUE_FLAGS.has(name) || BOOL_FLAGS.has(name))) {
+    return `${tok} (that flag belongs to a different command group)`;
+  }
+  const near = nearestFlag(name, allowed);
   return near ? `${tok} (did you mean --${near}?)` : tok;
 }
 
@@ -354,6 +386,23 @@ export function run(argv: string[], root: string): number {
       // 배선 오타는 조용히 죽는 게 가장 위험하다 — 침묵하되 흔적을 남긴다.
       if (!HOOK_EVENTS.includes(sub)) {
         logHookIssue(root, `cli unknown-hook-event ${String(sub)}`);
+        /**
+         * [USE-245] **틀린 이벤트 이름을 친 그 자리에서 말해 준다.**
+         *
+         * 예전에는 로그 한 줄만 남고 화면은 완전 침묵 exit 0 이었다 — 그래서 `PreToolUse`
+         * 같은 플랫폼 표기를 친 사람은 **「전부 통과했다」로 읽는다.** 이 함정에 구현자
+         * 자신이 빠져 「차단이 전부 풀렸다」는 잘못된 결론을 낸 적이 있다(관측된 비용이다).
+         *
+         * 「항상 exit 0 · stdout 침묵」 계약은 **플랫폼 호출용**이고, 플랫폼은 미지 이벤트를
+         * 보내지 않는다. 그러니 미지 이벤트일 때만 **stderr** 로 한 줄 내는 것은 계약을
+         * 깨지 않는다 — stdout 은 그대로 비어 있고 exit 도 0 이다.
+         */
+        console.error(pick({
+          en: `hook: unknown event ${String(sub)} — nothing was judged. `
+            + `Valid events: ${HOOK_EVENTS.join(', ')}.`,
+          ko: `hook: 미지 이벤트 ${String(sub)} — 아무것도 판정하지 않았다. `
+            + `실제 이벤트: ${HOOK_EVENTS.join(', ')}.`,
+        }, langFor(root)));
         return 0;
       }
       let input: HookInput = {};
@@ -475,10 +524,13 @@ export function run(argv: string[], root: string): number {
       throw new Error(L('No .harness/ here — run `harness init` first.', '.harness/ 가 없다 — `harness init` 을 먼저 실행하라'));
     }
     // [UTIL-D] 아는 명령에만 건다 — 미지 명령은 UX-24 계약대로 「알 수 없는 명령」이 먼저다.
-    if (findGroup(cmd) !== undefined) {
-      const bad = unknownFlags(argv);
+    const grp = findGroup(cmd);
+    if (grp !== undefined) {
+      // [USE-241] 판정 어휘는 **그 명령군이 광고한 것**이다 — 전역 어휘로 재면 다른 군의
+      // 플래그가 통과한 뒤 조용히 버려진다.
+      const bad = unknownFlags(argv, flagsOfGroup(grp));
       if (bad.length > 0) {
-        const what = bad.map(explainUnknownFlag).join(' · ');
+        const what = bad.map(t => explainUnknownFlag(t, flagsOfGroup(grp))).join(' · ');
         throw new Error(L(
           `Unknown flag: ${what}. An unknown flag is never applied — accepting it silently would `
           + `record something other than what you asked for. Run \`harness ${cmd} --help\` to see what this group takes.`,
@@ -743,7 +795,25 @@ export function run(argv: string[], root: string): number {
                 : `No review feedback collected for ${phase} — collect it with \`harness gate feedback ${phase} --from <comments-file>\`.`));
               return 0;
             }
-            const n = recordGateFeedback(root, phase, fs.readFileSync(from, 'utf8'));
+            /**
+             * [UTIL-240] 경로는 **프로젝트 루트 기준**이다 — 형제 명령(`design inventory --from`)이
+             * 이미 그렇고, 같은 인자가 자리에 따라 다르게 해석되면 사람이 그 차이를 외워야 한다.
+             * 그리고 읽기 실패를 가공 없이 흘리면 `ENOENT: ... open 'rel.md'` 가 그대로 보인다 —
+             * 무엇을 어디서 찾았는지 말해 주지 않는 오류는 사람을 헤매게 한다.
+             */
+            const fromPath = path.resolve(root, from);
+            let body: string;
+            try {
+              body = fs.readFileSync(fromPath, 'utf8');
+            } catch {
+              throw new Error(L(
+                `Cannot read the comments file: ${from} (looked in ${fromPath}). `
+                + 'Paths are resolved from the project root.',
+                `코멘트 파일을 읽을 수 없다: ${from} (${fromPath} 에서 찾았다). `
+                + '경로는 프로젝트 루트 기준이다.',
+              ));
+            }
+            const n = recordGateFeedback(root, phase, body);
             console.log(lang === 'ko'
               ? `${phase} 리뷰 피드백 ${n}건 수집 — ${path.relative(root, feedbackPath(root, phase))}\n리뷰 패킷을 다시 만들면(\`harness report packet ${phase}\`) 개정 근거로 실린다.`
               : `Collected ${n} review comment(s) for ${phase} — ${path.relative(root, feedbackPath(root, phase))}\nRegenerate the packet (\`harness report packet ${phase}\`) to include them as revision grounds.`);
@@ -1066,14 +1136,33 @@ export function run(argv: string[], root: string): number {
           case 'inventory': {
             const from = flag(args, 'from');
             if (!from) throw new Error(L('Usage: harness design inventory --from <canvas-content-file>', '사용법: harness design inventory --from <캔버스 내용 파일>'));
-            console.log(JSON.stringify(extractInventory(fs.readFileSync(path.resolve(root, from), 'utf8')), null, 2));
+            const inv = extractInventory(fs.readFileSync(path.resolve(root, from), 'utf8'));
+            console.log(JSON.stringify(inv, null, 2));
+            /**
+             * [USE-252] **빈 결과는 성공처럼 보인다.** `{"components":[],"total":0}` 만 찍고 exit 0
+             * 이면 사람은 「이 파일에는 컴포넌트가 없구나」로 읽는데, 실제 원인은 대개
+             * **마커가 없는 파일을 준 것**이다. 아무 말도 안 하는 성공이 「침묵 성공 0」 규칙이
+             * 막으려는 것이다. stdout(JSON)은 그대로 두고 stderr 로만 이유를 말한다 —
+             * 파이프로 받는 쪽의 계약을 깨지 않으려고.
+             */
+            if (inv.total === 0) {
+              console.error(L(
+                `No component markers found in ${from} — this file has none, or it is not an export `
+                + 'that carries them. Nothing was recorded.',
+                `${from} 에서 컴포넌트 마커를 찾지 못했다 — 이 파일에 없거나, 마커를 담은 내보내기가 `
+                + '아니다. 기록된 것은 없다.',
+              ));
+            }
             return 0;
           }
           case 'baseline': {
             // 도움말은 `--png <file>` 을 광고하는데 위치 인자만 읽어 `--png` 자체를 경로로 삼았다.
             // 광고한 형태를 정본으로 두고 위치 인자는 별칭으로 남긴다.
+            // [USE-244] 인자 부재를 「UX- 로 시작하지 않는다」로 오진하지 않는다 —
+            // 누락과 잘못된 값은 원인이 다르고, 다른 곳을 가리키는 오류문은 없느니만 못하다.
+            const uxId = req(rest[0], 'harness design baseline <UX-x> --png <file>');
             const png = flag(args, 'png') ?? rest[1] ?? '';
-            recordBaseline(root, rest[0], png);
+            recordBaseline(root, uxId, png);
             console.log(L(`Baseline recorded for ${rest[0]}: ${png}`, `${rest[0]} 기준 이미지 등록: ${png}`));
             return 0;
           }
@@ -1169,7 +1258,9 @@ export function run(argv: string[], root: string): number {
       case 'report': {
         switch (sub) {
           case 'packet': {
-            const phase = requirePhase(rest[0], 'harness evidence packet', lang);
+            // [USE-243] usage 는 **지금 친 명령**을 말해야 한다. `harness evidence packet` 은
+            // 실재하지만 서식이 다르므로(`--ux <UX-x>`), 그대로 치면 두 번째로 실패한다.
+            const phase = requirePhase(rest[0], 'harness report packet', lang);
             console.log(buildReviewPacket(root, phase));
             return 0;
           }
@@ -1279,7 +1370,9 @@ export function run(argv: string[], root: string): number {
             // 그대로 따라 친 사람이 「artifact URL 이 https 가 아니다: "--url"」을 본다.
             // API-30 과 같은 처방으로 **둘 다 받는다** — 도움말과 구현이 갈리면 고칠 곳은 둘 중
             // 하나가 아니라 「사람이 친 것이 먹게 만드는 것」이다.
-            const d = setDocArtifactUrl(root, rest[0], flag(rest, 'url') ?? rest[1] ?? '');
+            // [USE-244] 인자 부재를 「미등록 문서」로 오진하지 않는다.
+            const docId = req(rest[0], 'harness doc url <DOC-x> <artifact-url>');
+            const d = setDocArtifactUrl(root, docId, flag(rest, 'url') ?? rest[1] ?? '');
             console.log(`${d.id} → ${d.artifactUrl}`);
             return 0;
           }
@@ -1374,8 +1467,12 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
         if (sub === 'bump') {
+          // [USE-244] 인자 부재는 **누락**이지 「등록 안 된 노드」가 아니다. 예전에는
+          // `undefined` 가 그대로 도메인까지 흘러가 「Node undefined is not in the design
+          // ledger」가 나왔고, 사람은 「내가 등록을 안 했나」로 오진했다([USE-94] 와 같은 부류).
+          const nodeId = req(rest[0], 'harness node bump <id>');
           // 개정의 규칙(저널 + STALE 전파)은 도메인 한 벌이다 — 표면은 보고만 한다.
-          const { node, marked, failed, unverifiable, activeBefore } = reviseNode(root, rest[0]);
+          const { node, marked, failed, unverifiable, activeBefore } = reviseNode(root, nodeId);
           console.log(L(`${node.id} v${node.version} — STALE waves: ${marked.join(', ') || 'none'}`, `${node.id} v${node.version} — STALE 웨이브: ${marked.join(', ') || '없음'}`));
           if (activeBefore && marked.includes(activeBefore)) {
             console.error(

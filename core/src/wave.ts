@@ -296,8 +296,13 @@ export function completeWave(root: string): void {
             ko: `거기 있는 파일은 증적으로 세지 않는다:\n  - ${report.problems.join('\n  - ')}`,
           })
         : tr(root, {
-            en: `there is no visual evidence. Put a screenshot in ${dir}.`,
-            ko: `시각 증적이 없다. ${dir} 에 스크린샷을 넣어라.`,
+            // [USE-248] 게이트를 여는 형태를 **전부** 적는다. 스크린샷만 광고하면
+            // html 목업으로 여는 정당한 경로를 사람이 모른 채 헤맨다 — 첫 거부문이
+            // 절반만 말하면 나머지 절반은 존재하지 않는 것과 같다.
+            en: `there is no visual evidence. Put an image (real dimensions, not a 1x1 placeholder) `
+              + `or an exported HTML page in ${dir}.`,
+            ko: `시각 증적이 없다. ${dir} 에 이미지(1x1 자리표시자 말고 실제 치수) 또는 `
+              + '내보낸 HTML 페이지를 넣어라.',
           });
       throw new Error(
         tr(root, {

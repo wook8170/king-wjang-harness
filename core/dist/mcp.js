@@ -8786,8 +8786,11 @@ function completeWave(root) {
         ko: `\uAC70\uAE30 \uC788\uB294 \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4:
   - ${report.problems.join("\n  - ")}`
       }) : tr(root, {
-        en: `there is no visual evidence. Put a screenshot in ${dir}.`,
-        ko: `\uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uB2E4. ${dir} \uC5D0 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB123\uC5B4\uB77C.`
+        // [USE-248] 게이트를 여는 형태를 **전부** 적는다. 스크린샷만 광고하면
+        // html 목업으로 여는 정당한 경로를 사람이 모른 채 헤맨다 — 첫 거부문이
+        // 절반만 말하면 나머지 절반은 존재하지 않는 것과 같다.
+        en: `there is no visual evidence. Put an image (real dimensions, not a 1x1 placeholder) or an exported HTML page in ${dir}.`,
+        ko: `\uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uB2E4. ${dir} \uC5D0 \uC774\uBBF8\uC9C0(1x1 \uC790\uB9AC\uD45C\uC2DC\uC790 \uB9D0\uACE0 \uC2E4\uC81C \uCE58\uC218) \uB610\uB294 \uB0B4\uBCF4\uB0B8 HTML \uD398\uC774\uC9C0\uB97C \uB123\uC5B4\uB77C.`
       });
       throw new Error(
         tr(root, {
@@ -9414,8 +9417,15 @@ function shipVerdict(root) {
     if (ux.length === 0) continue;
     if (hasMeasuredEvidence(root, id)) continue;
     reasons.push(t({
-      en: `${id} references UX nodes (${ux.join(", ")}) but has no real-run capture \u2014 leave headless 2x screenshots in ${evidenceDir(root, id)} before claiming measured (\xA73-5)`,
-      ko: `UX \uB178\uB4DC(${ux.join(", ")})\uB97C \uCC38\uC870\uD558\uB294 ${id} \uC5D0 \uC2E4\uC8FC\uD589 \uCEA1\uCC98 \uC99D\uC801\uC774 \uC5C6\uB2E4 \u2014 headless 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 ${evidenceDir(root, id)} \uC5D0 \uB0A8\uACA8\uC57C measured \uB97C \uC8FC\uC7A5\uD560 \uC218 \uC788\uB2E4(\xA73-5)`
+      /**
+       * [USE-251] **잣대가 둘인 것을 여기서 말한다.** `wave complete` 는 목업(내보낸 HTML)도
+       * 증적으로 인정하는데 출하 판정은 **실주행 캡처**를 따로 요구한다 — 이유가 있다(목업은
+       * 「그리려던 것」이고 출하 판정이 묻는 것은 「실제로 도는 것」이다). 그러나 그 이유를
+       * 말하지 않으면, 웨이브를 이미 통과시킨 사람은 같은 웨이브가 여기서 다시 걸리는 것을
+       * **일관성 없음**으로 읽는다. 다른 잣대라는 사실 자체가 안내의 일부다.
+       */
+      en: `${id} references UX nodes (${ux.join(", ")}) but has no real-run capture \u2014 leave headless 2x screenshots in ${evidenceDir(root, id)} before claiming measured. This is a stricter bar than \`wave complete\`, which accepts an exported HTML mockup: a mockup shows what you intended, a capture shows what actually runs.`,
+      ko: `UX \uB178\uB4DC(${ux.join(", ")})\uB97C \uCC38\uC870\uD558\uB294 ${id} \uC5D0 \uC2E4\uC8FC\uD589 \uCEA1\uCC98 \uC99D\uC801\uC774 \uC5C6\uB2E4 \u2014 headless 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 ${evidenceDir(root, id)} \uC5D0 \uB0A8\uACA8\uC57C measured \uB97C \uC8FC\uC7A5\uD560 \uC218 \uC788\uB2E4. \uC774\uAC83\uC740 \`wave complete\` \uBCF4\uB2E4 \uC5C4\uACA9\uD55C \uC7A3\uB300\uB2E4(\uADF8\uCABD\uC740 \uB0B4\uBCF4\uB0B8 HTML \uBAA9\uC5C5\uB3C4 \uBC1B\uB294\uB2E4) \u2014 \uBAA9\uC5C5\uC740 \xAB\uADF8\uB9AC\uB824\uB358 \uAC83\xBB\uC774\uACE0 \uCEA1\uCC98\uB294 \xAB\uC2E4\uC81C\uB85C \uB3C4\uB294 \uAC83\xBB\uC774\uB2E4.`
     }));
   }
   reasons.push(...waves.unreadable);

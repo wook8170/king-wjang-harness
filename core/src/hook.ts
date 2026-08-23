@@ -529,11 +529,26 @@ function sessionStart(
   } else {
     // 온보딩(상품성): 활성 웨이브가 없다 = 대개 «막 설치했다» 이다. 여기서 다음 한 걸음을
     // 주지 않으면 「설치 → 침묵 → ???」의 골짜기가 그대로 남는다.
+    /**
+     * [USE-250] **다음 수는 트랙마다 다르다.** 예전에는 어느 트랙에서든 설계 트랙 안내만
+     * 나왔고, 구축·출하 트랙은 그 트랙의 실재 규칙(출하 트랙의 「새 파일 금지」 같은 것)을
+     * **첫 거부로만** 배웠다. 세션 첫 주입이 말해 주지 않으면 그 규칙은 함정이 된다.
+     */
+    const nextMove = inDesign
+      ? L('In the design track, write your design docs then `harness gate submit <P>`.',
+          '설계 트랙이다 — 설계 문서를 쓰고 `harness gate submit <P>` 로 심사에 올려라.')
+      : (BUILD_PHASES as readonly string[]).includes(state.phase)
+        ? L('In the build track, open a wave first: `harness wave create --goal <text>`, then implement against it.',
+            '구축 트랙이다 — 먼저 웨이브를 열어라: `harness wave create --goal <내용>`. 그 지시서를 기준으로 구현한다.')
+        : L('In the ship track, new files are refused and deploy-ish commands stay closed until this '
+            + 'phase\'s gate is approved: `harness gate submit <P> --evidence measured --paths <artifacts>`.',
+            '출하 트랙이다 — 새 파일은 거부되고, 배포성 명령은 이 페이즈 게이트가 승인돼야 열린다: '
+            + '`harness gate submit <P> --evidence measured --paths <산출물>`.');
     lines.push(L(
-      'No active wave. Next: `harness status` to see where you are, `harness --help` for the '
-      + 'command map. In the design track, write your design docs then `harness gate submit <P>`.',
-      '활성 웨이브 없음. 다음: `harness status` 로 현재 위치를, `harness --help` 로 명령 지도를 '
-      + '보라. 설계 트랙이면 설계 문서를 쓰고 `harness gate submit <P>` 로 심사에 올려라.',
+      `No active wave. Next: \`harness status\` to see where you are, \`harness --help\` for the `
+      + `command map. ${nextMove}`,
+      `활성 웨이브 없음. 다음: \`harness status\` 로 현재 위치를, \`harness --help\` 로 명령 지도를 `
+      + `보라. ${nextMove}`,
     ));
   }
   if (state.backtrack) {
@@ -940,7 +955,15 @@ function harnessProgramFiles(): string[] {
  * 「목록에 있으면 막는다」가 아니라 **「정당한 한 형태만 통과시킨다」**이므로, 새 도구가 생겨도
  * 기본값이 안전한 쪽이다.
  */
-const INTERPRETER_HEADS = /^(node|nodejs|deno|bun|sh|bash|zsh|dash|ksh|fish|ash|busybox)$/;
+/**
+ * [ENG-237] 셸 부분은 **정본에서 파생**한다 — 손으로 적으면 여덟 번째 사본이 되고,
+ * 이 리포에서 같은 부류가 일곱 번 재발했다([ENG-235] 가 일곱 번째였다).
+ * 셸이 아닌 인터프리터(node·deno·bun)만 여기서 따로 센다.
+ */
+const NON_SHELL_INTERPRETERS = ['node', 'nodejs', 'deno', 'bun'] as const;
+const INTERPRETER_HEADS = new RegExp(
+  `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join('|')})$`,
+);
 
 /**
  * 이 줄에서 프로그램 파일이 **실행 대상**으로 쓰였는가(= 정당한 직접 호출).
@@ -1072,12 +1095,34 @@ function judgeWritePath(
   }
   const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r))
     ?? STATE_FILES.find(sf => spaces.some(r => coversPath(r, sf)));
+  /**
+   * [USE-246] 「고치려는 것」과 「없애려는 것」을 가른다 — 답이 달라야 하기 때문이다.
+   * 신호는 **대상의 모양**이다: 상태 파일을 콕 집었으면 편집이고, 그것을 덮는 **공간**
+   * (`.harness` 디렉토리 자체)을 겨눴으면 통째로 없애거나 덮어쓰는 것이다.
+   * 명령 이름을 열거하지 않는 이유는 이 리포가 일곱 번 배운 것과 같다 — 열거는 항상 빠진다.
+   */
+  const namesFileDirectly = [rel, realRel].some(r => STATE_FILES.includes(r));
+  const removesHarness = stateFile !== undefined && !namesFileDirectly;
   if (stateFile) {
     return deny(
       L(
+        /**
+         * [USE-246] **해제 시도를 편집으로 오진하지 않는다.** `rm -rf .harness` 는 편집이 아니라
+         * 해제이고, 거기에 「손으로 고치지 마라」라고 답하면 (a) 원인을 틀리게 말하고
+         * (b) 존재하지 않는 처방을 가리킨다 — 해제하는 harness 명령은 없다. 그리고 사람이
+         * 하네스를 그만 쓰는 것은 **의도된 탈출구**다(위협 모델은 에이전트 레인이다).
+         * 막을 수 없는 것을 막는 척하는 대신, 그 문이 어디 있는지 말한다.
+         */
         `${stateFile} can only be changed by harness commands — editing it by hand desynchronises the `
-        + 'journal from the state.' + (fromBash ? ' (shell redirects, tee, sed -i follow the same rule)' : ''),
+        + 'journal from the state.'
+        + (removesHarness ? ' If you meant to stop using the harness in this project, that is a '
+          + 'human decision and there is no command for it: delete `.harness/` yourself in your own '
+          + 'terminal. This hook governs the agent lane, not you.' : '')
+        + (fromBash ? ' (shell redirects, tee, sed -i follow the same rule)' : ''),
         `${stateFile} 은(는) harness 명령으로만 변경할 수 있다 — 직접 편집하면 저널과 상태가 어긋난다.`
+        + (removesHarness ? ' 이 프로젝트에서 하네스를 그만 쓰려는 것이라면 그것은 **사람의 결정**이고 '
+          + '그걸 하는 harness 명령은 없다 — 당신 터미널에서 `.harness/` 를 직접 지워라. '
+          + '이 훅이 다스리는 것은 에이전트 레인이지 사람이 아니다.' : '')
         + (fromBash ? ' (셸 리다이렉트·tee·sed -i 등도 같은 규칙이다)' : ''),
       ),
       degraded, lang,
@@ -1209,18 +1254,33 @@ function judgeWritePath(
   // 심링크로 다른 파일을 겨눈 경우, 사람이 「.yaml 을 썼는데 왜 막히지」로 헤매지 않도록
   // 실제로 걸린 경로를 함께 말한다.
   const via = hit.r !== rel ? ` → ${sanitizeUntrusted(hit.r)}` : '';
+  /**
+   * [UTIL-238] **광고와 판정이 어긋나 보이는 자리에 단서를 붙인다.**
+   *
+   * `src/app.test.ts` 는 이름 규칙(`*.test.*`)에 맞는데도 막힌다 — 프로파일이 선언한 소스
+   * 경로가 이름 규칙보다 **앞서기** 때문이고, 그 우선순위는 SessionStart 주입문에만 있었다.
+   * 그래서 거부문을 읽은 에이전트는 광고를 믿고 `src/` 안에서 이름만 바꿔 재시도한다 —
+   * 헛수고 경로다. 그 자리에서 이유를 말해 준다.
+   */
+  const looksLikeTest = looksLikeTestPath(rel);
+  const priority = looksLikeTest
+    ? { en: ' This file **is** named like a test, but the profile\'s source paths win over the naming '
+          + 'rule — move it outside the source globs (a `test/` tree of its own) if it is really a test.',
+        ko: ' 이 파일은 **이름이 테스트가 맞지만**, 프로파일이 선언한 소스 경로가 이름 규칙보다 '
+          + '앞선다 — 진짜 테스트라면 소스 글롭 밖(별도 `test/` 트리)으로 옮겨라.' }
+    : { en: '', ko: '' };
   return deny(
     L(
       `Implementation code cannot be written in the design track (${state.phase}) — `
       + `${sanitizeUntrusted(raw)}${via} is blocked because ${why.en}. No implementation before the P6 `
       + 'design approval. Writable: documents, assets, configuration (`*.config.js|ts` included), and '
       + 'files **named** as tests (`*.test.*`, `*_test.*`, `test_*`) — a `test/` directory alone is not '
-      + 'enough. Finish the design artifacts first.'
+      + 'enough.' + priority.en + ' Finish the design artifacts first.'
       + (fromBash ? ' (shell write target)' : ''),
       `설계 트랙(${state.phase})에서는 구현 코드를 쓸 수 없다 — `
       + `${sanitizeUntrusted(raw)}${via} 은(는) ${why.ko} 이유로 막힌다. P6 설계 승인 전 구현 금지다. `
       + '쓸 수 있는 것: 문서·자산·설정(`*.config.js|ts` 포함)과 **이름이 테스트인** 파일 '
-      + '(`*.test.*`·`*_test.*`·`test_*`) — `test/` 디렉토리에 넣는 것만으로는 부족하다. '
+      + '(`*.test.*`·`*_test.*`·`test_*`) — `test/` 디렉토리에 넣는 것만으로는 부족하다.' + priority.ko + ' '
       + '설계 산출물을 먼저 완성하라.'
       + (fromBash ? ' (셸 쓰기 대상)' : ''),
     ),
@@ -1471,11 +1531,20 @@ function preTool(
        */
       const blind0 = scan.blindTargets[0];
       if (blind0 !== undefined) {
+        /**
+         * [USE-247] **무엇을 못 봤는지 보여 준다.** `$(echo .harness)/events.jsonl` 을 두고
+         * 대상 표시가 `` `$` `` 한 글자로 뭉개지면, 사람은 자기가 친 어느 부분이 문제인지
+         * 알 수 없다 — 「런타임에 계산된다」는 설명만 남고 **어디가** 그런지는 사라진다.
+         * 추출이 실패한 조각 대신 **원문에서 그 조각이 있던 자리**를 인용한다.
+         */
+        const blindShown = blind0.length > 1
+          ? blind0
+          : (cmd.match(/(\$\((?:[^()]|\([^)]*\))*\)[^\s;|&<>]*|`[^`]*`[^\s;|&<>]*|\$\{[^}]*\}[^\s;|&<>]*)/)?.[1] ?? blind0);
         return deny(L(
-          `This computes the write target at run time (\`${blind0}\`), so the harness cannot see which `
+          `This computes the write target at run time (\`${sanitizeUntrusted(blindShown)}\`), so the harness cannot see which `
           + 'file it writes — and that includes the event journal that decides whether a gate is '
           + 'approved. Write the path out literally, or use harness commands.',
-          `쓰기 대상을 실행 시점에 계산하는 명령이다(\`${blind0}\`) — 어느 파일에 쓰는지 하네스가 `
+          `쓰기 대상을 실행 시점에 계산하는 명령이다(\`${sanitizeUntrusted(blindShown)}\`) — 어느 파일에 쓰는지 하네스가 `
           + '볼 수 없고, 거기에는 게이트 승인 여부를 정하는 이벤트 저널도 포함된다. '
           + '경로를 리터럴로 적거나 harness 명령을 쓰라.',
         ), degraded, lang);
