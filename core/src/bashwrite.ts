@@ -1072,6 +1072,19 @@ export function isDryRun(line: string): boolean {
   return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
 }
 
+/**
+ * [ENG-O1] **배포 판정에 쓸 줄들 — 나누기가 정규화보다 먼저다.**
+ *
+ * [ENG-236] 이 dry-run 예외를 한 벌로 모았는데도 **개행 구분자에서 다시 갈렸다**:
+ * 프로파일 쪽이 `\s+ → ' '` 로 **먼저 정규화**해 두 줄을 한 줄로 만든 뒤 나눴기 때문에,
+ * `A --dry-run⏎A` 가 「`--dry-run` 이 있는 한 줄」이 되어 통째로 사면됐다.
+ * 규칙이 같아도 **적용 순서가 다르면 답이 갈린다** — 그래서 순서까지 여기 한 곳에 둔다.
+ * 호출측 고유의 정규화(대소문자·공백)는 이 함수가 나눈 **뒤에** 붙인다.
+ */
+export function judgeableLines(cmd: string): string[] {
+  return commandLines(cmd).filter(line => !isDryRun(line));
+}
+
 export function commandLines(cmd: string): string[] {
   const out: string[] = [];
   for (const segment of cmd.split(SEGMENT_SPLIT)) {

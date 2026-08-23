@@ -38,7 +38,7 @@ import * as YAML from 'yaml';
 import { harnessDir } from './paths';
 import { loadConfig } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
-import { runsCommand, commandLines, isDryRun } from './bashwrite';
+import { runsCommand, judgeableLines } from './bashwrite';
 
 /**
  * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
@@ -515,7 +515,9 @@ export function isDeployCommand(profile: Profile, command: string): boolean {
     // 통째로 꺼진다 — 플래그 하나가 다른 줄의 진짜 배포를 사면하면 안 된다. 훅 쪽은 이미
     // 줄 단위였는데 이 형제 구현만 전체 단위라, 프로파일에만 있는 배포 명령
     // (`prisma migrate deploy` 등)이 그 형태로 출하 전에 실행됐다. 규칙은 `isDryRun` 한 벌.
-    const lines = commandLines(cmd).filter(l => !isDryRun(l));
+    // [ENG-O1] **나누기가 먼저다.** `normCmd` 가 개행을 공백으로 바꾸므로 정규화 후에 나누면
+    // 두 줄이 한 줄이 되고, 그 한 줄에 `--dry-run` 이 있으면 진짜 배포까지 사면된다.
+    const lines = judgeableLines(String(command)).map(normCmd).filter(l => l !== '');
     if (lines.length === 0) return false;
     // [EFF-108] **언급이 아니라 실행**을 본다. `cmd.includes` 였을 때
     // `grep "npm publish" README.md` 같은 순수 조회가 배포로 오판돼 막혔다.

@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, isDryRun, looksLikePath } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -130,6 +130,12 @@ export function isSelfCall(cmd: string): boolean {
  * 그래서 여기서는 인용부호·서브셸 안(`bash -c "harness … --force"`)까지 본다.
  * 실제 차단은 이 탐지 + CLI 의 `HARNESS_ALLOW_FORCE` env 게이트 **두 겹**이다.
  */
+/**
+ * 셸이 아닌 인터프리터 — 셸 목록(`SHELLS_TAKING_C`)과 함께 「무엇이 프로그램을 실행하는가」를
+ * 이룬다. 두 사용처(`CORE_INVOKE_RE`·`INTERPRETER_HEADS`)가 이 하나에서 파생한다.
+ */
+const NON_SHELL_INTERPRETERS = ['node', 'nodejs', 'deno', 'bun'] as const;
+
 const FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 
 /**
@@ -142,7 +148,16 @@ const FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
  *
  * 잠금은 **무엇을 실행하는가**로 판정해야 한다 — 어떤 이름으로 부르는지가 아니라.
  */
-const CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
+/**
+ * [ENG-O2] 런타임 목록도 **정본에서 파생**한다. 손으로 적었더니 `nodejs` 가 빠졌고
+ * (`node\b` 는 `nodejs` 에 안 걸린다) 그만큼 자기해제 탐지가 침식됐다 — 실제 탈출은
+ * CLI 의 env 게이트가 막았지만, **탐지 한 겹이 조용히 얇아지는 것**이 이 리포를 아홉 번
+ * 뚫은 드리프트 부류다. 패키지 러너(`npx`·`bunx`·`pnpx`)는 셸도 인터프리터도 아니라 여기 더한다.
+ */
+const CORE_INVOKE_RE = new RegExp(
+  `(?:^|[\\s;&|\`"'()])(?:${[...NON_SHELL_INTERPRETERS, 'npx', 'bunx', 'pnpx'].join('|')})`
+  + '\\b[^\\n;|&]*?core[\\\\/]dist[\\\\/](?:cli|mcp)\\.js',
+);
 
 /** 이 명령이 하네스를 실행하려 하는가 — 이름으로든(harness) 코어 파일로든(cli.js). */
 const invokesHarness = (cmd: string): boolean => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
@@ -999,7 +1014,6 @@ function harnessProgramFiles(): string[] {
  * 이 리포에서 같은 부류가 일곱 번 재발했다([ENG-235] 가 일곱 번째였다).
  * 셸이 아닌 인터프리터(node·deno·bun)만 여기서 따로 센다.
  */
-const NON_SHELL_INTERPRETERS = ['node', 'nodejs', 'deno', 'bun'] as const;
 const INTERPRETER_HEADS = new RegExp(
   `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join('|')})$`,
 );
@@ -1876,7 +1890,7 @@ function preTool(
        * 판정은 **줄 단위**다. 명령 전체에 한 번 걸면 `npm publish --dry-run; npm publish` 로
        * 차단이 통째로 꺼진다 — 플래그 하나가 다른 줄의 진짜 배포를 사면하면 안 된다.
        */
-      const deployLines = commandLines(cmd).filter(l => !isDryRun(l));   // [ENG-N2] 정본은 bashwrite
+      const deployLines = judgeableLines(cmd);   // [ENG-236]·[ENG-O1] 정본은 bashwrite
       const hit = config.design_blocked_bash.find(
         b => b.trim() !== '' && deployLines.some(l => l === b.trim() || l.startsWith(`${b.trim()} `)),
       );

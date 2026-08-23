@@ -415,3 +415,60 @@ describe('[SEC-265] MCP 쓰기 표면도 같은 잣대로 판정한다', () => {
     }
   });
 });
+
+/**
+ * [ENG-O1] **규칙이 같아도 적용 순서가 다르면 답이 갈린다.**
+ *
+ * [ENG-236] 이 `--dry-run` 예외를 한 벌로 모았는데도 **개행 구분자에서 다시 갈렸다** —
+ * 프로파일 쪽이 `\s+ → ' '` 로 **먼저 정규화**해 두 줄을 한 줄로 만든 뒤 나눴기 때문에,
+ * `A --dry-run⏎A` 가 「`--dry-run` 이 있는 한 줄」이 되어 통째로 사면됐다. 아홉 번째 사본이다.
+ * 그래서 `judgeableLines` 가 **나누기와 거르기의 순서까지** 정본으로 들고 있다.
+ */
+describe('[ENG-O1] dry-run 예외는 네 구분자에서 같은 답을 낸다', () => {
+  const withDeploy = (): ReturnType<typeof loadProfile> => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, '.harness/profile'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.harness/profile/profile.yaml'),
+      'name: t\ndeploy_commands:\n  - prisma migrate deploy\n');
+    return loadProfile(root);
+  };
+
+  it('★ 개행 포함 네 구분자 전부에서 진짜 배포를 본다', () => {
+    const profile = withDeploy();
+    for (const sep of ['&&', ';', '||', '\n']) {
+      expect(
+        isDeployCommand(profile, `prisma migrate deploy --dry-run ${sep} prisma migrate deploy`),
+        `${JSON.stringify(sep)} 로 사면됐다`,
+      ).toBe(true);
+    }
+  });
+
+  it('전부 dry-run 이면 배포가 아니다 — 과차단하지 않는다', () => {
+    const profile = withDeploy();
+    expect(isDeployCommand(profile, 'prisma migrate deploy --dry-run')).toBe(false);
+    expect(isDeployCommand(profile, 'prisma migrate deploy --dry-run\nprisma migrate deploy --dry-run')).toBe(false);
+  });
+});
+
+/**
+ * [ENG-O2] **런타임 목록도 정본에서 파생한다.** 손으로 적었더니 `nodejs` 가 빠졌고
+ * (`node\b` 는 `nodejs` 에 안 걸린다) 자기해제 탐지가 그만큼 얇아졌다. 실제 탈출은 CLI 의
+ * env 게이트가 막았지만, **탐지 한 겹이 조용히 침식되는 것**이 이 리포를 아홉 번 뚫은 부류다.
+ */
+describe('[ENG-O2] 코어 직접 호출 탐지가 모든 런타임에서 같다', () => {
+  it('정본의 모든 런타임 + 패키지 러너에서 자기해제가 잡힌다', () => {
+    const root = setup('P0');
+    for (const rt of ['node', 'nodejs', 'deno', 'bun', 'npx', 'bunx', 'pnpx']) {
+      expect(
+        denied(bash(root, `${rt} /p/core/dist/cli.js phase set P7 --force`)),
+        `${rt} 로 빠져나갔다`,
+      ).toBe(true);
+    }
+  });
+
+  it('언급은 실행이 아니다 — 과차단하지 않는다', () => {
+    const root = setup('P0');
+    const out = bash(root, 'echo node core/dist/cli.js');
+    expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});

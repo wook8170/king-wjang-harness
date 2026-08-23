@@ -12550,6 +12550,9 @@ function scanBashWrites(rawCmd, env = {}) {
 function isDryRun(line) {
   return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
 }
+function judgeableLines(cmd) {
+  return commandLines(cmd).filter((line) => !isDryRun(line));
+}
 function commandLines(cmd) {
   const out = [];
   for (const segment of cmd.split(SEGMENT_SPLIT)) {
@@ -12941,7 +12944,7 @@ function isDeployCommand(profile, command) {
   try {
     const cmd = normCmd(command);
     if (!cmd) return false;
-    const lines = commandLines(cmd).filter((l) => !isDryRun(l));
+    const lines = judgeableLines(String(command)).map(normCmd).filter((l) => l !== "");
     if (lines.length === 0) return false;
     return (profile.deployCommands ?? []).some((d) => {
       const needle = normCmd(d);
@@ -12985,8 +12988,11 @@ function isSelfCall(cmd) {
   }
   return false;
 }
+var NON_SHELL_INTERPRETERS = ["node", "nodejs", "deno", "bun"];
 var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
-var CORE_INVOKE_RE = /(?:^|[\s;&|`"'()])(?:node|npx|bun|deno)\b[^\n;|&]*?core[\\/]dist[\\/](?:cli|mcp)\.js/;
+var CORE_INVOKE_RE = new RegExp(
+  `(?:^|[\\s;&|\`"'()])(?:${[...NON_SHELL_INTERPRETERS, "npx", "bunx", "pnpx"].join("|")})\\b[^\\n;|&]*?core[\\\\/]dist[\\\\/](?:cli|mcp)\\.js`
+);
 var invokesHarness = (cmd) => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
 var STATE_FILES = [
   ".harness/state.json",
@@ -13437,7 +13443,6 @@ function harnessProgramFiles() {
     path17.join(install, "bin", "harness-hook")
   ];
 }
-var NON_SHELL_INTERPRETERS = ["node", "nodejs", "deno", "bun"];
 var INTERPRETER_HEADS = new RegExp(
   `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join("|")})$`
 );
@@ -13814,7 +13819,7 @@ function preTool(root, state, config, input, degraded) {
         " Deploy-ish commands open on the ship track (P10 onward), once that phase's gate is approved. Check where you are with `harness status`.",
         " \uBC30\uD3EC\uC131 \uBA85\uB839\uC740 \uCD9C\uD558 \uD2B8\uB799(P10 \uC774\uD6C4)\uC5D0\uC11C \uD574\uB2F9 \uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uAC00 \uC2B9\uC778\uB418\uBA74 \uC5F4\uB9B0\uB2E4. \uC9C0\uAE08 \uC704\uCE58\uB294 `harness status` \uB85C \uD655\uC778\uD558\uB77C."
       );
-      const deployLines = commandLines(cmd).filter((l) => !isDryRun(l));
+      const deployLines = judgeableLines(cmd);
       const hit = config.design_blocked_bash.find(
         (b) => b.trim() !== "" && deployLines.some((l) => l === b.trim() || l.startsWith(`${b.trim()} `))
       );
