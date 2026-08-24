@@ -62,11 +62,17 @@ describe('scanBashWrites: 쓰기 대상 추출', () => {
    * 있었고, 그 고정이 곧 구멍이었다(`mv .harness /tmp/x` 로 하네스 전체가 통과했다).
    * `cp` 는 원본을 남기므로 목적지만이 맞다 — 갈리는 지점은 **원본이 사라지는가**다.
    */
-  it('cp 는 목적지만 · mv 는 원본도 · ln 은 링크 이름만', () => {
+  it('cp 는 목적지만 · mv 는 원본도 · ln 은 링크 이름과 **가리키는 곳** 둘 다', () => {
     expect(t('cp /tmp/evil.ts src/app.ts')).toEqual(['src/app.ts']);
     expect(t('mv a.txt docs/b.txt')).toEqual(['docs/b.txt', 'a.txt']);
     expect(t('mv .harness /tmp/gone')).toContain('.harness');
-    expect(t('ln -s /tmp/evil src/link.ts')).toEqual(['src/link.ts']);
+    /**
+     * [SEC-274] 예전에는 `ln` 이 **링크 이름만** 올렸다 — 「만드는 것은 쓰기가 아니고
+     * 그 링크로 쓰면 realpath 가 잡는다」는 논리였다. 그 논리의 구멍이 [SEC-275] 사슬이다:
+     * 링크를 만들어 **아카이브에 담으면** 나중에 전개할 때 텍스트에도 파일시스템에도 없다.
+     * 그래서 이제 **가리키는 곳도** 올린다 — 판정은 그것이 보호 대상인지가 정한다.
+     */
+    expect(t('ln -s /tmp/evil src/link.ts')).toEqual(['src/link.ts', '/tmp/evil']);
   });
 
   it('dd of=', () => {

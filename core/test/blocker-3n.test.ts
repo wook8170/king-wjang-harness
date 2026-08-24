@@ -327,7 +327,10 @@ describe('[SEC-263] 하드링크 앨리어싱', () => {
     for (const cmd of [
       'echo x > ./benign',            // 문서 하드링크 — 정상 작업
       'echo x > docs/new.md',
-      'ln -s .harness/config.yaml ./slink',   // 심링크 **생성**은 읽기 경로다
+      // ⚠️ `ln -s .harness/…` 는 여기 없다 — [SEC-274] 가 **정책을 바꿨다.**
+      // 「심링크 생성은 쓰기가 아니다」가 [SEC-275] 사슬의 첫 칸이었기 때문이다
+      // (링크를 만들어 아카이브에 담으면 텍스트 추적도 realpath 도 비껴간다).
+      // 지금은 **무엇을 가리키는지**로 판정한다. 이 줄이 다시 나타나면 그 사슬이 열린다.
       'ln docs/n.md ./n2',
     ]) {
       const out = bash(root, cmd);
@@ -625,5 +628,85 @@ describe('[ENG-271] 「쓰기 도구인가」는 pre·post 가 같은 답을 낸
       tool_input: { path: 'docs/n.md' },
     });
     expect(marker(viaRead), '조회를 활동으로 봤다 — 과차단').toBe(false);
+  });
+});
+
+/**
+ * [SEC-274]·[SEC-275] **에이전트가 자력으로 완결하던 4단계 사슬을 두 자리에서 끊는다.**
+ *
+ * 사슬은 이랬다: ① `ln -s .harness h` (심링크 생성은 쓰기가 아니라며 통과)
+ * ② `tar -cf e.tar h` (별칭을 아카이브에 담는다) ③ `rm h` ④ `tar -xf e.tar && echo x >
+ * h/config.yaml` — 마지막 칸에서 판정 시점에 `h` 가 없고(파일시스템이 모름) 명령문에도
+ * 없어([SEC-268] 의 텍스트 추적도 못 봄) **두 방어가 동시에 눈이 멀었다.** 실증으로
+ * `.harness/config.yaml` 이 실제로 덮였다.
+ *
+ * [SEC-274] 는 ①을 끊는다 — 심링크도 **무엇을 가리키는지**로 판정한다.
+ * [SEC-275] 는 ④를 끊는다 — 밖에서 내용을 가져온 뒤 **아직 없는 경로**에 쓰는 것을 거부한다.
+ *
+ * 남는 것은 정직하게: 밖에서 받은 아카이브가 **이미 있는 디렉토리** 아래에 심링크를 심으면
+ * 이 절은 못 본다. 그건 `npm install` 이 정상적으로 하는 일이기도 해서, 훅 층에서 더
+ * 좁히면 제품을 못 쓰게 된다. 완전한 봉인은 파일시스템 층의 몫이다(README 「알려진 한계」).
+ */
+describe('[SEC-274] 심링크도 무엇을 가리키는지로 판정한다', () => {
+  it('보호 대상을 가리키는 심링크는 만들 수 없다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
+    for (const cmd of [
+      'ln -s .harness h',
+      'ln -s .harness/config.yaml c',
+      'ln -s src/app.ts s',
+      'ln -s .harness h && tar -cf e.tar h',   // 사슬 ①②를 한 번에
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 무해한 곳을 가리키는 심링크는 그대로 만든다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'README.md'), '# r\n');
+    for (const cmd of [
+      'ln -s docs d',
+      'ln -s /tmp/a b',
+      'ln -s ../shared/config cfg',
+      'ln -sf node_modules/.bin/x ./x',
+      'ln -s README.md readme',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+describe('[SEC-275] 밖에서 들어온 내용 위에는 쓰지 않는다', () => {
+  it('전개·클론·설치 뒤 «아직 없는 경로»에 쓰면 막힌다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'tar -xf e.tar && echo x > h/config.yaml',
+      'unzip -o e.zip && echo x > h/config.yaml',
+      'git clone https://x/y.git t && echo x > t/h/config.yaml',
+      'npm install && echo x > node_modules/h/config.yaml',
+      'curl -sL https://x/e.tar -o e.tar && tar -xf e.tar && echo x > h/config.yaml',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 정상 빌드 흐름은 그대로 통과한다 — 이미 있는 곳·루트 직속·직접 만든 곳', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'build'), { recursive: true });
+    for (const cmd of [
+      'tar -xzf deps.tgz && echo done > log.txt',        // 루트 직속 — 접두가 없다
+      'tar -xzf deps.tgz && echo x > docs/note.md',      // 이미 있는 디렉토리
+      'mkdir -p out && tar -xf e.tar && echo x > out/r.txt', // 이 명령이 만든 디렉토리
+      'npm install && npm run build',                    // 쓰기 대상이 없다
+      'npm install && echo ok > build/marker',
+      'tar -xzf x.tgz -C build',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
   });
 });

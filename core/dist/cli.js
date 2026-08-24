@@ -12295,6 +12295,26 @@ function sourcesFor(operands, dir) {
   });
 }
 var LINK_MAKERS = /* @__PURE__ */ new Set(["ln", "link"]);
+var CONTENT_IMPORTERS = /* @__PURE__ */ new Set([
+  "tar",
+  "bsdtar",
+  "unzip",
+  "cpio",
+  "pax",
+  "gunzip",
+  "unxz",
+  "unrar",
+  "7z",
+  "git",
+  "rsync",
+  "scp",
+  "npm",
+  "pnpm",
+  "yarn",
+  "bun",
+  "pip",
+  "pip3"
+]);
 function cpMakesLink(args) {
   return args.some((a) => a === "--link" || !a.startsWith("--") && a.startsWith("-") && a.includes("l"));
 }
@@ -12306,6 +12326,7 @@ function scanBashWrites(rawCmd, env = {}) {
   const cmd = expandStaticVars(rawCmd, env);
   const targets = [];
   const aliases = [];
+  let importAt = null;
   const placed = [];
   let mutating = false;
   let patchesWorkingTree = false;
@@ -12330,6 +12351,9 @@ function scanBashWrites(rawCmd, env = {}) {
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
+    if (CONTENT_IMPORTERS.has(name) && (name !== "git" || args.some((a) => ["clone", "checkout", "restore", "pull", "fetch"].includes(a))) && importAt === null) {
+      importAt = seg.start;
+    }
     if (LINK_MAKERS.has(name) || name === "cp" && cpMakesLink(args)) {
       const ops = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
       if (ops.length >= 2) {
@@ -12395,9 +12419,8 @@ function scanBashWrites(rawCmd, env = {}) {
           targets.push(...underDir(dir, sourcesFor(operands, dir)));
           break;
         }
-        if (paths.length >= 2) targets.push(paths[paths.length - 1]);
-        const symbolic = args.some((a) => a === "-s" || a === "--symbolic" || !a.startsWith("--") && a.startsWith("-") && a.includes("s"));
-        if (!symbolic && paths.length >= 2) targets.push(...paths.slice(0, -1));
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
         break;
       }
       case "dd":
@@ -12590,7 +12613,13 @@ function scanBashWrites(rawCmd, env = {}) {
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
-    blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
+    blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))],
+    /**
+     * [SEC-275] 「내용을 밖에서 가져오는」 명령 **뒤에** 오는 쓰기 대상들.
+     * 그 사이에 무엇이 생겼는지 이 명령문만 봐서는 알 수 없으므로, 호출측이 파일시스템을
+     * 보고 판단한다 — 경로의 첫 성분이 아직 없으면 그것은 **방금 들어온 것**일 수 있다.
+     */
+    afterImport: importAt === null ? [] : [...new Set(placed.filter((x) => x.at > importAt).map((x) => x.path))]
   };
 }
 function isDryRun(line) {
@@ -13813,6 +13842,25 @@ function preTool(root, state, config, input, degraded) {
           return deny(L(
             `This builds the file name at run time (\`${raw2}\`), so the harness cannot tell which file it writes \u2014 and \`${dir}\` is a directory where writes are restricted. Write the path out literally, or use harness commands.`,
             `\uD30C\uC77C \uC774\uB984\uC744 \uC2E4\uD589 \uC2DC\uC810\uC5D0 \uC870\uB9BD\uD558\uB294 \uBA85\uB839\uC774\uB2E4(\`${raw2}\`) \u2014 \uC5B4\uB290 \uD30C\uC77C\uC5D0 \uC4F0\uB294\uC9C0 \uC54C \uC218 \uC5C6\uACE0, \`${dir}\` \uB294 \uC4F0\uAE30\uAC00 \uC81C\uD55C\uB41C \uC790\uB9AC\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+          ), degraded, lang);
+        }
+      }
+      if (scan.afterImport.length > 0) {
+        const madeHere = /* @__PURE__ */ new Set();
+        for (const m of cmd.matchAll(/(?:^|[\s;&|])mkdir\s+(?:-\S+\s+)*([^\s;&|<>]+)/g)) {
+          const first = m[1].replace(/^\.\//, "").split("/")[0];
+          if (first) madeHere.add(first);
+        }
+        const opaque = scan.afterImport.find((t) => {
+          const first = t.replace(/^\.\//, "").split("/")[0];
+          if (first === "" || first === t) return false;
+          if (madeHere.has(first)) return false;
+          return !fs18.existsSync(path17.resolve(root, first));
+        });
+        if (opaque !== void 0) {
+          return deny(L(
+            `This command brings in content from outside (an archive, a clone, a package install) and then writes to \`${sanitizeUntrusted(opaque)}\`, whose first path segment does not exist yet. What that segment turns out to be is decided by the incoming content, not by this command text \u2014 an archive can carry a symlink that makes it the harness directory. Extract first and write in a separate call, and the harness will judge the real path.`,
+            `\uC774 \uBA85\uB839\uC740 \uBC14\uAE65\uC5D0\uC11C \uB0B4\uC6A9\uC744 \uAC00\uC838\uC628 \uB4A4(\uC544\uCE74\uC774\uBE0C\xB7\uD074\uB860\xB7\uD328\uD0A4\uC9C0 \uC124\uCE58) \`${sanitizeUntrusted(opaque)}\` \uC5D0 \uC4F4\uB2E4 \u2014 \uADF8 \uACBD\uB85C\uC758 \uCCAB \uC131\uBD84\uC774 **\uC544\uC9C1 \uC5C6\uB2E4**. \uADF8\uAC83\uC774 \uBB34\uC5C7\uC774 \uB420\uC9C0\uB294 \uB4E4\uC5B4\uC624\uB294 \uB0B4\uC6A9\uC774 \uC815\uD558\uC9C0 \uC774 \uBA85\uB839\uBB38\uC774 \uC815\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uC544\uCE74\uC774\uBE0C\uB294 \uADF8 \uC790\uB9AC\uB97C \uD558\uB124\uC2A4 \uB514\uB809\uD1A0\uB9AC\uB85C \uB9CC\uB4DC\uB294 \uC2EC\uB9C1\uD06C\uB97C \uB2F4\uC744 \uC218 \uC788\uB2E4. \uC804\uAC1C\uB97C \uBA3C\uC800 \uD558\uACE0 \uC4F0\uAE30\uB294 \uB2E4\uC74C \uD638\uCD9C\uB85C \uB098\uB220\uB77C. \uADF8\uB7EC\uBA74 \uD558\uB124\uC2A4\uAC00 \uC2E4\uC81C \uACBD\uB85C\uB97C \uD310\uC815\uD55C\uB2E4.`
           ), degraded, lang);
         }
       }

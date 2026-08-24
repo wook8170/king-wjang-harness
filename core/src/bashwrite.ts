@@ -306,6 +306,13 @@ export interface BashWriteScan {
    * 「볼 수 없는 쓰기」다. `opaqueExec`(볼 수 없는 실행)와 같은 태도로 다룬다.
    */
   blindTargets: string[];
+  /**
+   * [SEC-275] 「내용을 밖에서 가져오는」 명령(`tar -x`·`git clone`·`npm install`…) **뒤에**
+   * 오는 쓰기 대상들. 그 사이에 무엇이 생겼는지 명령문만 봐서는 알 수 없다 —
+   * 아카이브 안의 심링크는 텍스트에 적히지 않기 때문이다. 호출측이 파일시스템을 보고
+   * 「경로의 첫 성분이 아직 없는가」로 판단한다.
+   */
+  afterImport: string[];
 }
 
 /**
@@ -709,6 +716,23 @@ function sourcesFor(operands: readonly string[], dir: string): string[] {
  */
 const LINK_MAKERS = new Set(['ln', 'link']);
 
+/**
+ * [SEC-275] **내용을 밖에서 가져오는 명령** — 그 내용이 무엇인지 명령문에는 없다.
+ *
+ * [SEC-268] 은 명령문을 읽어 별칭을 추적한다. 그런데 `tar -xf e.tar` 처럼 **내용이 파일
+ * 안에 있는** 명령은 텍스트에 별칭이 안 적힌다 — 아카이브에 `h -> .harness` 심링크가
+ * 들어 있어도 명령문은 그것을 말하지 않는다. 그래서 전개 직후 `h/config.yaml` 에 쓰면
+ * 판정 시점에 `h` 가 없어 realpath 도 못 풀고, 텍스트에도 없어 추적도 안 된다 —
+ * **두 방어가 동시에 눈이 먼다.**
+ *
+ * 여기 적는 것은 「무엇이 들어올지 이 명령문만 봐서는 알 수 없다」는 뜻이다.
+ * 그 뒤의 쓰기는 호출측이 보수적으로 판정한다(`hook.ts`).
+ */
+const CONTENT_IMPORTERS = new Set([
+  'tar', 'bsdtar', 'unzip', 'cpio', 'pax', 'gunzip', 'unxz', 'unrar', '7z',
+  'git', 'rsync', 'scp', 'npm', 'pnpm', 'yarn', 'bun', 'pip', 'pip3',
+]);
+
 /** `cp` 가 하드링크를 만드는 형태인가 — `-l`·`--link`·`-al` 같은 묶음 포함. */
 function cpMakesLink(args: readonly string[]): boolean {
   return args.some(a => a === '--link'
@@ -733,6 +757,8 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
    * 세그먼트를 순서대로 도므로, 별칭을 만든 뒤의 세그먼트만 그것을 본다(셸 의미론과 같다).
    */
   const aliases: Array<{ alias: string; real: string; at: number }> = [];
+  /** [SEC-275] 내용을 밖에서 가져오는 명령이 처음 나온 위치. 그 뒤의 쓰기는 보수적으로 본다. */
+  let importAt: number | null = null;
   /** 대상이 원문 어디에서 나왔는지 — 별칭보다 **뒤**의 쓰기만 치환하려면 필요하다. */
   const placed: Array<{ path: string; at: number }> = [];
   let mutating = false;
@@ -762,6 +788,12 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
+    // [SEC-275] 내용을 밖에서 가져오는가 — `git` 은 `clone`·`checkout`·`restore` 만.
+    if (CONTENT_IMPORTERS.has(name)
+        && (name !== 'git' || args.some(a => ['clone', 'checkout', 'restore', 'pull', 'fetch'].includes(a)))
+        && importAt === null) {
+      importAt = seg.start;
+    }
     // [SEC-268] 별칭을 만드는 세그먼트인가 — `ln`·`link`·`cp -l` 계열.
     if (LINK_MAKERS.has(name) || (name === 'cp' && cpMakesLink(args))) {
       const ops = args.filter(a => !isFlag(a) && !/^[a-z]+=/.test(a));
@@ -858,7 +890,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         const dir = targetDirectory(args);            // [SEC-232]
         if (dir !== null) { targets.push(...underDir(dir, sourcesFor(operands, dir))); break; }
         // 심링크는 **링크 이름**이 생기는 자리다(마지막 인자). 대상 파일은 건드리지 않는다.
-        if (paths.length >= 2) targets.push(paths[paths.length - 1]);
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
         /**
          * [SEC-263] **하드링크의 소스도 대상이다 — 새 이름이 곧 그 파일이기 때문이다.**
          *
@@ -871,9 +903,22 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
          * 있는 새 이름을 만든다」는 것은 그 파일에 쓰는 것과 같은 무게다.
          * 이미 만들어져 있는 링크는 이 절이 못 잡으므로, 쓰기 시점의 inode 대조가 짝이다.
          */
-        const symbolic = args.some(a => a === '-s' || a === '--symbolic'
-          || (!a.startsWith('--') && a.startsWith('-') && a.includes('s')));
-        if (!symbolic && paths.length >= 2) targets.push(...paths.slice(0, -1));
+        /**
+         * [SEC-274] **심링크 생성도 소스를 판정에 올린다.**
+         *
+         * 예전에는 하드링크만 올렸다 — 「심링크는 만들어도 쓰기가 아니고, 그 링크로 쓰면
+         * `realpath` 가 잡는다」는 논리였다. 그 논리의 구멍은 **링크를 만든 다음 아카이브에
+         * 넣는 것**이다: `ln -s .harness h && tar -cf e.tar h` 로 별칭을 아카이브에 담고,
+         * 나중에 전개하면 판정 시점에 별칭이 없어 [SEC-268] 의 텍스트 추적도 비껴간다.
+         * 에이전트가 **자력으로** 악성 아카이브를 만드는 4단계 사슬의 첫 칸이 여기였다.
+         *
+         * 소스를 대상으로 올리면 판정이 알아서 좁힌다 — `.harness` 나 설계 소스를 가리키면
+         * 막히고, `docs`·`/tmp` 를 가리키면 그대로 통과한다. 「무엇을 가리키느냐」가 기준이지
+         * 「링크를 만드느냐」가 기준이 아니다.
+         */
+        // 피연산자 기준으로 본다 — `looksLikePath` 는 슬래시·확장자가 없는 `.harness`
+        // 같은 **디렉토리 이름**을 걸러 낸다. `cp` 케이스가 같은 이유로 `operands` 를 쓴다.
+        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
         break;
       }
       case 'dd':
@@ -1137,6 +1182,13 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
     blindTargets: [...new Set(unresolvedTargets.filter(t => /^[$`]/.test(t)))],
+    /**
+     * [SEC-275] 「내용을 밖에서 가져오는」 명령 **뒤에** 오는 쓰기 대상들.
+     * 그 사이에 무엇이 생겼는지 이 명령문만 봐서는 알 수 없으므로, 호출측이 파일시스템을
+     * 보고 판단한다 — 경로의 첫 성분이 아직 없으면 그것은 **방금 들어온 것**일 수 있다.
+     */
+    afterImport: importAt === null ? []
+      : [...new Set(placed.filter(x => x.at > (importAt as number)).map(x => x.path))],
   };
 }
 
