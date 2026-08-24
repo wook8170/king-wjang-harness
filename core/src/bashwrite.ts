@@ -306,13 +306,6 @@ export interface BashWriteScan {
    * 「볼 수 없는 쓰기」다. `opaqueExec`(볼 수 없는 실행)와 같은 태도로 다룬다.
    */
   blindTargets: string[];
-  /**
-   * [SEC-275] 「내용을 밖에서 가져오는」 명령(`tar -x`·`git clone`·`npm install`…) **뒤에**
-   * 오는 쓰기 대상들. 그 사이에 무엇이 생겼는지 명령문만 봐서는 알 수 없다 —
-   * 아카이브 안의 심링크는 텍스트에 적히지 않기 때문이다. 호출측이 파일시스템을 보고
-   * 「경로의 첫 성분이 아직 없는가」로 판단한다.
-   */
-  afterImport: string[];
 }
 
 /**
@@ -717,21 +710,14 @@ function sourcesFor(operands: readonly string[], dir: string): string[] {
 const LINK_MAKERS = new Set(['ln', 'link']);
 
 /**
- * [SEC-275] **내용을 밖에서 가져오는 명령** — 그 내용이 무엇인지 명령문에는 없다.
- *
- * [SEC-268] 은 명령문을 읽어 별칭을 추적한다. 그런데 `tar -xf e.tar` 처럼 **내용이 파일
- * 안에 있는** 명령은 텍스트에 별칭이 안 적힌다 — 아카이브에 `h -> .harness` 심링크가
- * 들어 있어도 명령문은 그것을 말하지 않는다. 그래서 전개 직후 `h/config.yaml` 에 쓰면
- * 판정 시점에 `h` 가 없어 realpath 도 못 풀고, 텍스트에도 없어 추적도 안 된다 —
- * **두 방어가 동시에 눈이 먼다.**
- *
- * 여기 적는 것은 「무엇이 들어올지 이 명령문만 봐서는 알 수 없다」는 뜻이다.
- * 그 뒤의 쓰기는 호출측이 보수적으로 판정한다(`hook.ts`).
+ * [SEC-276] 경로의 디렉토리 부분 — 가상 cwd 공간에서. `''` 는 프로젝트 루트다.
+ * `path.dirname` 을 쓰지 않는 이유: 이 공간은 OS 경로가 아니라 **루트 기준 정규화 문자열**이고,
+ * `path.dirname('')` 은 `'.'` 을 내 루트와 다른 값이 된다.
  */
-const CONTENT_IMPORTERS = new Set([
-  'tar', 'bsdtar', 'unzip', 'cpio', 'pax', 'gunzip', 'unxz', 'unrar', '7z',
-  'git', 'rsync', 'scp', 'npm', 'pnpm', 'yarn', 'bun', 'pip', 'pip3',
-]);
+function dirOf(p: string): string {
+  const i = p.lastIndexOf('/');
+  return i <= 0 ? '' : p.slice(0, i);
+}
 
 /** `cp` 가 하드링크를 만드는 형태인가 — `-l`·`--link`·`-al` 같은 묶음 포함. */
 function cpMakesLink(args: readonly string[]): boolean {
@@ -757,10 +743,10 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
    * 세그먼트를 순서대로 도므로, 별칭을 만든 뒤의 세그먼트만 그것을 본다(셸 의미론과 같다).
    */
   const aliases: Array<{ alias: string; real: string; at: number }> = [];
-  /** [SEC-275] 내용을 밖에서 가져오는 명령이 처음 나온 위치. 그 뒤의 쓰기는 보수적으로 본다. */
-  let importAt: number | null = null;
   /** 대상이 원문 어디에서 나왔는지 — 별칭보다 **뒤**의 쓰기만 치환하려면 필요하다. */
   const placed: Array<{ path: string; at: number }> = [];
+  /** [SEC-274]·[SEC-276] 링크가 «가리키는 곳» — 링크 종류에 맞는 기준으로 푼 값. */
+  const linkSources: Array<{ path: string; at: number }> = [];
   let mutating = false;
   let patchesWorkingTree = false;
   let appliesPatch = false;
@@ -788,19 +774,32 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
-    // [SEC-275] 내용을 밖에서 가져오는가 — `git` 은 `clone`·`checkout`·`restore` 만.
-    if (CONTENT_IMPORTERS.has(name)
-        && (name !== 'git' || args.some(a => ['clone', 'checkout', 'restore', 'pull', 'fetch'].includes(a)))
-        && importAt === null) {
-      importAt = seg.start;
-    }
     // [SEC-268] 별칭을 만드는 세그먼트인가 — `ln`·`link`·`cp -l` 계열.
     if (LINK_MAKERS.has(name) || (name === 'cp' && cpMakesLink(args))) {
       const ops = args.filter(a => !isFlag(a) && !/^[a-z]+=/.test(a));
       if (ops.length >= 2) {
-        const src = resolveIn(seg.cwd, ops[ops.length - 2]);
+        const rawTarget = ops[ops.length - 2];
         const dst = resolveIn(seg.cwd, ops[ops.length - 1]);
+        /**
+         * [SEC-276] **심링크의 상대 타깃은 「링크가 놓인 자리」 기준으로 풀린다.**
+         *
+         * 예전에는 타깃도 cwd 기준으로 풀었다. 그런데 `ln -s ../ d/u` 는 링크를 `d/` 안에
+         * 만들고, 그 안에서 `../` 는 **루트**를 가리킨다 — 훅은 「루트 밖(무해)」으로 읽고
+         * 런타임은 「루트 안(코어)」에 착지해 **깊이만큼 어긋났다.** 그 어긋남으로
+         * `echo x > d/u/.harness/config.yaml` 이 통과했다(끝단 실증됨).
+         *
+         * 하드링크는 다르다 — 그때 상대경로는 **명령을 실행하는 cwd** 기준이라 원래대로 둔다.
+         * 절대경로는 둘 다 같으므로 구분할 필요가 없다.
+         */
+        const symbolicLink = args.some(a => a === '-s' || a === '--symbolic'
+          || (!a.startsWith('--') && a.startsWith('-') && !a.startsWith('--') && a.includes('s')));
+        const base = symbolicLink && !rawTarget.startsWith('/') && dst !== null
+          ? dirOf(dst)
+          : seg.cwd;
+        const src = resolveIn(base, rawTarget);
         if (src !== null && dst !== null && dst !== src) aliases.push({ alias: dst, real: src, at: seg.start });
+        // 소스도 대상으로 올릴 때 같은 기준을 쓴다([SEC-274]) — 두 기준이 갈리면 그것이 사본이다.
+        if (src !== null) linkSources.push({ path: src, at: seg.start });
       }
     }
     if (MUTATING_TOKENS.includes(name)) mutating = true;
@@ -916,9 +915,8 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
          * 막히고, `docs`·`/tmp` 를 가리키면 그대로 통과한다. 「무엇을 가리키느냐」가 기준이지
          * 「링크를 만드느냐」가 기준이 아니다.
          */
-        // 피연산자 기준으로 본다 — `looksLikePath` 는 슬래시·확장자가 없는 `.harness`
-        // 같은 **디렉토리 이름**을 걸러 낸다. `cp` 케이스가 같은 이유로 `operands` 를 쓴다.
-        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
+        // [SEC-276] 소스는 위에서 **링크 종류에 맞는 기준**으로 이미 풀어 뒀다(`linkSources`).
+        // 여기서 다시 풀면 기준이 두 벌이 되고, 그 차이가 정확히 이 결함이었다.
         break;
       }
       case 'dd':
@@ -1163,6 +1161,9 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
    * 파일시스템은 아직 그 사실을 모르지만 **명령문은 알고 있다.**
    * 치환은 대상을 **늘릴 뿐** 원래 대상을 지우지 않는다 — 판정이 느슨해지지 않게.
    */
+  // [SEC-274]·[SEC-276] 링크가 가리키는 곳을 판정 대상으로 올린다.
+  for (const { path: p } of linkSources) targets.push(p);
+
   for (const { alias, real, at } of aliases) {
     for (const { path: t, at: tAt } of placed) {
       // **별칭이 생긴 뒤의 쓰기만** 치환한다. 별칭을 만드는 그 세그먼트가 올린 대상
@@ -1170,7 +1171,13 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
       // 막힌다 — 만드는 것은 아직 쓰기가 아니고, 그 링크에 쓰면 realpath 가 잡는다.
       if (tAt <= at) continue;
       if (t === alias) targets.push(real);
-      else if (t.startsWith(`${alias}/`)) targets.push(real + t.slice(alias.length));
+      else if (t.startsWith(`${alias}/`)) {
+        // [SEC-276] `real` 이 빈 문자열이면 링크가 **루트**를 가리킨다(`ln -s ../ d/u`).
+        // 그대로 이으면 `/`로 시작하는 절대경로가 되어 루트 밖으로 읽힌다 — 그 어긋남이
+        // 정확히 이 결함이었다. 루트일 때는 접두만 벗긴다.
+        const rest = t.slice(alias.length + 1);
+        targets.push(real === '' ? rest : `${real}/${rest}`);
+      }
     }
   }
 
@@ -1182,13 +1189,6 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
     blindTargets: [...new Set(unresolvedTargets.filter(t => /^[$`]/.test(t)))],
-    /**
-     * [SEC-275] 「내용을 밖에서 가져오는」 명령 **뒤에** 오는 쓰기 대상들.
-     * 그 사이에 무엇이 생겼는지 이 명령문만 봐서는 알 수 없으므로, 호출측이 파일시스템을
-     * 보고 판단한다 — 경로의 첫 성분이 아직 없으면 그것은 **방금 들어온 것**일 수 있다.
-     */
-    afterImport: importAt === null ? []
-      : [...new Set(placed.filter(x => x.at > (importAt as number)).map(x => x.path))],
   };
 }
 

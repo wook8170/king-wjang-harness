@@ -74,7 +74,10 @@ export function isWriteTool(tool: string): boolean {
 }
 
 export const MCP_WRITE_MATCHER =
-  'mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*';
+  'mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir'
+  // [SEC-277] 재감정이 짚은 누락 — `store`·`upload`·`truncate`·`set_file`.
+  // 이름 열거인 한 다음 동사가 항상 남는다는 것도 함께 적어 둔다(README 「알려진 한계」).
+  + '|store|upload|truncate|set_file|set_content|replace).*';
 
 /**
  * harness 명령을 **명령 위치에서만** 식별한다 — 줄 처음, `;`/`&`/`|`/**개행** 다음,
@@ -1751,45 +1754,21 @@ function preTool(
       }
 
       /**
-       * [SEC-275] **방금 들어온 것이 무엇인지 모르면, 그 위에 쓰는 것도 판정할 수 없다.**
+       * [SEC-275] **되돌렸다 — 막아야 할 것은 못 막고 막지 말아야 할 것을 막았다.**
        *
-       * `tar -xf e.tar && echo x > h/config.yaml` — 아카이브에 `h -> .harness` 심링크가
-       * 들어 있으면 전개 직후 `h/config.yaml` 은 정책 파일이 된다. 그런데 판정 시점에
-       * `h` 는 없고(파일시스템이 모름), 명령문에도 없다(아카이브 안이라 [SEC-268] 도 못 봄).
-       * **두 방어가 동시에 눈이 먼 자리**이고, 실증으로 정책 파일이 덮였다.
+       * 「내용을 밖에서 가져오는 명령 뒤 + 경로의 첫 성분이 아직 없음」을 거부했었다.
+       * 재감정이 **양쪽으로 반례**를 냈다:
+       * - **우회**: `mkdir h && tar -xf e.tar -C h && echo x > h/.harness/config.yaml` —
+       *   첫 성분을 직접 만들면 그대로 통과한다. 한 단어로 무력화되는 방어였다.
+       * - **과차단**: `git clone <url> y && echo x > y/config.txt` · `unzip a.zip && echo x >
+       *   d/f.txt` · `npm install && echo x > out/f.txt` — **에이전트가 흔히 쓰는 단일 명령**이
+       *   전건 막혔다. 내가 「과차단 0/7」로 측정했으나 표본이 그 형태를 안 담고 있었다.
        *
-       * 그래서 조건을 좁혀 본다: 「내용을 밖에서 가져오는 명령」 뒤의 쓰기 중, 경로의
-       * **첫 성분이 아직 없는** 것만 거부한다. 이미 있는 디렉토리에 쓰는 것(`docs/n.md`)과
-       * 루트 직속 파일(`log.txt`)은 그대로 통과하므로 정상 작업은 영향을 안 받는다.
-       * 같은 명령에서 `mkdir` 로 만든 디렉토리도 통과시킨다 — 그건 텍스트에 적혀 있다.
+       * 순이익이 음수인 방어는 유지 비용만 남긴다([QUAL-229] 와 같은 판단).
+       * 아카이브 안의 심링크는 **명령문에도 판정 시점 파일시스템에도 없다** — 훅 층에서
+       * 닫을 수 있는 것이 아니고, 그 사실을 README 「알려진 한계」에 적는 것이 정직하다.
+       * 되살릴 근거는 하나뿐이다: **과차단 없이 그 부류를 막는 조건을 실제로 보이는 것.**
        */
-      if (scan.afterImport.length > 0) {
-        const madeHere = new Set<string>();
-        for (const m of cmd.matchAll(/(?:^|[\s;&|])mkdir\s+(?:-\S+\s+)*([^\s;&|<>]+)/g)) {
-          const first = m[1].replace(/^\.\//, '').split('/')[0];
-          if (first) madeHere.add(first);
-        }
-        const opaque = scan.afterImport.find(t => {
-          const first = t.replace(/^\.\//, '').split('/')[0];
-          if (first === '' || first === t) return false;          // 루트 직속 파일 — 접두가 없다
-          if (madeHere.has(first)) return false;                  // 이 명령이 만든 디렉토리
-          return !fs.existsSync(path.resolve(root, first));       // 아직 없다 = 방금 들어올 것
-        });
-        if (opaque !== undefined) {
-          return deny(L(
-            `This command brings in content from outside (an archive, a clone, a package install) and `
-            + `then writes to \`${sanitizeUntrusted(opaque)}\`, whose first path segment does not exist yet. `
-            + 'What that segment turns out to be is decided by the incoming content, not by this command '
-            + 'text — an archive can carry a symlink that makes it the harness directory. Extract first '
-            + 'and write in a separate call, and the harness will judge the real path.',
-            '이 명령은 바깥에서 내용을 가져온 뒤(아카이브·클론·패키지 설치) '
-            + `\`${sanitizeUntrusted(opaque)}\` 에 쓴다 — 그 경로의 첫 성분이 **아직 없다**. `
-            + '그것이 무엇이 될지는 들어오는 내용이 정하지 이 명령문이 정하지 않는다 — '
-            + '아카이브는 그 자리를 하네스 디렉토리로 만드는 심링크를 담을 수 있다. '
-            + '전개를 먼저 하고 쓰기는 다음 호출로 나눠라. 그러면 하네스가 실제 경로를 판정한다.',
-          ), degraded, lang);
-        }
-      }
 
       // [SEC-207] **대상 추출 자체가 실패한 경우**를 잡는다 — 표기가 토큰을 부수면
       // 위의 어떤 판정도 발화하지 않는다. 「못 봤다」를 「없다」로 읽지 않는다.

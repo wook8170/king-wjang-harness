@@ -679,34 +679,83 @@ describe('[SEC-274] 심링크도 무엇을 가리키는지로 판정한다', () 
   });
 });
 
-describe('[SEC-275] 밖에서 들어온 내용 위에는 쓰지 않는다', () => {
-  it('전개·클론·설치 뒤 «아직 없는 경로»에 쓰면 막힌다', () => {
+/**
+ * [SEC-275] **되돌린 자리 — 검사를 지웠고 그 이유를 여기 남긴다.**
+ *
+ * 「내용을 밖에서 가져오는 명령 뒤 + 경로의 첫 성분이 아직 없음」을 거부했었다.
+ * 재감정이 **양쪽으로** 반례를 냈다:
+ * - 우회: `mkdir h && tar -xf e.tar -C h && echo x > h/.harness/config.yaml` — 한 단어로 무력화.
+ * - 과차단: `git clone <url> y && echo x > y/config.txt` 같은 **흔한 단일 명령**이 막혔다.
+ *   내가 「과차단 0/7」로 측정했으나 표본이 그 형태를 안 담고 있었다 — **측정이 틀린 게 아니라
+ *   표본이 좁았다**는 것이 이 자리의 교훈이다.
+ *
+ * 순이익이 음수인 방어는 유지 비용만 남긴다([QUAL-229] 와 같은 판단). 되살릴 근거는 하나뿐이다:
+ * **과차단 없이 그 부류를 막는 조건을 실제로 보이는 것.**
+ */
+
+
+/**
+ * [SEC-276] **심링크의 상대 타깃은 「링크가 놓인 자리」 기준으로 풀린다.**
+ *
+ * `ln -s ../ d/u` 는 링크를 `d/` 안에 만들고, 그 안에서 `../` 는 **루트**를 가리킨다.
+ * 그런데 훅은 그것을 cwd(=루트) 기준으로 풀어 「루트 밖(무해)」으로 읽었다 — 런타임은
+ * 「루트 안(코어)」에 착지하므로 **깊이만큼 어긋났고**, 그 틈으로
+ * `echo x > d/u/.harness/config.yaml` 이 통과했다(끝단 실증됨).
+ *
+ * 하드링크는 다르다 — 그때 상대경로는 **명령을 실행하는 cwd** 기준이다. 두 기준을 한 자리에서
+ * 갈라 두지 않으면 그것이 곧 사본이 된다.
+ */
+describe('[SEC-276] 링크의 상대 타깃은 링크 위치 기준으로 푼다', () => {
+  it('`../` 등반으로 코어·소스에 착지하지 못한다', () => {
     const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
     for (const cmd of [
-      'tar -xf e.tar && echo x > h/config.yaml',
-      'unzip -o e.zip && echo x > h/config.yaml',
-      'git clone https://x/y.git t && echo x > t/h/config.yaml',
-      'npm install && echo x > node_modules/h/config.yaml',
-      'curl -sL https://x/e.tar -o e.tar && tar -xf e.tar && echo x > h/config.yaml',
+      'mkdir d && ln -s ../ d/u && echo x > d/u/.harness/config.yaml',
+      'mkdir -p a/b && ln -s ../../ a/b/u && echo x > a/b/u/.harness/config.yaml',
+      'mkdir d && ln -s ../src/app.ts d/u && printf x > d/u',
+      'mkdir d && ln -s ../ d/u && cp /tmp/f.json d/u/.harness/state.json',
     ]) {
       expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
     }
   });
 
-  it('★ 정상 빌드 흐름은 그대로 통과한다 — 이미 있는 곳·루트 직속·직접 만든 곳', () => {
+  it('★ 같은 등반이 무해한 곳에 착지하면 통과한다', () => {
     const root = setup('P0');
     fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'build'), { recursive: true });
     for (const cmd of [
-      'tar -xzf deps.tgz && echo done > log.txt',        // 루트 직속 — 접두가 없다
-      'tar -xzf deps.tgz && echo x > docs/note.md',      // 이미 있는 디렉토리
-      'mkdir -p out && tar -xf e.tar && echo x > out/r.txt', // 이 명령이 만든 디렉토리
-      'npm install && npm run build',                    // 쓰기 대상이 없다
-      'npm install && echo ok > build/marker',
-      'tar -xzf x.tgz -C build',
+      'mkdir d && ln -s ../ d/u && echo x > d/u/docs/n.md',
+      'mkdir d && ln -s ../docs d/u && echo x > d/u/n.md',
+      'ln -s ../other x',
     ]) {
       const out = bash(root, cmd);
       expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('[SEC-275 되돌림] 흔한 단일 명령이 다시 통과한다', () => {
+    const root = setup('P0');
+    for (const cmd of [
+      'git clone https://x/y.git y && echo x > y/config.txt',
+      'unzip a.zip && echo x > d/f.txt',
+      'npm install && echo x > out/f.txt',
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/** [SEC-277] MCP 쓰기 동사 보강 — 이름 열거인 한 다음 동사가 남는다는 것도 함께 안다. */
+describe('[SEC-277] MCP 쓰기 동사 보강', () => {
+  it('`store`·`upload`·`truncate`·`set_file` 도 쓰기다', () => {
+    for (const t of ['mcp__fs__store', 'mcp__x__upload', 'mcp__y__truncate', 'mcp__z__set_file']) {
+      expect(isWriteTool(t), `${t} 를 쓰기로 안 봤다`).toBe(true);
+    }
+  });
+  it('★ 조회 이름은 그대로 통과한다', () => {
+    for (const t of ['mcp__fs__read_file', 'mcp__x__list_files', 'mcp__y__get_info']) {
+      expect(isWriteTool(t), `${t} 를 쓰기로 봤다`).toBe(false);
     }
   });
 });

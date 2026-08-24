@@ -4,11 +4,11 @@
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" session-start", "timeout": 10 } ] }
     ],
     "PreToolUse": [
-      { "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*",
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir|store|upload|truncate|set_file|set_content|replace).*",
         "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" pre-tool", "timeout": 10 } ] }
     ],
     "PostToolUse": [
-      { "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*",
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir|store|upload|truncate|set_file|set_content|replace).*",
         "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" post-tool", "timeout": 10 } ] }
     ],
     "Stop": [
