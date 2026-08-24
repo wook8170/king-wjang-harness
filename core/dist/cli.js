@@ -11880,7 +11880,8 @@ function normalizePath(p) {
   }
   return (abs ? "/" : "") + parts.join("/");
 }
-var CWD_MAX = 4096;
+var PATH_MAX_GUESS = 4096;
+var CWD_MAX = PATH_MAX_GUESS;
 function advanceCwd(cwd, op) {
   if (op === void 0 || op === "-" || DYNAMIC_CD.test(op)) return null;
   if (op.startsWith("/")) return normalizePath(op);
@@ -12162,8 +12163,21 @@ var READ_ONLY_HEADS = [
 ];
 var CONDITIONAL_WRITERS = {
   sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
-  perl: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
-  ruby: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
+  /**
+   * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
+   * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
+   * `open(F,">",…)` 로 정책이 덮인다. `-i` 만 보던 조건은 **제자리 편집**만 변형으로 쳤고,
+   * 그래서 이 도구가 할 수 있는 일 중 가장 넓은 형태가 조회로 분류됐다.
+   *
+   * [EFF-214] 가 과차단을 고치며 이 도구들을 조회 쪽으로 옮겼고, [SEC-221] 이 그 목록의
+   * 의미를 「모든 형태에서 조회인 것만」으로 바꿨다 — 그런데 `perl` 의 조건 자체가
+   * 여전히 좁았다. **같은 부류의 세 번째 재발이다**(`awk -i inplace` · `yq -i` 에 이어).
+   *
+   * `ruby -e`·`python -c` 는 다른 경로로 이미 막히지만, 여기 함께 적는 이유는 **한 곳에서
+   * 같은 답을 내게** 하려는 것이다 — 답이 두 곳에 있으면 언젠가 한쪽만 고쳐진다.
+   */
+  perl: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
+  ruby: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
   awk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
   gawk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
   yq: (a) => a.some((x) => x === "-i" || x === "--inplace" || x === "--in-place"),
@@ -12280,6 +12294,10 @@ function sourcesFor(operands, dir) {
     return true;
   });
 }
+var LINK_MAKERS = /* @__PURE__ */ new Set(["ln", "link"]);
+function cpMakesLink(args) {
+  return args.some((a) => a === "--link" || !a.startsWith("--") && a.startsWith("-") && a.includes("l"));
+}
 function underDir(dir, sources) {
   const base = dir.replace(/\/+$/, "");
   return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
@@ -12287,6 +12305,8 @@ function underDir(dir, sources) {
 function scanBashWrites(rawCmd, env = {}) {
   const cmd = expandStaticVars(rawCmd, env);
   const targets = [];
+  const aliases = [];
+  const placed = [];
   let mutating = false;
   let patchesWorkingTree = false;
   let appliesPatch = false;
@@ -12299,7 +12319,10 @@ function scanBashWrites(rawCmd, env = {}) {
   for (const r of redirects) {
     const resolved = resolveIn(cwdAt(segs, r.index), r.path);
     if (resolved === null) unresolvedTargets.push(r.path);
-    else targets.push(resolved);
+    else {
+      targets.push(resolved);
+      placed.push({ path: resolved, at: r.index });
+    }
   }
   for (const seg of segs) {
     const segment = seg.text;
@@ -12307,6 +12330,14 @@ function scanBashWrites(rawCmd, env = {}) {
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
+    if (LINK_MAKERS.has(name) || name === "cp" && cpMakesLink(args)) {
+      const ops = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
+      if (ops.length >= 2) {
+        const src = resolveIn(seg.cwd, ops[ops.length - 2]);
+        const dst = resolveIn(seg.cwd, ops[ops.length - 1]);
+        if (src !== null && dst !== null && dst !== src) aliases.push({ alias: dst, real: src, at: seg.start });
+      }
+    }
     if (MUTATING_TOKENS.includes(name)) mutating = true;
     if (seg.cwd === null) unresolvedTargets.push(...args.filter(looksLikePath));
     const paths = args.filter(looksLikePath);
@@ -12322,9 +12353,11 @@ function scanBashWrites(rawCmd, env = {}) {
       case "sed":
       case "perl":
       case "ruby":
-        if (args.some((a) => a === "-i" || a.startsWith("-i"))) {
+        if (CONDITIONAL_WRITERS[name]?.(args) === true) {
           mutating = true;
           targets.push(...scriptFiles(name, args));
+          const inline = args.filter((a, i) => ["-e", "-E"].includes(args[i - 1] ?? ""));
+          for (const code of inline) targets.push(...pathLikeMentions(code));
         }
         break;
       case "cp":
@@ -12335,6 +12368,9 @@ function scanBashWrites(rawCmd, env = {}) {
           break;
         }
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (name === "cp" && cpMakesLink(args) && operands.length >= 2) {
+          targets.push(...operands.slice(0, -1));
+        }
         break;
       }
       case "mv": {
@@ -12532,7 +12568,17 @@ function scanBashWrites(rawCmd, env = {}) {
       if (resolved === null) {
         unresolvedTargets.push(targets[i]);
         targets[i] = "";
-      } else targets[i] = resolved;
+      } else {
+        targets[i] = resolved;
+        placed.push({ path: resolved, at: seg.start });
+      }
+    }
+  }
+  for (const { alias, real, at } of aliases) {
+    for (const { path: t, at: tAt } of placed) {
+      if (tAt <= at) continue;
+      if (t === alias) targets.push(real);
+      else if (t.startsWith(`${alias}/`)) targets.push(real + t.slice(alias.length));
     }
   }
   return {
@@ -12961,6 +13007,10 @@ function commandFor(profile, key) {
 
 // core/src/hook.ts
 var WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+function isWriteTool(tool) {
+  if (WRITE_TOOLS.includes(tool)) return true;
+  return new RegExp(`^${MCP_WRITE_MATCHER}$`, "i").test(tool) && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
+}
 var MCP_WRITE_MATCHER = "mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*";
 var PREFIX_SET = /* @__PURE__ */ new Set([...PREFIX_COMMANDS, "xargs"]);
 var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -13647,8 +13697,7 @@ function preTool(root, state, config, input, degraded) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
   const tool = input.tool_name ?? "";
-  const isMcpWrite = new RegExp(`^${MCP_WRITE_MATCHER}$`, "i").test(tool) && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
-  const isWrite = WRITE_TOOLS.includes(tool) || isMcpWrite;
+  const isWrite = isWriteTool(tool);
   const inDesign = DESIGN_PHASES.includes(state.phase);
   const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? "");
   const extraTargets = [];
@@ -13656,7 +13705,7 @@ function preTool(root, state, config, input, degraded) {
     for (const [key, value] of Object.entries(input.tool_input)) {
       if (typeof value !== "string" || value === "") continue;
       if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
-      if (value.length > 4096 || value.includes("\n")) continue;
+      if (value.length > PATH_MAX_GUESS || value.includes("\n")) continue;
       if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
     }
   }
@@ -13881,7 +13930,7 @@ function postTool(root, input) {
   const cmd = String(input.tool_input?.command ?? "");
   const selfCall = tool === "Bash" && isSelfCall(cmd);
   const readOnlyBash = tool === "Bash" && isReadOnlyCommand(cmd);
-  if (WRITE_TOOLS.includes(tool) || tool === "Bash" && !selfCall && !readOnlyBash) noteActivity(root);
+  if (isWriteTool(tool) || tool === "Bash" && !selfCall && !readOnlyBash) noteActivity(root);
   return null;
 }
 function stopGuard(root, state, input, lang, degraded = null) {

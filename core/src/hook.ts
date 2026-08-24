@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, PATH_MAX_GUESS } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -57,6 +57,22 @@ export const WRITE_TOOLS = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'];
  * 매처가 판정보다 **조금 넓은 것은 의도**다: 배선은 「기동할까」만 정하고, 조회 도구를
  * 걸러내는 정확한 판정은 코어가 한다(정규식 매처로는 부정 조건을 쓸 수 없다).
  */
+/**
+ * [ENG-271] **「이 도구가 쓰기인가」는 한 곳에서 나온다.**
+ *
+ * [SEC-265] 가 pre-tool 의 판정에 MCP 를 더하면서 **거울 자리인 post-tool 을 안 고쳤다** —
+ * 그래서 MCP 쓰기 턴이 「활동」으로 집계되지 않아 stop 가드 회계를 우회했다. 열 번째 사본이고,
+ * **이번엔 내가 만든 것**이다. 방어를 넓힐 때 그 개념을 쓰는 **모든 자리**를 같이 옮기지
+ * 않으면, 넓힌 만큼 다른 곳에서 갈린다.
+ *
+ * 조회 이름을 빼는 이유는 과차단 방지다 — `mcp__fs__read_file` 은 쓰기가 아니다.
+ */
+export function isWriteTool(tool: string): boolean {
+  if (WRITE_TOOLS.includes(tool)) return true;
+  return new RegExp(`^${MCP_WRITE_MATCHER}$`, 'i').test(tool)
+    && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
+}
+
 export const MCP_WRITE_MATCHER =
   'mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir).*';
 
@@ -1415,9 +1431,7 @@ function preTool(
    * 근본 한계는 남는다: 임의의 MCP 스키마를 다 알 수는 없다. 그래서 대상 추출도 이름 열거가
    * 아니라 **경로처럼 생긴 필드 전부**로 넓혔고(아래), 남는 한계는 README 「알려진 한계」에 적었다.
    */
-  const isMcpWrite = new RegExp(`^${MCP_WRITE_MATCHER}$`, 'i').test(tool)
-    && !/(read|list|search|grep|find|get|stat|info)/i.test(tool);
-  const isWrite = WRITE_TOOLS.includes(tool) || isMcpWrite;
+  const isWrite = isWriteTool(tool);
   const inDesign = (DESIGN_PHASES as readonly string[]).includes(state.phase);
   // [SEC-152] `NotebookEdit` 의 대상은 `file_path` 가 아니라 `notebook_path` 다 — 도구는
   // WRITE_TOOLS 에 있는데 경로를 못 꺼내서 **빈 문자열로 판정**됐고, 그러면 아무 규칙에도
@@ -1442,7 +1456,9 @@ function preTool(
       if (typeof value !== 'string' || value === '') continue;
       // 내용(`content`·`new_string` 등)은 대상이 아니다 — 경로처럼 생긴 **짧은** 값만 본다.
       if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
-      if (value.length > 4096 || value.includes('\n')) continue;
+      // [ENG-273] 같은 개념(경로 길이 상한)은 같은 정본을 쓴다 — 리터럴이 두 벌이면
+      // 한쪽만 바뀌고 그 차이를 아무도 모른다.
+      if (value.length > PATH_MAX_GUESS || value.includes('\n')) continue;
       if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
     }
   }
@@ -1995,7 +2011,8 @@ function postTool(root: string, input: HookInput): null {
    * 스캐너가 「모르겠다」면 mutating 이 참이므로 활동으로 센다. 방어는 그대로 두고 비용만 뺀다.
    */
   const readOnlyBash = tool === 'Bash' && isReadOnlyCommand(cmd);
-  if (WRITE_TOOLS.includes(tool) || (tool === 'Bash' && !selfCall && !readOnlyBash)) noteActivity(root);
+  // [ENG-271] pre-tool 과 **같은 정본**으로 묻는다 — 두 벌이면 넓힌 쪽만 넓어지고 회계가 샌다.
+  if (isWriteTool(tool) || (tool === 'Bash' && !selfCall && !readOnlyBash)) noteActivity(root);
   return null;
 }
 

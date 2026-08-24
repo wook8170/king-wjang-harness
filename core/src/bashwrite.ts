@@ -118,7 +118,8 @@ function normalizePath(p: string): string {
  *
  * 4096자는 흔한 `PATH_MAX` 다 — 그보다 깊은 실제 경로는 OS 가 먼저 거절한다.
  */
-const CWD_MAX = 4096;
+export const PATH_MAX_GUESS = 4096;
+const CWD_MAX = PATH_MAX_GUESS;
 
 function advanceCwd(cwd: Cwd, op: string | undefined): Cwd {
   if (op === undefined || op === '-' || DYNAMIC_CD.test(op)) return null;
@@ -494,8 +495,21 @@ const READ_ONLY_HEADS = [
  */
 const CONDITIONAL_WRITERS: Record<string, (args: readonly string[]) => boolean> = {
   sed: a => a.some(x => x === '-i' || x.startsWith('-i')),
-  perl: a => a.some(x => x === '-i' || x.startsWith('-i')),
-  ruby: a => a.some(x => x === '-i' || x.startsWith('-i')),
+  /**
+   * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
+   * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
+   * `open(F,">",…)` 로 정책이 덮인다. `-i` 만 보던 조건은 **제자리 편집**만 변형으로 쳤고,
+   * 그래서 이 도구가 할 수 있는 일 중 가장 넓은 형태가 조회로 분류됐다.
+   *
+   * [EFF-214] 가 과차단을 고치며 이 도구들을 조회 쪽으로 옮겼고, [SEC-221] 이 그 목록의
+   * 의미를 「모든 형태에서 조회인 것만」으로 바꿨다 — 그런데 `perl` 의 조건 자체가
+   * 여전히 좁았다. **같은 부류의 세 번째 재발이다**(`awk -i inplace` · `yq -i` 에 이어).
+   *
+   * `ruby -e`·`python -c` 는 다른 경로로 이미 막히지만, 여기 함께 적는 이유는 **한 곳에서
+   * 같은 답을 내게** 하려는 것이다 — 답이 두 곳에 있으면 언젠가 한쪽만 고쳐진다.
+   */
+  perl: a => a.some(x => x === '-i' || x.startsWith('-i') || x === '-e' || x === '-E'),
+  ruby: a => a.some(x => x === '-i' || x.startsWith('-i') || x === '-e' || x === '-E'),
   awk: a => a.some(x => x === '-i' || x === '--include' || x === 'inplace'),
   gawk: a => a.some(x => x === '-i' || x === '--include' || x === 'inplace'),
   yq: a => a.some(x => x === '-i' || x === '--inplace' || x === '--in-place'),
@@ -674,6 +688,34 @@ function sourcesFor(operands: readonly string[], dir: string): string[] {
 }
 
 /**
+ * [SEC-268] **명령 안에서 «곧 생길» 별칭을 텍스트로 추적한다 — 열세 번째는 시간 층이었다.**
+ *
+ * 열두 표기는 전부 「경로를 어떻게 쓰느냐」(문자열)와 「어느 파일이냐」(inode) 층에 있었고,
+ * 두 방어 모두 **판정 시점의 파일시스템**을 읽는다. 그런데 한 Bash 명령은
+ * `ln -s .harness ./h && echo x > ./h/config.yaml` 처럼 **별칭을 먼저 만들고 나중에 쓴다** —
+ * 판정 시점에 `./h` 는 없으므로 realpath 도 못 풀고 `statSync` 는 ENOENT 라 inode 대조도 안 돈다.
+ * 심링크 방어와 하드링크 방어를 **동시에** 넘는다.
+ *
+ * 파일시스템에 물어서는 못 잡는다. 그러나 **명령문에는 다 적혀 있다** — 무엇을 무엇으로
+ * 별칭 짓는지가 텍스트에 있다. 그래서 여기서는 파일시스템 대신 **명령문을 읽는다**:
+ * 별칭을 만드는 세그먼트에서 `(별칭 → 원본)` 을 기록하고, 이후 세그먼트의 쓰기 대상이
+ * 그 별칭(또는 그 아래 경로)이면 **원본으로도** 대상에 올린다.
+ *
+ * 과차단이 없는 이유: 별칭이 무해한 곳을 가리키면(`ln -s docs ./d`) 치환 결과도 무해한
+ * 경로(`docs/new.md`)라 그대로 통과한다. 치환은 **판정 대상을 늘릴 뿐 판정을 바꾸지 않는다.**
+ *
+ * 한계는 정직하게: 두 개의 **다른 tool call** 로 나누면 이 절이 못 본다. 다만 그때는 별칭이
+ * 실재하므로 realpath·inode 대조가 잡는다 — 두 방어가 서로의 사각을 덮는다.
+ */
+const LINK_MAKERS = new Set(['ln', 'link']);
+
+/** `cp` 가 하드링크를 만드는 형태인가 — `-l`·`--link`·`-al` 같은 묶음 포함. */
+function cpMakesLink(args: readonly string[]): boolean {
+  return args.some(a => a === '--link'
+    || (!a.startsWith('--') && a.startsWith('-') && a.includes('l')));
+}
+
+/**
  * `-t DIR` 이 실제로 만드는 이름들 — 디렉토리 자신과, 그 아래 생기는 각 소스의 basename.
  * 디렉토리만 올리면 `.harness/config.yaml` 같은 **파일 단위** 보호가 발화하지 않는다.
  */
@@ -686,6 +728,13 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   // [SEC-216] 볼 수 있는 대입은 먼저 편다 — 그래야 남는 것이 진짜 신호가 된다.
   const cmd = expandStaticVars(rawCmd, env);
   const targets: string[] = [];
+  /**
+   * [SEC-268] 별칭 맵 — 이 명령 안에서 «곧 생길» 이름과 그것이 가리킬 원본.
+   * 세그먼트를 순서대로 도므로, 별칭을 만든 뒤의 세그먼트만 그것을 본다(셸 의미론과 같다).
+   */
+  const aliases: Array<{ alias: string; real: string; at: number }> = [];
+  /** 대상이 원문 어디에서 나왔는지 — 별칭보다 **뒤**의 쓰기만 치환하려면 필요하다. */
+  const placed: Array<{ path: string; at: number }> = [];
   let mutating = false;
   let patchesWorkingTree = false;
   let appliesPatch = false;
@@ -703,8 +752,9 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   for (const r of redirects) {
     const resolved = resolveIn(cwdAt(segs, r.index), r.path);
     if (resolved === null) unresolvedTargets.push(r.path);
-    else targets.push(resolved);
+    else { targets.push(resolved); placed.push({ path: resolved, at: r.index }); }
   }
+
 
   for (const seg of segs) {
     const segment = seg.text;
@@ -712,6 +762,15 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
+    // [SEC-268] 별칭을 만드는 세그먼트인가 — `ln`·`link`·`cp -l` 계열.
+    if (LINK_MAKERS.has(name) || (name === 'cp' && cpMakesLink(args))) {
+      const ops = args.filter(a => !isFlag(a) && !/^[a-z]+=/.test(a));
+      if (ops.length >= 2) {
+        const src = resolveIn(seg.cwd, ops[ops.length - 2]);
+        const dst = resolveIn(seg.cwd, ops[ops.length - 1]);
+        if (src !== null && dst !== null && dst !== src) aliases.push({ alias: dst, real: src, at: seg.start });
+      }
+    }
     if (MUTATING_TOKENS.includes(name)) mutating = true;
 
     // [SEC-170] `cd` 대상을 정적으로 못 읽으면 이 세그먼트의 상대경로가 **어디에 떨어지는지
@@ -741,9 +800,18 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // [EFF-109] **치환 스크립트는 경로가 아니다.** `s/x/y/` 에는 슬래시가 있어서
         // `looksLikePath` 가 참을 내고, 그래서 출하 트랙에서 거짓 「새 파일」 거부가 났다
         // (기존 주석은 「따옴표라 걸러진다」고 적어 뒀지만 토크나이저가 따옴표를 벗긴다).
-        if (args.some(a => a === '-i' || a.startsWith('-i'))) {
-          mutating = true;                              // [EFF-214] 제자리 편집일 때만 변형이다
+        /**
+         * [SEC-270] **판정은 `CONDITIONAL_WRITERS` 한 곳에서 나온다.** 예전에는 이 자리가
+         * `-i` 를 **직접** 물어서, 그 목록을 고쳐도 여기가 안 따라왔다 — 같은 질문에 두 답이
+         * 있으면 느슨한 쪽이 정본이 된다(이 리포가 아홉 번 배운 것).
+         * `perl -e` 처럼 **인라인 코드**를 받는 형태는 임의 쓰기가 가능하므로, 그때는
+         * 스크립트 인자뿐 아니라 **코드 문자열 안의 경로**도 대상으로 올린다.
+         */
+        if (CONDITIONAL_WRITERS[name]?.(args) === true) {
+          mutating = true;
           targets.push(...scriptFiles(name, args));
+          const inline = args.filter((a, i) => ['-e', '-E'].includes(args[i - 1] ?? ''));
+          for (const code of inline) targets.push(...pathLikeMentions(code));
         }
         break;
       case 'cp':
@@ -752,6 +820,16 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         const dir = targetDirectory(args);            // [SEC-232] 단, 플래그가 있으면 그것이 정본이다
         if (dir !== null) { targets.push(...underDir(dir, sourcesFor(operands, dir))); break; }
         if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        /**
+         * [SEC-268] **`cp -l` 은 복사가 아니라 하드링크다 — 그때는 원본도 대상이다.**
+         * [SEC-263] 이 `ln` 에 세운 규칙(「이 파일에 쓸 수 있는 새 이름을 만드는 것은 그
+         * 파일에 쓰는 것과 같은 무게다」)이 `cp` 쪽에는 없어 비대칭이 남았다. 코어 파일은
+         * 쓰기 시점 inode 대조가 뒤를 받치지만 **설계 소스는 생성 차단에만 의존**하므로,
+         * 생성 동사가 하나 빠지면 그만큼 그대로 열린다.
+         */
+        if (name === 'cp' && cpMakesLink(args) && operands.length >= 2) {
+          targets.push(...operands.slice(0, -1));
+        }
         break;
       }
       case 'mv': {
@@ -1030,7 +1108,24 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     for (let i = firstNew; i < targets.length; i++) {
       const resolved = resolveIn(seg.cwd, targets[i]);
       if (resolved === null) { unresolvedTargets.push(targets[i]); targets[i] = ''; }
-      else targets[i] = resolved;
+      else { targets[i] = resolved; placed.push({ path: resolved, at: seg.start }); }
+    }
+  }
+
+  /**
+   * [SEC-268] **별칭을 지나 원본까지 판정에 올린다.** 이 명령 안에서 `./h → .harness` 로
+   * 별칭이 생긴다면, `./h/config.yaml` 에 쓰는 것은 `.harness/config.yaml` 에 쓰는 것이다.
+   * 파일시스템은 아직 그 사실을 모르지만 **명령문은 알고 있다.**
+   * 치환은 대상을 **늘릴 뿐** 원래 대상을 지우지 않는다 — 판정이 느슨해지지 않게.
+   */
+  for (const { alias, real, at } of aliases) {
+    for (const { path: t, at: tAt } of placed) {
+      // **별칭이 생긴 뒤의 쓰기만** 치환한다. 별칭을 만드는 그 세그먼트가 올린 대상
+      // (`ln -s <코어> ./slink` 의 `./slink`)까지 치환하면 **심링크를 만드는 것 자체**가
+      // 막힌다 — 만드는 것은 아직 쓰기가 아니고, 그 링크에 쓰면 realpath 가 잡는다.
+      if (tAt <= at) continue;
+      if (t === alias) targets.push(real);
+      else if (t.startsWith(`${alias}/`)) targets.push(real + t.slice(alias.length));
     }
   }
 

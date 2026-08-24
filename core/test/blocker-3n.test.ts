@@ -16,8 +16,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initHarness, readState, writeState } from '../src/state';
-import { handleHook } from '../src/hook';
-import { SHELLS_TAKING_C } from '../src/bashwrite';
+import { handleHook, isWriteTool } from '../src/hook';
+import { SHELLS_TAKING_C, isReadOnlyCommand } from '../src/bashwrite';
 import { isDeployCommand, loadProfile } from '../src/profile';
 import type { Phase } from '../src/types';
 
@@ -470,5 +470,160 @@ describe('[ENG-O2] 코어 직접 호출 탐지가 모든 런타임에서 같다'
     const root = setup('P0');
     const out = bash(root, 'echo node core/dist/cli.js');
     expect(denied(out), `과차단: ${reason(out)}`).toBe(false);
+  });
+});
+
+/**
+ * [SEC-268] **열세 번째는 표기가 아니라 «시간»이었다.**
+ *
+ * 열두 표기는 전부 「경로를 어떻게 쓰느냐」(문자열)와 「어느 파일이냐」(inode) 층에 있었고,
+ * 두 방어 모두 **판정 시점의 파일시스템**을 읽는다. 그런데 한 Bash 명령은
+ * `ln -s .harness ./h && echo x > ./h/config.yaml` 처럼 **별칭을 먼저 만들고 나중에 쓴다** —
+ * 판정 시점에 `./h` 는 없어서 realpath 도 inode 대조도 코어를 못 본다. 심링크 방어와
+ * 하드링크 방어를 **동시에** 넘는 부류다.
+ *
+ * 처방은 파일시스템에 묻는 대신 **명령문을 읽는 것**이다 — 무엇을 무엇으로 별칭 짓는지는
+ * 텍스트에 다 적혀 있다. 별칭이 무해한 곳을 가리키면 치환 결과도 무해하므로 과차단이 없다.
+ *
+ * 한계는 정직하게: 두 개의 **다른 tool call** 로 나누면 이 절은 못 본다. 다만 그때는 별칭이
+ * 실재하므로 [SEC-263] 의 realpath·inode 대조가 잡는다 — 두 방어가 서로의 사각을 덮는다.
+ */
+describe('[SEC-268] 한 명령 안에서 만들어지는 별칭을 지나 원본까지 본다', () => {
+  it('별칭 생성 + 그 별칭에 쓰기가 한 명령이어도 막힌다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'export const S = 1;\n');
+    for (const cmd of [
+      'ln -s .harness ./h && echo x > ./h/config.yaml',
+      'cp -l .harness/config.yaml ./a && echo x > ./a',
+      'ln -s .harness ./h && cp /tmp/f.json ./h/state.json',
+      'ln -s src/app.ts ./s && printf x > ./s',
+      'ln -s .harness ./h && printf x >> ./h/events.jsonl',
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('`cp -l` 계열도 하드링크를 만든다 — `ln` 과 같은 잣대다', () => {
+    // [SEC-263] 이 `ln` 만 봐서 생긴 비대칭. 코어는 inode 로 지켜지지만 설계 소스는
+    // 생성 차단에만 의존하므로, 생성 동사가 하나라도 빠지면 그만큼 열린다.
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
+    for (const cmd of ['cp -l src/app.ts ./a', 'cp --link .harness/config.yaml ./b', 'cp -al src ./copy']) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 무해한 곳을 가리키는 별칭은 그대로 통과한다 — 치환은 판정을 바꾸지 않는다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'docs/n.md'), '# d\n');
+    for (const cmd of [
+      'ln -s docs ./d && cat ./d/n.md',        // 조회
+      'ln -s docs ./d && echo x > ./d/new.md', // 문서 쓰기 — 정상
+      'ln -s /tmp/a ./b && echo x > ./b',      // 밖을 가리킨다
+      'cp -r src /tmp/out',                    // 링크가 아니다
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/**
+ * [SEC-270] **인라인 코드는 조회가 아니다 — 그리고 판정은 한 곳에서 나와야 한다.**
+ *
+ * `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고 `open(F,">",…)` 로 정책이
+ * 덮였다. `-i`(제자리 편집)만 변형으로 보던 조건이 **그 도구가 할 수 있는 가장 넓은 형태**를
+ * 조회로 분류했기 때문이다. [EFF-214] 가 과차단을 고치며 이 도구들을 조회 쪽으로 옮겼고
+ * [SEC-221] 이 목록의 의미를 바로잡았는데, `perl` 의 조건 자체가 여전히 좁았다 —
+ * `awk -i inplace`·`yq -i` 에 이은 **같은 부류의 세 번째 재발**이다.
+ *
+ * 더 나쁜 것은 그 조건이 **두 곳**에 있었다는 점이다(`CONDITIONAL_WRITERS` 와 `case 'perl'`).
+ * 목록을 고쳐도 판정이 안 따라왔다 — 같은 질문에 두 답이 있으면 느슨한 쪽이 정본이 된다.
+ */
+describe('[SEC-270] `perl -e` 는 임의 쓰기다', () => {
+  it('인라인 코드가 코어·소스에 닿으면 막힌다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
+    for (const cmd of [
+      `perl -e 'unlink ".harness/events.jsonl"'`,
+      `perl -e 'open(F,">",".harness/config.yaml")'`,
+      `perl -e 'rename ".harness/state.json", "/tmp/s"'`,
+      `perl -E 'unlink ".harness/config.yaml"'`,
+      `perl -e 'unlink "src/app.ts"'`,
+    ]) {
+      expect(denied(bash(root, cmd)), `통과했다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('★ 조회 형태는 그대로 통과한다 — 코드가 있다고 다 쓰기는 아니다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src/app.ts'), 'x');
+    for (const cmd of [
+      `perl -ne 'print if /x/' src/app.ts`,
+      `perl -pe 's/a/b/' src/app.ts`,
+      `perl -e 'print 1+1'`,
+      `perl -e 'print "hello"'`,
+      `sed -n 1p src/app.ts`,
+    ]) {
+      const out = bash(root, cmd);
+      expect(denied(out), `과차단: ${cmd} — ${reason(out)}`).toBe(false);
+    }
+  });
+
+  it('조건은 한 곳에서 나온다 — `CONDITIONAL_WRITERS` 가 정본이다', () => {
+    // 목록을 고쳤는데 판정이 안 따라오던 것이 이 결함의 절반이었다.
+    expect(isReadOnlyCommand(`perl -e 'unlink "x"'`), 'perl -e 를 조회로 봤다').toBe(false);
+    expect(isReadOnlyCommand(`ruby -e 'File.write("x","y")'`), 'ruby -e 를 조회로 봤다').toBe(false);
+    expect(isReadOnlyCommand(`perl -ne 'print' f`), 'perl -ne 는 조회다').toBe(true);
+  });
+});
+
+/**
+ * [ENG-271] **방어를 넓힐 때는 그 개념을 쓰는 모든 자리를 같이 옮긴다.**
+ *
+ * [SEC-265] 가 pre-tool 의 「이 도구가 쓰기인가」에 MCP 를 더하면서 **거울 자리인 post-tool 을
+ * 안 고쳤다.** 그래서 MCP 쓰기 턴이 「활동」으로 집계되지 않아 stop 가드 회계를 우회했다 —
+ * 열 번째 사본이고 **직전 웨이브가 만든 것**이다. 넓힌 만큼 다른 곳에서 갈린다.
+ */
+describe('[ENG-271] 「쓰기 도구인가」는 pre·post 가 같은 답을 낸다', () => {
+  it('정본 하나가 양쪽을 답한다', () => {
+    for (const t of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit',
+                     'mcp__filesystem__write_file', 'mcp__fs__edit', 'mcp__x__create_file']) {
+      expect(isWriteTool(t), `${t} 를 쓰기로 안 봤다`).toBe(true);
+    }
+  });
+
+  it('★ [ENG-272] 조회 이름은 쓰기가 아니다 — 이 필터가 무테스트였다', () => {
+    for (const t of ['Read', 'Grep', 'mcp__filesystem__read_file', 'mcp__x__list_files',
+                     'mcp__y__search_content', 'mcp__z__get_file_info']) {
+      expect(isWriteTool(t), `${t} 를 쓰기로 봤다 — 과차단`).toBe(false);
+    }
+  });
+
+  it('★ MCP 쓰기 턴이 활동으로 집계된다 — 이것이 갈렸던 자리다', () => {
+    // 활동 마커는 stop 가드의 입력이다. 그것이 안 서면 「쓰고도 정산 안 한 턴」이 조용히 지나간다.
+    const marker = (root: string): boolean =>
+      fs.existsSync(path.join(root, '.harness/.runtime/last-activity'));
+
+    const viaMcp = setup('P7');
+    expect(marker(viaMcp), '사전 상태가 이미 더럽다').toBe(false);
+    handleHook(viaMcp, 'post-tool', {
+      tool_name: 'mcp__filesystem__write_file',
+      tool_input: { path: 'docs/n.md', content: 'x' },
+    });
+    expect(marker(viaMcp), 'MCP 쓰기가 활동으로 안 잡혔다 — 회계가 샌다').toBe(true);
+
+    // 짝: 조회 MCP 는 활동이 아니다(조회로 가드를 깨우면 가드가 잡음이 된다).
+    const viaRead = setup('P7');
+    handleHook(viaRead, 'post-tool', {
+      tool_name: 'mcp__filesystem__read_file',
+      tool_input: { path: 'docs/n.md' },
+    });
+    expect(marker(viaRead), '조회를 활동으로 봤다 — 과차단').toBe(false);
   });
 });
