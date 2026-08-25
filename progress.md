@@ -12,7 +12,12 @@
 - **봉인**: `tokenize` 를 셸 인용/이스케이프 해소 **정본 하나**로(따옴표+`\x→x`), redirectTargets 가 대상을
   한 토큰 런으로 잡아 tokenize 로 착지경로 획득. 실측 전건 deny·과차단 0. bypass-corpus `notations()` 상시편입.
   대장 SEC-300 verified. 커밋 `e79a9c6`.
-- **11차 독립 재검증 진행 중**(`scratchpad/sec300-verify.md`, VERDICT: HOLDS/BROKEN/NEW-FINDINGS).
+- **11차 독립 재검증 = BROKEN** (`\`+개행 줄이음 미처리 — 셸은 잇는데 하네스는 개행을 세그먼트 경계로
+  쪼개 대상이 `\` 에서 잘림; config.yaml 실덮힘·게이트위조·배포게이트 끝단 재현). **봉인**: `foldLineContinuations`
+  를 `scanBashWrites`·`commandLines` 진입 «세그먼트 분해 전»에. 실측 전건 deny·과차단 0. 커밋 `c092a1a`. 1384 green.
+- **12차 독립 재검증 진행 중**(`scratchpad/sec300-verify2.md`) — 줄이음 봉인 반증 + 남은 셸 파싱 엣지
+  (`$'...'`·`${}`·glob·brace·프로세스치환 등). CLEAN 나오면 **G001 checkpoint→G002**, 새 발견 시 보완 반복.
+  ★ 축2 는 9·10·11차 연속으로 매번 새 우회를 냈다 — 「새 우회 0」 한 스윕이 나와야 G001 닫힘.
 
 ### ⚠️ 사고: 자기 참조 self-enforcement (CLAUDE.md 함정 실제 발생)
 - 10차 검증자(또는 프로브)가 `CLAUDE_PROJECT_DIR` 없이 `harness init` 을 돌려 **repo 루트에 `.harness/` 생성**
