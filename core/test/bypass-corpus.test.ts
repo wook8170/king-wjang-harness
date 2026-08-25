@@ -109,6 +109,12 @@ const notations = (t: string): string[] => {
     `echo x > ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,        // 리다이렉트 줄이음
     `echo x | tee ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,    // tee 줄이음
     `cp /tmp/x ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,       // cp 줄이음
+    // [SEC-300/12차] ANSI-C 인용 `$'\x2e'`→`.` 로 코어 파일명 조립 · `~+`=$PWD 물결확장
+    `echo x > ${dir}/${base.slice(0, base.lastIndexOf('.'))}$'\\x2e'${base.slice(base.lastIndexOf('.') + 1)}`,
+    `echo x | tee ${dir}/${base.slice(0, base.lastIndexOf('.'))}$'\\x2e'${base.slice(base.lastIndexOf('.') + 1)}`,
+    `echo x > ~+/${t}`,                                             // ~+ = $PWD → 프로젝트 안
+    `echo x | tee ~+/${t}`,
+    `dd of=~+/${t}`,
   ];
 };
 

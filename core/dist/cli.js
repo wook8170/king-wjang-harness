@@ -7400,6 +7400,41 @@ var MUTATING_TOKENS = [
   "find"
 ];
 var foldLineContinuations = (s) => s.replace(/\\\r?\n/g, "");
+function decodeAnsiC(body) {
+  let out = "";
+  for (let i = 0; i < body.length; ) {
+    if (body[i] !== "\\") {
+      out += body[i];
+      i++;
+      continue;
+    }
+    const n = body[i + 1];
+    if (n === void 0) {
+      out += "\\";
+      break;
+    }
+    let m;
+    if (n === "x" && (m = /^[0-9A-Fa-f]{1,2}/.exec(body.slice(i + 2)))) {
+      out += String.fromCharCode(parseInt(m[0], 16));
+      i += 2 + m[0].length;
+      continue;
+    }
+    if (n === "u" && (m = /^[0-9A-Fa-f]{1,4}/.exec(body.slice(i + 2)))) {
+      out += String.fromCharCode(parseInt(m[0], 16));
+      i += 2 + m[0].length;
+      continue;
+    }
+    if (n >= "0" && n <= "7" && (m = /^[0-7]{1,3}/.exec(body.slice(i + 1)))) {
+      out += String.fromCharCode(parseInt(m[0], 8) & 255);
+      i += 1 + m[0].length;
+      continue;
+    }
+    const map = { n: "\n", t: "	", r: "\r", a: "\x07", b: "\b", f: "\f", v: "\v", e: "\x1B", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+    out += Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n;
+    i += 2;
+  }
+  return out;
+}
 function tokenize(segment) {
   const out = [];
   let cur = "";
@@ -7423,6 +7458,22 @@ function tokenize(segment) {
         continue;
       }
       cur += ch;
+      continue;
+    }
+    if (ch === "$" && chars[i + 1] === "'") {
+      let j = i + 2;
+      let body = "";
+      while (j < chars.length && chars[j] !== "'") {
+        if (chars[j] === "\\" && j + 1 < chars.length) {
+          body += chars[j] + chars[j + 1];
+          j += 2;
+        } else {
+          body += chars[j];
+          j++;
+        }
+      }
+      cur += decodeAnsiC(body);
+      i = j;
       continue;
     }
     if (ch === '"' || ch === "'") {
@@ -7477,7 +7528,7 @@ function advanceCwd(cwd, op) {
   return normalizePath((cwd ? cwd + "/" : "") + op);
 }
 function resolveIn(cwd, p) {
-  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
+  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])|^~\+(?=\/|$)/.exec(p);
   if (pwdHead !== null) {
     if (cwd === null) return null;
     const rest = p.slice(pwdHead[0].length).replace(/^\//, "");
@@ -7485,6 +7536,7 @@ function resolveIn(cwd, p) {
     return /[$`]/.test(joined) ? null : normalizePath(joined);
   }
   if (/[$`]/.test(p)) return null;
+  if (/^~-(?=\/|$)/.test(p)) return null;
   if (p.startsWith("/") || p.startsWith("~")) return p;
   if (cwd === null) return null;
   if (cwd === "") return p;

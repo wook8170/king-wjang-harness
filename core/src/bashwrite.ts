@@ -52,6 +52,35 @@ const MUTATING_TOKENS = [
 const foldLineContinuations = (s: string): string => s.replace(/\\\r?\n/g, '');
 
 /**
+ * [SEC-300/12차] **ANSI-C 인용 `$'…'` 는 셸이 이스케이프를 «펴는» 인용이다** — 작은따옴표와 달리
+ * `\x2e`→`.`, `\056`→`.`, `\n`→개행 처럼 바꾼다. `echo x > .harness/events$'\x2e'jsonl` 은
+ * `.harness/events.jsonl` 에 착지하는데, 허용 디렉토리(`.harness/`) «안»의 코어 파일명을 이렇게
+ * 조립하면 디렉토리-단위 방어로도 못 막혔다. 그래서 `$'…'` 본문을 실제 값으로 편다.
+ */
+function decodeAnsiC(body: string): string {
+  let out = '';
+  for (let i = 0; i < body.length; ) {
+    if (body[i] !== '\\') { out += body[i]; i++; continue; }
+    const n = body[i + 1];
+    if (n === undefined) { out += '\\'; break; }
+    let m: RegExpExecArray | null;
+    if (n === 'x' && (m = /^[0-9A-Fa-f]{1,2}/.exec(body.slice(i + 2)))) {
+      out += String.fromCharCode(parseInt(m[0], 16)); i += 2 + m[0].length; continue;
+    }
+    if (n === 'u' && (m = /^[0-9A-Fa-f]{1,4}/.exec(body.slice(i + 2)))) {
+      out += String.fromCharCode(parseInt(m[0], 16)); i += 2 + m[0].length; continue;
+    }
+    if (n >= '0' && n <= '7' && (m = /^[0-7]{1,3}/.exec(body.slice(i + 1)))) {
+      out += String.fromCharCode(parseInt(m[0], 8) & 0xff); i += 1 + m[0].length; continue;
+    }
+    const map: Record<string, string> = { n: '\n', t: '\t', r: '\r', a: '\x07', b: '\b', f: '\f', v: '\v', e: '\x1b', '\\': '\\', "'": "'", '"': '"', '?': '?' };
+    out += Object.prototype.hasOwnProperty.call(map, n) ? map[n] : n;
+    i += 2;
+  }
+  return out;
+}
+
+/**
  * 세그먼트를 셸처럼 토큰으로 나누며 **인용/이스케이프를 해소**한다 — 훅이 「셸이 실제로
  * 착지시킬 경로」를 판정하도록. 따옴표는 벗기고, 역슬래시는 다음 글자를 리터럴로 만든다.
  *
@@ -74,6 +103,15 @@ function tokenize(segment: string): string[] {
       // 큰따옴표 안 역슬래시는 `" \ $ ` `` 앞에서만 이스케이프다.
       if (ch === '\\' && i + 1 < chars.length && '"\\$`'.includes(chars[i + 1])) { cur += chars[i + 1]; i++; continue; }
       cur += ch; continue;
+    }
+    // [SEC-300/12차] ANSI-C 인용 `$'…'` — 본문의 이스케이프를 실제 값으로 편다(`$'\x2e'`→`.`).
+    if (ch === '$' && chars[i + 1] === "'") {
+      let j = i + 2; let body = '';
+      while (j < chars.length && chars[j] !== "'") {
+        if (chars[j] === '\\' && j + 1 < chars.length) { body += chars[j] + chars[j + 1]; j += 2; }
+        else { body += chars[j]; j++; }
+      }
+      cur += decodeAnsiC(body); i = j; continue;   // i=닫는 `'`(또는 끝), 루프 i++ 가 지나간다
     }
     if (ch === '"' || ch === "'") { quote = ch; continue; }
     // 인용 밖 역슬래시 — 다음 글자를 리터럴로(공백 이스케이프면 토큰을 안 나눈다).
@@ -183,8 +221,12 @@ function resolveIn(cwd: Cwd, p: string): string | null {
    * [SEC-279] **`$PWD` 는 모르는 값이 아니다 — 이 세그먼트의 cwd 다.**
    * 훅은 `cd` 를 이미 추적하므로 정확히 풀 수 있다. `$OLDPWD` 는 추적하지 않으므로
    * 아래 「모른다」 경로로 떨어진다(보수적). 기준점을 여기 한 곳에만 둔다.
+   *
+   * [SEC-300/12차] **`~+`(=$PWD)·`~-`(=$OLDPWD) 물결 축약도 홈이 아니라 cwd 의존**이라 프로젝트
+   * «안»으로 편다. `~+` 는 `$PWD` 와 같은 값이라 같은 기준점으로 풀고(아래 정규식에 합류), `~-`
+   * (=$OLDPWD)는 추적 안 하므로 「모른다」로 떨어뜨린다 — 홈으로 통과시키면 코어 파일에 착지한다.
    */
-  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
+  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])|^~\+(?=\/|$)/.exec(p);
   if (pwdHead !== null) {
     if (cwd === null) return null;                    // cwd 를 못 읽었다 — 「모른다」
     const rest = p.slice(pwdHead[0].length).replace(/^\//, '');
@@ -192,7 +234,8 @@ function resolveIn(cwd: Cwd, p: string): string | null {
     return /[$`]/.test(joined) ? null : normalizePath(joined);
   }
   if (/[$`]/.test(p)) return null;
-  if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈 — cwd 와 무관하다
+  if (/^~-(?=\/|$)/.test(p)) return null;               // [12차] $OLDPWD 미추적 — 홈 통과 금지
+  if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈(`~`·`~user`) — cwd 와 무관하다
   if (cwd === null) return null;
   if (cwd === '') return p; // 프로젝트 루트 — 기존 표기 그대로 둔다(거부문이 명령과 같아 보이게)
   return normalizePath(cwd + '/' + p);
