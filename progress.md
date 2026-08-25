@@ -2,8 +2,9 @@
 
 ## 2026-08-25 (5) — 3-R 감정확인 **6차**: 하네스 CLI 가 우회로였다 · 축 2·3·4 = 4.8 유지
 
-**정본.** `main` `3b34498` + 후속(감정서·코퍼스·요약 갱신) · **1372 tests green ×3 동일 ·
-skip 0 · tsc 0 · 빌드 바이트 재현 OK · 대장 lint R1–R13(313행)** · verified **312** · open 0.
+**정본.** `main` `5623311` · 워킹트리 clean · origin 대비 **ahead 17(미푸시)** ·
+**1372 tests green ×3 동일 · skip 0 · tsc 0 · 빌드 바이트 재현 OK · 대장 lint R1–R13(320행:
+verified 312 + deferred 5 + rejected 3)**.
 아티팩트: https://claude.ai/code/artifact/ce3ebbc2-dace-4f6c-9578-463fdfbf1b19
 
 ### ★ 이번 세션의 핵심 — 4.8 을 매긴 «뒤에» BLOCKER 가 하나 더 나왔다
@@ -45,10 +46,41 @@ skip 0 · tsc 0 · 빌드 바이트 재현 OK · 대장 lint R1–R13(313행)** 
    지시하면 신규 컨텍스트로 축 2·3·4 를 다시 친다.
 3. 축 1·5·6·7 재감정(3-N 기준이라 낡음).
 
-### 미해결
+### 즉시 재개 레시피 (복사해 쓰라)
 
-- 로컬 **17커밋 미푸시**.
-- 축 1·5·6·7 낡음.
+```bash
+cd /Volumes/WorkSpace/0200_Dev/king-wjang-harness
+# 1) 정본 확인 — 이 셋이 핸드오프와 같아야 한다
+npx vitest run </dev/null 2>&1 | grep -E 'Test Files|Tests  '        # 1372 / 57
+npx tsc --noEmit && echo "tsc 0"
+python3 docs/release-readiness/2026-08-21/round3i/sync-ledger-summary.py   # verified 312 · open 0
+```
+
+**감정확인 스윕 만드는 법** (7차용):
+
+1. 샌드박스: `D=$(mktemp -d); CLAUDE_PROJECT_DIR=$D /Volumes/.../bin/harness init`
+   — **반드시 리포의 `bin/harness` 를 절대경로로**(PATH 는 구 플러그인 빌드다).
+2. 훅 판정: `echo '<JSON>' | CLAUDE_PROJECT_DIR=$D <절대경로>/bin/harness hook pre-tool`
+   → 출력 없음 = allow. `permissionDecision` 이 판정.
+3. **allow 가 나오면 실제로 실행해 파일이 바뀌는지 본다.** deny 를 무시하고 실행한 결과를
+   「착지」라 부르지 않는다. 둘 다 한 번씩 틀렸다.
+4. 차단 목록만 내지 말고 **허용 목록을 짝으로** 낸다(과차단은 결함과 같은 무게).
+5. 새로 찾은 표기는 **`core/test/bypass-corpus.test.ts` 에 넣는다** — 다음 라운드에 같은 문이
+   조용히 열려 있지 않도록. 코퍼스 크기 하한도 함께 올린다.
+6. 봉인마다 **RED 확인**: 처방을 되돌려 해당 가드가 정확히 빨강이 되는지 본다.
+7. 대장 등재 → `reanchor-citations.py` → `sync-ledger-summary.py` → 00-summary·README 4개 언어
+   숫자 동기화 → 전체 스위트 ×3.
+
+자세한 E2E 함정 목록은 프로젝트 스킬 `/verify` 에 있다.
+
+### 미해결 · 확인 대기
+
+- **로컬 17커밋 미푸시** — 푸시할지는 사용자 결정.
+- **축 1·5·6·7 은 3-N 기준이라 낡았다**(효용성 4.7 · 가성비 4.3 · 사용성 4.5 · 상품성 4.6).
+  출하 판정은 7축 전부가 정하므로 **판정은 여전히 「출하 불가」**.
+- 3-Q 의 「세 선택지」(루브릭 재검토 / 파일시스템 층 / 현상 유지)는 **더 이상 블로커가 아니다** —
+  3-R 이 「관측 가능한 자리가 열한 군데 더 있었다」로 답했다. 관측 **불가** 부류만
+  파일시스템 층 몫으로 남고 README 4개 언어 「알려진 한계」에 고지돼 있다.
 
 ### 시스템 지식 (이번 세션 추가분)
 
