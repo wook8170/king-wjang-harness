@@ -2,7 +2,8 @@
 
 ## 2026-08-25 (5) — 3-R 감정확인 **6차**: 하네스 CLI 가 우회로였다 · 축 2·3·4 = 4.8 유지
 
-**정본.** `main` `5623311` · 워킹트리 clean · origin 대비 **ahead 17(미푸시)** ·
+**정본.** `main` HEAD(이 핸드오프 커밋) · **제품코드는 `3b34498` 이후 무변경** ·
+워킹트리 clean · origin 대비 **미푸시 다수**(`git rev-list --count origin/main..HEAD` 로 확인) ·
 **1372 tests green ×3 동일 · skip 0 · tsc 0 · 빌드 바이트 재현 OK · 대장 lint R1–R13(320행:
 verified 312 + deferred 5 + rejected 3)**.
 아티팩트: https://claude.ai/code/artifact/ce3ebbc2-dace-4f6c-9578-463fdfbf1b19
@@ -75,7 +76,7 @@ python3 docs/release-readiness/2026-08-21/round3i/sync-ledger-summary.py   # ver
 
 ### 미해결 · 확인 대기
 
-- **로컬 17커밋 미푸시** — 푸시할지는 사용자 결정.
+- **로컬 커밋 미푸시** — 푸시할지는 사용자 결정(수는 위 명령으로 확인).
 - **축 1·5·6·7 은 3-N 기준이라 낡았다**(효용성 4.7 · 가성비 4.3 · 사용성 4.5 · 상품성 4.6).
   출하 판정은 7축 전부가 정하므로 **판정은 여전히 「출하 불가」**.
 - 3-Q 의 「세 선택지」(루브릭 재검토 / 파일시스템 층 / 현상 유지)는 **더 이상 블로커가 아니다** —
