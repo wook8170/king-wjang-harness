@@ -14433,28 +14433,40 @@ function preTool(root, state, config, input, degraded) {
   const inDesign = DESIGN_PHASES.includes(state.phase);
   const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? "");
   const extraTargets = [];
-  if (namedTarget === "" && input.tool_input && typeof input.tool_input === "object") {
-    for (const [key, value] of Object.entries(input.tool_input)) {
-      if (typeof value !== "string" || value === "") continue;
-      if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
-      if (value.length > PATH_MAX_GUESS || value.includes("\n")) continue;
-      if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+  const collectTargets = (key, value) => {
+    if (Array.isArray(value)) {
+      for (const v of value) collectTargets(key, v);
+      return;
     }
+    if (value && typeof value === "object") {
+      for (const [k, v] of Object.entries(value)) collectTargets(k, v);
+      return;
+    }
+    if (typeof value !== "string" || value === "") return;
+    if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) return;
+    if (value.length > PATH_MAX_GUESS || value.includes("\n")) return;
+    if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+  };
+  if (namedTarget === "" && input.tool_input && typeof input.tool_input === "object") {
+    for (const [key, value] of Object.entries(input.tool_input)) collectTargets(key, value);
   }
-  const raw = namedTarget !== "" ? namedTarget : extraTargets[0] ?? "";
+  const writeTargets = namedTarget !== "" ? [namedTarget] : extraTargets;
+  const raw = writeTargets[0] ?? "";
   const rel = raw ? relPath(root, raw) : "";
   const realRel = raw ? realRelPath(root, raw) : "";
   let profileCache = null;
   const getProfile = () => profileCache ??= loadProfile(root);
   if (isWrite) {
-    if (inDesign && !raw.trim()) {
+    if (inDesign && writeTargets.every((t) => !t.trim())) {
       return deny(L(
         "No file path in the tool input \u2014 blocked (safe default).",
         "\uB3C4\uAD6C \uC785\uB825\uC5D0 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC5C6\uB2E4 \u2014 \uCC28\uB2E8(\uC548\uC804 \uAE30\uBCF8\uAC12)."
       ), degraded, lang);
     }
-    const verdict = judgeWritePath(root, state, config, raw, degraded, false, getProfile);
-    if (verdict) return verdict;
+    for (const t of writeTargets) {
+      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile);
+      if (verdict) return verdict;
+    }
   }
   if (tool === "Bash") {
     const rawCmd = String(input.tool_input?.command ?? "");

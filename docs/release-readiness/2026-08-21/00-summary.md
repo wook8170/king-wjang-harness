@@ -18,6 +18,13 @@
 >   `tokens swap --out` 에 같은 판정이 없어 `--out /tmp/…` 가 루트 밖에 파일을 떨궜다.
 >   판정을 한 벌(`assertOutputAllowed`)로 두고 네 표면이 쓴다 — 차단 8/8 · 착지 0건 ·
 >   과차단 0/5 · RED. 두 각도 다 `bypass-corpus.test.ts` 에 넣었다.
+>
+> **★ 8차 감정확인(2026-08-26) — MCP 쓰기도구 인자 추출 갭 HIGH 1 ([SEC-299]).** 대상 추출이
+> top-level string 하나만 봐서, `{note:ok.md, dst:core}`(디코이-우선, 전 페이즈)·`{paths:[core]}`·
+> `{target:{path:core}}`(배열·중첩, P7~P9) 로 감싸면 코어·프로파일(POLICY_FILES) 쓰기가 훅을
+> 통과했다 — [SEC-69]·[SEC-49/50/51] 재개통. **끝단 파일 덮임은 미관측**(실 MCP 서버 미연결)이라
+> BLOCKER 아닌 HIGH([OPS-74] §5). 재귀 추출 + 전 대상 판정으로 봉인 — 차단 디코이·배열·중첩 P0·P7
+> 전건 deny · 과차단 0 · RED(`blocker-3n.test.ts` 「SEC-299」).
 > **축 2 실효성 2.0 → 4.8 · 축 3 엔지니어링 3.9 → 4.8 · 축 4 가치 3.0 → 4.8.**
 > 감정서: `round3r/appraisal11-{2,3,4}-*.md`. 판정 자체는 **바뀌지 않는다** —
 > 축 1·5·6·7 은 3-N 기준이고 재감정 전이며, 출하 판정은 7축 전부가 정해진다.
@@ -163,7 +170,7 @@
 > [COST-261](stdin 상한이 타임아웃보다 커서 그 사이가 fail-open) ·
 > [COST-262](벤치가 명령 파싱 경로를 안 봐서 2차 회귀가 CI 에 안 걸리던 것 — **게이트 신설**).
 > 선제 조사로 [SEC-259](위치 가정 잔여 3도구)도 함께 닫았다. **open 0**.
-> 대장: **verified 314 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
+> 대장: **verified 315 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
 
 ---
 
@@ -173,7 +180,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 314 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
+> 대장 집계: **verified** 315 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데

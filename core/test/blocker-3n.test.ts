@@ -460,6 +460,69 @@ describe('[SEC-265] MCP 쓰기 표면도 같은 잣대로 판정한다', () => {
 });
 
 /**
+ * [SEC-299] **대상을 하나 뽑아 하나만 판정하면, 나머지 대상은 안 본다.**
+ *
+ * [SEC-265] 가 대상을 「경로처럼 생긴 문자열 필드 **전부**」로 넓힌다고 적어 놓고, 실제로는
+ * `extraTargets[0]` 하나만 판정했다(감정확인 8차 실측). 두 얼굴:
+ *  - **디코이-우선(8-A1)**: `{note:'ok.md', dst:'.harness/events.jsonl'}` — 앞 필드가 판정되고
+ *    진짜 대상은 뒤에 숨는다. 전 페이즈에서 통했다. 프로파일(POLICY_FILES)에도 통해
+ *    [SEC-69](정책 변조)·[SEC-49/50/51](저널 위조) 차단이 통째로 재개통됐다.
+ *  - **배열·중첩(8-A2)**: `{paths:[core]}`·`{target:{path:core}}` — 값이 문자열이 아니라
+ *    `typeof value!=='string'` 로 걸러져 후보에 못 오른다. design 페이즈는 `raw===''` 안전
+ *    기본값이 잡았지만 build/ship(P7~P9)에서 통했다.
+ *
+ * 그래서 **후보를 배열·중첩까지 재귀로 모으고, 하나가 아니라 전부를 판정**한다. 짝(과차단)을
+ * 함께 잰다 — 여분의 경로형 필드나 배열 정상대상이 사면되지 않도록.
+ */
+describe('[SEC-299] 경로형 대상 전부를 판정한다 — 하나만 보면 나머지가 샌다', () => {
+  const mcp = (root: string, name: string, args: Record<string, unknown>): object | null =>
+    handleHook(root, 'pre-tool', { tool_name: name, tool_input: args });
+
+  it('8-A1 디코이-우선: 앞에 정상 경로를 놓아도 뒤의 코어·정책 파일을 막는다 (전 페이즈)', () => {
+    for (const phase of ['P0', 'P7'] as Phase[]) {
+      const root = setup(phase);
+      const cases: Array<[string, Record<string, unknown>]> = [
+        ['mcp__fs__write_file', { note: 'ok.md', dst: '.harness/events.jsonl', content: 'x' }],
+        ['mcp__fs__write_file', { note: 'ok.md', dst: '.harness/state.json', content: 'x' }],
+        ['mcp__fs__write_file', { note: 'ok.md', dst: '.harness/profile/profile.yaml', content: 'x' }],
+      ];
+      for (const [name, args] of cases) {
+        expect(denied(mcp(root, name, args)), `통과했다(${phase}): ${JSON.stringify(args)}`).toBe(true);
+      }
+    }
+  });
+
+  it('8-A2 배열·중첩: 문자열이 아닌 값 안에 숨긴 코어 대상도 막는다 (build 페이즈 포함)', () => {
+    for (const phase of ['P0', 'P7'] as Phase[]) {
+      const root = setup(phase);
+      const cases: Array<[string, Record<string, unknown>]> = [
+        ['mcp__fs__write_file', { paths: ['.harness/state.json'] }],
+        ['mcp__fs__write_file', { target: { path: '.harness/events.jsonl' } }],
+        ['mcp__fs__write_file', { files: ['docs/ok.md', '.harness/config.yaml'] }],
+      ];
+      for (const [name, args] of cases) {
+        expect(denied(mcp(root, name, args)), `통과했다(${phase}): ${JSON.stringify(args)}`).toBe(true);
+      }
+    }
+  });
+
+  it('★ 여분 경로형 필드·배열 정상대상·조회는 통과한다 — 과차단은 결함과 같은 무게다', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['mcp__fs__write_file', { path: 'docs/n.md', note: 'other.md', content: 'x' }],
+      ['mcp__fs__write_file', { paths: ['docs/a.md', 'docs/b.md'] }],
+      ['mcp__fs__read_file', { paths: ['.harness/state.json'] }],
+      ['mcp__z__search', { path: 'src', pattern: 'foo' }],
+    ];
+    for (const [name, args] of cases) {
+      const out = mcp(root, name, args);
+      expect(denied(out), `과차단: ${name} — ${reason(out)}`).toBe(false);
+    }
+  });
+});
+
+/**
  * [ENG-O1] **규칙이 같아도 적용 순서가 다르면 답이 갈린다.**
  *
  * [ENG-236] 이 `--dry-run` 예외를 한 벌로 모았는데도 **개행 구분자에서 다시 갈렸다** —

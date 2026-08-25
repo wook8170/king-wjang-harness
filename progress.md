@@ -1,5 +1,83 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (10) — 푸시 + 절충안 A E2E + 감정확인 8차 **MCP 추출-갭 발견·SEC-299 봉인 완료**
+
+**정본.** `main` · 이전 23커밋 푸시 완료 · **SEC-299 봉인분은 워킹트리(미커밋)** — 서브에이전트가
+커밋·푸시·로컬설치 진행 중. **1380 tests green(단독 재측정 · +3 SEC-299) · tsc 0 · dist 재빌드 ·
+대장 verified 315 · open 0.** hook.ts 수정본.
+
+### ★ 봉인 (SEC-299 · HIGH · 축6)
+- **발견(8차)**: 훅 MCP 쓰기도구 대상추출이 top-level string 하나(`extraTargets[0]`)만 판정 →
+  ①디코이-우선 `{note:ok.md, dst:core}`(전 페이즈) ②배열/중첩 `{paths:[core]}`·`{target:{path:core}}`
+  (build/ship P7~P9) 로 코어·프로파일(POLICY_FILES) 쓰기가 훅 통과. SEC-69·SEC-49/50/51 재개통 경로.
+- **끝단 파일덮임 미관측**(실 MCP 서버 미연결) → 확정 BLOCKER 아닌 **HIGH**(OPS-74 §5).
+- **수정**: `hook.ts:1508~` `collectTargets` 재귀(배열원소·중첩 string) + `writeTargets` **전부**를
+  `judgeWritePath` 로 판정(하나라도 걸리면 deny). key제외·길이·경로형 필터 재귀에도 적용 → 과차단
+  안 넓힘(기존 `{paths:[docs/…]}` design 과차단도 함께 해소). 테스트 `blocker-3n.test.ts`「SEC-299」
+  (막을것 8-A1/8-A2 P0·P7 + 짝 MNB). **README 「전부 검사」 문구는 이제 참** → README 무변경.
+- 대장 SEC-299 행 + 헤더/요약 verified 314→315. 밀린 인용 3건 재앵커(EFF-231·USE-247·SEC-275,
+  `reanchor-citations.py HEAD`).
+
+### 배선/함정 (이번에 확인)
+- **perf 노이즈**: 풀런에서 med-3j COST-228(200KB 922ms>500ms) 1건 빨강 뜰 수 있으나 **단독
+  재측정 722ms 통과** — 머신 부하 타이밍, 회귀 아님. 커밋 판단은 단독 재측정으로.
+- **로컬 설치법**: `claude plugin marketplace add <repo>` + `claude plugin install king-wjang-harness@king-wjang-harness`
+  (README:147). PATH harness=구빌드라 이 설치가 최신 봉인본 반영. 적용에 CC 재시작 필요할 수 있음.
+
+### ① 푸시 (item 1 · 완료)
+- 미푸시 23 → `git push origin main` (`0858396..530f100`). 커밋 다 됨·검증된 green 그대로
+  (핸드오프 이후 추가분은 progress.md 문서 1개뿐, dist 무변경).
+
+### ② 절충안 A E2E (item 2 · 통과)
+- 샌드박스에서 `design sync <UX> --from <파일>` 실측(에이전트 WebFetch 산출 파일 시뮬).
+  draft→해시만·멱등(same hash)→unchanged·approved→version++·**STALE 전파 pending→stale 실전이 관측**
+  (첫 content-change sync = `STALE waves: wave-001`, 둘째=none=멱등)·§1 누락파일 에러 세공·
+  inventory·원장 canvas-synced 기록 전부 정상. 스크립트: `scratchpad/e2e-compromiseA.sh`.
+
+### ③ 감정확인 8차 (item 3) — ★ MCP 쓰기도구 **대상-추출 갭 2건**
+훅 판정기 `hook.ts:1505~1518`: MCP 쓰기도구의 대상 추출이 ①**top-level string 만** 본다
+(`typeof value!=='string'` skip → 배열·중첩 string 미검사) ②**extraTargets[0] 하나만** 판정한다.
+- **8-A1 (디코이-우선, 전 페이즈)**: `mcp__fs__write_file {note:"ok.md", dst:".harness/events.jsonl"}`
+  → **ALLOW** (P0·P7 둘 다 재현). raw=extraTargets[0]="ok.md" 만 판정, 진짜 대상 dst 미판정.
+  프로파일(`.harness/profile/profile.yaml`, POLICY_FILES)에도 통함(B2 ALLOW) → **SEC-69(정책 변조
+  차단)·SEC-49/50/51(저널 위조 차단) 재개통 경로**.
+- **8-A2 (배열/중첩, build·ship 페이즈만)**: `{paths:[core]}`·`{target:{path:core}}` → P7 **ALLOW**.
+  P0(design)에선 `inDesign && raw===''` 안전기본값이 잡음 → design 페이즈 안전, **P7~P9 뚫림**.
+- **README 「알려진 한계」 과다주장 확정**: `README.md:254`/`.ko:253` "every path-shaped argument
+  is checked / 경로처럼 생긴 인자는 전부 검사" — **거짓**(배열·중첩·2번째 필드 미검사). USE-59 부류.
+- **Vector C(페이로드 극단값)**: crash·fail-open **0** — huge/deep-nest/null/array/number 입력에
+  훅 안 죽음(`hook-errors.log` 빈). 미추출 대상은 design 페이즈에서 안전기본값 deny. **견고.**
+- 짝(MNB) 통과: mcp read/list/search ALLOW·일반 산출물 ALLOW·직접 string 대상 DENY. 과차단 0.
+
+**증명된 것 vs 추론**: 훅이 ALLOW(exit0·빈 출력) 반환은 **실측**(P0·P7 재현). 「파일이 실제로
+덮인다」는 **추론** — 실 MCP 파일서버 미연결이라 최종 파일상태는 관측 못함(OPS-74 §5 한계 명시).
+**exploitability 조건부**: 대상 MCP 서버가 배열-스키마(8-A2)거나 여분필드 관대(8-A1)일 때. 그래서
+확정 BLOCKER 아닌 **HIGH(조건부 BLOCKER)**. 다만 "전부 검사" 문구 거짓은 **무조건 참**.
+
+**→ 이 발견은 위 ★봉인 절에서 SEC-299 로 봉인 완료.** (a)전대상 판정 + (b)배열·중첩 재귀 추출로
+수정, 짝(MNB) 과차단 테스트 포함, README 문구는 수정으로 참이 됨.
+
+### 다음 즉시 할 일
+1. **서브에이전트: 커밋·푸시·로컬설치 진행 중.** SEC-299 봉인분(hook.ts·blocker-3n·ledger·
+   00-summary·dist·progress) 커밋 → origin/main 푸시 → `claude plugin` 로컬 설치/갱신.
+2. 축 1·5·6·7 재감정 — SEC-299 봉인으로 open 0 유지되나 **판정은 「출하 불가」 유지**(1·5·6·7 미재감정).
+   독립 검증자(OPS-74 §3 구현자≠감정자)로 SEC-299 반증 시도도 권장(내가 구현+감정 겸함).
+3. (선택) stale 울트라골(`.omc/ultragoal` 라운드3 Aug21) 닫기/재조정.
+
+### 미해결 · 확인 대기
+- **SEC-299 는 구현자=감정자** — 사용자 봉인 지시로 진행했으나 독립 반증 미실시(OPS-74 §3).
+- 축 1·5·6·7 은 3-N 기준 → 「출하 불가」 유지.
+- 커밋/푸시/로컬설치 완료 여부는 서브에이전트 보고(`scratchpad/ship-install.md`) 확인.
+
+### 함정 (그대로 유효)
+- 훅은 `readState`(state.json 직접) → 픽스처로 phase 직접 세팅 가능(운영자 파일편집=훅 경유 아님).
+- DESIGN_PHASES=P0–P6 · BUILD=P7–P9 · SHIP=P10–P12. 기본 init=P0(design).
+- 스윕 판정: stdout 에 `permissionDecision` → deny; 빈 stdout+exit0 → allow.
+- 짝 목록(MB/MNB) 없는 차단측정은 보고 안 함. 과차단=결함 동급.
+- 8차 스크립트: `scratchpad/appraise8.sh`(P0), P7 재현은 인라인.
+
+---
+
 ## 2026-08-26 (9) — 절충안 A: 캔버스 fetch 를 P4 스킬 층으로(코어 무변경)
 
 **정본.** `main` HEAD `c682723` · 워킹트리 clean · 미푸시 **22** ·

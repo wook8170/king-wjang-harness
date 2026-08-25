@@ -1504,18 +1504,38 @@ function preTool(
    */
   const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? '');
   const extraTargets: string[] = [];
-  if (namedTarget === '' && input.tool_input && typeof input.tool_input === 'object') {
-    for (const [key, value] of Object.entries(input.tool_input as Record<string, unknown>)) {
-      if (typeof value !== 'string' || value === '') continue;
-      // 내용(`content`·`new_string` 등)은 대상이 아니다 — 경로처럼 생긴 **짧은** 값만 본다.
-      if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) continue;
-      // [ENG-273] 같은 개념(경로 길이 상한)은 같은 정본을 쓴다 — 리터럴이 두 벌이면
-      // 한쪽만 바뀌고 그 차이를 아무도 모른다.
-      if (value.length > PATH_MAX_GUESS || value.includes('\n')) continue;
-      if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+  /**
+   * [SEC-299] **후보를 하나 뽑아 하나만 판정하면, 나머지 대상은 안 본다.**
+   *
+   * [SEC-265] 는 대상을 「경로처럼 생긴 문자열 필드 **전부**」로 넓힌다고 적어 놓고, 실제로는
+   * ① `typeof value!=='string'` 로 걸러 **배열·중첩 안의 문자열을 못 보고**(8-A2) ② 아래에서
+   * `extraTargets[0]` **하나만** 판정했다(8-A1). 그래서 `{paths:[core]}`·`{target:{path:core}}`
+   * 로 감싸거나 `{note:'ok.md', dst:core}` 로 앞에 디코이 경로를 두면 진짜 대상이 샜다 —
+   * 코어 파일뿐 아니라 프로파일(POLICY_FILES)까지 덮여 [SEC-69]·[SEC-49/50/51] 이 재개통됐다.
+   *
+   * 그래서 **배열·중첩까지 재귀로 모으고**, 아래 `judgeWritePath` 가 `raw` 하나가 아니라
+   * `writeTargets` **전부**를 본다(하나라도 걸리면 deny). 같은 key 제외·길이·경로형 필터를
+   * 재귀 안에서도 그대로 적용해 과차단을 넓히지 않는다.
+   */
+  const collectTargets = (key: string, value: unknown): void => {
+    if (Array.isArray(value)) { for (const v of value) collectTargets(key, v); return; }
+    if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) collectTargets(k, v);
+      return;
     }
+    if (typeof value !== 'string' || value === '') return;
+    // 내용(`content`·`new_string` 등)은 대상이 아니다 — 경로처럼 생긴 **짧은** 값만 본다.
+    if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) return;
+    // [ENG-273] 같은 개념(경로 길이 상한)은 같은 정본을 쓴다 — 리터럴이 두 벌이면
+    // 한쪽만 바뀌고 그 차이를 아무도 모른다.
+    if (value.length > PATH_MAX_GUESS || value.includes('\n')) return;
+    if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+  };
+  if (namedTarget === '' && input.tool_input && typeof input.tool_input === 'object') {
+    for (const [key, value] of Object.entries(input.tool_input as Record<string, unknown>)) collectTargets(key, value);
   }
-  const raw = namedTarget !== '' ? namedTarget : (extraTargets[0] ?? '');
+  const writeTargets = namedTarget !== '' ? [namedTarget] : extraTargets;
+  const raw = writeTargets[0] ?? '';
   // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산해, 아래 모든 프리픽스/파일명
   // 매치(CORE_FILES 보호, 설계 allowlist, 구축 트랙 `.harness/design/` 보호)에 "두 공간 중
   // 하나라도 걸리면 매치"로 쓴다. root 자체가 심링크면 리터럴 공간이 새고(C3), root
@@ -1542,12 +1562,15 @@ function preTool(
   // 판정은 한 벌이다 — judgeWritePath 가 코어 파일 보호(페이즈 무관)와 설계 트랙 허용목록을
   // 함께 본다. Bash 리다이렉트도 아래에서 **같은 함수**로 보낸다.
   if (isWrite) {
-    if (inDesign && !raw.trim()) {
+    if (inDesign && writeTargets.every(t => !t.trim())) {
       return deny(L('No file path in the tool input — blocked (safe default).',
         '도구 입력에 파일 경로가 없다 — 차단(안전 기본값).'), degraded, lang);
     }
-    const verdict = judgeWritePath(root, state, config, raw, degraded, false, getProfile);
-    if (verdict) return verdict;
+    // [SEC-299] 대상 하나가 아니라 **전부**를 판정한다 — 하나라도 걸리면 deny.
+    for (const t of writeTargets) {
+      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile);
+      if (verdict) return verdict;
+    }
   }
 
   if (tool === 'Bash') {
