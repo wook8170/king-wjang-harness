@@ -177,6 +177,68 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
 });
 
 /**
+ * **MCP 쓰기도구의 «대상 추출»도 코퍼스에 든다 ([SEC-299]).**
+ *
+ * 훅은 임의 MCP 스키마를 모르므로 «경로처럼 생긴 필드 전부»를 대상으로 본다. 그 추출이 새면
+ * 코어·정책 파일이 이름 있는 쓰기도구를 통해 덮인다 — 감정확인 8·9·9-2 차가 세 번 갱신했다:
+ * 배열·중첩(8차), `file_path` 디코이 단락(9차 F1), 부차 소스참조 과차단(9-2 C). 코어·정책은
+ * **부차 필드·배열·중첩·길이패딩 어디에 숨겨도** deny 여야 하고(하드 경계, 9-2 독립확인), 정상
+ * 문서쓰기는 부차 소스참조가 있어도 통과해야 한다(과차단=결함). 매 실행마다 다시 잰다.
+ */
+describe('[SEC-299] MCP 쓰기 대상추출 코퍼스 — 코어·정책은 어디 숨겨도 deny, 정상은 통과', () => {
+  const decideMcp = (root: string, name: string, args: Record<string, unknown>): string => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const o: any = handleHook(root, 'pre-tool', { tool_name: name, tool_input: args });
+    return o?.hookSpecificOutput?.permissionDecision ?? 'allow';
+  };
+  // 코어·정책 표적을 온갖 인자 형태에 숨긴다 — 전부 deny 여야 한다(하드 경계).
+  const decoyShapes = (core: string): Array<Record<string, unknown>> => [
+    { path: core },                                         // 직접(기준선)
+    { file_path: 'ok.md', path: core },                     // [F1] file_path 디코이
+    { notebook_path: 'ok.md', path: core },                 // [F1] notebook_path 디코이
+    { file_path: ' ', path: core },                         // [F1] 공백 디코이
+    { note: 'ok.md', dst: core },                           // 디코이-선행
+    { file_path: 'ok.md', ref: core },                      // weak-key 로 코어
+    { paths: [core] },                                      // [8-A2] 배열
+    { target: { path: core } },                             // [8-A2] 중첩
+    { items: [{ path: core }] },                            // 객체 배열
+    { x: [[core]] },                                        // 배열 속 배열
+    { a: { b: { c: { dst: core } } } },                     // 깊은 중첩
+    { cfg: { file: core } },                                // 중첩 정책 key
+    { path: `.harness/${'./'.repeat(2200)}${core.replace('.harness/', '')}` }, // [F4] 길이패딩
+  ];
+  const CORE = ['.harness/config.yaml', '.harness/state.json', '.harness/events.jsonl', '.harness/profile/profile.yaml'];
+
+  it('★ 코어·정책은 배열·중첩·디코이·길이패딩 어디에 숨겨도 deny (P0·P7)', () => {
+    for (const phase of ['P0', 'P7'] as Phase[]) {
+      const root = setup(phase);
+      const missed: string[] = [];
+      for (const core of CORE) {
+        for (const args of decoyShapes(core)) {
+          if (decideMcp(root, 'mcp__fs__write_file', args) !== 'deny') missed.push(`${phase} ${JSON.stringify(args).slice(0, 70)}`);
+        }
+      }
+      expect(missed, `${missed.length}건 통과: ${missed.slice(0, 3).join(' | ')}`).toEqual([]);
+    }
+  }, 60_000);
+
+  it('★ 정상 문서쓰기는 부차 소스참조·배열 정상대상·조회에도 통과 — 과차단은 결함과 같은 무게', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    const allowed: Array<[string, Record<string, unknown>]> = [
+      ['mcp__fs__write_file', { path: 'docs/n.md', options: { template: 'src/base.ts' } }],
+      ['mcp__fs__write_file', { path: 'docs/n.md', schema_ref: 'app/x.ts' }],
+      ['mcp__fs__write_file', { path: 'docs/n.md', dest: 'src/app.ts' }],   // 부차 DEST 소스참조(9-2 C 해소)
+      ['mcp__fs__write_file', { file_path: 'docs/n.md', backup: 'lib/y.ts' } ],
+      ['mcp__fs__write_file', { paths: ['docs/a.md', 'docs/b.md'] }],
+      ['mcp__fs__read_file', { paths: ['.harness/state.json'] }],
+    ];
+    const over = allowed.filter(([n, a]) => decideMcp(root, n, a) === 'deny');
+    expect(over.map(([, a]) => JSON.stringify(a)), `${over.length}건 과차단`).toEqual([]);
+  }, 30_000);
+});
+
+/**
  * **하네스 «자신의 명령»도 코퍼스에 든다.**
  *
  * 훅은 `harness …` 를 신뢰해 통과시킨다 — 그래서 경로를 받는 플래그가 임의 경로를 받으면

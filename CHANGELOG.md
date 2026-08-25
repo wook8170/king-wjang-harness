@@ -10,6 +10,24 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nothing yet.
 
+## [0.1.1] — 2026-08-26
+
+Round 3-R appraisal-confirmation, sweeps 8 through 9-2. The MCP-write target
+extractor was hardened after two independent adversarial rounds each broke the
+prior fix — the whole point of implementer-≠-appraiser (OPS-74 §3).
+
+### Fixed — a named write field could hide a second target ([SEC-299])
+
+The hook infers a write tool's target from path-shaped arguments. It looked at
+only the top-level string fields, and — worse — short-circuited on `file_path`/
+`notebook_path`, so `{file_path: "ok.md", path: ".harness/state.json"}` slipped a
+core-file write past every earlier defense. The extractor now recurses into
+arrays and nested objects and judges **every** collected target; core/policy
+files are checked on all of them, while the design-track source rule applies to
+the primary target only so a source-referencing side field no longer over-blocks
+a normal document write. The F1/F2/F4 vectors are pinned in
+`bypass-corpus.test.ts` and re-measured on every run.
+
 ## [0.1.0] — 2026-08-23
 
 First cut of the core engine. Rounds 3-I through 3-L of the release-readiness audit;
