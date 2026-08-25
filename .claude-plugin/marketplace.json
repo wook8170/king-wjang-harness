@@ -12,7 +12,7 @@
       "name": "king-wjang-harness",
       "source": "./",
       "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. Completely silent in projects without a .harness/ directory.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "장욱"
       },
