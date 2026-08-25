@@ -2,9 +2,10 @@
 
 ## 2026-08-26 (10) — 푸시 + 절충안 A E2E + 감정확인 8차 **MCP 추출-갭 발견·SEC-299 봉인 완료**
 
-**정본.** `main` · 이전 23커밋 푸시 완료 · **SEC-299 봉인분은 워킹트리(미커밋)** — 서브에이전트가
-커밋·푸시·로컬설치 진행 중. **1380 tests green(단독 재측정 · +3 SEC-299) · tsc 0 · dist 재빌드 ·
-대장 verified 315 · open 0.** hook.ts 수정본.
+**정본.** `main` HEAD `85b7813` · **origin/main 푸시 완료**(미푸시 0) · 워킹트리 clean(이 progress
+갱신 제외) · **1380 tests green(+3 SEC-299) · tsc 0 · dist 재빌드 · 대장 verified 315 · open 0.**
+**로컬 플러그인 0.0.1→0.1.0 설치 완료**(SEC-299 반영, dist sha `426b5de` 리포와 일치, enabled) —
+**적용에 Claude Code 재시작 필요**(update 출력 "Restart to apply changes").
 
 ### ★ 봉인 (SEC-299 · HIGH · 축6)
 - **발견(8차)**: 훅 MCP 쓰기도구 대상추출이 top-level string 하나(`extraTargets[0]`)만 판정 →
@@ -58,11 +59,13 @@
 수정, 짝(MNB) 과차단 테스트 포함, README 문구는 수정으로 참이 됨.
 
 ### 다음 즉시 할 일
-1. **서브에이전트: 커밋·푸시·로컬설치 진행 중.** SEC-299 봉인분(hook.ts·blocker-3n·ledger·
-   00-summary·dist·progress) 커밋 → origin/main 푸시 → `claude plugin` 로컬 설치/갱신.
+1. **완료**: SEC-299 봉인 커밋(`85b7813`)·푸시·로컬 플러그인 0.1.0 설치. **사용자 CC 재시작**하면
+   새 훅(SEC-299 포함) 적용. (이 progress 갱신은 미커밋 — 다음에 `docs: 핸드오프` 로 커밋.)
 2. 축 1·5·6·7 재감정 — SEC-299 봉인으로 open 0 유지되나 **판정은 「출하 불가」 유지**(1·5·6·7 미재감정).
    독립 검증자(OPS-74 §3 구현자≠감정자)로 SEC-299 반증 시도도 권장(내가 구현+감정 겸함).
 3. (선택) stale 울트라골(`.omc/ultragoal` 라운드3 Aug21) 닫기/재조정.
+4. (정리) 플러그인 캐시에 리포의 `.claude/worktrees/wf_*` 잔여 워크트리가 복사돼 들어감(설치 bloat,
+   기능 무해). 리포에서 그 워크트리 정리하면 다음 설치가 가벼워진다.
 
 ### 미해결 · 확인 대기
 - **SEC-299 는 구현자=감정자** — 사용자 봉인 지시로 진행했으나 독립 반증 미실시(OPS-74 §3).
