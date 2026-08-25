@@ -1371,7 +1371,26 @@ function judgeWritePath(
   const allowed = [rel, realRel].some(
     r => r !== '' && (allowList(config).some(pre => r.startsWith(pre)) || /^[^/]+\.md$/.test(r)),
   );
-  if (allowed) return null;
+  /**
+   * [SEC-297] **허용목록은 「이 이름이 허용인가」를 답하지, 「이 쓰기가 어디에 착지하는가」를
+   * 답하지 않는다.** 두 공간 중 한쪽만 걸려도 통과시키고 곧장 반환하면, 허용된 이름 하나가
+   * 소스 전체의 문이 된다 — 실측(P0): `ln -s .. docs/up` 통과 → `Write docs/up/src/app.ts`
+   * 통과 → **소스 파일이 실제로 덮였다**. 같은 자리를 직접 겨눈 `Write src/app.ts` 는 deny 다.
+   * 아래 구현 판정이 이미 두 공간을 함께 보는데(SEC-263) **그 앞에서 반환해 버리므로**
+   * 그 계약에 닿지 못한 것이다.
+   *
+   * 그래서 통과는 **착지 지점까지 안전할 때만** 준다. 비용은 앨리어스가 실제로 있는 경우에만
+   * 낸다 — 두 공간이 같으면(대다수) 프로파일을 읽지 않고 예전 그대로 통과한다([COST-260]
+   * 이 만든 부류: 느린 판정 → 타임아웃 → fail-open 을 다시 부르지 않는다).
+   */
+  if (allowed) {
+    if (rel === realRel) return null;
+    const escaped = [rel, realRel]
+      .filter(r => r !== '' && !isOutsideRoot(r))
+      .some(r => implementationReason(getProfile(), r) !== null);
+    if (!escaped) return null;
+    // 빠져나간다 — 아래 구현 판정으로 떨어뜨린다(사유 문구도 거기서 실경로를 함께 말한다).
+  }
 
   const outside = isOutsideRoot(rel) && isOutsideRoot(realRel);
   if (outside) {

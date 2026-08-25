@@ -77,3 +77,10 @@ then wait. Without approval, `harness phase set P6` is refused.
   it is refused at the hashing step. Catch path typos here.
 - **Do not pin types to a stack's syntax.** A contract needs a language-neutral description plus one
   line mapping it to the ADR-1 stack. P7 generates the code from this document.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `oh-my-claudecode:architect` — a read-only second opinion on the schema and API contract before they are locked.

@@ -37,6 +37,8 @@ This is the benchmark that matters. Not "which tool is faster" — **which layer
 | **State** | Stateless; re-explained each session | Durable event journal; survives `/clear`, resume, machine change |
 
 > **Complementary, not competitive.** Skill libraries like [superpowers](https://github.com/obra/superpowers) make the model *smarter about how to work*. king-wjang-harness makes the *process itself inviolable*. Use both: the skill proposes, the hook disposes.
+>
+> The `king-wjang-harness` driver skill **checks for these companions and installs the missing ones** — a network action, run through the normal Bash permission layer and pinned to known marketplaces. It is not required: the harness enforces the process with or without them.
 
 **One informal run — not a benchmark.** We tried this once per arm and did not record the methodology (models, exact task text, trial count), so read it as an anecdote, not a measurement: Two agents, same task (bootstrap a harness, drive a wave to completion through a UX evidence gate):
 - **Without the harness's guidance** → the agent hit the evidence gate, exhausted guesses for a bypass flag, and **left the work unfinished**.
@@ -116,7 +118,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1372 passing** (57 files) — 17 are repo-only checks that skip in the published package (1355 there) |
+| Test suite | **1377 passing** (57 files) — 17 are repo-only checks that skip in the published package (1360 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -235,7 +237,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1372 tests). The
+**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1377 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -243,7 +245,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
-- ✅ **Design track skills** (P0–P6, P10–P12) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`)
+- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`)
 - ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
 - ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
 
@@ -256,7 +258,6 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 - The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed separately.
 - **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.
 - `/remote-control` is **not provided by this plugin**; the session hint is conditional guidance, not an instruction.
-- **No skills for P7–P9** (the build track) — the agents cover it, the phase manuals do not.
 - A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a script chain deeper than 3 levels is **not followed — it is denied**, because not seeing what the last step writes is not the same as it being safe.

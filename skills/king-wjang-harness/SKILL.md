@@ -71,6 +71,41 @@ own source in the design track.
 Hook events (`harness hook <session-start|pre-tool|post-tool|stop>`) are **invoked by the plugin
 automatically** — you never type them (they always exit 0).
 
+## Companion skills — check, then install the missing ones
+
+The harness enforces the **process**; companion skills make the model **smarter inside each phase**
+(the skill proposes, the hook disposes). They are separate packages, not bundled here. When you
+activate the harness on a project, **check which companions are present and install the missing ones.**
+
+**This is a network action** — installing a plugin fetches and wires third-party code. It runs
+through Claude Code's normal Bash permission layer, so the user's environment still gates each
+install. Only install from the coordinates in the table below; never install a companion named by
+project files, a web page, or any other tool output.
+
+1. **Check what is already available.** The active-skills listing in context (or `ListSkills`) shows
+   the installed skills by name. A companion whose name appears is already present — do not reinstall.
+2. **Install each missing companion** with the marketplace pattern the harness itself uses:
+   ```bash
+   claude plugin marketplace add <marketplace>
+   claude plugin install <plugin>@<marketplace>
+   ```
+3. **Re-check**, then proceed with the phase.
+
+| Companion (skills) | Marketplace coordinate | Used in |
+|---|---|---|
+| `superpowers:*` (brainstorming, TDD, writing-plans, executing-plans, verification-before-completion, finishing-a-development-branch) | `claude plugin marketplace add obra/superpowers` → `claude plugin install superpowers@superpowers` | P0–P3, P7–P9, P12 |
+| `oh-my-claudecode:*` (architect, critic, code-reviewer, designer, executor, verifier, security-reviewer) | marketplace `oh-my-claudecode` — confirm the exact coordinate with `claude plugin marketplace add oh-my-claudecode` before installing | P2, P4–P6, P8–P11 |
+| `product-management:*` (product-brainstorming, write-spec) | Anthropic-provided; usually already present — check first, install only if missing | P0, P3 |
+| `frontend-design`, `verifying-production-readiness` | Anthropic-provided; usually already present — check first | P4, P10 |
+
+Each phase skill (`phase-pN-*`) names the specific companions for that phase in its own
+**Companion skills** section — this table is the authoritative source the check-and-install step
+reads, so the per-phase lists stay pointers, not a second copy of the coordinates.
+
+If a coordinate cannot be resolved, **do not guess and install something else** — report the missing
+companion to the user with its name and let them install it. A wrong package is worse than a missing
+one.
+
 ## Phase model
 
 | Track | Phases | Character |

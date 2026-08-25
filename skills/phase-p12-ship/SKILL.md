@@ -95,3 +95,10 @@ not the approval — it is **the input to the approval review**.
 - **A finding after shipping is a new cycle.** If something needs fixing after the P12 approval,
   backtrack formally with `harness backtrack`. Quietly editing an approved artifact invalidates the
   gate automatically (§4-3).
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `superpowers:finishing-a-development-branch` — the structured merge / PR / cleanup options once the go verdict is in.

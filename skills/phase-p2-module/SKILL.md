@@ -90,3 +90,11 @@ and that the review packet has no blockers, then wait.
   is blocked.
 - **A settled stack is not permission to write code.** Until the P6 approval the hook blocks writing
   implementation code.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `oh-my-claudecode:architect` — a read-only advisor for the module boundaries, dependency graph and the ADR stack decision.
+- `superpowers:writing-plans` — turn the module design into a written plan the build track executes.

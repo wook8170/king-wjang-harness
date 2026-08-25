@@ -80,3 +80,10 @@ wait. If the evidence grade is not `measured`, the core refuses first.
   out", and it cannot stand as evidence in the P12 verdict.
 - **An improvement you spot mid-deployment is new feature code — the hook blocks it.** If it is not a
   ledger item, send it to the backlog.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `oh-my-claudecode:verifier` — evidence-based checks that the smoke and canary actually verify the deploy.

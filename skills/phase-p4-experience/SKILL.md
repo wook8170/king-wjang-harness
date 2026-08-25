@@ -135,3 +135,11 @@ first and let the user actually click through it. P4 is a gate that is approved 
 - **Reviewer comments come back through `harness gate feedback <P>`** (`--from <file>` to ingest a
   collected file). A canvas change still has to be promoted to a revision by hand —
   `harness node bump UX-x` — or STALE never propagates.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `frontend-design` — distinctive, intentional visual direction for the UX scenarios and design system.
+- `oh-my-claudecode:designer` — building the interactive HTML canonical that becomes the P9 baseline.

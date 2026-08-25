@@ -40,6 +40,13 @@ const decide = (root: string, command: string): string => {
   return o?.hookSpecificOutput?.permissionDecision ?? 'allow';
 };
 
+/** 같은 판정을 Write 표면에서도 잰다 — 표면마다 규칙이 갈리면 한쪽만 강화된다(SEC-50). */
+const decideWrite = (root: string, filePath: string): string => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const o: any = handleHook(root, 'pre-tool', { tool_name: 'Write', tool_input: { file_path: filePath, content: 'x' } });
+  return o?.hookSpecificOutput?.permissionDecision ?? 'allow';
+};
+
 /** 쓰기 «동사» — 도구 이름을 바꿔 가며 같은 일을 한다. */
 const verbs = (t: string): string[] => [
   `echo x > ${t}`, `echo x >> ${t}`, `printf x > ${t}`, `cat /tmp/x > ${t}`,
@@ -215,6 +222,34 @@ describe('하네스 명령 표면 — 훅을 신뢰받는 문이 우회로가 �
     expect(accepted, '루트 밖 문서가 등록됐다').toEqual([]);
   });
 
+  /**
+   * [SEC-298] **형제 표면에 같은 판정이 없으면 봉인은 한 문만 닫은 것이다.**
+   *
+   * SEC-296 은 `tokens gen --out` 을 닫았는데, **경로를 받는 형제 플래그 세 곳**
+   * (`evidence spec --out` · `evidence packet --out` · `tokens swap --out`)에는 같은 판정이
+   * 없었다. 실측(P0): `harness evidence spec UX-1 --wave W1 --out /tmp/…` 이 훅을 통과하고
+   * **루트 밖에 디렉토리까지 만들며 파일을 떨궜다**. 같은 자리를 Write 로 겨누면 deny 다
+   * (「루트 밖 경로는 설계 트랙에서 쓸 수 없다」).
+   */
+  it('★ 형제 --out 도 같은 판정을 지난다 — 루트 밖·설계 트랙 소스로 나가지 못한다', () => {
+    // 앞선 실행(처방을 되돌린 RED 확인 포함)이 남긴 흔적을 「이번 실행의 결과」로 읽지 않는다.
+    fs.rmSync('/tmp/kwh-corpus-sibling', { recursive: true, force: true });
+    const escapes = ['/tmp/kwh-corpus-sibling', '../escaped/out.ts'];
+    const inSource = ['src/app.ts', 'lib/gen.css'];
+    const leaked: string[] = [];
+
+    for (const out of [...escapes, ...inSource]) {
+      const root = withTokens('P0');
+      fs.writeFileSync(path.join(root, 'ov.json'),
+        JSON.stringify({ color: { 'text.primary': { light: '#ff0000', dark: '#00ff00' } } }));
+      if (run(['evidence', 'spec', 'UX-1', '--wave', 'W1', '--out', out], root) === 0) leaked.push(`evidence spec --out ${out}`);
+      if (run(['evidence', 'packet', '--ux', 'UX-1', '--wave', 'W1', '--out', out], root) === 0) leaked.push(`evidence packet --out ${out}`);
+      if (run(['tokens', 'swap', '--with', 'ov.json', '--out', out], root) === 0) leaked.push(`tokens swap --out ${out}`);
+    }
+    expect(leaked, '형제 --out 이 나가서는 안 되는 곳으로 나갔다').toEqual([]);
+    expect(fs.existsSync('/tmp/kwh-corpus-sibling'), '루트 밖에 만들었다').toBe(false);
+  });
+
   it('제품이 시키는 절차는 막지 않는다 — 설계 영역 생성 · 구축 트랙 소스 생성', () => {
     const design = withTokens('P0');
     for (const out of ['.', 'docs', '.harness/design', 'build']) {
@@ -222,5 +257,75 @@ describe('하네스 명령 표면 — 훅을 신뢰받는 문이 우회로가 �
     }
     const build = withTokens('P7');
     expect(run(['tokens', 'gen', '--out', 'src'], build), 'P7 에서 막았다').toBe(0);
+  });
+
+  it('형제 --out 의 정상 경로는 막지 않는다 — 설계 영역·기본 위치·구축 트랙', () => {
+    const design = withTokens('P0');
+    fs.writeFileSync(path.join(design, 'ov.json'),
+      JSON.stringify({ color: { 'text.primary': { light: '#ff0000', dark: '#00ff00' } } }));
+    expect(run(['evidence', 'spec', 'UX-1', '--wave', 'W1'], design), '기본 위치를 막았다').toBe(0);
+    expect(run(['evidence', 'spec', 'UX-1', '--wave', 'W1', '--out', 'e2e/ux-1.spec.ts'], design), '과차단: e2e/').toBe(0);
+    expect(run(['evidence', 'packet', '--ux', 'UX-1', '--wave', 'W1', '--out', 'docs/packet.html'], design), '과차단: docs/').toBe(0);
+    expect(run(['tokens', 'swap', '--with', 'ov.json', '--out', '.harness/design/swap.css'], design), '과차단: 설계 영역').toBe(0);
+    const build = withTokens('P7');
+    fs.writeFileSync(path.join(build, 'ov.json'),
+      JSON.stringify({ color: { 'text.primary': { light: '#ff0000', dark: '#00ff00' } } }));
+    expect(run(['tokens', 'swap', '--with', 'ov.json', '--out', 'src/theme.css'], build), 'P7 에서 막았다').toBe(0);
+  });
+});
+
+describe('심링크 — 「허용된 이름」이 소스로 빠져나가지 못한다', () => {
+  /**
+   * [SEC-297] **허용목록이 실경로 판정보다 앞서면, 허용된 이름 하나가 소스 전체의 문이 된다.**
+   *
+   * 설계 트랙 판정은 두 공간(리터럴 `rel` · 실경로 `realRel`)을 함께 본다(SEC-263). 그런데
+   * 그 «앞»의 allow-list 는 두 공간 중 **한쪽만** 걸려도 통과시키고 곧장 반환했다 — 리터럴이
+   * `docs/` 로 시작하면 실경로가 `src/app.ts` 여도 구현 판정에 닿지 않았다.
+   *
+   * 실측(P0): `ln -s .. docs/up` 은 훅이 **통과**시키고, 이어서 `Write docs/up/src/app.ts` 도
+   * **통과**시켜 **소스 파일을 실제로 덮었다**. 같은 자리를 직접 겨눈 `Write src/app.ts` 는
+   * deny 다 — 두 답이 갈리면 느슨한 쪽이 정본이 된다.
+   */
+  const linked = (): string => {
+    const root = setup('P0');
+    fs.symlinkSync('..', path.join(root, 'docs/up'));        // docs/up → 루트
+    fs.symlinkSync('../src', path.join(root, 'docs/l'));     // docs/l  → src
+    return root;
+  };
+
+  it('★ 허용 접두 아래 심링크로 소스에 착지하는 쓰기는 전건 deny', () => {
+    const root = linked();
+    const targets = [
+      'docs/up/src/app.ts',      // 기존 소스를 덮는다
+      'docs/up/src/new.ts',      // 아직 없는 파일도 같은 판정이다
+      'docs/l/app.ts',
+      'docs/l/nested/deep.ts',
+      'docs/up/src',             // 디렉토리를 통째로 겨눈 형태(isSourceTree)
+    ];
+    const leaked = targets.filter(t => decideWrite(root, t) !== 'deny');
+    expect(leaked, '심링크로 소스에 착지하는 Write 가 통과했다').toEqual([]);
+    const shell = targets.filter(t => decide(root, `echo x > ${t}`) !== 'deny');
+    expect(shell, '같은 표적을 Bash 로 치면 통과했다 — 표면이 갈렸다').toEqual([]);
+  });
+
+  it('★ 실제로 덮이지 않는다 — 판정을 무시하고 실행해도 원본이 남는가가 아니라, 판정이 막는가', () => {
+    const root = linked();
+    // 훅이 allow 를 냈다면 에이전트는 그대로 쓴다. deny 가 나오는지만이 방어다.
+    expect(decideWrite(root, 'docs/up/src/app.ts')).toBe('deny');
+    expect(fs.readFileSync(path.join(root, 'src/app.ts'), 'utf8')).toBe('export const a = 1\n');
+  });
+
+  it('과차단 없음 — 소스로 풀리지 않는 심링크·정상 설계 쓰기는 통과한다', () => {
+    const root = setup('P0');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-corpus-ext-'));
+    fs.symlinkSync(outside, path.join(root, 'docs/ext'));    // 루트 밖 스토어를 가리키는 링크
+    fs.symlinkSync('../docs/deep', path.join(root, 'docs/inner'));
+    const blocked = [
+      'docs/d.md', 'docs/deep/note.md', 'README.md',
+      'docs/inner/note.md',            // 문서 → 문서 링크
+      'docs/ext/note.md',              // 루트 밖 스토어(설계 산출물 보관)
+      '.harness/design/canonical.html',
+    ].filter(t => decideWrite(root, t) === 'deny');
+    expect(blocked, '과차단: 소스가 아닌 자리가 막혔다').toEqual([]);
   });
 });

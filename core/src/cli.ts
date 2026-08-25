@@ -311,6 +311,57 @@ const csv = (v: string | undefined): string[] =>
  *
  * 한 벌로 두면 다음에 페이즈를 받는 명령이 늘어도 같은 답이 나간다.
  */
+/**
+ * [SEC-296·SEC-298] **경로를 받는 플래그는 훅과 «같은» 판정을 지난다 — 한 벌로.**
+ *
+ * 훅은 `harness …` 를 신뢰해 통과시킨다. 그래서 `--out` 이 임의 경로를 받으면 그것이
+ * **훅을 우회하는 쓰기 원시명령**이 된다. SEC-296 은 `tokens gen --out` 에서 그것을 실측했고
+ * (P0 에서 `echo x > src/tokens.ts` 는 deny 인데 `tokens gen --out src` 는 기존 소스를 덮었다),
+ * SEC-298 은 **형제 세 곳**(`evidence spec` · `evidence packet` · `tokens swap`)에 같은 판정이
+ * 없었음을 실측했다 — `--out /tmp/…` 가 루트 밖에 디렉토리까지 만들며 파일을 떨궜다.
+ * 문 하나만 닫으면 봉인이 아니므로 규칙을 여기 한 벌로 두고 **문구만** 표면의 것을 받는다.
+ *
+ * 판정 규칙은 복제하지 않는다 — 위치는 `isInsideRoot`, 「구현인가」는 훅이 쓰는 것과 같은
+ * **프로파일이 선언한 소스 트리**다. 확장자로 하면 안 된다: 토큰 생성물은 P4 에서 내는 것이
+ * 정상 흐름이라 「`.ts` 는 소스다」로 막으면 **제품이 시키는 절차 자체가 막힌다**(직접 겪었다).
+ *
+ * `targets` 는 실제로 착지하는 경로들이다 — 디렉토리를 받아 여러 파일을 내는 명령이 있어
+ * 「받은 경로」와 「착지하는 경로」가 다르다.
+ */
+function assertOutputAllowed(
+  root: string,
+  out: string,
+  targets: string[],
+  lang: Lang,
+  what: { en: string; ko: string },
+): void {
+  const L = (en: string, ko: string): string => pick({ en, ko }, lang);
+  if (!isInsideRoot(root, out)) {
+    throw new Error(L(
+      `${what.en} must land inside the project — \`${out}\` is outside it. `
+      + 'A harness command is not a way around the write rules the hook applies.',
+      `${what.ko} 프로젝트 안에 떨어져야 한다 — \`${out}\` 는 루트 밖이다. `
+      + 'harness 명령은 훅이 적용하는 쓰기 규칙을 피해 가는 길이 아니다.'));
+  }
+  const phase = readState(root).phase;
+  if (!(DESIGN_PHASES as readonly string[]).includes(phase)) return;
+  const profile = loadProfile(root);
+  for (const t of targets) {
+    const rel = path.relative(root, path.resolve(root, t));
+    if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+      throw new Error(L(
+        `Cannot write ${rel} in the design track (${phase}) — it lands in the source paths `
+        + `this project's profile declares (profile ${profile.name}, `
+        + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
+        + 'Generate into the design area, or move to the build track first.',
+        `설계 트랙(${phase})에서는 ${rel} 을(를) 쓸 수 없다 — 이 프로젝트 프로파일이 `
+        + `선언한 소스 경로에 떨어진다 (프로파일 ${profile.name}, `
+        + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
+        + '설계 영역에 내거나, 구축 트랙으로 넘어간 뒤에 실행하라.'));
+    }
+  }
+}
+
 function requirePhase(raw: unknown, cmd: string, lang: Lang): Phase {
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   if (raw === undefined || raw === null || String(raw).trim() === '') {
@@ -992,6 +1043,7 @@ export function run(argv: string[], root: string): number {
             if (!uxNodeId) throw new Error(L('Usage: harness evidence spec <UX-x> [--wave <wave-id>] [--out <path>]', '사용법: harness evidence spec <UX-x> [--wave <wave-id>] [--out <경로>]'));
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, 'wave') });
             const out = flag(args, 'out') ?? specFileNameFor(uxNodeId);
+            assertOutputAllowed(root, out, [out], lang, { en: 'The generated spec', ko: '생성된 스펙은' });
             fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
             fs.writeFileSync(path.resolve(root, out), src);
             console.log(out);
@@ -1024,6 +1076,7 @@ export function run(argv: string[], root: string): number {
             }
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, 'out');
+            if (out) assertOutputAllowed(root, out, [out], lang, { en: 'The generated packet', ko: '생성된 패킷은' });
             if (out) { fs.writeFileSync(path.resolve(root, out), html); console.log(out); }
             else console.log(html);
             return 0;
@@ -1200,49 +1253,8 @@ export function run(argv: string[], root: string): number {
               ['tokens.ts', generateTs(doc, lang)],
               ['tailwind.tokens.js', generateTailwind(doc, lang)],
             ];
-            /**
-             * [SEC-296] **하네스 자신의 명령도 같은 규칙을 지난다.**
-             *
-             * 훅은 `harness …` 를 신뢰해 통과시킨다 — 그래서 `--out` 이 임의 경로를 받으면
-             * 그것이 **훅을 우회하는 쓰기 원시명령**이 된다. 실측: P0(설계 트랙)에서
-             * `echo x > src/tokens.ts` 는 deny 인데 `harness tokens gen --out src` 는 통과하고
-             * **기존 소스를 실제로 덮었다**. 루트 밖(`../escaped`)·절대경로(`/tmp/…`)에도 썼다.
-             *
-             * 판정 규칙을 복제하지 않는다 — 위치는 `isInsideRoot`, 「구현인가」는 훅이 쓰는
-             * `implementationReason` 그대로다. 문구만 이 표면의 것이다.
-             */
-            const phase = readState(root).phase;
-            const outsideOut = !isInsideRoot(root, out);
-            if (outsideOut) {
-              throw new Error(L(
-                `Generated tokens must land inside the project — \`${out}\` is outside it. `
-                + 'A harness command is not a way around the write rules the hook applies.',
-                `생성물은 프로젝트 안에 떨어져야 한다 — \`${out}\` 는 루트 밖이다. `
-                + 'harness 명령은 훅이 적용하는 쓰기 규칙을 피해 가는 길이 아니다.'));
-            }
-            /**
-             * 판정은 **프로파일이 선언한 소스 트리**로 한다 — 확장자로 하면 안 된다.
-             * 토큰 생성물은 설계 시스템의 산출물이고 P4 에서 내는 것이 정상 흐름이라,
-             * 「`.ts` 는 소스다」로 막으면 **제품이 시키는 절차 자체가 막힌다**(직접 겪었다).
-             * 막아야 하는 것은 생성이 아니라 **설계 트랙에서 소스 트리에 착지하는 것**이다.
-             */
-            if ((DESIGN_PHASES as readonly string[]).includes(phase)) {
-              const profile = loadProfile(root);
-              for (const [name] of targets) {
-                const rel = path.relative(root, path.resolve(root, out, name));
-                if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
-                  throw new Error(L(
-                    `Cannot write ${rel} in the design track (${phase}) — it lands in the source paths `
-                    + `this project's profile declares (profile ${profile.name}, `
-                    + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
-                    + 'Generate into the design area, or move to the build track first.',
-                    `설계 트랙(${phase})에서는 ${rel} 을(를) 쓸 수 없다 — 이 프로젝트 프로파일이 `
-                    + `선언한 소스 경로에 떨어진다 (프로파일 ${profile.name}, `
-                    + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
-                    + '설계 영역에 내거나, 구축 트랙으로 넘어간 뒤에 실행하라.'));
-                }
-              }
-            }
+            assertOutputAllowed(root, out, targets.map(([name]) => path.join(out, name)), lang,
+              { en: 'Generated tokens', ko: '생성물은' });
             fs.mkdirSync(path.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
               fs.writeFileSync(path.resolve(root, out, name), content);
@@ -1290,6 +1302,7 @@ export function run(argv: string[], root: string): number {
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, 'out');
+            if (out) assertOutputAllowed(root, out, [out], lang, { en: 'The swapped CSS', ko: '스왑된 CSS 는' });
             if (out) fs.writeFileSync(path.resolve(root, out), generateCss(swapped, lang));
             // [UX-A6] `--out` 이 없으면 **아무것도 기록하지 않는다** — 그런데 「N개 바뀌었다」만
             // 말하면 사람은 파일이 생긴 줄 안다. 드라이런이면 드라이런이라고 말하고, 기록하려면

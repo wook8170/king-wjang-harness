@@ -14393,7 +14393,11 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   const allowed = [rel, realRel].some(
     (r) => r !== "" && (allowList(config).some((pre) => r.startsWith(pre)) || /^[^/]+\.md$/.test(r))
   );
-  if (allowed) return null;
+  if (allowed) {
+    if (rel === realRel) return null;
+    const escaped = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).some((r) => implementationReason(getProfile(), r) !== null);
+    if (!escaped) return null;
+  }
   const outside = isOutsideRoot(rel) && isOutsideRoot(realRel);
   if (outside) {
     if (fromBash) return null;
@@ -15287,6 +15291,27 @@ function readAllStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 var csv = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+function assertOutputAllowed(root, out, targets, lang, what) {
+  const L = (en, ko) => pick({ en, ko }, lang);
+  if (!isInsideRoot(root, out)) {
+    throw new Error(L(
+      `${what.en} must land inside the project \u2014 \`${out}\` is outside it. A harness command is not a way around the write rules the hook applies.`,
+      `${what.ko} \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uB5A8\uC5B4\uC838\uC57C \uD55C\uB2E4 \u2014 \`${out}\` \uB294 \uB8E8\uD2B8 \uBC16\uC774\uB2E4. harness \uBA85\uB839\uC740 \uD6C5\uC774 \uC801\uC6A9\uD558\uB294 \uC4F0\uAE30 \uADDC\uCE59\uC744 \uD53C\uD574 \uAC00\uB294 \uAE38\uC774 \uC544\uB2C8\uB2E4.`
+    ));
+  }
+  const phase = readState(root).phase;
+  if (!DESIGN_PHASES.includes(phase)) return;
+  const profile = loadProfile(root);
+  for (const t of targets) {
+    const rel = path20.relative(root, path20.resolve(root, t));
+    if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+      throw new Error(L(
+        `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
+        `\uC124\uACC4 \uD2B8\uB799(${phase})\uC5D0\uC11C\uB294 ${rel} \uC744(\uB97C) \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). \uC124\uACC4 \uC601\uC5ED\uC5D0 \uB0B4\uAC70\uB098, \uAD6C\uCD95 \uD2B8\uB799\uC73C\uB85C \uB118\uC5B4\uAC04 \uB4A4\uC5D0 \uC2E4\uD589\uD558\uB77C.`
+      ));
+    }
+  }
+}
 function requirePhase(raw, cmd, lang) {
   const L = (en, ko) => pick({ en, ko }, lang);
   if (raw === void 0 || raw === null || String(raw).trim() === "") {
@@ -15736,6 +15761,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             if (!uxNodeId) throw new Error(L("Usage: harness evidence spec <UX-x> [--wave <wave-id>] [--out <path>]", "\uC0AC\uC6A9\uBC95: harness evidence spec <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]"));
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
+            assertOutputAllowed(root, out, [out], lang, { en: "The generated spec", ko: "\uC0DD\uC131\uB41C \uC2A4\uD399\uC740" });
             fs23.mkdirSync(path20.dirname(path20.resolve(root, out)), { recursive: true });
             fs23.writeFileSync(path20.resolve(root, out), src);
             console.log(out);
@@ -15760,6 +15786,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             }
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, "out");
+            if (out) assertOutputAllowed(root, out, [out], lang, { en: "The generated packet", ko: "\uC0DD\uC131\uB41C \uD328\uD0B7\uC740" });
             if (out) {
               fs23.writeFileSync(path20.resolve(root, out), html);
               console.log(out);
@@ -15900,26 +15927,13 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               ["tokens.ts", generateTs(doc, lang)],
               ["tailwind.tokens.js", generateTailwind(doc, lang)]
             ];
-            const phase = readState(root).phase;
-            const outsideOut = !isInsideRoot(root, out);
-            if (outsideOut) {
-              throw new Error(L(
-                `Generated tokens must land inside the project \u2014 \`${out}\` is outside it. A harness command is not a way around the write rules the hook applies.`,
-                `\uC0DD\uC131\uBB3C\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uB5A8\uC5B4\uC838\uC57C \uD55C\uB2E4 \u2014 \`${out}\` \uB294 \uB8E8\uD2B8 \uBC16\uC774\uB2E4. harness \uBA85\uB839\uC740 \uD6C5\uC774 \uC801\uC6A9\uD558\uB294 \uC4F0\uAE30 \uADDC\uCE59\uC744 \uD53C\uD574 \uAC00\uB294 \uAE38\uC774 \uC544\uB2C8\uB2E4.`
-              ));
-            }
-            if (DESIGN_PHASES.includes(phase)) {
-              const profile = loadProfile(root);
-              for (const [name] of targets) {
-                const rel = path20.relative(root, path20.resolve(root, out, name));
-                if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
-                  throw new Error(L(
-                    `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
-                    `\uC124\uACC4 \uD2B8\uB799(${phase})\uC5D0\uC11C\uB294 ${rel} \uC744(\uB97C) \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). \uC124\uACC4 \uC601\uC5ED\uC5D0 \uB0B4\uAC70\uB098, \uAD6C\uCD95 \uD2B8\uB799\uC73C\uB85C \uB118\uC5B4\uAC04 \uB4A4\uC5D0 \uC2E4\uD589\uD558\uB77C.`
-                  ));
-                }
-              }
-            }
+            assertOutputAllowed(
+              root,
+              out,
+              targets.map(([name]) => path20.join(out, name)),
+              lang,
+              { en: "Generated tokens", ko: "\uC0DD\uC131\uBB3C\uC740" }
+            );
             fs23.mkdirSync(path20.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
               fs23.writeFileSync(path20.resolve(root, out, name), content);
@@ -15959,6 +15973,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
+            if (out) assertOutputAllowed(root, out, [out], lang, { en: "The swapped CSS", ko: "\uC2A4\uC651\uB41C CSS \uB294" });
             if (out) fs23.writeFileSync(path20.resolve(root, out), generateCss(swapped, lang));
             console.log(L(
               `Swap is meaningful \u2014 ${changed.length} token(s) changed` + (out ? ` \xB7 CSS written to ${out}` : " \xB7 dry run: nothing was written. Pass `--out <file.css>` to write the swapped CSS."),

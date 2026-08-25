@@ -63,3 +63,10 @@ transition happens on "artifact approved", never on "work finished".
   `harness node upsert --id D-1 --title "<new title>"` (the version is preserved).
 - **No hand-editing the ledger.** The hook blocks direct edits to `.harness/design/ledger.yaml` —
   change it only through `harness node` commands.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `superpowers:brainstorming` — explore the domain decomposition and where the boundaries fall before committing them.

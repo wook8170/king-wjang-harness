@@ -64,3 +64,11 @@ acceptance criteria, and any missing exception paths, then wait for the user's a
   check those waves by hand. Let it slide and a wave implemented against a stale design survives.
 - **UX belongs to P4.** Do not settle screens or components here — `UX-x` are P4 nodes. P3 goes as far
   as "what"; "how it looks" is P4.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `product-management:write-spec` — shape each feature into a spec with verifiable acceptance criteria.
+- `superpowers:writing-plans` — the acceptance criteria you settle here become the plan the P8 waves execute.

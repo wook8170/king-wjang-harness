@@ -100,3 +100,11 @@ is not `measured` the core refuses first — do not try to route around that ref
 - **The hook blocks new feature code.** An improvement you feel like making during ship prep is backlog,
   not a defect. If it really is a design change, backtrack formally:
   `harness backtrack <phase> --reason "<reason>"`.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `verifying-production-readiness` — the readiness rubric the `readiness-auditor` drives for the first verdict.
+- `oh-my-claudecode:security-reviewer` — OWASP-oriented vulnerability pass feeding the defect ledger.

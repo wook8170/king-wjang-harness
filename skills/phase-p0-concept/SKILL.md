@@ -85,3 +85,11 @@ ends here:
   judgement that was wrong, not the phase.
 - **The evidence grade is `claimed`.** `claimed`/`code` is enough for the design track. `measured` is
   for the ship track (P10~P12); there is nothing to measure here.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `superpowers:brainstorming` — settle intent, requirements and the problem space before you write the concept doc.
+- `product-management:product-brainstorming` — pressure-test the product idea and its target users.

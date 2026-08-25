@@ -92,3 +92,11 @@ uncovered stretches of the RTM honestly, and let the user approve it themselves.
 - **During a backtrack, editing `.harness/design/` is open.** Always run `harness backtrack clear` when
   you are done. Walk into P7 with it still open and the build track's protection of the design
   documents stays disabled.
+
+## Companion skills (optional)
+
+These are separate skill packages, not part of this harness. The `king-wjang-harness` driver checks
+for them and offers to install any that are missing.
+
+- `oh-my-claudecode:critic` — a structured, multi-perspective review of the whole design before the final gate.
+- `oh-my-claudecode:code-reviewer` — severity-rated review of any design artifact that carries logic.

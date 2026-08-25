@@ -1,5 +1,128 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (7) — 스킬 확장: P7~P9 네이티브(b) + companion 참조(a) + 드라이버 check→자동설치(c)
+
+**정본.** `main` HEAD(미커밋 — 워킹트리에 7차 봉인 + 스킬 확장) · 미푸시 18(+커밋 예정) ·
+**1377 tests green ×3 동일**(배포본 1360 + 17 skip) · tsc 0 · 빌드 sha256 재현 · 대장 verified 314 · open 0.
+
+### 이번 세션에 한 일 (사용자 지시: a·b 다 + 자동설치)
+- **(b) P7~P9 구축트랙 스킬 3장 신규** — `phase-p7-skeleton`·`phase-p8-implement`·`phase-p9-verify`.
+  기존 페이즈 스킬 형식대로(Overview/Procedure/Gate/Pitfalls/Companion), 실재 CLI 를 몬다
+  (`evidence spec`, `wave create/activate/complete`, `loop brief/attempt`, `design baseline`,
+  `evidence packet`, `report rtm`). 스킬 개수 11 → **14**(페이즈 13 + 드라이버 1).
+- **(a) companion 참조** — 10개 기존 + 3개 신규 페이즈 스킬 각각에 「Companion skills」 절 추가.
+  스킬↔companion 매핑은 superpowers·oh-my-claudecode·product-management·frontend-design·
+  verifying-production-readiness 중 실재하는 것만.
+- **(c) 드라이버 스킬 `check → 자동설치`** — `king-wjang-harness/SKILL.md` 에 「Companion skills」
+  정본 표 + 설치 절차(ListSkills 로 점검 → `claude plugin marketplace add`+`install`). 좌표 확실한
+  것(superpowers=obra/superpowers)만 핀, 불확실한 건 「추측 설치 금지·사용자에게 보고」.
+- **(d) 정직 정정(필수)** — 자동설치 = 네트워크 액션이라 README 4개 언어에:
+  ①「No skills for P7–P9」한계 **삭제**(이제 거짓) ②✅스킬 줄을 「전 13페이즈」로 ③§39 콜아웃에
+  companion 자동설치가 **네트워크 액션·권한층 통과·마켓 한정·비필수**임을 고지.
+  ⚠️ **canvas 「no network pull」 주장은 그대로 유지**(그건 캔버스 fetch 얘기라 여전히 참).
+
+### ★ 핵심 제약 (다음 세션 필수)
+- **`skills/`·`agents/` 는 영어 전용** — `i18n-en-default.test.ts` 가 한글(저자명 `장욱` 제외) 차단.
+  스킬 편집은 반드시 영어. README 4종은 각 언어.
+- **대장 인용은 README/소스 줄을 가리킨다** — README 줄 편집하면 밀린다. `reanchor-citations.py`
+  실행하되 **「후보 0개」로 못 잡는 것은 손으로**(이번에 PROD-A→121, PROD-180→120 수동). 그 뒤
+  `sync-ledger-summary.py` → `ledger-summary-sync.test.ts` 초록 확인.
+- **자동설치 좌표**: superpowers 만 확실(`obra/superpowers`). oh-my-claudecode·기타는 좌표 미핀 —
+  드라이버 스킬이 「확인 후 설치, 불확실하면 보고」로 처리. 정확 좌표는 추후 확정 대상.
+
+### 7차 봉인분(직전, 그대로 유효)
+- [SEC-297] BLOCKER 심링크로 훅 우회(허용목록이 실경로 판정보다 앞섬) · [SEC-298] BLOCKER 형제
+  `--out` 봉인 누락. 둘 다 `bypass-corpus.test.ts` 등재 · RED 확인. 상세는 아래 (6) 섹션.
+
+### 다음 즉시 할 일
+1. **커밋** — 7차 봉인 + 스킬 확장(사용자 승인 후). 미푸시 18+.
+2. **자동설치 좌표 확정** — oh-my-claudecode 등 마켓플레이스 좌표를 실측/문의로 핀.
+3. 감정확인 8차(MCP 인자 배열·중첩, 프로파일 조작, 훅 페이로드 극단값) · 축 1·5·6·7 재감정.
+
+### 즉시 재개 레시피
+```bash
+cd /Volumes/WorkSpace/0200_Dev/king-wjang-harness
+npx vitest run </dev/null 2>&1 | grep -E 'Test Files|Tests  '   # 1377 / 57
+npx tsc --noEmit && echo "tsc 0"
+python3 docs/release-readiness/2026-08-21/round3i/sync-ledger-summary.py  # verified 314 · open 0
+ls skills | grep -c phase   # 13
+```
+
+### 미해결 · 확인 대기
+- **미커밋 + 미푸시 18** — 커밋/푸시 사용자 결정.
+- **자동설치 좌표 미확정**(superpowers 외) — 드라이버가 「불확실 시 보고」로 안전 처리 중.
+- 축 1·5·6·7 은 3-N 기준 → 판정 「출하 불가」 유지 · 구현자=감정자(OPS-74).
+
+---
+
+## 2026-08-26 (6) — 3-R 감정확인 **7차**: 심링크가 훅 자체를 뚫었다 + 형제 --out · 축 2·3·4 = 4.8 유지
+
+**정본.** `main` HEAD(아직 커밋 전 — 워킹트리에 봉인분) · origin 대비 미푸시 18(+이번 봉인 커밋) ·
+**1377 tests green ×3 동일**(배포본 실측 1360 green + 17 skip) · skip 0(리포) · tsc 0 ·
+빌드 바이트 재현 OK(sha256 동일) · 대장 verified **314** · open 0 · deferred 5.
+
+### ★ 이번 세션 핵심 — 4.8 을 매긴 «뒤에» BLOCKER 둘 (7차)
+
+각도: **① 훅 자체를 심링크로 우회 ② 6차 봉인의 형제 표면.** 둘 다 실측·봉인·상시화·RED.
+
+- **[SEC-297] BLOCKER — 허용목록이 실경로 판정보다 «앞서» 반환했다.** 설계 트랙 판정은 두 공간
+  (리터럴 `rel`·실경로 `realRel`)을 함께 보는데(SEC-263), 그 앞의 allow-list 가 **한쪽만 걸려도**
+  통과시키고 곧장 return 했다. 실측(P0): `ln -s .. docs/up` 통과 → `Write docs/up/src/app.ts`
+  통과 → **소스를 실제로 덮었다**. 대조: `rootlink -> src`(접두 허용목록 밖)는 deny, 직접
+  `Write src/app.ts`도 deny. 처방(`hook.ts:1371`): 통과는 **착지 지점까지 안전할 때만** —
+  허용목록에 걸려도 두 공간 중 하나가 구현 소스면 아래 구현 판정으로 떨어뜨린다. 비용은
+  앨리어스가 «실제로» 있을 때만(두 공간 동일이면 프로파일 안 읽음 → COST-260 부류 회피).
+  차단 6/6 · 과차단 0/5 · RED.
+- **[SEC-298] BLOCKER — 6차 봉인이 문 하나만 닫았다.** SEC-296 이 `tokens gen --out` 만 닫고
+  형제 `evidence spec --out`·`evidence packet --out`·`tokens swap --out` 은 그대로였다. 실측(P0):
+  `evidence spec … --out /tmp/…` 이 루트 밖에 **디렉토리까지 만들며 파일 착지**. 처방:
+  판정을 한 벌 `assertOutputAllowed`(`cli.ts:315`)로 두고 네 표면이 쓴다(위치 `isInsideRoot`,
+  설계 트랙은 프로파일 소스 트리, 문구만 표면별). 차단 8/8 · 착지 0건 · 과차단 0/5 · RED(한 곳만 되돌려도 빨강).
+
+**두 각도 다 `bypass-corpus.test.ts` 에 등재** — 「심링크」 절 신설 + 「하네스 명령 표면」 절 확장.
+헬퍼 `decideWrite`(Write 표면) 추가. sibling 테스트는 자기정리(앞 실행 흔적 rm)로 self-contained.
+
+### ★★ 이번에 배운 것 (다음 라운드가 반드시 알 것)
+- **훅 판정의 «순서»가 곧 구멍이다.** allow-list 가 구현 판정보다 앞서면, 두 공간 합집합
+  (SEC-263)을 아무리 잘 만들어도 그 앞에서 return 하면 안 닿는다. 「검사가 있다」 ≠ 「검사에 닿는다」.
+- **봉인은 «표면 전수»로 한다.** `--out` 을 하나 닫으면 형제 `--out` 을 전수로 훑어야 한다.
+  경로를 받는 플래그: `--out`(4곳)·`--path`·`--paths`·`--evidence`·`--png`·`--with`.
+- 배포본 테스트 수는 **산술로 빼지 말고 실측**: 리포를 tar 로 복제(docs/.git 제외)해 vitest.
+  1377 리포 = 1360 배포본 + 17 skip. README 4개 언어가 그 숫자를 광고하므로 doc-claims 가 지킨다.
+
+### 스킬 — 하네스는 «자체 저작» 스킬 11 + 에이전트 5 동봉
+`skills/` 11개(king-wjang-harness 드라이버 + phase-p0~p6 설계트랙 7 + p10~p12 출하트랙 3),
+`agents/` 5개. **전부 장욱 저작**(2026-08-20~), 외부 플러그인(superpowers/omc) 아님.
+**P7~P9(구축 트랙) 스킬 없음** — 알려진 한계로 상품성 감정서 등재(소스 자유라 진행 규율 없음).
+README §(줄 39)에 「Complementary, not competitive — the skill proposes, the hook disposes」 스탠스 명시.
+
+### 다음 즉시 할 일
+1. **이번 봉인 커밋** — 사용자 승인 후. 그다음 감정확인 **8차**(아직 안 친 각도:
+   MCP 도구 인자 배열·중첩, 프로파일 `source_globs` 파일 조작 무력화, 훅 페이로드 극단값).
+2. **기성 스킬 동봉 여부** — 사용자 질문. 아래 §미해결 참조(권고: 동봉 말고 참조/네이티브).
+3. 축 1·5·6·7 재감정(3-N 기준이라 낡음) · 독립 적대 감정(구현자=감정자, OPS-74).
+
+### 즉시 재개 레시피
+```bash
+cd /Volumes/WorkSpace/0200_Dev/king-wjang-harness
+npx vitest run </dev/null 2>&1 | grep -E 'Test Files|Tests  '   # 1377 / 57
+npx tsc --noEmit && echo "tsc 0"
+python3 docs/release-readiness/2026-08-21/round3i/sync-ledger-summary.py  # verified 314 · open 0
+```
+7차 스윕 함정: ① 샌드박스는 리포 `bin/harness` **절대경로**(PATH 는 구 플러그인). ② allow 나오면
+**실제 실행해 파일이 바뀌는지** 본다. ③ 차단·허용 목록을 **짝으로** 낸다. ④ 새 표기는
+`bypass-corpus.test.ts` 등재 + 하한↑. ⑤ 봉인마다 처방 되돌려 **RED 확인**. ⑥ RED 확인이 루트 밖에
+남긴 흔적(`/tmp/kwh-corpus-*`)을 테스트가 「이번 결과」로 오독하지 않게 self-clean.
+
+### 미해결 · 확인 대기
+- **이번 봉인 미커밋 · 기존 미푸시 18** — 커밋/푸시는 사용자 결정.
+- **기성 스킬(omc·superpowers) 각 단계 동봉 제안** — 권고: **동봉(vendor)하지 말 것.**
+  근거 ① 제품 명제가 「process inviolable」인데 3rd-party 스킬은 공급망 표면(이 리포 보안 posture 상충).
+  ② 라이선스(별도 저작) ③ 「the skill proposes, the hook disposes」 경계가 흐려짐 ④ 사용자는 이미
+  세션 레벨에 omc+superpowers 보유(중복). **대안**: (a) phase SKILL.md 에 companion 으로 «참조»만,
+  (b) 빈 구간(P7~P9·test/verify)은 하네스 CLI 를 호출하는 **얇은 네이티브 스킬**로 자작. 사용자 판단 대기.
+- 축 1·5·6·7 은 3-N 기준(효용 4.7·가성비 4.3·사용성 4.5·상품성 4.6) → 판정 「출하 불가」 유지.
+
 ## 2026-08-25 (5) — 3-R 감정확인 **6차**: 하네스 CLI 가 우회로였다 · 축 2·3·4 = 4.8 유지
 
 **정본.** `main` HEAD(이 핸드오프 커밋) · **제품코드는 `3b34498` 이후 무변경** ·
