@@ -10,6 +10,23 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Nothing yet.
 
+## [0.1.2] — 2026-08-26
+
+Ultragoal ship-readiness loop, story G001 (effectiveness axis). Sweep 10 —
+a fresh independent adversarial pass — found a critical bypass the previous
+nine rounds missed.
+
+### Fixed — a backslash or mid-token quote hid the write target ([SEC-300])
+
+`echo x >> .harness/events\.jsonl` landed on the real journal, but the hook
+parsed the target only up to the backslash — `.harness/events` — which slipped
+past the exact-name check. Mid-token quotes did the same. This defeated core,
+policy, and source protection in every phase, end-to-end (a forged
+`gate-approved` event opened `npm publish` without human approval). `tokenize`
+is now the single authority that resolves shell quoting and escaping, and the
+redirect scanner runs its target through it, so the hook judges the path the
+shell will actually write to. Pinned in `bypass-corpus.test.ts`.
+
 ## [0.1.1] — 2026-08-26
 
 Round 3-R appraisal-confirmation, sweeps 8 through 9-2. The MCP-write target

@@ -7403,14 +7403,34 @@ function tokenize(segment) {
   const out = [];
   let cur = "";
   let quote = null;
-  for (const ch of segment) {
-    if (quote) {
-      if (ch === quote) quote = null;
+  const chars = [...segment];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
       else cur += ch;
+      continue;
+    }
+    if (quote === '"') {
+      if (ch === '"') {
+        quote = null;
+        continue;
+      }
+      if (ch === "\\" && i + 1 < chars.length && '"\\$`'.includes(chars[i + 1])) {
+        cur += chars[i + 1];
+        i++;
+        continue;
+      }
+      cur += ch;
       continue;
     }
     if (ch === '"' || ch === "'") {
       quote = ch;
+      continue;
+    }
+    if (ch === "\\" && i + 1 < chars.length) {
+      cur += chars[i + 1];
+      i++;
       continue;
     }
     if (/\s/.test(ch)) {
@@ -7705,11 +7725,12 @@ function opaqueExecOf(cmd) {
 }
 function redirectTargets(segment) {
   const out = [];
-  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
+  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|((?:"[^"]*"|'[^']*'|\\.|[^\s;|&<>()])+))/g;
   let m;
   while ((m = re.exec(segment)) !== null) {
     const amp = m[1] === "&";
-    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? "";
+    const escaped = m[2] ?? m[3];
+    const t = escaped ?? (m[4] !== void 0 ? tokenize(m[4])[0] ?? m[4] : "");
     if (amp && /^\d+$/.test(t)) continue;
     if (t && !t.startsWith("&")) out.push({ path: t, index: m.index });
   }

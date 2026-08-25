@@ -40,17 +40,33 @@ const MUTATING_TOKENS = [
 ];
 
 /** 따옴표를 존중하는 토크나이저. 이스케이프는 다루지 않는다(모델이 쓰는 표현 범위). */
+/**
+ * 세그먼트를 셸처럼 토큰으로 나누며 **인용/이스케이프를 해소**한다 — 훅이 「셸이 실제로
+ * 착지시킬 경로」를 판정하도록. 따옴표는 벗기고, 역슬래시는 다음 글자를 리터럴로 만든다.
+ *
+ * [SEC-300] **역슬래시·중간 따옴표가 대상 경로를 잘라 코어·정책 보호를 통째로 비껴갔다.**
+ * `echo x > .harness/events\.jsonl` 은 셸에서 `.harness/events.jsonl` 로 착지하는데, 예전
+ * tokenize 는 `\` 를 리터럴로 둬 정확 이름 대조가 빗나갔고, redirectTargets 정규식은 아예
+ * `.harness/events` 에서 **잘렸다**. 셸이 지우는 것을 훅도 지운다 — 이 정본 하나가 리다이렉트·
+ * 명령 인자 두 표면을 다 덮는다(redirectTargets 도 이 함수로 대상을 해소한다).
+ */
 function tokenize(segment: string): string[] {
   const out: string[] = [];
   let cur = '';
   let quote: '"' | "'" | null = null;
-  for (const ch of segment) {
-    if (quote) {
-      if (ch === quote) quote = null;
-      else cur += ch;
-      continue;
+  const chars = [...segment];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (quote === "'") { if (ch === "'") quote = null; else cur += ch; continue; }
+    if (quote === '"') {
+      if (ch === '"') { quote = null; continue; }
+      // 큰따옴표 안 역슬래시는 `" \ $ ` `` 앞에서만 이스케이프다.
+      if (ch === '\\' && i + 1 < chars.length && '"\\$`'.includes(chars[i + 1])) { cur += chars[i + 1]; i++; continue; }
+      cur += ch; continue;
     }
     if (ch === '"' || ch === "'") { quote = ch; continue; }
+    // 인용 밖 역슬래시 — 다음 글자를 리터럴로(공백 이스케이프면 토큰을 안 나눈다).
+    if (ch === '\\' && i + 1 < chars.length) { cur += chars[i + 1]; i++; continue; }
     if (/\s/.test(ch)) { if (cur) { out.push(cur); cur = ''; } continue; }
     cur += ch;
   }
@@ -527,11 +543,19 @@ function redirectTargets(segment: string): Array<{ path: string; index: number }
    * 맨 대안에서 역슬래시도 뺀다 — 남은 `\\` 는 경로가 아니라 **추출 실패의 흔적**이고,
    * 그것을 대상으로 올리면 [SEC-207] 의 「못 봤다를 없다로 읽지 않는다」 안전망이 안 뜬다.
    */
-  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
+  /**
+   * [SEC-300] 대상을 **한 토큰으로 통째로** 잡은 뒤 `tokenize` 로 셸 인용/이스케이프를 해소한다.
+   * 예전 맨 대안 `[^\s;|&<>()"'\\]+` 은 `"' \` 를 제외해 `.harness/events\.jsonl`·`.harn"ess"/…` 를
+   * **잘라** 코어·정책 보호가 통째로 새었다(전 페이즈·degraded 무관, 저널위조→배포게이트까지 실증).
+   * 이제 따옴표 span·역슬래시 이스케이프·맨몸 글자의 **런**을 잡아, 셸이 실제로 착지시킬 경로를 판정한다.
+   * [SEC-282] `\"…\"`·`\'…\'` (escape 로 감싼 형태)는 안쪽 경로가 대상이라 그대로 쓴다.
+   */
+  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|((?:"[^"]*"|'[^']*'|\\.|[^\s;|&<>()])+))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(segment)) !== null) {
     const amp = m[1] === '&';
-    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? '';
+    const escaped = m[2] ?? m[3];                       // [SEC-282] escape 로 감싼 안쪽 경로
+    const t = escaped ?? (m[4] !== undefined ? (tokenize(m[4])[0] ?? m[4]) : '');
     if (amp && /^\d+$/.test(t)) continue; // fd 복제(`2>&1`) — 파일이 아니다
     if (t && !t.startsWith('&')) out.push({ path: t, index: m.index });
   }

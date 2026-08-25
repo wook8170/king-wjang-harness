@@ -97,6 +97,14 @@ const notations = (t: string): string[] => {
     `if true; then cd ${dir}; else cd docs; fi; echo x > ${base}`,
     // [EFF-289] 무해 내장을 앞에 붙여도 쓰기는 쓰기다
     `test -f q && echo x > ${t}`, `true; echo x > ${t}`, `: ; echo x > ${t}`,
+    // [SEC-300] 역슬래시·중간 따옴표로 대상 경로를 «잘라» 코어·정책 보호를 비껴가던 부류 —
+    // 셸은 같은 파일에 착지한다. 추출 전에 tokenize 로 인용/이스케이프를 해소해 잡는다.
+    `echo x > ${t.replace(/\.([A-Za-z0-9]+)$/, '\\.$1')}`,          // 확장자 앞 역슬래시
+    `echo x | tee ${t.replace(/\.([A-Za-z0-9]+)$/, '\\.$1')}`,      // tee 역슬래시(명령 인자)
+    `echo x > ${dir}/${base.charAt(0)}"${base.slice(1)}"`,          // 중간 큰따옴표
+    `echo x > ${dir}/${base.charAt(0)}'${base.slice(1)}'`,          // 중간 작은따옴표
+    `echo x > ""${t}`,                                              // 빈 따옴표 접두
+    `printf x | dd of=${t.replace(/\.([A-Za-z0-9]+)$/, '\\.$1')}`,  // dd 역슬래시
   ];
 };
 
