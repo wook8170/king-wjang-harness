@@ -1,6 +1,6 @@
 {
   "name": "king-wjang-harness",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. The event journal is the source of truth for phase, wave, and design-ledger state; PreToolUse/Stop hooks block source writes in the design track and unsettled session ends. Completely silent in projects without a .harness/ directory.",
   "author": {
     "name": "장욱"
