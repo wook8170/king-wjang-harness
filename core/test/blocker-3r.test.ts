@@ -16,6 +16,8 @@ import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import { scanBashWrites } from '../src/bashwrite';
+import { CRITICAL_REASONS } from '../src/loop';
+import { findGroup, renderGroupHelp } from '../src/help';
 import type { Phase } from '../src/types';
 
 const setup = (phase: Phase = 'P0'): string => {
@@ -339,5 +341,19 @@ describe('[SEC-291] 디렉토리를 몰라도 이름은 보인다 — 그리고 
                        'cd $D && sed s/a/b/ app.ts', 'cd $D && echo x > note.md']) {
       expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
     }
+  });
+});
+
+describe('[ENG-292] 소환 사유 목록이 한 벌이다', () => {
+  it('도움말과 CLI 검증기가 정본에서 파생된다 — 목록이 늘면 셋이 함께 는다', () => {
+    const group = findGroup('loop');
+    expect(group, '`loop` 명령군이 도움말에 없다').toBeDefined();
+    const help = renderGroupHelp(group as NonNullable<typeof group>, 'en');
+    for (const r of CRITICAL_REASONS) {
+      expect(help, `도움말이 ${r} 를 모른다`).toContain(r);
+    }
+    // 정본에 없는 값은 도움말에도 없다 — 사본이 남아 있으면 여기서 드러난다.
+    const listed = /--reason <([^>]*)>/.exec(help)?.[1].split('|') ?? [];
+    expect(listed.sort(), '도움말 목록이 정본과 다르다').toEqual([...CRITICAL_REASONS].sort());
   });
 });

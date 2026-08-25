@@ -48,7 +48,7 @@ import {
 } from './evidence';
 import {
   nextAction, recordAttempt, attemptCount, checkThreshold, summonMessage,
-  pendingCritical, raiseCritical, clearCritical, buildExecutorBrief, buildVerifierBrief,
+  pendingCritical, raiseCritical, clearCritical, buildExecutorBrief, buildVerifierBrief, CRITICAL_REASONS, isCriticalReason,
 } from './loop';
 import type { CriticalReason } from './loop';
 import { tierFor, shouldInject, guidanceFor, recordTier, lastTier } from './usage';
@@ -951,13 +951,15 @@ export function run(argv: string[], root: string): number {
             if (rest[0] === 'clear') { clearCritical(root, rest[1]); console.log(L('Escalation cleared', '소환 해제')); return 0; }
             if (rest[0] === 'raise') {
               const reason = flag(args, 'reason');
-              const valid = ['repeated-failure', 'backtrack-needed', 'external-blocker', 'acceptance-unclear'];
-              if (!reason || !valid.includes(reason)) {
-                throw new Error(L(`Usage: harness loop critical raise --reason <${valid.join('|')}> [--wave <id>] [--detail <text>]`, `사용법: harness loop critical raise --reason <${valid.join('|')}> [--wave <id>] [--detail <내용>]`));
+              // [ENG-292] 정본은 `loop.ts` 의 `CRITICAL_REASONS` 다 — 목록도 **판정도** 거기서 온다.
+              // 손으로 다시 적으면 사유가 하나 늘 때 검증기·도움말·정본이 서로 다른 말을 한다.
+              if (!isCriticalReason(reason)) {
+                const list = CRITICAL_REASONS.join('|');
+                throw new Error(L(`Usage: harness loop critical raise --reason <${list}> [--wave <id>] [--detail <text>]`, `사용법: harness loop critical raise --reason <${list}> [--wave <id>] [--detail <내용>]`));
               }
               raiseCritical(root, {
                 waveId: flag(args, 'wave'),
-                reason: reason as CriticalReason,
+                reason,
                 detail: flag(args, 'detail') ?? '',
               });
               // [UTIL-A4] **exit 2 는 계약이다** — 「사람을 소환했다」를 종료코드로 알려

@@ -116,7 +116,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1361 passing** (56 files) — 17 are repo-only checks that skip in the published package (1344 there) |
+| Test suite | **1362 passing** (56 files) — 17 are repo-only checks that skip in the published package (1345 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -235,7 +235,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 
 ## Status & roadmap
 
-**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1361 tests). The
+**v0.1.0 — core engine, gates, and both later tracks are implemented and measured** (1362 tests). The
 release-readiness audit is still **not-ready**: see "Known limits" below for what is open.
 
 - ✅ Event journal, state replay, doctor recovery
@@ -250,7 +250,7 @@ release-readiness audit is still **not-ready**: see "Known limits" below for wha
 ### Known limits (measured, still open)
 
 - **Arbitrary MCP server schemas cannot all be known.** Tools whose names read as writes (`write`, `edit`, `put`, …) are judged, and every path-shaped argument is checked — but a server that names neither its tool nor its argument that way is outside what the hook can see.
-- **Content that arrives from outside can still carry an alias into a directory that already exists.** A write that lands on a freshly-created path after an extract, clone or package install is refused; one that lands inside an existing directory is not, because that is what `npm install` legitimately does. Closing this completely belongs to the filesystem layer, not the hook.
+- **Content that arrives from outside can carry an alias the command text never names.** A symlink inside an archive is in neither the command nor the filesystem at the moment of judgment, so the hook cannot see it. An earlier rule that refused writes onto freshly-created paths after an extract, clone or install was **removed**: one extra word defeated it (`mkdir h && tar -xf a.tar -C h && echo x > h/f`), and it blocked ordinary single commands (`git clone <url> y && echo x > y/f`). Closing this belongs to the filesystem layer, not the hook.
 - **Hard links that already exist are only checked against the core files.** Creating a new name for a protected file is refused, and an existing alias of `config.yaml`/`state.json`/`events.jsonl` is caught by inode. An alias of a *source* file made before the harness was installed is not — matching every source by inode would cost a directory walk on every write, and a slow verdict is a hook that times out, which is a hook that allows.
 
 - The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed separately.

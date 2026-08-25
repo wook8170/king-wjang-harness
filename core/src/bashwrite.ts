@@ -179,8 +179,13 @@ function envChdirOf(tokens: string[]): string | undefined {
 }
 
 /** 세그먼트를 **위치와 함께** 끊는다 — 리다이렉트는 원문 위치로 자기 cwd 를 찾아야 한다. */
-function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cwd: Cwd }> {
-  const out: Array<{ text: string; start: number; cwd: Cwd }> = [];
+/**
+ * [COST-293] **토큰은 한 번만 만든다.** 세그먼트마다 `tokenize` 를 다시 부르면 깊은 cwd 에서
+ * 그 비용이 세그먼트 수에 곱해져 [COST-260] 의 2차가 되살아난다 — 실측 11.7초(가드가 물었다).
+ * 여기서 만든 토큰을 호출측이 그대로 쓴다.
+ */
+function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cwd: Cwd; tokens: string[] }> {
+  const out: Array<{ text: string; start: number; cwd: Cwd; tokens: string[] }> = [];
   /**
    * [ENG-226] **따옴표 안의 `&&`·`;` 는 분해 기준이 아니다.**
    *
@@ -198,11 +203,11 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
     const two = cmd.slice(i, i + 2);
     const len = two === '||' || two === '&&' ? 2 : ';|&\n()'.includes(ch) ? 1 : 0;
     if (len === 0) continue;
-    out.push({ text: cmd.slice(last, i), start: last, cwd: '' });
+    out.push({ text: cmd.slice(last, i), start: last, cwd: '', tokens: [] });
     last = i + len;
     i += len - 1;
   }
-  out.push({ text: cmd.slice(last), start: last, cwd: '' });
+  out.push({ text: cmd.slice(last), start: last, cwd: '', tokens: [] });
 
   /**
    * [SEC-288] **분기가 끝나면 cwd 는 「갈렸을 수 있다」.**
@@ -216,6 +221,7 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
   let sawCd = false;
   for (const seg of out) {
     const tokens = tokenize(seg.text);
+    seg.tokens = tokens;                                    // [COST-293] 한 번만 만든다
     if (sawCd && tokens.some(t => BRANCH_END.has(t))) cwd = null;
     seg.cwd = cwd;
     if (tokens.length === 0) continue;
@@ -959,7 +965,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
    */
   const substMarks = new Set<string>();
   for (const seg of segs) {
-    const t = tokenize(seg.text);
+    const t = seg.tokens;                                   // [COST-293] 이미 만들어 둔 것
     if (t.length === 0) continue;
     const c = commandName(t);
     if (c.name === 'xargs') {
@@ -984,7 +990,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   for (const seg of segs) {
     const segment = seg.text;
     const firstNew = targets.length;
-    const tokens = tokenize(segment);
+    const tokens = seg.tokens;                              // [COST-293] 이미 만들어 둔 것
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
     // [SEC-268] 별칭을 만드는 세그먼트인가 — `ln`·`link`·`cp -l` 계열.
@@ -1586,7 +1592,7 @@ export function pathLikeMentions(cmd: string): string[] {
     // 받아들이는 이유는 **`cd` 로 디렉토리가 정해진 세그먼트에서만** 그 낱말이 진짜 경로임을
     // 알 수 있기 때문이다(루트에서는 커밋 메시지·로그 문구가 경로로 잡혀 오탐이 폭증한다).
     if (seg.cwd !== null && seg.cwd !== '') {
-      for (const t of tokenize(seg.text)) {
+      for (const t of seg.tokens) {          // [COST-293] 이미 만들어 둔 것
         if (t.includes('/') || isFlag(t) || !looksLikePath(t)) continue;
         if (SUBSTITUTION_SCRIPT.test(t)) continue;
         const resolved = resolveIn(seg.cwd, t);

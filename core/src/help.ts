@@ -9,6 +9,7 @@
  * 그래서 **목록을 한 곳에 둔다.** 이 표가 유일한 정의이고 `--help`·군별 도움말·
  * 「알 수 없는 하위 명령」 안내가 전부 여기서 나온다 — 새 명령을 추가하면 세 곳이 함께 갱신된다.
  */
+import { CRITICAL_REASONS } from './loop';
 import { pick, type Lang, type Msg } from './i18n';
 import { TOKEN_DOC_SKELETON, TOKEN_DOC_SHAPE_HINT } from './tokens';
 import { DEFECT_STATUSES } from './ship';
@@ -167,7 +168,7 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'critical raise',
         // [UTIL-A5·UX-102] `--reason` 은 enum 이다. `<r>` 로 적어 두면 안내대로 친 사람이
         // usage 에러를 만난다 — 도움말이 실제 계약을 그대로 보여야 한다.
-        args: '--reason <repeated-failure|backtrack-needed|external-blocker|acceptance-unclear> [--wave <id>] [--detail <text>]', summary: M('Escalate to the human with a reason.', '사유와 함께 사람을 소환한다.') },
+        args: `--reason <${CRITICAL_REASONS.join('|')}> [--wave <id>] [--detail <text>]`, summary: M('Escalate to the human with a reason.', '사유와 함께 사람을 소환한다.') },
       // [UX-A1] 해제 명령이 도움말에 없어서, 소환된 사람이 **빠져나올 길을 찾을 수 없었다.**
       // 안내 문구는 실재하지 않는 `loop clear` 를 가리키고 있었다 — 막다른 길 두 겹.
       { name: 'critical clear', summary: M('Clear the escalation so the wave loop can run again.', '소환을 해제해 웨이브 루프를 다시 돌린다.') },
