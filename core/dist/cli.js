@@ -3991,10 +3991,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4008,7 +4008,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep6) {
+          if (!keyProps.anchor && !keyProps.tag && !sep7) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4032,7 +4032,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep7 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4048,7 +4048,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep7, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4139,7 +4139,7 @@ var require_resolve_end = __commonJS({
       let comment2 = "";
       if (end) {
         let hasSpace = false;
-        let sep6 = "";
+        let sep7 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4153,13 +4153,13 @@ var require_resolve_end = __commonJS({
               if (!comment2)
                 comment2 = cb;
               else
-                comment2 += sep6 + cb;
-              sep6 = "";
+                comment2 += sep7 + cb;
+              sep7 = "";
               break;
             }
             case "newline":
               if (comment2)
-                sep6 += source;
+                sep7 += source;
               hasSpace = true;
               break;
             default:
@@ -4202,18 +4202,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep6 && !value) {
+          if (!props.anchor && !props.tag && !sep7 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4267,8 +4267,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep6 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
+        if (!isMap && !sep7 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep7, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4280,7 +4280,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep7 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4291,8 +4291,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep6)
-                for (const st of sep6) {
+              if (sep7)
+                for (const st of sep7) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep7, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4489,7 +4489,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep6 = "";
+      let sep7 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4506,24 +4506,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep6 === " ")
-            sep6 = "\n";
-          else if (!prevMoreIndented && sep6 === "\n")
-            sep6 = "\n\n";
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          if (sep7 === " ")
+            sep7 = "\n";
+          else if (!prevMoreIndented && sep7 === "\n")
+            sep7 = "\n\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep6 === "\n")
+          if (sep7 === "\n")
             value += "\n";
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          value += sep6 + content;
-          sep6 = " ";
+          value += sep7 + content;
+          sep7 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4705,25 +4705,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep6 = " ";
+      let sep7 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep6 === "\n")
-            res += sep6;
+          if (sep7 === "\n")
+            res += sep7;
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          res += sep6 + match[1];
-          sep6 = " ";
+          res += sep7 + match[1];
+          sep7 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep6 + (match?.[1] ?? "");
+      return res + sep7 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5533,14 +5533,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep6, value }) {
+    function stringifyItem({ start, key, sep: sep7, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep6)
-        for (const st of sep6)
+      if (sep7)
+        for (const st of sep7)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6707,18 +6707,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep6;
+          let sep7;
           if (scalar.end) {
-            sep6 = scalar.end;
-            sep6.push(this.sourceToken);
+            sep7 = scalar.end;
+            sep7.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep6 = [this.sourceToken];
+            sep7 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep6 }]
+            items: [{ start, key: scalar, sep: sep7 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6871,15 +6871,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep6 = it.sep;
-                  sep6.push(this.sourceToken);
+                  const sep7 = it.sep;
+                  sep7.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep6 }]
+                    items: [{ start: start2, key, sep: sep7 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs24 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs23, sep: [] });
+                map.items.push({ start, key: fs24, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs23);
+                this.stack.push(fs24);
               } else {
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs24, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs23 = this.flowScalar(this.type);
+              const fs24 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs23, sep: [] });
+                fc.items.push({ start: [], key: fs24, sep: [] });
               else if (it.sep)
-                this.stack.push(fs23);
+                this.stack.push(fs24);
               else
-                Object.assign(it, { key: fs23, sep: [] });
+                Object.assign(it, { key: fs24, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7073,13 +7073,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep6 = fc.end.splice(1, fc.end.length);
-            sep6.push(this.sourceToken);
+            const sep7 = fc.end.splice(1, fc.end.length);
+            sep7.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep6 }]
+              items: [{ start, key: fc, sep: sep7 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7367,7 +7367,7 @@ __export(cli_exports, {
   unknownFlags: () => unknownFlags
 });
 module.exports = __toCommonJS(cli_exports);
-var fs22 = __toESM(require("fs"));
+var fs23 = __toESM(require("fs"));
 
 // core/src/bashwrite.ts
 var SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
@@ -8439,10 +8439,11 @@ var tty = __toESM(require("tty"));
 var path20 = __toESM(require("path"));
 
 // core/src/state.ts
-var fs2 = __toESM(require("fs"));
+var fs3 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 
 // core/src/paths.ts
+var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var harnessDir = (root) => path.join(root, ".harness");
 var statePath = (root) => path.join(harnessDir(root), "state.json");
@@ -8456,9 +8457,27 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+function realOrNearest(p) {
+  let cur = path.resolve(p);
+  const rest = [];
+  for (; ; ) {
+    try {
+      return path.join(fs.realpathSync(cur), ...rest.reverse());
+    } catch {
+    }
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(p);
+    rest.push(path.basename(cur));
+    cur = parent;
+  }
+}
+function isInsideRoot(root, p) {
+  const rel = path.relative(realOrNearest(root), realOrNearest(path.resolve(root, p)));
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
 
 // core/src/config.ts
-var fs = __toESM(require("fs"));
+var fs2 = __toESM(require("fs"));
 var YAML = __toESM(require_dist());
 
 // core/src/i18n.ts
@@ -8518,7 +8537,7 @@ var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
 var CONFIG_CACHE = /* @__PURE__ */ new Map();
 function configCacheKey(p) {
   try {
-    const st = fs.statSync(p, { bigint: true });
+    const st = fs2.statSync(p, { bigint: true });
     return `${st.mtimeNs}:${st.size}`;
   } catch {
     return "absent";
@@ -8535,9 +8554,9 @@ function loadConfig(root) {
 }
 function parseConfig(p) {
   let raw = {};
-  if (fs.existsSync(p)) {
+  if (fs2.existsSync(p)) {
     try {
-      raw = YAML.parse(fs.readFileSync(p, "utf8")) ?? {};
+      raw = YAML.parse(fs2.readFileSync(p, "utf8")) ?? {};
     } catch {
       raw = {};
     }
@@ -8556,9 +8575,9 @@ function parseConfig(p) {
 }
 function inspectConfig(root) {
   const p = configPath(root);
-  if (!fs.existsSync(p)) return { problems: [] };
+  if (!fs2.existsSync(p)) return { problems: [] };
   try {
-    const parsed = YAML.parse(fs.readFileSync(p, "utf8"));
+    const parsed = YAML.parse(fs2.readFileSync(p, "utf8"));
     if (parsed !== null && parsed !== void 0 && typeof parsed !== "object") {
       return { problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`] };
     }
@@ -8597,14 +8616,14 @@ function defaultState() {
   };
 }
 function isInitialized(root) {
-  return fs2.existsSync(statePath(root));
+  return fs3.existsSync(statePath(root));
 }
 function hasHarness(root) {
-  return fs2.existsSync(harnessDir(root));
+  return fs3.existsSync(harnessDir(root));
 }
 function readState(root) {
   try {
-    return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+    return JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
   } catch (e) {
     if (isInitialized(root)) {
       throw new Error(tr(root, {
@@ -8625,30 +8644,30 @@ function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs2.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs2.renameSync(tmp, target);
+  fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+  fs3.renameSync(tmp, target);
 }
 function initHarness(root) {
-  if (fs2.existsSync(harnessDir(root))) throw new Error(tr(root, { en: `.harness/ is already initialised: ${harnessDir(root)}`, ko: `.harness/ \uAC00 \uC774\uBBF8 \uCD08\uAE30\uD654\uB418\uC5B4 \uC788\uB2E4: ${harnessDir(root)}` }));
+  if (fs3.existsSync(harnessDir(root))) throw new Error(tr(root, { en: `.harness/ is already initialised: ${harnessDir(root)}`, ko: `.harness/ \uAC00 \uC774\uBBF8 \uCD08\uAE30\uD654\uB418\uC5B4 \uC788\uB2E4: ${harnessDir(root)}` }));
   for (const d of [harnessDir(root), designDir(root), wavesDir(root), runtimeDir(root)]) {
-    fs2.mkdirSync(d, { recursive: true });
+    fs3.mkdirSync(d, { recursive: true });
   }
-  fs2.writeFileSync(path2.join(runtimeDir(root), ".gitignore"), "*\n!.gitignore\n");
-  fs2.writeFileSync(ledgerPath(root), "nodes: []\n");
-  fs2.writeFileSync(configPath(root), [
+  fs3.writeFileSync(path2.join(runtimeDir(root), ".gitignore"), "*\n!.gitignore\n");
+  fs3.writeFileSync(ledgerPath(root), "nodes: []\n");
+  fs3.writeFileSync(configPath(root), [
     "profile: generic",
     "remote_control: true",
     "terse: false",
     ""
   ].join("\n"));
-  fs2.writeFileSync(eventsPath(root), "");
+  fs3.writeFileSync(eventsPath(root), "");
   const tmp = `${statePath(root)}.tmp-${process.pid}`;
-  fs2.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + "\n");
-  fs2.renameSync(tmp, statePath(root));
+  fs3.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + "\n");
+  fs3.renameSync(tmp, statePath(root));
 }
 
 // core/src/events.ts
-var fs3 = __toESM(require("fs"));
+var fs4 = __toESM(require("fs"));
 
 // core/src/types.ts
 var PHASES = [
@@ -8720,14 +8739,14 @@ var EVENT_TYPES = [
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
 function appendEvent(root, type, data) {
   const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs3.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
   return ev;
 }
 function readJournal(root) {
-  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  if (!fs4.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events = [];
   let corruptLines = 0;
-  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
+  for (const line of fs4.readFileSync(eventsPath(root), "utf8").split("\n")) {
     if (!line.trim()) continue;
     let parsed;
     try {
@@ -8775,10 +8794,10 @@ function eventType(line) {
   return TYPE_RE.exec(line)?.[1];
 }
 function readJournalForReplay(root) {
-  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  if (!fs4.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events = [];
   let corruptLines = 0;
-  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
+  for (const line of fs4.readFileSync(eventsPath(root), "utf8").split("\n")) {
     if (!line.trim()) continue;
     const t = eventType(line);
     if (t && !REPLAY_TYPES.has(t)) continue;
@@ -8875,25 +8894,25 @@ function resolveState(root) {
 }
 
 // core/src/wave.ts
-var fs9 = __toESM(require("fs"));
+var fs10 = __toESM(require("fs"));
 var path8 = __toESM(require("path"));
 var YAML4 = __toESM(require_dist());
 
 // core/src/ledger.ts
-var fs4 = __toESM(require("fs"));
+var fs5 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var YAML2 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs4.existsSync(ledgerPath(root))) return [];
-  const doc = YAML2.parse(fs4.readFileSync(ledgerPath(root), "utf8"));
+  if (!fs5.existsSync(ledgerPath(root))) return [];
+  const doc = YAML2.parse(fs5.readFileSync(ledgerPath(root), "utf8"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs4.writeFileSync(tmp, YAML2.stringify({ nodes }));
-  fs4.renameSync(tmp, target);
+  fs5.writeFileSync(tmp, YAML2.stringify({ nodes }));
+  fs5.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -8933,12 +8952,12 @@ function bumpNode(root, id) {
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs4.existsSync(wavesDir(root))) {
-    for (const f2 of fs4.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  if (fs5.existsSync(wavesDir(root))) {
+    for (const f2 of fs5.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs4.readFileSync(path3.join(wavesDir(root), f2), "utf8");
+        txt = fs5.readFileSync(path3.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -9003,45 +9022,45 @@ function mergeNode(root, patch) {
 }
 
 // core/src/runtime.ts
-var fs5 = __toESM(require("fs"));
+var fs6 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
 var f = (root, name) => path4.join(runtimeDir(root), name);
 function noteActivity(root) {
-  fs5.mkdirSync(runtimeDir(root), { recursive: true });
-  fs5.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
+  fs6.mkdirSync(runtimeDir(root), { recursive: true });
+  fs6.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function noteTurnLogged(root) {
-  fs5.mkdirSync(runtimeDir(root), { recursive: true });
-  fs5.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs6.mkdirSync(runtimeDir(root), { recursive: true });
+  fs6.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 function clearActivity(root) {
   try {
     const p = f(root, "last-activity");
-    if (fs5.existsSync(p)) fs5.rmSync(p);
+    if (fs6.existsSync(p)) fs6.rmSync(p);
   } catch {
   }
 }
 function readRuntime(root) {
   const read = (name) => {
-    if (!fs5.existsSync(f(root, name))) return void 0;
-    const v = fs5.readFileSync(f(root, name), "utf8").trim();
+    if (!fs6.existsSync(f(root, name))) return void 0;
+    const v = fs6.readFileSync(f(root, name), "utf8").trim();
     return v || void 0;
   };
   return { lastActivityAt: read("last-activity"), lastTurnAt: read("last-turn") };
 }
 
 // core/src/evidence.ts
-var fs8 = __toESM(require("fs"));
+var fs9 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
 
 // core/src/design.ts
-var fs7 = __toESM(require("fs"));
+var fs8 = __toESM(require("fs"));
 var path6 = __toESM(require("path"));
 var crypto = __toESM(require("crypto"));
 var YAML3 = __toESM(require_dist());
 
 // core/src/tokens.ts
-var fs6 = __toESM(require("fs"));
+var fs7 = __toESM(require("fs"));
 var path5 = __toESM(require("path"));
 var FLAT_CATEGORIES = ["space", "radius", "shadow", "breakpoint"];
 var TYPE_GROUPS = ["family", "size", "weight", "lineHeight"];
@@ -9100,7 +9119,7 @@ function rawAt(doc, tokenPath, mode) {
   }
   return void 0;
 }
-function resolve(doc, tokenPath, mode, seen = []) {
+function resolve2(doc, tokenPath, mode, seen = []) {
   if (seen.includes(tokenPath)) {
     throw new Error(
       `Token aliases form a cycle: ${[...seen, tokenPath].join(" \u2192 ")}. Break the chain somewhere with a real value (${tokensPath("<root>")}).`
@@ -9112,7 +9131,7 @@ function resolve(doc, tokenPath, mode, seen = []) {
     throw new Error(`Token ${tokenPath} is not in the document${from}. It is a typo or a deleted token.`);
   }
   const next = aliasTarget(raw);
-  return next === null ? raw : resolve(doc, next, mode, [...seen, tokenPath]);
+  return next === null ? raw : resolve2(doc, next, mode, [...seen, tokenPath]);
 }
 function tokenPaths(doc) {
   const out = [];
@@ -9186,14 +9205,14 @@ function validateTokens(input) {
   checkGroups(o.motion ?? {}, MOTION_GROUPS, "motion");
   const doc = input;
   for (const p of tokenPaths(doc)) {
-    resolve(doc, p, "light");
-    resolve(doc, p, "dark");
+    resolve2(doc, p, "light");
+    resolve2(doc, p, "dark");
   }
   return doc;
 }
 function loadTokens(root) {
   const p = tokensPath(root);
-  if (!fs6.existsSync(p)) {
+  if (!fs7.existsSync(p)) {
     throw new Error(
       `No token file at ${p}. Design tokens are a single source of truth, so the core will not invent defaults \u2014 export the CSS variable block from the P4 canonical HTML into design-tokens.json (spec \xA77).
 The document shape: ${TOKEN_DOC_SHAPE_HINT}
@@ -9203,7 +9222,7 @@ ${TOKEN_DOC_SKELETON}`
   }
   let parsed;
   try {
-    parsed = JSON.parse(fs6.readFileSync(p, "utf8"));
+    parsed = JSON.parse(fs7.readFileSync(p, "utf8"));
   } catch (e) {
     throw new Error(`Cannot read the token file: ${p} \u2014 ${e.message}`);
   }
@@ -9219,8 +9238,8 @@ var TW_NOTE = {
 };
 function generateCss(doc, lang = DEFAULT_LANG) {
   const paths = tokenPaths(doc);
-  const light = paths.map((p) => `  ${cssVar(p)}: ${resolve(doc, p, "light")};`);
-  const dark = paths.filter((p) => p.startsWith("color.") && resolve(doc, p, "dark") !== resolve(doc, p, "light")).map((p) => `    ${cssVar(p)}: ${resolve(doc, p, "dark")};`);
+  const light = paths.map((p) => `  ${cssVar(p)}: ${resolve2(doc, p, "light")};`);
+  const dark = paths.filter((p) => p.startsWith("color.") && resolve2(doc, p, "dark") !== resolve2(doc, p, "light")).map((p) => `    ${cssVar(p)}: ${resolve2(doc, p, "dark")};`);
   const out = [`/* ${pick(BANNER, lang)} */`, ":root {", ...light, "}"];
   if (dark.length) {
     out.push("", "@media (prefers-color-scheme: dark) {", "  :root {", ...dark, "  }", "}");
@@ -9229,7 +9248,7 @@ function generateCss(doc, lang = DEFAULT_LANG) {
 `;
 }
 var q = (s) => JSON.stringify(s);
-var tsEntries = (doc, prefix, indent) => tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `${indent}${q(p.slice(prefix.length + 1))}: ${q(resolve(doc, p, "light"))},`);
+var tsEntries = (doc, prefix, indent) => tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `${indent}${q(p.slice(prefix.length + 1))}: ${q(resolve2(doc, p, "light"))},`);
 var tsBlock = (doc, key, prefix, indent) => {
   const rows = tsEntries(doc, prefix, `${indent}  `);
   return rows.length ? [`${indent}${key}: {`, ...rows, `${indent}},`] : [`${indent}${key}: {},`];
@@ -9240,7 +9259,7 @@ function generateTs(doc, lang = DEFAULT_LANG) {
   out.push("  color: {");
   for (const p of colors) {
     const name = p.slice("color.".length);
-    out.push(`    ${q(name)}: { light: ${q(resolve(doc, p, "light"))}, dark: ${q(resolve(doc, p, "dark"))} },`);
+    out.push(`    ${q(name)}: { light: ${q(resolve2(doc, p, "light"))}, dark: ${q(resolve2(doc, p, "dark"))} },`);
   }
   out.push("  },");
   out.push(...tsBlock(doc, "space", "space", "  "));
@@ -9259,7 +9278,7 @@ function generateTs(doc, lang = DEFAULT_LANG) {
 }
 var twKey = (name) => name.replace(/\./g, "-");
 var twBlock = (doc, key, prefix, literal = false) => {
-  const rows = tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `        ${q(twKey(p.slice(prefix.length + 1)))}: ${literal ? q(resolve(doc, p, "light")) : q(`var(${cssVar(p)})`)},`);
+  const rows = tokenPaths(doc).filter((p) => p.startsWith(`${prefix}.`)).map((p) => `        ${q(twKey(p.slice(prefix.length + 1)))}: ${literal ? q(resolve2(doc, p, "light")) : q(`var(${cssVar(p)})`)},`);
   return rows.length ? [`      ${key}: {`, ...rows, "      },"] : [`      ${key}: {},`];
 };
 function generateTailwind(doc, lang = DEFAULT_LANG) {
@@ -9452,8 +9471,8 @@ function assertSwapIsMeaningful(before, after, minColorRatio = SWAP_DRILL_MIN_CO
 // core/src/design.ts
 var canvasPath = (root) => path6.join(designDir(root), "canvas.yaml");
 function loadDoc(root) {
-  if (!fs7.existsSync(canvasPath(root))) return { links: [], baselines: [] };
-  const doc = YAML3.parse(fs7.readFileSync(canvasPath(root), "utf8"));
+  if (!fs8.existsSync(canvasPath(root))) return { links: [], baselines: [] };
+  const doc = YAML3.parse(fs8.readFileSync(canvasPath(root), "utf8"));
   return {
     links: Array.isArray(doc?.links) ? doc.links : [],
     baselines: Array.isArray(doc?.baselines) ? doc.baselines : []
@@ -9461,10 +9480,10 @@ function loadDoc(root) {
 }
 function saveDoc(root, doc) {
   const target = canvasPath(root);
-  fs7.mkdirSync(path6.dirname(target), { recursive: true });
+  fs8.mkdirSync(path6.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs7.writeFileSync(tmp, YAML3.stringify(doc));
-  fs7.renameSync(tmp, target);
+  fs8.writeFileSync(tmp, YAML3.stringify(doc));
+  fs8.renameSync(tmp, target);
 }
 function requireUxId(root, id) {
   if (typeof id !== "string" || !/^UX-\S/.test(id)) {
@@ -9615,7 +9634,7 @@ function recordBaseline(root, uxNodeId, pngPath) {
   const abs = path6.isAbsolute(pngPath) ? pngPath : path6.join(root, pngPath);
   let st;
   try {
-    st = fs7.statSync(abs);
+    st = fs8.statSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -9970,9 +9989,9 @@ function waveAcceptance(root, waveId) {
 function pngDimensions(pngPath) {
   let fd = null;
   try {
-    fd = fs8.openSync(pngPath, "r");
+    fd = fs9.openSync(pngPath, "r");
     const head = Buffer.alloc(24);
-    if (fs8.readSync(fd, head, 0, 24, 0) < 24) return null;
+    if (fs9.readSync(fd, head, 0, 24, 0) < 24) return null;
     if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
     if (head.readUInt32BE(8) !== 13) return null;
     if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
@@ -9985,7 +10004,7 @@ function pngDimensions(pngPath) {
   } finally {
     if (fd !== null) {
       try {
-        fs8.closeSync(fd);
+        fs9.closeSync(fd);
       } catch {
       }
     }
@@ -10000,7 +10019,7 @@ function validateEvidence(root, waveId) {
   const unusable = /* @__PURE__ */ new Set();
   let names;
   try {
-    names = fs8.readdirSync(dir).sort();
+    names = fs9.readdirSync(dir).sort();
   } catch {
     return {
       ok: false,
@@ -10026,7 +10045,7 @@ function validateEvidence(root, waveId) {
     const abs = path7.join(dir, name);
     let st;
     try {
-      st = fs8.statSync(abs);
+      st = fs9.statSync(abs);
     } catch {
       problems.push(`${name}: ${t({
         en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
@@ -10104,7 +10123,7 @@ function dataUri(abs) {
   const mime = IMAGE_MIME[path7.extname(abs).slice(1).toLowerCase()];
   if (!mime) return null;
   try {
-    const buf = fs8.readFileSync(abs);
+    const buf = fs9.readFileSync(abs);
     if (buf.length === 0) return null;
     return `data:${mime};base64,${buf.toString("base64")}`;
   } catch {
@@ -10347,14 +10366,14 @@ ${YAML4.stringify(meta).trimEnd()}
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs9.readFileSync(wavePath(root, id), "utf8"), langFor(root));
+  return parseWave(fs10.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs9.existsSync(wavesDir(root))) return [];
+  if (!fs10.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs9.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  for (const f2 of fs10.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
-      out.push(parseWave(fs9.readFileSync(path8.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
+      out.push(parseWave(fs10.readFileSync(path8.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -10364,22 +10383,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs9.writeFileSync(tmp, serializeWave(meta, body));
-  fs9.renameSync(tmp, target);
+  fs10.writeFileSync(tmp, serializeWave(meta, body));
+  fs10.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs9.existsSync(dir)) return [];
-  return fs9.readdirSync(dir).filter((f2) => {
+  if (!fs10.existsSync(dir)) return [];
+  return fs10.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs9.statSync(path8.join(dir, f2));
+    const st = fs10.statSync(path8.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs9.existsSync(wavesDir(root))) {
-    for (const f2 of fs9.readdirSync(wavesDir(root))) {
+  if (fs10.existsSync(wavesDir(root))) {
+    for (const f2 of fs10.readdirSync(wavesDir(root))) {
       const n = waveNumberOf(f2);
       if (n !== void 0) nums.push(n);
     }
@@ -10409,7 +10428,7 @@ function createWave(root, opts) {
     }));
   }
   const id = nextWaveId(root);
-  if (fs9.existsSync(wavePath(root, id))) {
+  if (fs10.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -10532,7 +10551,7 @@ function markStale(root, id) {
 }
 
 // core/src/doctor.ts
-var fs11 = __toESM(require("fs"));
+var fs12 = __toESM(require("fs"));
 var path10 = __toESM(require("path"));
 
 // core/src/policy.ts
@@ -10549,14 +10568,14 @@ function updateHashEntry(h, rel, content) {
 }
 
 // core/src/policy.ts
-var fs10 = __toESM(require("fs"));
+var fs11 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
 var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
   try {
-    entries = fs10.readdirSync(dir, { withFileTypes: true });
+    entries = fs11.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -10570,7 +10589,7 @@ function listPolicyFiles(root) {
   const out = [];
   for (const rel of POLICY_FILES) {
     try {
-      if (fs10.statSync(path9.join(root, rel)).isFile()) out.push(rel);
+      if (fs11.statSync(path9.join(root, rel)).isFile()) out.push(rel);
     } catch {
     }
   }
@@ -10583,7 +10602,7 @@ function computePolicyHash(root) {
   for (const rel of files) {
     let content = null;
     try {
-      content = fs10.readFileSync(path9.join(root, rel));
+      content = fs11.readFileSync(path9.join(root, rel));
     } catch {
       content = null;
     }
@@ -10635,7 +10654,7 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs11.readdirSync(dir);
+      names = fs12.readdirSync(dir);
     } catch {
       continue;
     }
@@ -10644,8 +10663,8 @@ function sweepOrphanTmp(root) {
       if (!m || pidAlive(Number(m[1]))) continue;
       const p = path10.join(dir, name);
       try {
-        if (!fs11.statSync(p).isFile()) continue;
-        fs11.rmSync(p);
+        if (!fs12.statSync(p).isFile()) continue;
+        fs12.rmSync(p);
         swept++;
       } catch {
       }
@@ -10655,8 +10674,8 @@ function sweepOrphanTmp(root) {
 }
 function countHookErrors(root) {
   const p = path10.join(runtimeDir(root), "hook-errors.log");
-  if (!fs11.existsSync(p)) return 0;
-  return fs11.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  if (!fs12.existsSync(p)) return 0;
+  return fs12.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -10667,11 +10686,11 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  const journalExists = fs11.existsSync(eventsPath(root));
+  const journalExists = fs12.existsSync(eventsPath(root));
   const { events, corruptLines } = readJournal(root);
   const replayed = replayState(events);
   let current = null;
-  if (!fs11.existsSync(statePath(root))) {
+  if (!fs12.existsSync(statePath(root))) {
     issues.push(t({
       en: "state.json is missing \u2014 it must be rebuilt by replaying the journal",
       ko: "state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694"
@@ -10729,7 +10748,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs11.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs12.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -10763,7 +10782,7 @@ function runDoctor(root, opts = {}) {
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs11.existsSync(harnessDir(root))) {
+  if (fs12.existsSync(harnessDir(root))) {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -10809,7 +10828,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs11.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs12.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -10831,7 +10850,7 @@ function runDoctor(root, opts = {}) {
   if (opts.repair && !refused && hookErrors > 0) {
     const log = path10.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs11.renameSync(log, `${log}.prev`);
+      fs12.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -10847,7 +10866,7 @@ function runDoctor(root, opts = {}) {
 }
 
 // core/src/loop.ts
-var fs12 = __toESM(require("fs"));
+var fs13 = __toESM(require("fs"));
 
 // core/src/untrusted.ts
 var import_node_crypto = require("crypto");
@@ -10939,7 +10958,7 @@ function recordAttempt(root, waveId, outcome, detail) {
   if (outcome !== "pass" && outcome !== "fail") {
     throw new Error(tr(root, { en: `The verification outcome must be pass or fail: ${String(outcome)}`, ko: `\uAC80\uC99D \uACB0\uACFC\uB294 pass \uB610\uB294 fail \uC774\uC5B4\uC57C \uD55C\uB2E4: ${String(outcome)}` }));
   }
-  if (!fs12.existsSync(wavePath(root, waveId))) {
+  if (!fs13.existsSync(wavePath(root, waveId))) {
     throw new Error(
       tr(root, {
         en: `No instruction sheet for wave ${waveId} (${wavePath(root, waveId)}) \u2014 check the id, or list them with \`harness wave list\``,
@@ -11359,17 +11378,17 @@ function buildVerifierBrief(root, waveId) {
 }
 
 // core/src/ship.ts
-var fs16 = __toESM(require("fs"));
+var fs17 = __toESM(require("fs"));
 var path14 = __toESM(require("path"));
 var YAML6 = __toESM(require_dist());
 
 // core/src/gate.ts
 var crypto4 = __toESM(require("crypto"));
-var fs14 = __toESM(require("fs"));
+var fs15 = __toESM(require("fs"));
 var path12 = __toESM(require("path"));
 
 // core/src/registry.ts
-var fs13 = __toESM(require("fs"));
+var fs14 = __toESM(require("fs"));
 var path11 = __toESM(require("path"));
 var crypto3 = __toESM(require("crypto"));
 var YAML5 = __toESM(require_dist());
@@ -11393,10 +11412,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs13.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs14.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML5.parse(fs13.readFileSync(registryPath(root), "utf8"));
+    doc = YAML5.parse(fs14.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -11406,8 +11425,8 @@ function readEntries(root) {
 function writeEntries(root, entries) {
   const target = registryPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs13.writeFileSync(tmp, YAML5.stringify({ docs: entries }));
-  fs13.renameSync(tmp, target);
+  fs14.writeFileSync(tmp, YAML5.stringify({ docs: entries }));
+  fs14.renameSync(tmp, target);
 }
 function inspectRegistry(root) {
   const { entries, parseError } = readEntries(root);
@@ -11432,6 +11451,14 @@ function getDoc(root, id) {
   return best;
 }
 function upsertDoc(root, node) {
+  if (!isInsideRoot(root, node.path)) {
+    throw new Error(
+      tr(root, {
+        en: `A registered document must live inside the project \u2014 ${node.path} is outside it. Registered documents are listed in the review packet for their phase, so a path the reviewer cannot see in the repository would be presented as reviewed.`,
+        ko: `\uB4F1\uB85D \uBB38\uC11C\uB294 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 ${node.path} \uB294 \uB8E8\uD2B8 \uBC16\uC774\uB2E4. \uB4F1\uB85D\uB41C \uBB38\uC11C\uB294 \uD574\uB2F9 \uD398\uC774\uC988\uC758 \uB9AC\uBDF0 \uD328\uD0B7\uC5D0 \uC2EC\uC0AC \uB300\uC0C1\uC73C\uB85C \uC2E4\uB9AC\uBBC0\uB85C, \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uACBD\uB85C\uAC00 \u300C\uC2EC\uC0AC\uB410\uB2E4\u300D\uB85C \uC81C\uC2DC\uB41C\uB2E4.`
+      })
+    );
+  }
   const { entries } = readEntries(root);
   const i = entries.findIndex((e) => {
     const n = toDocNode(e);
@@ -11445,7 +11472,7 @@ function computeDocHash(root, doc) {
   const abs = path11.join(root, doc.path);
   let buf;
   try {
-    buf = fs13.readFileSync(abs);
+    buf = fs14.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -11598,8 +11625,8 @@ function docsForPhase(root, phase) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs14.realpathSync(path12.resolve(root, rel));
-    const r = path12.relative(fs14.realpathSync(root), real);
+    const real = fs15.realpathSync(path12.resolve(root, rel));
+    const r = path12.relative(fs15.realpathSync(root), real);
     return r && !r.startsWith(`..${path12.sep}`) && r !== ".." && !path12.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
@@ -11622,7 +11649,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs14.readFileSync(path12.resolve(root, rel));
+    return fs15.readFileSync(path12.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -11787,25 +11814,7 @@ function assertPhaseFit(root, phase, paths) {
   );
 }
 function assertInsideRoot(root, paths) {
-  const real = (p) => {
-    let cur = path12.resolve(p);
-    const rest = [];
-    for (; ; ) {
-      try {
-        return path12.join(fs14.realpathSync(cur), ...rest.reverse());
-      } catch {
-      }
-      const parent = path12.dirname(cur);
-      if (parent === cur) return path12.resolve(p);
-      rest.push(path12.basename(cur));
-      cur = parent;
-    }
-  };
-  const base = real(root);
-  const outside = paths.filter((p) => {
-    const rel = path12.relative(base, real(path12.resolve(root, p)));
-    return rel === ".." || rel.startsWith(`..${path12.sep}`) || path12.isAbsolute(rel);
-  });
+  const outside = paths.filter((p) => !isInsideRoot(root, p));
   if (outside.length > 0) {
     throw new Error(
       tr(root, {
@@ -11832,7 +11841,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs14.readFileSync(path12.resolve(root, rel)).toString("utf8");
+      text = fs15.readFileSync(path12.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -11967,8 +11976,8 @@ function recordGateFeedback(root, phase, raw) {
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs14.mkdirSync(packetsDir(root), { recursive: true });
-  fs14.appendFileSync(
+  fs15.mkdirSync(packetsDir(root), { recursive: true });
+  fs15.appendFileSync(
     feedbackPath(root, phase),
     `
 ## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
@@ -11980,7 +11989,7 @@ ${lines.map((l) => `- ${l}`).join("\n")}
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs14.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs15.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -12073,7 +12082,7 @@ function setPhaseViaGate(root, phase) {
 }
 
 // core/src/report.ts
-var fs15 = __toESM(require("fs"));
+var fs16 = __toESM(require("fs"));
 var path13 = __toESM(require("path"));
 var trFor3 = (lang) => (m) => pick(m, lang);
 var MSG = {
@@ -12119,10 +12128,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs16.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs15.readdirSync(wavesDir(root));
+    files = fs16.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -12138,14 +12147,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs15.readdirSync(dir);
+    files = fs16.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs15.statSync(path13.join(dir, f2));
+      const st = fs16.statSync(path13.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -12546,16 +12555,16 @@ var deploymentsPath = (root) => path14.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 function writeAtomic(target, content) {
-  fs16.mkdirSync(path14.dirname(target), { recursive: true });
+  fs17.mkdirSync(path14.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs16.writeFileSync(tmp, content);
-  fs16.renameSync(tmp, target);
+  fs17.writeFileSync(tmp, content);
+  fs17.renameSync(tmp, target);
 }
 function readRecords(root, file, key, to) {
-  if (!fs16.existsSync(file)) return [];
+  if (!fs17.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML6.parse(fs16.readFileSync(file, "utf8"));
+    doc = YAML6.parse(fs17.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -12837,16 +12846,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs16.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs17.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs16.readdirSync(wavesDir(root));
+    files = fs17.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs16.readFileSync(path14.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs17.readFileSync(path14.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -13330,11 +13339,11 @@ Run \`harness --help\` for the full usage.`;
 }
 
 // core/src/hook.ts
-var fs19 = __toESM(require("fs"));
+var fs20 = __toESM(require("fs"));
 var path17 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs17 = __toESM(require("fs"));
+var fs18 = __toESM(require("fs"));
 var path15 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
 var tierFile = (root) => path15.join(runtimeDir(root), "usage-tier");
@@ -13370,12 +13379,12 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs17.mkdirSync(runtimeDir(root), { recursive: true });
-  fs17.writeFileSync(tierFile(root), tier + "\n");
+  fs18.mkdirSync(runtimeDir(root), { recursive: true });
+  fs18.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs17.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs18.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
@@ -13383,7 +13392,7 @@ function lastTier(root) {
 }
 
 // core/src/profile.ts
-var fs18 = __toESM(require("fs"));
+var fs19 = __toESM(require("fs"));
 var path16 = __toESM(require("path"));
 var YAML7 = __toESM(require_dist());
 var trFor5 = (lang) => (m) => pick(m, lang);
@@ -13429,7 +13438,7 @@ function bundledProfilesDir() {
 var errMsg = (e) => e instanceof Error ? e.message : String(e);
 function isDir(p) {
   try {
-    return fs18.statSync(p).isDirectory();
+    return fs19.statSync(p).isDirectory();
   } catch {
     return false;
   }
@@ -13470,7 +13479,7 @@ function readCommands(dir, problems, t) {
   const p = path16.join(dir, "commands.yaml");
   let text;
   try {
-    text = fs18.readFileSync(p, "utf8");
+    text = fs19.readFileSync(p, "utf8");
   } catch {
     problems.push(t({
       en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
@@ -13515,9 +13524,9 @@ function readProfileDir(dir, origin, problems, t) {
   const yamlPath = path16.join(dir, "profile.yaml");
   let text;
   try {
-    text = fs18.readFileSync(yamlPath, "utf8");
+    text = fs19.readFileSync(yamlPath, "utf8");
   } catch (e) {
-    if (fs18.existsSync(path16.join(dir, "commands.yaml"))) {
+    if (fs19.existsSync(path16.join(dir, "commands.yaml"))) {
       text = "name: local";
     } else {
       problems.push(t({
@@ -13569,12 +13578,12 @@ function floorProfile() {
     commands: { ...GENERIC_FLOOR.commands }
   };
 }
-function resolve4(root, name, lang = DEFAULT_LANG) {
+function resolve5(root, name, lang = DEFAULT_LANG) {
   const t = trFor5(lang);
   const problems = [];
   const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
   const local = localProfileDir(root);
-  if (fs18.existsSync(local)) {
+  if (fs19.existsSync(local)) {
     if (!isDir(local)) {
       problems.push(t({
         en: `${local} is not a directory \u2014 skipping the project-local profile`,
@@ -13623,7 +13632,7 @@ function inspectProfile(root, name) {
   } catch {
   }
   try {
-    return resolve4(root, name, lang);
+    return resolve5(root, name, lang);
   } catch (e) {
     return {
       profile: floorProfile(),
@@ -13779,7 +13788,7 @@ function isHarnessStateShape(s) {
 function handleHook(root, event, input) {
   realCache = /* @__PURE__ */ new Map();
   try {
-    if (!fs19.existsSync(harnessDir(root))) return null;
+    if (!fs20.existsSync(harnessDir(root))) return null;
     let state;
     let degraded = null;
     try {
@@ -13814,8 +13823,8 @@ function handleHook(root, event, input) {
 function logHookError(root, event, err) {
   try {
     const dir = runtimeDir(root);
-    fs19.mkdirSync(dir, { recursive: true });
-    fs19.appendFileSync(
+    fs20.mkdirSync(dir, { recursive: true });
+    fs20.appendFileSync(
       path17.join(dir, "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${event} ${String(err)}
 `
@@ -14021,10 +14030,10 @@ function realOrSelf(p) {
 }
 function realOrSelfUncached(p) {
   try {
-    return fs19.realpathSync.native(p);
+    return fs20.realpathSync.native(p);
   } catch {
     try {
-      const target = fs19.readlinkSync(p);
+      const target = fs20.readlinkSync(p);
       return realOrSelf(path17.isAbsolute(target) ? target : path17.join(path17.dirname(p), target));
     } catch {
     }
@@ -14073,19 +14082,19 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
           continue;
         }
         try {
-          const st0 = fs19.statSync(path17.resolve(root, candidate));
+          const st0 = fs20.statSync(path17.resolve(root, candidate));
           if (!st0.isFile()) continue;
           if (st0.size > SCRIPT_MAX_BYTES) {
             unread.push(candidate);
             continue;
           }
-          outside.push(fs19.readFileSync(path17.resolve(root, candidate), "utf8"));
+          outside.push(fs20.readFileSync(path17.resolve(root, candidate), "utf8"));
         } catch {
         }
         continue;
       }
       const abs = path17.resolve(root, candidate);
-      const st = fs19.statSync(abs);
+      const st = fs20.statSync(abs);
       if (!st.isFile()) continue;
       if (atLimit) {
         tooDeep.push(candidate);
@@ -14095,7 +14104,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
         unread.push(candidate);
         continue;
       }
-      const body = fs19.readFileSync(abs, "utf8");
+      const body = fs20.readFileSync(abs, "utf8");
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);
       out.push(...sub.bodies);
@@ -14108,7 +14117,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
   if (npmRun) {
     try {
-      const pkg = JSON.parse(fs19.readFileSync(path17.join(root, "package.json"), "utf8"));
+      const pkg = JSON.parse(fs20.readFileSync(path17.join(root, "package.json"), "utf8"));
       const script = pkg.scripts?.[npmRun[1]];
       if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
@@ -14136,8 +14145,8 @@ function readPatchTargets(root, files) {
     const abs = path17.isAbsolute(rel) ? rel : path17.resolve(root, rel);
     let body;
     try {
-      if (fs19.statSync(abs).size > PATCH_READ_CAP) return null;
-      body = fs19.readFileSync(abs, "utf8");
+      if (fs20.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs20.readFileSync(abs, "utf8");
     } catch {
       return null;
     }
@@ -14288,11 +14297,11 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   const aliasOfCore = (() => {
     try {
       const abs = path17.resolve(root, raw);
-      const st = fs19.statSync(abs);
+      const st = fs20.statSync(abs);
       if (!st.isFile() || st.nlink < 2) return void 0;
       for (const core of CORE_FILES) {
         try {
-          const cs = fs19.statSync(path17.join(root, core));
+          const cs = fs20.statSync(path17.join(root, core));
           if (cs.dev === st.dev && cs.ino === st.ino) return core;
         } catch {
         }
@@ -14359,7 +14368,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   if (SHIP_PHASES.includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
-    const isNew = inRoot && target !== "" && !fs19.existsSync(path17.join(root, target));
+    const isNew = inRoot && target !== "" && !fs20.existsSync(path17.join(root, target));
     if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
         // [UTIL-149] **강제하지 않는 것을 강제한다고 말하지 않는다.** 예전 문구는 「이 구간은
@@ -14689,7 +14698,7 @@ ${note}` };
 }
 
 // core/src/adr.ts
-var fs20 = __toESM(require("fs"));
+var fs21 = __toESM(require("fs"));
 var path18 = __toESM(require("path"));
 var YAML8 = __toESM(require_dist());
 var adrDir = (root) => path18.join(designDir(root), "adr");
@@ -14699,10 +14708,10 @@ var CUSTOM_OPTION_ID = "custom";
 var MIN_OPTIONS = 2;
 var MAX_OPTIONS = 4;
 function writeAdrFile(target, rec) {
-  fs20.mkdirSync(path18.dirname(target), { recursive: true });
+  fs21.mkdirSync(path18.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs20.writeFileSync(tmp, YAML8.stringify(rec));
-  fs20.renameSync(tmp, target);
+  fs21.writeFileSync(tmp, YAML8.stringify(rec));
+  fs21.renameSync(tmp, target);
 }
 function toAdrRecord(v) {
   if (typeof v !== "object" || v === null) return null;
@@ -14734,20 +14743,20 @@ function toAdrRecord(v) {
 }
 function getAdr(root, id) {
   const p = adrPath(root, id);
-  if (!fs20.existsSync(p)) return void 0;
-  const parsed = toAdrRecord(YAML8.parse(fs20.readFileSync(p, "utf8")));
+  if (!fs21.existsSync(p)) return void 0;
+  const parsed = toAdrRecord(YAML8.parse(fs21.readFileSync(p, "utf8")));
   if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} \u2014 restore it from git history`, ko: `ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   return parsed;
 }
 function listAdrs(root) {
   const dir = adrDir(root);
-  if (!fs20.existsSync(dir)) return [];
+  if (!fs21.existsSync(dir)) return [];
   const out = [];
-  for (const f2 of fs20.readdirSync(dir).sort()) {
+  for (const f2 of fs21.readdirSync(dir).sort()) {
     if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
     if (/\.v\d+\.yaml$/.test(f2)) continue;
     try {
-      const rec = toAdrRecord(YAML8.parse(fs20.readFileSync(path18.join(dir, f2), "utf8")));
+      const rec = toAdrRecord(YAML8.parse(fs21.readFileSync(path18.join(dir, f2), "utf8")));
       if (rec) out.push(rec);
     } catch {
       continue;
@@ -14796,12 +14805,12 @@ function syncIndex(root, rec) {
 function referencingWaves(root, id) {
   const affected = [];
   const unverifiable = [];
-  if (!fs20.existsSync(wavesDir(root))) return { affected, unverifiable };
-  for (const f2 of fs20.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  if (!fs21.existsSync(wavesDir(root))) return { affected, unverifiable };
+  for (const f2 of fs21.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     const stem = f2.replace(/\.md$/, "");
     let txt;
     try {
-      txt = fs20.readFileSync(path18.join(wavesDir(root), f2), "utf8");
+      txt = fs21.readFileSync(path18.join(wavesDir(root), f2), "utf8");
     } catch {
       unverifiable.push(stem);
       continue;
@@ -14821,7 +14830,7 @@ function proposeAdr(root, input) {
   if (!input.id.startsWith("ADR-")) {
     throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (\xA73-2 ledger id convention)`, ko: `ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)` }));
   }
-  if (fs20.existsSync(adrPath(root, input.id))) {
+  if (fs21.existsSync(adrPath(root, input.id))) {
     throw new Error(
       tr(root, {
         en: `ADR ${input.id} already exists \u2014 do not overwrite a decision. To change it, revise formally with reviseAdr (version++ and STALE propagation).`,
@@ -15000,7 +15009,7 @@ function renderAdrPacket(rec, lang = DEFAULT_LANG) {
 }
 
 // core/src/migrate.ts
-var fs21 = __toESM(require("fs"));
+var fs22 = __toESM(require("fs"));
 var path19 = __toESM(require("path"));
 var CANDIDATES = [
   {
@@ -15050,7 +15059,7 @@ function detectLegacyTools(homeDir, lang = DEFAULT_LANG) {
     const p = path19.join(homeDir, c.rel);
     let st;
     try {
-      st = fs21.statSync(p);
+      st = fs22.statSync(p);
     } catch {
       continue;
     }
@@ -15092,7 +15101,7 @@ function migrationReport(tools, lang = DEFAULT_LANG) {
 }
 function legacyHarnessGitignore(root) {
   try {
-    const body = fs21.readFileSync(path19.join(runtimeDir(root), ".gitignore"), "utf8");
+    const body = fs22.readFileSync(path19.join(runtimeDir(root), ".gitignore"), "utf8");
     return body.trim() === "*";
   } catch {
     return false;
@@ -15223,9 +15232,9 @@ function explainUnknownFlag(tok, allowed) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs22.existsSync(harnessDir(root))) return;
-    fs22.mkdirSync(runtimeDir(root), { recursive: true });
-    fs22.appendFileSync(
+    if (!fs23.existsSync(harnessDir(root))) return;
+    fs23.mkdirSync(runtimeDir(root), { recursive: true });
+    fs23.appendFileSync(
       path20.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
@@ -15256,7 +15265,7 @@ function readAllStdin() {
   for (; ; ) {
     let n;
     try {
-      n = fs22.readSync(0, buf, 0, CHUNK, null);
+      n = fs23.readSync(0, buf, 0, CHUNK, null);
     } catch (err) {
       const code = err.code;
       if (code === "EAGAIN") {
@@ -15297,7 +15306,7 @@ function requirePhase(raw, cmd, lang) {
 function harnessVersion() {
   for (const rel of ["../../package.json", "../package.json"]) {
     try {
-      const v = JSON.parse(fs22.readFileSync(path20.resolve(__dirname, rel), "utf8")).version;
+      const v = JSON.parse(fs23.readFileSync(path20.resolve(__dirname, rel), "utf8")).version;
       if (typeof v === "string" && v) return `v${v}`;
     } catch {
     }
@@ -15311,7 +15320,7 @@ function warnUnresolvedEvidence(root, evidence, lang) {
   const p0 = raw.replace(/:\d+(?::\d+)?$/, "");
   if (!p0 || !/[/.]/.test(p0)) return;
   if (path20.isAbsolute(p0)) return;
-  if (fs22.existsSync(path20.resolve(root, p0))) return;
+  if (fs23.existsSync(path20.resolve(root, p0))) return;
   console.error(lang === "ko" ? `\uACBD\uACE0: \uADFC\uAC70 \uACBD\uB85C\uAC00 \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC5C6\uB2E4 \u2014 ${p0}. \uACB0\uD568\uC740 \uB4F1\uC7AC\uD588\uB2E4. \uC2E4\uC81C \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uAC8C \uACE0\uCE58\uB824\uBA74 \`harness ship defect update <id> --evidence <\uACBD\uB85C:\uC904>\` \uC744 \uC4F0\uB77C.` : `Warning: the evidence path does not exist in this project \u2014 ${p0}. The defect was recorded. Point it at a real file with \`harness ship defect update <id> --evidence <path:line>\`.`);
 }
 function run(argv, root) {
@@ -15490,9 +15499,9 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
             let packet = "";
             try {
-              fs22.mkdirSync(packetsDir(root), { recursive: true });
+              fs23.mkdirSync(packetsDir(root), { recursive: true });
               packet = path20.join(packetsDir(root), `${phase}.md`);
-              fs22.writeFileSync(packet, buildReviewPacket(root, phase));
+              fs23.writeFileSync(packet, buildReviewPacket(root, phase));
             } catch (e) {
               console.error(L(`Review packet generation failed (the submission still stands) \u2014 ${String(e)}`, `\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`));
               packet = "";
@@ -15555,7 +15564,7 @@ Next: a human approves it in their terminal \u2014 \`harness gate approve ${phas
             const fromPath = path20.resolve(root, from);
             let body;
             try {
-              body = fs22.readFileSync(fromPath, "utf8");
+              body = fs23.readFileSync(fromPath, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the comments file: ${from} (looked in ${fromPath}). Paths are resolved from the project root.`,
@@ -15727,8 +15736,8 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             if (!uxNodeId) throw new Error(L("Usage: harness evidence spec <UX-x> [--wave <wave-id>] [--out <path>]", "\uC0AC\uC6A9\uBC95: harness evidence spec <UX-x> [--wave <wave-id>] [--out <\uACBD\uB85C>]"));
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
-            fs22.mkdirSync(path20.dirname(path20.resolve(root, out)), { recursive: true });
-            fs22.writeFileSync(path20.resolve(root, out), src);
+            fs23.mkdirSync(path20.dirname(path20.resolve(root, out)), { recursive: true });
+            fs23.writeFileSync(path20.resolve(root, out), src);
             console.log(out);
             return 0;
           }
@@ -15752,7 +15761,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const html = buildComparisonPacket(root, { uxNodeId, waveId });
             const out = flag(args, "out");
             if (out) {
-              fs22.writeFileSync(path20.resolve(root, out), html);
+              fs23.writeFileSync(path20.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -15821,7 +15830,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const fromAbs = path20.resolve(root, from);
             let content;
             try {
-              content = fs22.readFileSync(fromAbs, "utf8");
+              content = fs23.readFileSync(fromAbs, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the canvas content file: ${fromAbs} \u2014 the core never touches the network, so an agent must fetch the canvas (WebFetch) and save it to a file first. Check the path, then pass it with \`--from <file>\`.`,
@@ -15847,7 +15856,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           case "inventory": {
             const from = flag(args, "from");
             if (!from) throw new Error(L("Usage: harness design inventory --from <canvas-content-file>", "\uC0AC\uC6A9\uBC95: harness design inventory --from <\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>"));
-            const inv = extractInventory(fs22.readFileSync(path20.resolve(root, from), "utf8"));
+            const inv = extractInventory(fs23.readFileSync(path20.resolve(root, from), "utf8"));
             console.log(JSON.stringify(inv, null, 2));
             if (inv.total === 0) {
               console.error(L(
@@ -15868,7 +15877,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const out = flag(args, "out");
             const html = generateSourceOfTruthHtml(root);
             if (out) {
-              fs22.writeFileSync(path20.resolve(root, out), html);
+              fs23.writeFileSync(path20.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -15891,9 +15900,29 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               ["tokens.ts", generateTs(doc, lang)],
               ["tailwind.tokens.js", generateTailwind(doc, lang)]
             ];
-            fs22.mkdirSync(path20.resolve(root, out), { recursive: true });
+            const phase = readState(root).phase;
+            const outsideOut = !isInsideRoot(root, out);
+            if (outsideOut) {
+              throw new Error(L(
+                `Generated tokens must land inside the project \u2014 \`${out}\` is outside it. A harness command is not a way around the write rules the hook applies.`,
+                `\uC0DD\uC131\uBB3C\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uB5A8\uC5B4\uC838\uC57C \uD55C\uB2E4 \u2014 \`${out}\` \uB294 \uB8E8\uD2B8 \uBC16\uC774\uB2E4. harness \uBA85\uB839\uC740 \uD6C5\uC774 \uC801\uC6A9\uD558\uB294 \uC4F0\uAE30 \uADDC\uCE59\uC744 \uD53C\uD574 \uAC00\uB294 \uAE38\uC774 \uC544\uB2C8\uB2E4.`
+              ));
+            }
+            if (DESIGN_PHASES.includes(phase)) {
+              const profile = loadProfile(root);
+              for (const [name] of targets) {
+                const rel = path20.relative(root, path20.resolve(root, out, name));
+                if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+                  throw new Error(L(
+                    `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
+                    `\uC124\uACC4 \uD2B8\uB799(${phase})\uC5D0\uC11C\uB294 ${rel} \uC744(\uB97C) \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). \uC124\uACC4 \uC601\uC5ED\uC5D0 \uB0B4\uAC70\uB098, \uAD6C\uCD95 \uD2B8\uB799\uC73C\uB85C \uB118\uC5B4\uAC04 \uB4A4\uC5D0 \uC2E4\uD589\uD558\uB77C.`
+                  ));
+                }
+              }
+            }
+            fs23.mkdirSync(path20.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
-              fs22.writeFileSync(path20.resolve(root, out, name), content);
+              fs23.writeFileSync(path20.resolve(root, out, name), content);
             }
             console.log(targets.map(([n]) => path20.join(out, n)).join("\n"));
             return 0;
@@ -15906,7 +15935,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               if (isTokenFile(root, f2)) continue;
               let src = "";
               try {
-                src = fs22.readFileSync(path20.resolve(root, f2), "utf8");
+                src = fs23.readFileSync(path20.resolve(root, f2), "utf8");
               } catch {
                 throw new Error(L(
                   `Cannot read the file to lint: ${f2} \u2014 check the path. A file that was not read is not a file that is clean`,
@@ -15925,12 +15954,12 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const overridePath = flag(args, "with");
             if (!overridePath) throw new Error(L("Usage: harness tokens swap --with <override-theme.json> [--out <path>]", "\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]"));
             const doc = loadTokens(root);
-            const overrides = JSON.parse(fs22.readFileSync(path20.resolve(root, overridePath), "utf8"));
+            const overrides = JSON.parse(fs23.readFileSync(path20.resolve(root, overridePath), "utf8"));
             const swapped = swapTokens(doc, overrides);
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
-            if (out) fs22.writeFileSync(path20.resolve(root, out), generateCss(swapped, lang));
+            if (out) fs23.writeFileSync(path20.resolve(root, out), generateCss(swapped, lang));
             console.log(L(
               `Swap is meaningful \u2014 ${changed.length} token(s) changed` + (out ? ` \xB7 CSS written to ${out}` : " \xB7 dry run: nothing was written. Pass `--out <file.css>` to write the swapped CSS."),
               `\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74` + (out ? ` \xB7 CSS \uAE30\uB85D \u2192 ${out}` : " \xB7 \uB4DC\uB77C\uC774\uB7F0: \uC544\uBB34\uAC83\uB3C4 \uAE30\uB85D\uD558\uC9C0 \uC54A\uC558\uB2E4. \uAE30\uB85D\uD558\uB824\uBA74 `--out <\uD30C\uC77C.css>` \uB97C \uB118\uACA8\uB77C.")

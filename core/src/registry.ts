@@ -37,7 +37,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as YAML from 'yaml';
-import { registryPath } from './paths';
+import { registryPath, isInsideRoot } from './paths';
 import { tr } from './tr';
 import { appendEvent } from './events';
 import { isDocStatus, isPhase } from './types';
@@ -128,6 +128,24 @@ export function getDoc(root: string, id: string): DocNode | undefined {
 
 /** `{id, version}` 복합키로 제자리 교체(순서 보존). 형태 불량 엔트리는 건드리지 않는다. */
 export function upsertDoc(root: string, node: DocNode): void {
+  /**
+   * [SEC-295] **등록도 심사 대상을 정한다.** 게이트 제출은 루트 밖 경로를 거부하는데
+   * 등록은 받고 있었고, 등록된 문서는 그 페이즈의 **리뷰 패킷에 「심사 대상」으로 실린다** —
+   * `../outside.txt`·`/etc/hosts` 가 P0 패킷에 그대로 올라갔다(실측). 두 문이 다른 답을
+   * 내면 느슨한 쪽이 정본이 된다. 규칙은 `paths.ts` 한 벌이고 문구만 이 표면의 것이다.
+   */
+  if (!isInsideRoot(root, node.path)) {
+    throw new Error(
+      tr(root, {
+        en: `A registered document must live inside the project — ${node.path} is outside it. `
+          + 'Registered documents are listed in the review packet for their phase, so a path the '
+          + 'reviewer cannot see in the repository would be presented as reviewed.',
+        ko: `등록 문서는 프로젝트 안에 있어야 한다 — ${node.path} 는 루트 밖이다. `
+          + '등록된 문서는 해당 페이즈의 리뷰 패킷에 심사 대상으로 실리므로, 리뷰어가 저장소에서 '
+          + '볼 수 없는 경로가 「심사됐다」로 제시된다.',
+      }),
+    );
+  }
   const { entries } = readEntries(root);
   const i = entries.findIndex((e) => {
     const n = toDocNode(e);

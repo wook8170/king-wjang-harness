@@ -3991,10 +3991,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep5, value } = collItem;
+        const { start, key, sep: sep6, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep5?.[0],
+          next: key ?? sep6?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4008,7 +4008,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep5) {
+          if (!keyProps.anchor && !keyProps.tag && !sep6) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4032,7 +4032,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep5 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4048,7 +4048,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep5, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4139,7 +4139,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep5 = "";
+        let sep6 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4153,13 +4153,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep5 + cb;
-              sep5 = "";
+                comment += sep6 + cb;
+              sep6 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep5 += source;
+                sep6 += source;
               hasSpace = true;
               break;
             default:
@@ -4202,18 +4202,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep5, value } = collItem;
+        const { start, key, sep: sep6, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep5?.[0],
+          next: key ?? sep6?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep5 && !value) {
+          if (!props.anchor && !props.tag && !sep6 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4267,8 +4267,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep5 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep5, null, props, onError);
+        if (!isMap && !sep6 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4280,7 +4280,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep5 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4291,8 +4291,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep5)
-                for (const st of sep5) {
+              if (sep6)
+                for (const st of sep6) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep5, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4489,7 +4489,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep5 = "";
+      let sep6 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4506,24 +4506,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep5 + indent.slice(trimIndent) + content;
-          sep5 = "\n";
+          value += sep6 + indent.slice(trimIndent) + content;
+          sep6 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep5 === " ")
-            sep5 = "\n";
-          else if (!prevMoreIndented && sep5 === "\n")
-            sep5 = "\n\n";
-          value += sep5 + indent.slice(trimIndent) + content;
-          sep5 = "\n";
+          if (sep6 === " ")
+            sep6 = "\n";
+          else if (!prevMoreIndented && sep6 === "\n")
+            sep6 = "\n\n";
+          value += sep6 + indent.slice(trimIndent) + content;
+          sep6 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep5 === "\n")
+          if (sep6 === "\n")
             value += "\n";
           else
-            sep5 = "\n";
+            sep6 = "\n";
         } else {
-          value += sep5 + content;
-          sep5 = " ";
+          value += sep6 + content;
+          sep6 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4705,25 +4705,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep5 = " ";
+      let sep6 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep5 === "\n")
-            res += sep5;
+          if (sep6 === "\n")
+            res += sep6;
           else
-            sep5 = "\n";
+            sep6 = "\n";
         } else {
-          res += sep5 + match[1];
-          sep5 = " ";
+          res += sep6 + match[1];
+          sep6 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep5 + (match?.[1] ?? "");
+      return res + sep6 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5533,14 +5533,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep5, value }) {
+    function stringifyItem({ start, key, sep: sep6, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep5)
-        for (const st of sep5)
+      if (sep6)
+        for (const st of sep6)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6707,18 +6707,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep5;
+          let sep6;
           if (scalar.end) {
-            sep5 = scalar.end;
-            sep5.push(this.sourceToken);
+            sep6 = scalar.end;
+            sep6.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep5 = [this.sourceToken];
+            sep6 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep5 }]
+            items: [{ start, key: scalar, sep: sep6 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6871,15 +6871,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep5 = it.sep;
-                  sep5.push(this.sourceToken);
+                  const sep6 = it.sep;
+                  sep6.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep5 }]
+                    items: [{ start: start2, key, sep: sep6 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -6908,14 +6908,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs18 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs17, sep: [] });
+                map.items.push({ start, key: fs18, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs17);
+                this.stack.push(fs18);
               } else {
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs18, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7043,13 +7043,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs17 = this.flowScalar(this.type);
+              const fs18 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs17, sep: [] });
+                fc.items.push({ start: [], key: fs18, sep: [] });
               else if (it.sep)
-                this.stack.push(fs17);
+                this.stack.push(fs18);
               else
-                Object.assign(it, { key: fs17, sep: [] });
+                Object.assign(it, { key: fs18, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7073,13 +7073,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep5 = fc.end.splice(1, fc.end.length);
-            sep5.push(this.sourceToken);
+            const sep6 = fc.end.splice(1, fc.end.length);
+            sep6.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep5 }]
+              items: [{ start, key: fc, sep: sep6 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7364,14 +7364,15 @@ __export(mcp_exports, {
   toolDefinitions: () => toolDefinitions
 });
 module.exports = __toCommonJS(mcp_exports);
-var fs16 = __toESM(require("fs"));
+var fs17 = __toESM(require("fs"));
 var path15 = __toESM(require("path"));
 
 // core/src/state.ts
-var fs2 = __toESM(require("fs"));
+var fs3 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 
 // core/src/paths.ts
+var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var harnessDir = (root) => path.join(root, ".harness");
 var statePath = (root) => path.join(harnessDir(root), "state.json");
@@ -7385,9 +7386,27 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+function realOrNearest(p) {
+  let cur = path.resolve(p);
+  const rest = [];
+  for (; ; ) {
+    try {
+      return path.join(fs.realpathSync(cur), ...rest.reverse());
+    } catch {
+    }
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(p);
+    rest.push(path.basename(cur));
+    cur = parent;
+  }
+}
+function isInsideRoot(root, p) {
+  const rel = path.relative(realOrNearest(root), realOrNearest(path.resolve(root, p)));
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
 
 // core/src/config.ts
-var fs = __toESM(require("fs"));
+var fs2 = __toESM(require("fs"));
 var YAML = __toESM(require_dist());
 
 // core/src/i18n.ts
@@ -7443,7 +7462,7 @@ var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
 var CONFIG_CACHE = /* @__PURE__ */ new Map();
 function configCacheKey(p) {
   try {
-    const st = fs.statSync(p, { bigint: true });
+    const st = fs2.statSync(p, { bigint: true });
     return `${st.mtimeNs}:${st.size}`;
   } catch {
     return "absent";
@@ -7460,9 +7479,9 @@ function loadConfig(root) {
 }
 function parseConfig(p) {
   let raw = {};
-  if (fs.existsSync(p)) {
+  if (fs2.existsSync(p)) {
     try {
-      raw = YAML.parse(fs.readFileSync(p, "utf8")) ?? {};
+      raw = YAML.parse(fs2.readFileSync(p, "utf8")) ?? {};
     } catch {
       raw = {};
     }
@@ -7481,9 +7500,9 @@ function parseConfig(p) {
 }
 function inspectConfig(root) {
   const p = configPath(root);
-  if (!fs.existsSync(p)) return { problems: [] };
+  if (!fs2.existsSync(p)) return { problems: [] };
   try {
-    const parsed = YAML.parse(fs.readFileSync(p, "utf8"));
+    const parsed = YAML.parse(fs2.readFileSync(p, "utf8"));
     if (parsed !== null && parsed !== void 0 && typeof parsed !== "object") {
       return { problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`] };
     }
@@ -7522,14 +7541,14 @@ function defaultState() {
   };
 }
 function isInitialized(root) {
-  return fs2.existsSync(statePath(root));
+  return fs3.existsSync(statePath(root));
 }
 function hasHarness(root) {
-  return fs2.existsSync(harnessDir(root));
+  return fs3.existsSync(harnessDir(root));
 }
 function readState(root) {
   try {
-    return JSON.parse(fs2.readFileSync(statePath(root), "utf8"));
+    return JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
   } catch (e) {
     if (isInitialized(root)) {
       throw new Error(tr(root, {
@@ -7550,8 +7569,8 @@ function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs2.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs2.renameSync(tmp, target);
+  fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+  fs3.renameSync(tmp, target);
 }
 
 // core/src/gate.ts
@@ -7568,11 +7587,11 @@ function updateHashEntry(h, rel, content) {
 }
 
 // core/src/gate.ts
-var fs6 = __toESM(require("fs"));
+var fs7 = __toESM(require("fs"));
 var path5 = __toESM(require("path"));
 
 // core/src/events.ts
-var fs3 = __toESM(require("fs"));
+var fs4 = __toESM(require("fs"));
 
 // core/src/types.ts
 var PHASES = [
@@ -7642,14 +7661,14 @@ var EVENT_TYPES = [
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
 function appendEvent(root, type, data) {
   const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs3.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
   return ev;
 }
 function readJournal(root) {
-  if (!fs3.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
+  if (!fs4.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events = [];
   let corruptLines = 0;
-  for (const line of fs3.readFileSync(eventsPath(root), "utf8").split("\n")) {
+  for (const line of fs4.readFileSync(eventsPath(root), "utf8").split("\n")) {
     if (!line.trim()) continue;
     let parsed;
     try {
@@ -7750,14 +7769,14 @@ function replayState(events) {
 
 // core/src/policy.ts
 var crypto = __toESM(require("crypto"));
-var fs4 = __toESM(require("fs"));
+var fs5 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
 var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
   try {
-    entries = fs4.readdirSync(dir, { withFileTypes: true });
+    entries = fs5.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -7771,7 +7790,7 @@ function listPolicyFiles(root) {
   const out = [];
   for (const rel of POLICY_FILES) {
     try {
-      if (fs4.statSync(path3.join(root, rel)).isFile()) out.push(rel);
+      if (fs5.statSync(path3.join(root, rel)).isFile()) out.push(rel);
     } catch {
     }
   }
@@ -7784,7 +7803,7 @@ function computePolicyHash(root) {
   for (const rel of files) {
     let content = null;
     try {
-      content = fs4.readFileSync(path3.join(root, rel));
+      content = fs5.readFileSync(path3.join(root, rel));
     } catch {
       content = null;
     }
@@ -7823,7 +7842,7 @@ function pinPolicy(root, via) {
 var import_node_crypto = require("crypto");
 
 // core/src/registry.ts
-var fs5 = __toESM(require("fs"));
+var fs6 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
 var crypto2 = __toESM(require("crypto"));
 var YAML2 = __toESM(require_dist());
@@ -7847,10 +7866,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs5.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs6.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML2.parse(fs5.readFileSync(registryPath(root), "utf8"));
+    doc = YAML2.parse(fs6.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -7875,7 +7894,7 @@ function computeDocHash(root, doc) {
   const abs = path4.join(root, doc.path);
   let buf;
   try {
-    buf = fs5.readFileSync(abs);
+    buf = fs6.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -7910,8 +7929,8 @@ function docsForPhase(root, phase) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs6.realpathSync(path5.resolve(root, rel));
-    const r = path5.relative(fs6.realpathSync(root), real);
+    const real = fs7.realpathSync(path5.resolve(root, rel));
+    const r = path5.relative(fs7.realpathSync(root), real);
     return r && !r.startsWith(`..${path5.sep}`) && r !== ".." && !path5.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
@@ -7934,7 +7953,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs6.readFileSync(path5.resolve(root, rel));
+    return fs7.readFileSync(path5.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -8099,25 +8118,7 @@ function assertPhaseFit(root, phase, paths) {
   );
 }
 function assertInsideRoot(root, paths) {
-  const real = (p) => {
-    let cur = path5.resolve(p);
-    const rest = [];
-    for (; ; ) {
-      try {
-        return path5.join(fs6.realpathSync(cur), ...rest.reverse());
-      } catch {
-      }
-      const parent = path5.dirname(cur);
-      if (parent === cur) return path5.resolve(p);
-      rest.push(path5.basename(cur));
-      cur = parent;
-    }
-  };
-  const base = real(root);
-  const outside = paths.filter((p) => {
-    const rel = path5.relative(base, real(path5.resolve(root, p)));
-    return rel === ".." || rel.startsWith(`..${path5.sep}`) || path5.isAbsolute(rel);
-  });
+  const outside = paths.filter((p) => !isInsideRoot(root, p));
   if (outside.length > 0) {
     throw new Error(
       tr(root, {
@@ -8144,7 +8145,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs6.readFileSync(path5.resolve(root, rel)).toString("utf8");
+      text = fs7.readFileSync(path5.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -8227,7 +8228,7 @@ function feedbackPath(root, phase) {
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs6.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs7.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -8279,25 +8280,25 @@ function verifyGate(root, phase) {
 }
 
 // core/src/wave.ts
-var fs12 = __toESM(require("fs"));
+var fs13 = __toESM(require("fs"));
 var path11 = __toESM(require("path"));
 var YAML5 = __toESM(require_dist());
 
 // core/src/ledger.ts
-var fs7 = __toESM(require("fs"));
+var fs8 = __toESM(require("fs"));
 var path6 = __toESM(require("path"));
 var YAML3 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs7.existsSync(ledgerPath(root))) return [];
-  const doc = YAML3.parse(fs7.readFileSync(ledgerPath(root), "utf8"));
+  if (!fs8.existsSync(ledgerPath(root))) return [];
+  const doc = YAML3.parse(fs8.readFileSync(ledgerPath(root), "utf8"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs7.writeFileSync(tmp, YAML3.stringify({ nodes }));
-  fs7.renameSync(tmp, target);
+  fs8.writeFileSync(tmp, YAML3.stringify({ nodes }));
+  fs8.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -8337,12 +8338,12 @@ function bumpNode(root, id) {
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs7.existsSync(wavesDir(root))) {
-    for (const f2 of fs7.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  if (fs8.existsSync(wavesDir(root))) {
+    for (const f2 of fs8.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs7.readFileSync(path6.join(wavesDir(root), f2), "utf8");
+        txt = fs8.readFileSync(path6.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -8407,26 +8408,26 @@ function mergeNode(root, patch) {
 }
 
 // core/src/runtime.ts
-var fs8 = __toESM(require("fs"));
+var fs9 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
 var f = (root, name) => path7.join(runtimeDir(root), name);
 function noteTurnLogged(root) {
-  fs8.mkdirSync(runtimeDir(root), { recursive: true });
-  fs8.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+  fs9.mkdirSync(runtimeDir(root), { recursive: true });
+  fs9.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
 }
 
 // core/src/evidence.ts
-var fs11 = __toESM(require("fs"));
+var fs12 = __toESM(require("fs"));
 var path10 = __toESM(require("path"));
 
 // core/src/design.ts
-var fs10 = __toESM(require("fs"));
+var fs11 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var crypto4 = __toESM(require("crypto"));
 var YAML4 = __toESM(require_dist());
 
 // core/src/tokens.ts
-var fs9 = __toESM(require("fs"));
+var fs10 = __toESM(require("fs"));
 var path8 = __toESM(require("path"));
 var TOKENS_REL = "design/tokens/design-tokens.json";
 var BANNER = {
@@ -8470,9 +8471,9 @@ function requireWaveId(id) {
 function pngDimensions(pngPath) {
   let fd = null;
   try {
-    fd = fs11.openSync(pngPath, "r");
+    fd = fs12.openSync(pngPath, "r");
     const head = Buffer.alloc(24);
-    if (fs11.readSync(fd, head, 0, 24, 0) < 24) return null;
+    if (fs12.readSync(fd, head, 0, 24, 0) < 24) return null;
     if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
     if (head.readUInt32BE(8) !== 13) return null;
     if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
@@ -8485,7 +8486,7 @@ function pngDimensions(pngPath) {
   } finally {
     if (fd !== null) {
       try {
-        fs11.closeSync(fd);
+        fs12.closeSync(fd);
       } catch {
       }
     }
@@ -8500,7 +8501,7 @@ function validateEvidence(root, waveId) {
   const unusable = /* @__PURE__ */ new Set();
   let names;
   try {
-    names = fs11.readdirSync(dir).sort();
+    names = fs12.readdirSync(dir).sort();
   } catch {
     return {
       ok: false,
@@ -8526,7 +8527,7 @@ function validateEvidence(root, waveId) {
     const abs = path10.join(dir, name);
     let st;
     try {
-      st = fs11.statSync(abs);
+      st = fs12.statSync(abs);
     } catch {
       problems.push(`${name}: ${t({
         en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
@@ -8637,14 +8638,14 @@ ${YAML5.stringify(meta).trimEnd()}
 ${body}`;
 }
 function readWave(root, id) {
-  return parseWave(fs12.readFileSync(wavePath(root, id), "utf8"), langFor(root));
+  return parseWave(fs13.readFileSync(wavePath(root, id), "utf8"), langFor(root));
 }
 function listWaves(root) {
-  if (!fs12.existsSync(wavesDir(root))) return [];
+  if (!fs13.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs12.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  for (const f2 of fs13.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
-      out.push(parseWave(fs12.readFileSync(path11.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
+      out.push(parseWave(fs13.readFileSync(path11.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -8654,22 +8655,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs12.writeFileSync(tmp, serializeWave(meta, body));
-  fs12.renameSync(tmp, target);
+  fs13.writeFileSync(tmp, serializeWave(meta, body));
+  fs13.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs12.existsSync(dir)) return [];
-  return fs12.readdirSync(dir).filter((f2) => {
+  if (!fs13.existsSync(dir)) return [];
+  return fs13.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs12.statSync(path11.join(dir, f2));
+    const st = fs13.statSync(path11.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs12.existsSync(wavesDir(root))) {
-    for (const f2 of fs12.readdirSync(wavesDir(root))) {
+  if (fs13.existsSync(wavesDir(root))) {
+    for (const f2 of fs13.readdirSync(wavesDir(root))) {
       const n = waveNumberOf(f2);
       if (n !== void 0) nums.push(n);
     }
@@ -8699,7 +8700,7 @@ function createWave(root, opts) {
     }));
   }
   const id = nextWaveId(root);
-  if (fs12.existsSync(wavePath(root, id))) {
+  if (fs13.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -8822,7 +8823,7 @@ function markStale(root, id) {
 }
 
 // core/src/report.ts
-var fs13 = __toESM(require("fs"));
+var fs14 = __toESM(require("fs"));
 var path12 = __toESM(require("path"));
 var trFor2 = (lang) => (m) => pick(m, lang);
 var MSG = {
@@ -8868,10 +8869,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs13.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs14.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs13.readdirSync(wavesDir(root));
+    files = fs14.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -8887,14 +8888,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs13.readdirSync(dir);
+    files = fs14.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs13.statSync(path12.join(dir, f2));
+      const st = fs14.statSync(path12.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -9287,7 +9288,7 @@ function buildHub(root) {
 }
 
 // core/src/ship.ts
-var fs14 = __toESM(require("fs"));
+var fs15 = __toESM(require("fs"));
 var path13 = __toESM(require("path"));
 var YAML6 = __toESM(require_dist());
 var trFor3 = (lang) => (m) => pick(m, lang);
@@ -9296,10 +9297,10 @@ var defectsPath = (root) => path13.join(shipDir(root), "defects.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 function readRecords(root, file, key, to) {
-  if (!fs14.existsSync(file)) return [];
+  if (!fs15.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML6.parse(fs14.readFileSync(file, "utf8"));
+    doc = YAML6.parse(fs15.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -9351,16 +9352,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs14.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs14.readdirSync(wavesDir(root));
+    files = fs15.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs14.readFileSync(path13.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs15.readFileSync(path13.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -9440,7 +9441,7 @@ function shipVerdict(root) {
 }
 
 // core/src/doctor.ts
-var fs15 = __toESM(require("fs"));
+var fs16 = __toESM(require("fs"));
 var path14 = __toESM(require("path"));
 var COMPARED_FIELDS = ["phase", "activeWave", "gates", "backtrack"];
 var TMP_RE = /\.tmp-(\d+)$/;
@@ -9458,7 +9459,7 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs15.readdirSync(dir);
+      names = fs16.readdirSync(dir);
     } catch {
       continue;
     }
@@ -9467,8 +9468,8 @@ function sweepOrphanTmp(root) {
       if (!m || pidAlive(Number(m[1]))) continue;
       const p = path14.join(dir, name);
       try {
-        if (!fs15.statSync(p).isFile()) continue;
-        fs15.rmSync(p);
+        if (!fs16.statSync(p).isFile()) continue;
+        fs16.rmSync(p);
         swept++;
       } catch {
       }
@@ -9478,8 +9479,8 @@ function sweepOrphanTmp(root) {
 }
 function countHookErrors(root) {
   const p = path14.join(runtimeDir(root), "hook-errors.log");
-  if (!fs15.existsSync(p)) return 0;
-  return fs15.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  if (!fs16.existsSync(p)) return 0;
+  return fs16.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -9490,11 +9491,11 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  const journalExists = fs15.existsSync(eventsPath(root));
+  const journalExists = fs16.existsSync(eventsPath(root));
   const { events, corruptLines } = readJournal(root);
   const replayed = replayState(events);
   let current = null;
-  if (!fs15.existsSync(statePath(root))) {
+  if (!fs16.existsSync(statePath(root))) {
     issues.push(t({
       en: "state.json is missing \u2014 it must be rebuilt by replaying the journal",
       ko: "state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694"
@@ -9552,7 +9553,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs15.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs16.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -9586,7 +9587,7 @@ function runDoctor(root, opts = {}) {
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs15.existsSync(harnessDir(root))) {
+  if (fs16.existsSync(harnessDir(root))) {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -9632,7 +9633,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs15.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs16.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -9654,7 +9655,7 @@ function runDoctor(root, opts = {}) {
   if (opts.repair && !refused && hookErrors > 0) {
     const log = path14.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs15.renameSync(log, `${log}.prev`);
+      fs16.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -9887,9 +9888,9 @@ function dispatch(root, name, o) {
       const r = submitGate(root, phase, { paths: strArr(o, "paths"), evidence });
       let packet = "";
       try {
-        fs16.mkdirSync(packetsDir(root), { recursive: true });
+        fs17.mkdirSync(packetsDir(root), { recursive: true });
         packet = path15.join(packetsDir(root), `${phase}.md`);
-        fs16.writeFileSync(packet, buildReviewPacket(root, phase));
+        fs17.writeFileSync(packet, buildReviewPacket(root, phase));
       } catch (e) {
         return ok(
           `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}

@@ -42,7 +42,7 @@ import {
   linkCanvas, syncCanvas, extractInventory, recordBaseline,
   generateSourceOfTruthHtml, listCanvasLinks,
 } from './design';
-import { loadProfile, inspectProfile, commandFor, localProfileDir } from './profile';
+import { loadProfile, inspectProfile, commandFor, localProfileDir, isSourcePath, isSourceTree } from './profile';
 import { pinPolicy } from './policy';
 import {
   generatePlaywrightSpec, specFileNameFor, validateEvidence, buildComparisonPacket,
@@ -59,9 +59,9 @@ import {
   recordDeployment, listDeployments, shipVerdict, renderReleaseChecklist,
 } from './ship';
 import type { DefectRecord } from './ship';
-import { isEvidenceGrade, isDocStatus } from './types';
+import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase } from './types';
-import { harnessDir, runtimeDir, packetsDir } from './paths';
+import { harnessDir, runtimeDir, packetsDir, isInsideRoot } from './paths';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
@@ -1200,6 +1200,49 @@ export function run(argv: string[], root: string): number {
               ['tokens.ts', generateTs(doc, lang)],
               ['tailwind.tokens.js', generateTailwind(doc, lang)],
             ];
+            /**
+             * [SEC-296] **하네스 자신의 명령도 같은 규칙을 지난다.**
+             *
+             * 훅은 `harness …` 를 신뢰해 통과시킨다 — 그래서 `--out` 이 임의 경로를 받으면
+             * 그것이 **훅을 우회하는 쓰기 원시명령**이 된다. 실측: P0(설계 트랙)에서
+             * `echo x > src/tokens.ts` 는 deny 인데 `harness tokens gen --out src` 는 통과하고
+             * **기존 소스를 실제로 덮었다**. 루트 밖(`../escaped`)·절대경로(`/tmp/…`)에도 썼다.
+             *
+             * 판정 규칙을 복제하지 않는다 — 위치는 `isInsideRoot`, 「구현인가」는 훅이 쓰는
+             * `implementationReason` 그대로다. 문구만 이 표면의 것이다.
+             */
+            const phase = readState(root).phase;
+            const outsideOut = !isInsideRoot(root, out);
+            if (outsideOut) {
+              throw new Error(L(
+                `Generated tokens must land inside the project — \`${out}\` is outside it. `
+                + 'A harness command is not a way around the write rules the hook applies.',
+                `생성물은 프로젝트 안에 떨어져야 한다 — \`${out}\` 는 루트 밖이다. `
+                + 'harness 명령은 훅이 적용하는 쓰기 규칙을 피해 가는 길이 아니다.'));
+            }
+            /**
+             * 판정은 **프로파일이 선언한 소스 트리**로 한다 — 확장자로 하면 안 된다.
+             * 토큰 생성물은 설계 시스템의 산출물이고 P4 에서 내는 것이 정상 흐름이라,
+             * 「`.ts` 는 소스다」로 막으면 **제품이 시키는 절차 자체가 막힌다**(직접 겪었다).
+             * 막아야 하는 것은 생성이 아니라 **설계 트랙에서 소스 트리에 착지하는 것**이다.
+             */
+            if ((DESIGN_PHASES as readonly string[]).includes(phase)) {
+              const profile = loadProfile(root);
+              for (const [name] of targets) {
+                const rel = path.relative(root, path.resolve(root, out, name));
+                if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+                  throw new Error(L(
+                    `Cannot write ${rel} in the design track (${phase}) — it lands in the source paths `
+                    + `this project's profile declares (profile ${profile.name}, `
+                    + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
+                    + 'Generate into the design area, or move to the build track first.',
+                    `설계 트랙(${phase})에서는 ${rel} 을(를) 쓸 수 없다 — 이 프로젝트 프로파일이 `
+                    + `선언한 소스 경로에 떨어진다 (프로파일 ${profile.name}, `
+                    + `source_globs: ${(profile.sourceGlobs ?? []).join(', ')}). `
+                    + '설계 영역에 내거나, 구축 트랙으로 넘어간 뒤에 실행하라.'));
+                }
+              }
+            }
             fs.mkdirSync(path.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
               fs.writeFileSync(path.resolve(root, out, name), content);

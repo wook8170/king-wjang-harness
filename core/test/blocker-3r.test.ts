@@ -17,7 +17,9 @@ import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
 import { scanBashWrites } from '../src/bashwrite';
 import { CRITICAL_REASONS } from '../src/loop';
+import { upsertDoc } from '../src/registry';
 import { findGroup, renderGroupHelp } from '../src/help';
+import { run } from '../src/cli';
 import type { Phase } from '../src/types';
 
 const setup = (phase: Phase = 'P0'): string => {
@@ -355,5 +357,80 @@ describe('[ENG-292] 소환 사유 목록이 한 벌이다', () => {
     // 정본에 없는 값은 도움말에도 없다 — 사본이 남아 있으면 여기서 드러난다.
     const listed = /--reason <([^>]*)>/.exec(help)?.[1].split('|') ?? [];
     expect(listed.sort(), '도움말 목록이 정본과 다르다').toEqual([...CRITICAL_REASONS].sort());
+  });
+});
+
+describe('[SEC-295] 「프로젝트 안인가」는 하나의 규칙이다 — 등록도 심사 대상을 정한다', () => {
+  /**
+   * 게이트 제출은 루트 밖 경로를 거부하는데 문서 «등록»은 받고 있었다. 그리고 등록된 문서는
+   * 그 페이즈의 리뷰 패킷에 「심사 대상」으로 실린다 — 리뷰어가 저장소에서 볼 수 없는 파일이
+   * 「심사됐다」로 제시된다. 두 문이 다른 답을 내면 느슨한 쪽이 정본이 된다.
+   */
+  it('★ 루트 밖 경로는 등록되지 않는다', () => {
+    const root = setup();
+    for (const bad of ['../outside.txt', '/etc/hosts', '../../etc/passwd', 'docs/../../outside.txt']) {
+      expect(() => upsertDoc(root, { id: 'D-1', phase: 'P0', path: bad, version: 1, status: 'draft', linkedNodes: [] }),
+        `루트 밖을 받았다: ${bad}`).toThrow();
+    }
+  });
+
+  it('프로젝트 안 경로는 그대로 등록된다 — 아직 없는 파일도', () => {
+    const root = setup();
+    for (const ok of ['docs/d.md', './docs/d.md', 'docs/sub/../d.md', 'docs/not-yet.md', '.harness/design/x.md']) {
+      expect(() => upsertDoc(root, { id: `D-${ok}`, phase: 'P0', path: ok, version: 1, status: 'draft', linkedNodes: [] }),
+        `과차단: ${ok}`).not.toThrow();
+    }
+  });
+});
+
+describe('[SEC-296] 하네스 자신의 명령도 훅과 같은 쓰기 규칙을 지난다', () => {
+  /**
+   * 훅은 `harness …` 를 신뢰해 통과시킨다 — 그래서 경로를 받는 플래그가 임의 경로를 받으면
+   * 그것이 **훅을 우회하는 쓰기 원시명령**이 된다. P0 에서 `echo x > src/tokens.ts` 는 deny 인데
+   * `harness tokens gen --out src` 는 통과해 기존 소스를 실제로 덮었다.
+   */
+  const withTokens = (phase: Phase): string => {
+    const root = setup(phase);
+    const dir = path.join(root, '.harness/design/tokens');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'design-tokens.json'), JSON.stringify({
+      schemaVersion: 1,
+      color: { 'text.primary': { light: '#111111', dark: '#f5f5f5' } },
+      space: { md: '16px' },
+      type: { family: { sans: 'Inter, sans-serif' }, size: { md: '16px' },
+              weight: { regular: '400' }, lineHeight: { normal: '1.5' } },
+      radius: { md: '8px' }, shadow: { md: '0 1px 2px rgba(0,0,0,.08)' },
+      motion: { duration: { fast: '120ms' }, easing: { standard: 'cubic-bezier(.2,0,0,1)' } },
+      breakpoint: { md: '768px' },
+    }));
+    fs.writeFileSync(path.join(root, 'src/tokens.ts'), 'export const KEEP = 1\n');
+    return root;
+  };
+  // `run` 은 던지지 않고 종료코드를 낸다 — 0 이 아니면 거부다.
+  const gen = (root: string, out: string): { ok: boolean } => ({ ok: run(['tokens', 'gen', '--out', out], root) === 0 });
+
+  it('★ 설계 트랙에서 소스 트리·루트 밖으로 내지 못한다', () => {
+    const root = withTokens('P0');
+    for (const out of ['src', 'lib', 'app', 'src/ui', '../escaped', '/tmp/kwh-sec296']) {
+      expect(gen(root, out).ok, `통과했다: --out ${out}`).toBe(false);
+    }
+    expect(fs.readFileSync(path.join(root, 'src/tokens.ts'), 'utf8'), '소스가 덮였다')
+      .toContain('KEEP');
+    expect(fs.existsSync('/tmp/kwh-sec296'), '루트 밖에 만들었다').toBe(false);
+  });
+
+  it('설계 영역·문서·빌드 자리에는 그대로 낼 수 있다 — 제품이 시키는 절차를 막지 않는다', () => {
+    const root = withTokens('P0');
+    for (const out of ['.', 'docs', '.harness/design', 'build']) {
+      expect(gen(root, out).ok, `과차단: --out ${out}`).toBe(true);
+    }
+  });
+
+  it('구축 트랙에서는 소스 트리로 낸다', () => {
+    const root = withTokens('P7');
+    expect(gen(root, 'src').ok, 'P7 에서 막았다').toBe(true);
+    // 문구는 lang 에 따라 갈리므로 «원천 경로»로 확인한다 — 생성물에만 박힌다.
+    expect(fs.readFileSync(path.join(root, 'src/tokens.ts'), 'utf8'), 'P7 에서 생성 안 됐다')
+      .toContain('design-tokens.json');
   });
 });

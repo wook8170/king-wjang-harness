@@ -53,7 +53,7 @@ import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
 import { tr } from './tr';
 import type { Msg } from './i18n';
-import { packetsDir } from './paths';
+import { packetsDir, isInsideRoot } from './paths';
 import { computePolicyHash } from './policy';
 import { sanitizeUntrusted } from './untrusted';
 import { loadRegistry } from './registry';
@@ -472,34 +472,8 @@ function assertPhaseFit(root: string, phase: Phase, paths: string[]): void {
  * 산출물 경로만 안 하던 **비대칭**이었다.
  */
 function assertInsideRoot(root: string, paths: string[]): void {
-  /**
-   * 심링크로 밖을 가리키는 경우까지 잡으려면 실경로로 비교해야 한다.
-   *
-   * [VAL-134] 예전에는 해석에 실패하면(= 아직 없는 파일) **리터럴 경로**를 그대로 썼다.
-   * 그러면 루트가 심링크일 때(맥OS 기본 `mktemp` 이 그렇다: `/var/…` → `/private/var/…`)
-   * 루트만 실경로로 풀리고 대상은 안 풀려 **프로젝트 안의 없는 파일이 「밖」으로 판정**됐다.
-   * 원인은 「파일이 없다」인데 「위치가 틀렸다」고 안내하니, 경로가 명백히 프로젝트 안인
-   * 사용자는 무엇을 고쳐야 할지 알 수 없다 — 틀린 곳을 가리키는 거부는 없느니만 못하다.
-   *
-   * 그래서 **존재하는 가장 가까운 조상**까지 풀고 나머지 구간을 다시 붙인다. 존재 여부는
-   * `computeArtifactHash` 가 따로 정확히 말한다 — 이 함수는 위치만 판정한다.
-   */
-  const real = (p: string): string => {
-    let cur = path.resolve(p);
-    const rest: string[] = [];
-    for (;;) {
-      try { return path.join(fs.realpathSync(cur), ...rest.reverse()); } catch { /* 위로 */ }
-      const parent = path.dirname(cur);
-      if (parent === cur) return path.resolve(p);      // 루트까지 못 풀면 리터럴
-      rest.push(path.basename(cur));
-      cur = parent;
-    }
-  };
-  const base = real(root);
-  const outside = paths.filter(p => {
-    const rel = path.relative(base, real(path.resolve(root, p)));
-    return rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel);
-  });
+  // [SEC-295] 위치 판정 규칙은 `paths.ts` 한 벌이다 — 여기서는 **게이트의 문구**만 낸다.
+  const outside = paths.filter(p => !isInsideRoot(root, p));
   if (outside.length > 0) {
     throw new Error(
       tr(root, {
