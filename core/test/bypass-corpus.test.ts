@@ -20,6 +20,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook } from '../src/hook';
+import { run } from '../src/cli';
+import { upsertDoc } from '../src/registry';
 import type { Phase } from '../src/types';
 
 const setup = (phase: Phase = 'P0'): string => {
@@ -165,4 +167,60 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
     expect(ALLOWED.length, '허용 표본이 줄었다 — 차단만 남기면 「전부 막기」가 초록이 된다')
       .toBeGreaterThanOrEqual(64);
   }, 60_000);
+});
+
+/**
+ * **하네스 «자신의 명령»도 코퍼스에 든다.**
+ *
+ * 훅은 `harness …` 를 신뢰해 통과시킨다 — 그래서 경로를 받는 플래그가 임의 경로를 받으면
+ * 그것이 훅을 우회하는 쓰기 원시명령이 된다([SEC-296]: `tokens gen --out src` 가 설계
+ * 트랙에서 소스를 실제로 덮었다). 이 각도는 라운드 3-R 6차 감정확인에서야 열렸다 —
+ * 그래서 여기 넣어 **매 실행마다** 다시 잰다.
+ */
+describe('하네스 명령 표면 — 훅을 신뢰받는 문이 우회로가 되지 않는다', () => {
+  const withTokens = (phase: Phase): string => {
+    const root = setup(phase);
+    const dir = path.join(root, '.harness/design/tokens');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'design-tokens.json'), JSON.stringify({
+      schemaVersion: 1,
+      color: { 'text.primary': { light: '#111111', dark: '#f5f5f5' } },
+      space: { md: '16px' },
+      type: { family: { sans: 'Inter, sans-serif' }, size: { md: '16px' },
+              weight: { regular: '400' }, lineHeight: { normal: '1.5' } },
+      radius: { md: '8px' }, shadow: { md: '0 1px 2px rgba(0,0,0,.08)' },
+      motion: { duration: { fast: '120ms' }, easing: { standard: 'cubic-bezier(.2,0,0,1)' } },
+      breakpoint: { md: '768px' },
+    }));
+    return root;
+  };
+
+  it('★ 경로를 받는 플래그가 루트 밖·설계 트랙 소스로 나가지 못한다', () => {
+    const root = withTokens('P0');
+    const refused = ['src', 'lib', 'app', 'src/ui', '../escaped', '/tmp/kwh-corpus-escape']
+      .filter(out => run(['tokens', 'gen', '--out', out], root) === 0);
+    expect(refused, `--out 이 나가서는 안 되는 곳으로 나갔다`).toEqual([]);
+    expect(fs.existsSync('/tmp/kwh-corpus-escape'), '루트 밖에 만들었다').toBe(false);
+  });
+
+  it('★ 등록도 심사 대상을 정한다 — 루트 밖 문서는 등록되지 않는다', () => {
+    const root = setup();
+    const accepted = ['../outside.txt', '/etc/hosts', '../../etc/passwd']
+      .filter(p2 => {
+        try {
+          upsertDoc(root, { id: 'D', phase: 'P0', path: p2, version: 1, status: 'draft', linkedNodes: [] });
+          return true;
+        } catch { return false; }
+      });
+    expect(accepted, '루트 밖 문서가 등록됐다').toEqual([]);
+  });
+
+  it('제품이 시키는 절차는 막지 않는다 — 설계 영역 생성 · 구축 트랙 소스 생성', () => {
+    const design = withTokens('P0');
+    for (const out of ['.', 'docs', '.harness/design', 'build']) {
+      expect(run(['tokens', 'gen', '--out', out], design), `과차단: --out ${out}`).toBe(0);
+    }
+    const build = withTokens('P7');
+    expect(run(['tokens', 'gen', '--out', 'src'], build), 'P7 에서 막았다').toBe(0);
+  });
 });
