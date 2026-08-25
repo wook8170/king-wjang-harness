@@ -82,11 +82,11 @@ The harness treats **design as enforced, versioned state** — and Claude Design
 
 A wave that references a `UX-` node **cannot be completed without a visual artifact** in `.harness/evidence/<wave-id>/`. Prompt a mockup in Claude Design, export the HTML/PNG, drop it into the evidence folder — the gate opens. No mockup, no completion. **You can't ship a UX feature that was never actually drawn.**
 
-### Claude Design integration — shipped, except the network pull
+### Claude Design integration — shipped, canvas fetch driven by the P4 skill
 
-*(This section used to be titled "roadmap". It was wrong in the quiet direction: everything below except the automatic canvas fetch is implemented and measured. Under-advertising is a documentation defect too — it just does not complain.)*
+*(This section used to be titled "roadmap". It was wrong in the quiet direction: everything below is implemented and measured. The canvas fetch is not in the core — by design, to keep the enforcement hook local — it lives in the P4 skill, which fetches with WebFetch and hands the body to the core. Under-advertising is a documentation defect too — it just does not complain.)*
 
-- **Canvas = the visual source of truth.** One artboard ↔ one UX node (`"UX-7 Checkout"`); the canvas URL lives in the design ledger. **Not shipped:** fetching the canvas over the network — `harness design sync <UX-x> --from <file>` takes content you exported yourself.
+- **Canvas = the visual source of truth.** One artboard ↔ one UX node (`"UX-7 Checkout"`); the canvas URL lives in the design ledger. The **core** never fetches over the network (that keeps the enforcement hook local and fast). The **P4 skill** does it for you: it fetches the canvas with WebFetch and hands the body to `harness design sync <UX-x> --from <file>` in one flow — so the agent pulls the canvas while the core stays local.
 - **`harness design sync`** pulls the canvas, diffs it against the approved hash, and on change **bumps the node's version → propagates STALE.** A canvas edit becomes a *formal design revision* — every downstream build wave is flagged, automatically.
 - **P4 extraction** captures a component inventory and a 2× baseline PNG, later used for visual-regression review.
 - **Feedback loop:** canvas comment threads are collected (`harness gate feedback`) into revisions — an iPad "review → comment → revise → resubmit" loop with no chat.

@@ -55,9 +55,26 @@ Build the canvas with the `design` skill. **One artboard = one UX node**, named 
 `"UX-7 Checkout screen"`. Keep design-system artboards (token sheet, component gallery) separate.
 
 Link the canvas to the ledger with `harness design link --ux UX-7 --url <canvas-url>
-[--artboard <name>]`; `harness design sync UX-7 --from <file>` brings fetched canvas content back
-into the ledger, and `harness design baseline UX-7 --png <file>` records the reference screenshot the
-P9 verifier compares against. Where they disagree, **the HTML of record wins** (the canvas is a visual
+[--artboard <name>]`.
+
+**Pulling a canvas change back is one flow you drive.** The core never touches the network (so that
+the enforcement hook stays local and fast — see the `king-wjang-harness` driver) — the fetch is
+*your* job as the agent, and the core only ever sees the file you hand it:
+
+```bash
+# 1. Fetch the canvas HTML yourself — WebFetch on the canvas URL — and save the body to a file,
+#    e.g. .harness/design/_canvas/UX-7.html
+# 2. Hand that body to the core; it diffs against the approved hash, revises, and records:
+harness design sync UX-7 --from .harness/design/_canvas/UX-7.html
+```
+
+Run this whenever the canvas is edited. On an **approved** node a changed canvas is a formal
+revision — `sync` bumps the node's version and propagates STALE to every referencing wave
+automatically. On a **draft** node (still inside P4) it simply records the new hash. Either way the
+core stays local.
+
+`harness design baseline UX-7 --png <file>` records the reference screenshot the P9 verifier compares
+against. Where the canvas and the HTML of record disagree, **the HTML wins** (the canvas is a visual
 expression of it).
 
 ## The interactive HTML of record
@@ -133,8 +150,10 @@ first and let the user actually click through it. P4 is a gate that is approved 
 - **After the P4 approval the design-system directory is frozen.** PreToolUse catches an attempt to
   add a component that is not in the ledger — if you need one, revise it properly through a backtrack.
 - **Reviewer comments come back through `harness gate feedback <P>`** (`--from <file>` to ingest a
-  collected file). A canvas change still has to be promoted to a revision by hand —
-  `harness node bump UX-x` — or STALE never propagates.
+  collected file). A canvas change still has to be **promoted** to a revision — re-run
+  `harness design sync UX-x --from <file>` (it bumps an approved node automatically), or if you
+  revised the design without a canvas sync, `harness node bump UX-x` by hand. Without one of the two,
+  STALE never propagates.
 
 ## Companion skills (optional)
 
