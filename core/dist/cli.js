@@ -11890,6 +11890,13 @@ function advanceCwd(cwd, op) {
   return normalizePath((cwd ? cwd + "/" : "") + op);
 }
 function resolveIn(cwd, p) {
+  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
+  if (pwdHead !== null) {
+    if (cwd === null) return null;
+    const rest = p.slice(pwdHead[0].length).replace(/^\//, "");
+    const joined = rest === "" ? cwd === "" ? "." : cwd : cwd === "" ? rest : `${cwd}/${rest}`;
+    return /[$`]/.test(joined) ? null : normalizePath(joined);
+  }
   if (/[$`]/.test(p)) return null;
   if (p.startsWith("/") || p.startsWith("~")) return p;
   if (cwd === null) return null;
@@ -11969,33 +11976,54 @@ var PREFIX_COMMANDS = /* @__PURE__ */ new Set([
   // [ENG-217] `busybox` 도 감싸기만 한다 — `busybox sh -c '…'` 의 실행 단위는 `sh -c '…'` 다.
   "busybox"
 ]);
-var PREFIX_FLAG_TAKES_VALUE = /* @__PURE__ */ new Set([
-  "-u",
-  "-g",
-  "-n",
-  "-C",
-  "-S",
-  "-k",
-  "-i",
-  "-o",
-  "--user",
-  "--group",
-  "--chdir",
-  "--signal",
-  "--kill-after",
-  "--adjustment"
-]);
+var PREFIX_FLAG_VALUE = {
+  sudo: /* @__PURE__ */ new Set([
+    "-u",
+    "-g",
+    "-C",
+    "-p",
+    "-D",
+    "-h",
+    "-U",
+    "-r",
+    "-t",
+    "--user",
+    "--group",
+    "--close-from",
+    "--prompt",
+    "--chdir",
+    "--host",
+    "--other-user",
+    "--role",
+    "--type"
+  ]),
+  doas: /* @__PURE__ */ new Set(["-u", "-C"]),
+  env: /* @__PURE__ */ new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"]),
+  nice: /* @__PURE__ */ new Set(["-n", "--adjustment"]),
+  ionice: /* @__PURE__ */ new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
+  timeout: /* @__PURE__ */ new Set(["-k", "-s", "--kill-after", "--signal"]),
+  stdbuf: /* @__PURE__ */ new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
+  chroot: /* @__PURE__ */ new Set(["--userspec", "--groups"]),
+  script: /* @__PURE__ */ new Set(["-c", "--command", "--logging-format", "-B", "-I", "-O", "-T"]),
+  npx: /* @__PURE__ */ new Set(["-p", "-c", "--package", "--call"]),
+  bunx: /* @__PURE__ */ new Set(["-p", "--package"]),
+  pnpx: /* @__PURE__ */ new Set(["-p", "--package"])
+};
+var EMPTY_FLAGS = /* @__PURE__ */ new Set();
 function commandName(tokens) {
   let i = 0;
+  let lastPrefix = -1;
   for (; ; ) {
     while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
     const head = (tokens[i] ?? "").split("/").pop() ?? "";
     if (!PREFIX_COMMANDS.has(head)) break;
+    lastPrefix = i;
+    const takesValue = PREFIX_FLAG_VALUE[head] ?? EMPTY_FLAGS;
     i++;
     while (i < tokens.length) {
       const t = tokens[i];
       if (isFlag(t)) {
-        i += PREFIX_FLAG_TAKES_VALUE.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
+        i += takesValue.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
         continue;
       }
       if (/^\d+(\.\d+)?[smhd]?$/.test(t)) {
@@ -12005,7 +12033,12 @@ function commandName(tokens) {
       break;
     }
   }
-  const raw = tokens[i] ?? "";
+  let raw = tokens[i] ?? "";
+  if (/[\s<>|]/.test(raw) && lastPrefix >= 0) {
+    i = lastPrefix;
+    raw = tokens[i] ?? "";
+  }
+  if (/[\s<>|]/.test(raw)) return { name: "", args: [] };
   return { name: raw.split("/").pop() ?? "", args: tokens.slice(i + 1) };
 }
 var SHELLS_TAKING_C = [
@@ -12065,43 +12098,73 @@ function opaqueExecOf(cmd) {
 }
 function redirectTargets(segment) {
   const out = [];
-  const re = /\d*>>?([|&])?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
   let m;
   while ((m = re.exec(segment)) !== null) {
     const amp = m[1] === "&";
-    const t = m[2] ?? m[3] ?? m[4] ?? "";
+    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? "";
     if (amp && /^\d+$/.test(t)) continue;
     if (t && !t.startsWith("&")) out.push({ path: t, index: m.index });
   }
   return out;
 }
-function innerCommandOf(args) {
-  const takesValue = /* @__PURE__ */ new Set([
-    "-I",
-    "-i",
-    "-L",
-    "-n",
-    "-P",
-    "-s",
-    "-d",
-    "-E",
-    "--replace",
-    "--max-args",
-    "--max-procs",
-    "--delimiter",
-    "--max-chars",
-    "--arg-file",
-    "-a"
-  ]);
+var XARGS_FLAG_VALUE = /* @__PURE__ */ new Set([
+  "-L",
+  "-n",
+  "-P",
+  "-s",
+  "-d",
+  "-E",
+  "-a",
+  "--max-args",
+  "--max-procs",
+  "--delimiter",
+  "--max-chars",
+  "--arg-file"
+]);
+function parseXargs(args) {
+  let mark;
   let i = 0;
   while (i < args.length) {
     const a = args[i];
     if (!isFlag(a)) break;
-    if (takesValue.has(a) && i + 1 < args.length && !isFlag(args[i + 1])) i += 2;
-    else i += 1;
+    if (a === "-I") {
+      const next = args[i + 1];
+      if (next !== void 0 && !isFlag(next)) {
+        mark ??= next;
+        i += 2;
+        continue;
+      }
+      mark ??= "{}";
+      i += 1;
+      continue;
+    }
+    if (a === "-i" || a === "--replace") {
+      mark ??= "{}";
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("--replace=")) {
+      mark ??= a.slice("--replace=".length);
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("-I") && a.length > 2) {
+      mark ??= a.slice(2);
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("-i") && a.length > 2) {
+      mark ??= a.slice(2);
+      i += 1;
+      continue;
+    }
+    i += XARGS_FLAG_VALUE.has(a) && i + 1 < args.length && !isFlag(args[i + 1]) ? 2 : 1;
   }
-  return args.slice(i);
+  return { mark, rest: args.slice(i) };
 }
+var replaceMarkOf = (args) => parseXargs(args).mark;
+var innerCommandOf = (args) => parseXargs(args).rest;
 function scriptFiles(name, args) {
   const carriesProgram = (a) => /^-[A-Za-z]*[ef]$/.test(a) || name !== "sed" && /^-[A-Za-z]*e[A-Za-z]*$/.test(a);
   const operands = [];
@@ -12246,6 +12309,7 @@ function expandStaticVars(rawCmd, env = {}) {
   const lookup = (name) => {
     const local = vars.get(name);
     if (local !== void 0) return local;
+    if (name === "PWD" || name === "OLDPWD") return void 0;
     const e = env[name];
     return e !== void 0 && e !== "" && !/[\s$`"'<>|;&()]/.test(e) ? e : void 0;
   };
@@ -12319,9 +12383,26 @@ function scanBashWrites(rawCmd, env = {}) {
   let opaqueExec = opaqueExecOf(cmd);
   const unresolvedTargets = [];
   const segs = segmentsWithIndex(cmd);
+  const substMarks = /* @__PURE__ */ new Set();
+  for (const seg of segs) {
+    const t = tokenize(seg.text);
+    if (t.length === 0) continue;
+    const c = commandName(t);
+    if (c.name === "xargs") {
+      const mk = replaceMarkOf(c.args);
+      if (mk !== void 0 && mk !== "") substMarks.add(mk);
+    } else if (c.name === "find" && c.args.some((a) => ["-exec", "-execdir", "-ok", "-okdir"].includes(a))) {
+      substMarks.add("{}");
+    }
+  }
+  const isSubst = (t) => [...substMarks].some((m) => t.includes(m));
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   for (const r of redirects) {
+    if (isSubst(r.path)) {
+      unresolvedTargets.push(r.path);
+      continue;
+    }
     const resolved = resolveIn(cwdAt(segs, r.index), r.path);
     if (resolved === null) unresolvedTargets.push(r.path);
     else {
@@ -12554,8 +12635,19 @@ function scanBashWrites(rawCmd, env = {}) {
         const inner = innerCommandOf(args);
         if (inner.length > 0) {
           const sub = scanBashWrites(inner.join(" "));
-          targets.push(...sub.targets);
+          const mark = replaceMarkOf(args);
+          for (const t of sub.targets) {
+            if (mark !== void 0 && t.includes(mark)) unresolvedTargets.push(t);
+            else targets.push(t);
+          }
           unresolvedTargets.push(...sub.unresolvedTargets);
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) {
+            appliesPatch = true;
+            patchFiles.push(...sub.patchFiles);
+          }
+          opaqueExec ??= sub.opaqueExec;
         }
         break;
       }

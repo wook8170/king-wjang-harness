@@ -140,6 +140,18 @@ function resolveIn(cwd: Cwd, p: string): string | null {
    * `D=.harness; echo … >> $D/events.jsonl` 한 줄로 저널 위조가 다시 열렸다(다섯 라운드째
    * 같은 부류의 세 번째 표기). 셸이 나중에 펼 값을 여기서 알 수 없으면 **그 사실을 올린다.**
    */
+  /**
+   * [SEC-279] **`$PWD` 는 모르는 값이 아니다 — 이 세그먼트의 cwd 다.**
+   * 훅은 `cd` 를 이미 추적하므로 정확히 풀 수 있다. `$OLDPWD` 는 추적하지 않으므로
+   * 아래 「모른다」 경로로 떨어진다(보수적). 기준점을 여기 한 곳에만 둔다.
+   */
+  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
+  if (pwdHead !== null) {
+    if (cwd === null) return null;                    // cwd 를 못 읽었다 — 「모른다」
+    const rest = p.slice(pwdHead[0].length).replace(/^\//, '');
+    const joined = rest === '' ? (cwd === '' ? '.' : cwd) : (cwd === '' ? rest : `${cwd}/${rest}`);
+    return /[$`]/.test(joined) ? null : normalizePath(joined);
+  }
   if (/[$`]/.test(p)) return null;
   if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈 — cwd 와 무관하다
   if (cwd === null) return null;
@@ -226,10 +238,36 @@ export const PREFIX_COMMANDS = new Set([
 ]);
 
 /** 접두 명령이 값으로 받는 플래그. 여기 없는 플래그는 값을 안 받는 것으로 본다. */
-const PREFIX_FLAG_TAKES_VALUE = new Set([
-  '-u', '-g', '-n', '-C', '-S', '-k', '-i', '-o', '--user', '--group', '--chdir',
-  '--signal', '--kill-after', '--adjustment',
-]);
+/**
+ * [SEC-280] **「값을 받는 플래그」는 도구마다 다르다 — 평평한 집합은 틀린 모양이었다.**
+ *
+ * 예전에는 접두 명령 전체에 하나의 집합을 썼고 거기에 `-i` 가 있었다. 그런데 `-i` 는
+ * `stdbuf` 에서만 값을 받고 `env`·`sudo` 에서는 **값이 없는 플래그**다(`--ignore-environment`
+ * / login shell). 그래서 `env -i sh -c "echo x > .harness/config.yaml"` 에서 walker 가
+ * `sh` 를 `-i` 의 값으로 삼켜 **실행 단위를 놓쳤고**, 따옴표 안 문자열이 명령 이름 자리로
+ * 올라가 래퍼가 열리지 않았다 — 정책 파일이 실제로 덮였다.
+ *
+ * [SEC-232]·[SEC-259] 와 같은 부류다: **위치·의미 가정을 도구를 가리지 않고 적었다.**
+ * 목록에 없는 접두 명령은 「값 받는 플래그 없음」으로 본다 — 숫자 인자는 아래 `timeout 5`
+ * 규칙이 이미 건너뛴다.
+ */
+const PREFIX_FLAG_VALUE: Record<string, ReadonlySet<string>> = {
+  sudo: new Set(['-u', '-g', '-C', '-p', '-D', '-h', '-U', '-r', '-t',
+                 '--user', '--group', '--close-from', '--prompt', '--chdir', '--host',
+                 '--other-user', '--role', '--type']),
+  doas: new Set(['-u', '-C']),
+  env: new Set(['-u', '-C', '-S', '--unset', '--chdir', '--split-string']),
+  nice: new Set(['-n', '--adjustment']),
+  ionice: new Set(['-c', '-n', '-p', '-P', '-u', '--class', '--classdata', '--pid', '--pgid', '--uid']),
+  timeout: new Set(['-k', '-s', '--kill-after', '--signal']),
+  stdbuf: new Set(['-i', '-o', '-e', '--input', '--output', '--error']),
+  chroot: new Set(['--userspec', '--groups']),
+  script: new Set(['-c', '--command', '--logging-format', '-B', '-I', '-O', '-T']),
+  npx: new Set(['-p', '-c', '--package', '--call']),
+  bunx: new Set(['-p', '--package']),
+  pnpx: new Set(['-p', '--package']),
+};
+const EMPTY_FLAGS: ReadonlySet<string> = new Set();
 
 /**
  * 명령 이름에서 경로·env 접두·**접두 명령**을 벗긴다 (`sudo -u x /usr/bin/tee` → `tee`).
@@ -237,22 +275,36 @@ const PREFIX_FLAG_TAKES_VALUE = new Set([
  */
 function commandName(tokens: string[]): { name: string; args: string[] } {
   let i = 0;
+  let lastPrefix = -1;                                                             // [SEC-280] 되돌아갈 자리
   for (;;) {
     while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;   // env 대입
     const head = (tokens[i] ?? '').split('/').pop() ?? '';
     if (!PREFIX_COMMANDS.has(head)) break;
+    lastPrefix = i;
+    const takesValue = PREFIX_FLAG_VALUE[head] ?? EMPTY_FLAGS;                     // [SEC-280] 도구별
     i++;                                                                           // 접두 명령 자체
     while (i < tokens.length) {                                                    // 그 플래그·값
       const t = tokens[i];
       if (isFlag(t)) {
-        i += PREFIX_FLAG_TAKES_VALUE.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
+        i += takesValue.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
         continue;
       }
       if (/^\d+(\.\d+)?[smhd]?$/.test(t)) { i++; continue; }                       // `timeout 5`
       break;
     }
   }
-  const raw = tokens[i] ?? '';
+  /**
+   * [SEC-280] **명령 이름에는 공백도 리다이렉트도 없다.** 위 walker 가 어긋나면 따옴표 안
+   * 문자열 하나가 이름 자리로 올라오고, `split('/').pop()` 이 그것을 그럴듯한 이름
+   * (`config.yaml`)으로 바꿔 **어긋났다는 사실 자체가 사라진다.**
+   *
+   * 그때는 **마지막 접두 명령 자리로 되돌아간다** — 벗기기가 틀렸다는 뜻이므로 벗기기 전
+   * 상태가 더 참에 가깝다(`busybox -c '…'` 처럼 접두 명령이 곧 셸인 경우가 그렇다).
+   * 되돌아가도 이름이 안 되면 「모른다」로 둔다 — 그럴듯한 이름을 지어내지 않는다.
+   */
+  let raw = tokens[i] ?? '';
+  if (/[\s<>|]/.test(raw) && lastPrefix >= 0) { i = lastPrefix; raw = tokens[i] ?? ''; }
+  if (/[\s<>|]/.test(raw)) return { name: '', args: [] };
   return { name: raw.split('/').pop() ?? '', args: tokens.slice(i + 1) };
 }
 
@@ -394,11 +446,23 @@ function redirectTargets(segment: string): Array<{ path: string; index: number }
   // `>&` 는 두 얼굴이다: `2>&1` 은 **fd 복제**(파일 아님), `echo x >& out.txt` 는 파일 쓰기다.
   // 그래서 `&` 뒤가 숫자뿐이면 대상에서 뺀다 — 안 그러면 흔한 `2>&1` 이 `1` 이라는 파일로 잡혀
   // 정상 명령이 대량으로 deny 되고, 그러면 사람이 하네스를 꺼버린다(과차단이 곧 방어 0).
-  const re = /\d*>>?([|&])?\s*(?:"([^"]*)"|'([^']*)'|([^\s;|&<>()]+))/g;
+  // [SEC-281] 맨 대안에서 **따옴표를 뺀다.** `sh -c "echo x > .harness/config.yaml"` 처럼
+  // 리다이렉트가 따옴표 «안»에 있으면 세그먼트 텍스트에서는 닫는 따옴표가 대상에 붙어
+  // `.harness/config.yaml"` 이 됐다 — 정확한 이름 대조(`CORE_FILES.includes`)가 조용히 빗나간다.
+  /**
+   * [SEC-282] **escape 된 따옴표도 따옴표다.**
+   * `awk "BEGIN{print \\"x\\" > \\"src/app.ts\\"}"` 처럼 대상이 `\\"…\\"` 로 싸이면
+   * 예전 정규식은 맨 대안으로 떨어져 **역슬래시 한 글자**(`\\`)를 대상으로 잡았다 —
+   * 진짜 경로가 판정에서 통째로 사라진다(설계 소스 덮어쓰기 실증). awk 안쪽 `>` 만의
+   * 문제가 아니다: `echo x > \\"src/app.ts\\"` 도 같았다.
+   * 맨 대안에서 역슬래시도 뺀다 — 남은 `\\` 는 경로가 아니라 **추출 실패의 흔적**이고,
+   * 그것을 대상으로 올리면 [SEC-207] 의 「못 봤다를 없다로 읽지 않는다」 안전망이 안 뜬다.
+   */
+  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(segment)) !== null) {
     const amp = m[1] === '&';
-    const t = m[2] ?? m[3] ?? m[4] ?? '';
+    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? '';
     if (amp && /^\d+$/.test(t)) continue; // fd 복제(`2>&1`) — 파일이 아니다
     if (t && !t.startsWith('&')) out.push({ path: t, index: m.index });
   }
@@ -410,18 +474,45 @@ function redirectTargets(segment: string): Array<{ path: string; index: number }
  * 실제 명령이다. 값을 받는 플래그를 목록으로 두는 이유: `-I {}` 처럼 값이 분리돼 오면
  * 그 값을 명령으로 오인해 엉뚱한 것을 판정하게 된다.
  */
-function innerCommandOf(args: string[]): string[] {
-  const takesValue = new Set(['-I', '-i', '-L', '-n', '-P', '-s', '-d', '-E', '--replace', '--max-args',
-    '--max-procs', '--delimiter', '--max-chars', '--arg-file', '-a']);
+/**
+ * [ENG-283] **`xargs` 인자 해석은 한 벌이다.**
+ *
+ * 예전에는 자리표시자를 찾는 쪽과 감싼 명령을 꺼내는 쪽이 **각자 플래그 표**를 들고 있었고,
+ * `-i`·`--replace` 에서 답이 갈렸다 — 한쪽은 다음 토큰을 인자로 삼키고 한쪽은 안 삼켰다.
+ * 같은 질문에 두 답이 있으면 **느슨한 쪽이 정본이 된다**([ENG-199] 와 같은 판단).
+ * 그래서 한 번 훑어 둘 다 낸다.
+ *
+ * `-I` 만 다음 토큰을 **요구**한다. `-i`·`--replace` 는 인자가 선택이라 맨몸이면 기본 `{}` 다 —
+ * 다음 토큰을 삼키면 `xargs -i sh -c …` 에서 `sh` 를 자리표시자로 읽는다(실측으로 뚫렸다).
+ */
+const XARGS_FLAG_VALUE = new Set(['-L', '-n', '-P', '-s', '-d', '-E', '-a', '--max-args',
+  '--max-procs', '--delimiter', '--max-chars', '--arg-file']);
+
+function parseXargs(args: string[]): { mark: string | undefined; rest: string[] } {
+  let mark: string | undefined;
   let i = 0;
   while (i < args.length) {
     const a = args[i];
     if (!isFlag(a)) break;
-    if (takesValue.has(a) && i + 1 < args.length && !isFlag(args[i + 1])) i += 2;
-    else i += 1;
+    if (a === '-I') {
+      const next = args[i + 1];
+      if (next !== undefined && !isFlag(next)) { mark ??= next; i += 2; continue; }
+      mark ??= '{}'; i += 1; continue;
+    }
+    if (a === '-i' || a === '--replace') { mark ??= '{}'; i += 1; continue; }
+    if (a.startsWith('--replace=')) { mark ??= a.slice('--replace='.length); i += 1; continue; }
+    if (a.startsWith('-I') && a.length > 2) { mark ??= a.slice(2); i += 1; continue; }
+    if (a.startsWith('-i') && a.length > 2) { mark ??= a.slice(2); i += 1; continue; }
+    i += XARGS_FLAG_VALUE.has(a) && i + 1 < args.length && !isFlag(args[i + 1]) ? 2 : 1;
   }
-  return args.slice(i);
+  return { mark, rest: args.slice(i) };
 }
+
+/** [SEC-281] 치환 자리표시자 — `parseXargs` 한 벌에서 나온다. */
+const replaceMarkOf = (args: string[]): string | undefined => parseXargs(args).mark;
+
+/** xargs 가 감싼 진짜 명령 — `parseXargs` 한 벌에서 나온다. */
+const innerCommandOf = (args: string[]): string[] => parseXargs(args).rest;
 
 /**
  * [EFF-109] `sed`·`perl`·`ruby` 의 피연산자에서 **프로그램(치환 스크립트)을 뺀 파일들**.
@@ -609,6 +700,18 @@ export function expandStaticVars(rawCmd: string, env: Record<string, string | un
   const lookup = (name: string): string | undefined => {
     const local = vars.get(name);
     if (local !== undefined) return local;
+    /**
+     * [SEC-279] **`PWD`·`OLDPWD` 는 훅 프로세스의 값으로 펴지 않는다.**
+     *
+     * 이 둘은 셸이 유지하는 값이고 `cd` 를 따라간다 — 훅 프로세스의 `process.env.PWD` 는
+     * 명령이 실제로 도는 자리와 다를 수 있고, 실제로 달랐다:
+     * `cd docs && echo x > $PWD/../.harness/config.yaml` 에서 셸의 `$PWD` 는 `<root>/docs`
+     * 라 `..` 가 **루트**인데, 훅은 자기 env 의 `<root>` 로 펴서 `..` 를 **루트 밖(무해)**
+     * 으로 읽었다 — [SEC-276] 과 똑같이 **기준점이 어긋나** 정책 파일이 실제로 덮였다.
+     * `PWD` 는 아래 `resolveIn` 이 **세그먼트의 가상 cwd** 로 푼다(기준점이 하나여야 한다).
+     * 명령문 안의 명시적 대입(`PWD=/x`)은 정적으로 보이므로 그대로 둔다.
+     */
+    if (name === 'PWD' || name === 'OLDPWD') return undefined;
     const e = env[name];
     return e !== undefined && e !== '' && !/[\s$`"'<>|;&()]/.test(e) ? e : undefined;
   };
@@ -759,9 +862,30 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니고,
   // `2>&1` 의 `&` 가 분해 기준이라 세그먼트로 끊으면 리다이렉트가 반토막 난다.
   // 대신 **매치 위치**로 자기 세그먼트의 cwd 를 찾아 정규화한다([SEC-170]).
+  /**
+   * [SEC-281] **이 명령 안에서 「실행 시점에 바뀌는」 이름들.**
+   * `xargs -I{}` 의 `{}`·`find -exec` 의 `{}` 가 그것이다. 리다이렉트는 세그먼트 분해 전에
+   * 원문에서 훑으므로 여기서 한 번 모아 두고, 대상이 그것을 품으면 리터럴이 아니라
+   * **「모른다」**로 올린다 — `{}` 를 파일 이름으로 읽으면 어떤 보호 경로에도 안 걸린다.
+   */
+  const substMarks = new Set<string>();
+  for (const seg of segs) {
+    const t = tokenize(seg.text);
+    if (t.length === 0) continue;
+    const c = commandName(t);
+    if (c.name === 'xargs') {
+      const mk = replaceMarkOf(c.args);
+      if (mk !== undefined && mk !== '') substMarks.add(mk);
+    } else if (c.name === 'find' && c.args.some(a => ['-exec', '-execdir', '-ok', '-okdir'].includes(a))) {
+      substMarks.add('{}');
+    }
+  }
+  const isSubst = (t: string): boolean => [...substMarks].some(m => t.includes(m));
+
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   for (const r of redirects) {
+    if (isSubst(r.path)) { unresolvedTargets.push(r.path); continue; }
     const resolved = resolveIn(cwdAt(segs, r.index), r.path);
     if (resolved === null) unresolvedTargets.push(r.path);
     else { targets.push(resolved); placed.push({ path: resolved, at: r.index }); }
@@ -1105,8 +1229,30 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         const inner = innerCommandOf(args);
         if (inner.length > 0) {
           const sub = scanBashWrites(inner.join(' '));
-          targets.push(...sub.targets);
+          /**
+           * [SEC-281] **치환 자리표시자는 파일 이름이 아니다.**
+           * `xargs -I{} sh -c "echo x > {}" <<< "src/app.ts"` 에서 `{}` 를 리터럴 대상으로
+           * 읽으면 판정은 「`{}` 라는 파일에 쓴다」가 되어 **어떤 보호 경로에도 안 걸린다** —
+           * 실제로는 stdin 이 준 `src/app.ts` 에 쓴다(설계 소스 덮어쓰기 실증됨).
+           * 자리표시자는 `-I` 가 정하므로 이름을 가릴 필요가 없다(`{}`·`%`·`@` 무엇이든).
+           * 「모른다」로 올리면 호출측 안전망(이름·언급 기반)이 그대로 받는다.
+           */
+          const mark = replaceMarkOf(args);
+          for (const t of sub.targets) {
+            if (mark !== undefined && t.includes(mark)) unresolvedTargets.push(t);
+            else targets.push(t);
+          }
           unresolvedTargets.push(...sub.unresolvedTargets);
+          /**
+           * [SEC-281] **거울 자리 — `sh -c` 분기는 올리는데 여기는 안 올렸다.**
+           * `echo src/app.ts | xargs -I{} cp /tmp/x {}` 은 감싼 안쪽이 `cp`(변형)인데
+           * `mutating` 이 false 로 남아 호출측 안전망이 **하나도 발화하지 않았다.**
+           * 안쪽이 변형이면 바깥도 변형이다 — 래퍼는 사실을 가리지 않는다.
+           */
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) { appliesPatch = true; patchFiles.push(...sub.patchFiles); }
+          opaqueExec ??= sub.opaqueExec;
         }
         break;
       }
