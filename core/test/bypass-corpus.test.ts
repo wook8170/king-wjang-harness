@@ -105,6 +105,10 @@ const notations = (t: string): string[] => {
     `echo x > ${dir}/${base.charAt(0)}'${base.slice(1)}'`,          // 중간 작은따옴표
     `echo x > ""${t}`,                                              // 빈 따옴표 접두
     `printf x | dd of=${t.replace(/\.([A-Za-z0-9]+)$/, '\\.$1')}`,  // dd 역슬래시
+    // [SEC-300/11차] `\`+개행 줄이음 — 셸이 두 줄을 한 단어로 잇는다. 세그먼트 분해 전에 접어야 잡힌다.
+    `echo x > ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,        // 리다이렉트 줄이음
+    `echo x | tee ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,    // tee 줄이음
+    `cp /tmp/x ${dir}/${base.charAt(0)}\\\n${base.slice(1)}`,       // cp 줄이음
   ];
 };
 

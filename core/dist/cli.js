@@ -7399,6 +7399,7 @@ var MUTATING_TOKENS = [
   "rmdir",
   "find"
 ];
+var foldLineContinuations = (s) => s.replace(/\\\r?\n/g, "");
 function tokenize(segment) {
   const out = [];
   let cur = "";
@@ -8047,7 +8048,7 @@ function underDir(dir, sources) {
   return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
 }
 function scanBashWrites(rawCmd, env = {}) {
-  const cmd = expandStaticVars(rawCmd, env);
+  const cmd = expandStaticVars(foldLineContinuations(rawCmd), env);
   const targets = [];
   const aliases = [];
   const placed = [];
@@ -8382,7 +8383,7 @@ function judgeableLines(cmd) {
 }
 function commandLines(cmd) {
   const out = [];
-  for (const segment of cmd.split(SEGMENT_SPLIT)) {
+  for (const segment of foldLineContinuations(cmd).split(SEGMENT_SPLIT)) {
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);

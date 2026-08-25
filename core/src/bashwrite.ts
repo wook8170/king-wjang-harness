@@ -41,6 +41,17 @@ const MUTATING_TOKENS = [
 
 /** 따옴표를 존중하는 토크나이저. 이스케이프는 다루지 않는다(모델이 쓰는 표현 범위). */
 /**
+ * [SEC-300] **`\`+개행(줄이음)은 셸이 «지우는» 인용소거 규칙이다** — 두 줄을 한 단어로 잇는다.
+ * `echo x > .harness/con\⏎fig.yaml` 은 실제로 `.harness/config.yaml` 에 착지한다. 그런데 하네스는
+ * 개행을 무조건 세그먼트 경계로 쪼개고, 대상이 `\` 에서 잘려 `.harness/con\` 라는 «항상 허용되는
+ * `.harness/` 접두»로 떨어졌다(코어·정책·소스·배포게이트 전부 우회, 끝단 실증). 그래서 **세그먼트로
+ * 쪼개기·토큰화 «전»에 줄이음부터 접는다.** 세그먼트/리다이렉트/토큰이 전부 이 정본을 지난 뒤 판정한다.
+ * (인용 안 `\`+개행까지 접는 것은 큰따옴표에선 실 bash 와 같고, 작은따옴표 안은 리터럴 개행이라
+ * 애초에 보호 파일명과 다른 이름이 된다 — 과차단 0 을 짝으로 확인.)
+ */
+const foldLineContinuations = (s: string): string => s.replace(/\\\r?\n/g, '');
+
+/**
  * 세그먼트를 셸처럼 토큰으로 나누며 **인용/이스케이프를 해소**한다 — 훅이 「셸이 실제로
  * 착지시킬 경로」를 판정하도록. 따옴표는 벗기고, 역슬래시는 다음 글자를 리터럴로 만든다.
  *
@@ -969,8 +980,9 @@ function underDir(dir: string, sources: readonly string[]): string[] {
 }
 
 export function scanBashWrites(rawCmd: string, env: Record<string, string | undefined> = {}): BashWriteScan {
+  // [SEC-300] 줄이음(`\`+개행)을 세그먼트 분해 전에 접는다 — 셸이 지우는 것을 훅도 지운다.
   // [SEC-216] 볼 수 있는 대입은 먼저 편다 — 그래야 남는 것이 진짜 신호가 된다.
-  const cmd = expandStaticVars(rawCmd, env);
+  const cmd = expandStaticVars(foldLineContinuations(rawCmd), env);
   const targets: string[] = [];
   /**
    * [SEC-268] 별칭 맵 — 이 명령 안에서 «곧 생길» 이름과 그것이 가리킬 원본.
@@ -1522,7 +1534,8 @@ export function judgeableLines(cmd: string): string[] {
 
 export function commandLines(cmd: string): string[] {
   const out: string[] = [];
-  for (const segment of cmd.split(SEGMENT_SPLIT)) {
+  // [SEC-300] 줄이음을 세그먼트 분해 전에 접는다 — 배포/인터프리터 판정도 같은 맹점이 있었다.
+  for (const segment of foldLineContinuations(cmd).split(SEGMENT_SPLIT)) {
     const tokens = tokenize(segment);
     if (tokens.length === 0) continue;
     const { name, args } = commandName(tokens);
