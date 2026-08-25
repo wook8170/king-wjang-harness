@@ -1,5 +1,27 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (12) — ★ ULTRAGOAL 시작: 출하까지 「감사→보완」 루프 · G001(축2) 진행 중
+
+**정본.** `main` HEAD `9f05b62` · 미푸시 0 · **1384 green·tsc 0** · 버전 **0.1.1**(package/plugin/
+marketplace/CHANGELOG/CLI --version 전부 정합).
+
+### 사용자 지시: `/ultragoal 출하 가능할때까지 감사→보완 사이클 계속 반복`
+- **ultragoal 플랜 생성**(`.omc/ultragoal/`, --force 로 낡은 라운드3 교체 · 백업 `scratchpad/ultragoal-round3-backup/`).
+  7 스토리: **G001 축2실효성 → G002 축5가성비 → G003 축1효용 → G004 축6사용성 → G005 축7상품성 →
+  G006 재감정(루프) → G007 최종게이트(ai-slop+verify+code-review)**. 목표: 7축 전부 3-R ≥4.8 + 대장 open 0.
+- **`/goal` 필요**: 셸에서 못 검. 세션 자동 연속을 위해 **사용자가 아래 조건으로 `/goal` 타이핑**해야 함(안내함).
+  ledger 는 durable(세션/워크트리 넘어 유지), `/goal` 은 세션 stop-guard.
+- 관리 명령: `omc ultragoal status` · `complete-goals`(다음 스토리 핸드오프) · `checkpoint --goal-id <id> --status complete`.
+
+### G001 (축2 실효성) — 진행 중
+- **보완(완료분)**: F1/F2/F4 벡터를 `bypass-corpus.test.ts` **상시 코퍼스**로 편입(코어·정책은 배열·중첩·
+  디코이·길이패딩 어디 숨겨도 deny P0·P7 · 정상 문서쓰기 부차 소스참조에도 통과). 버전 0.1.1 정합. 커밋 `9f05b62`.
+- **감사(진행 중)**: **감정확인 10차** 독립 적대 스윕 백그라운드(`scratchpad/sec299-verify3.md`,
+  VERDICT: CLEAN / NEW-FINDINGS). 새 각도(D1 닫힘 가능성·잠금 MCP 우회·새 셸표기·SHIP/degraded·비-pre-tool 훅).
+- **다음**: 10차 결과 → 발견분 보완/봉인 or CLEAN 이면 G001 checkpoint → `complete-goals` 로 G002(축5).
+
+---
+
 ## 2026-08-26 (11) — ★ SEC-299 봉인 8→9→9-2 (깨짐 2회) · 정본 커밋·설치 완료 · 판정 출하 불가
 
 **정본.** `main` HEAD `9fad50b` · **origin/main 푸시 완료**(미푸시 0) · 워킹트리 clean · **1382 green·tsc 0** ·
