@@ -1,9 +1,27 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (12) — ★ ULTRAGOAL 시작: 출하까지 「감사→보완」 루프 · G001(축2) 진행 중
+## 2026-08-26 (12) — ★ ULTRAGOAL G001(축2): 감사 10차가 **CRITICAL SEC-300** 발견·봉인 · 11차 재검증 중
 
-**정본.** `main` HEAD `9f05b62` · 미푸시 0 · **1384 green·tsc 0** · 버전 **0.1.1**(package/plugin/
-marketplace/CHANGELOG/CLI --version 전부 정합).
+**정본.** `main` HEAD `e79a9c6` · 미푸시 0 · **1384 green·tsc 0** · 버전 **0.1.2**(4소스+CHANGELOG 정합) ·
+대장 verified 316. **로컬 설치는 아직 0.1.1(SEC-300 취약)** — 11차 통과 후 0.1.2 재설치 예정.
+
+### ★ SEC-300 (CRITICAL·BLOCKER) — ultragoal 감사→보완 루프가 잡은 것
+- **10차 독립 감사 발견**: 쓰기 대상 경로에 **역슬래시/중간 따옴표** → `bashwrite.ts` redirectTargets
+  정규식이 대상을 잘라(`.harness/events\.jsonl`→`.harness/events`) 코어·정책·소스 보호 **전부** 비껴감.
+  **끝단 실증**(Bash): 정책파일 덮임 · 저널에 gate-approved 위조→`npm publish` 승인없이 개통. 전 페이즈·degraded 무관.
+- **봉인**: `tokenize` 를 셸 인용/이스케이프 해소 **정본 하나**로(따옴표+`\x→x`), redirectTargets 가 대상을
+  한 토큰 런으로 잡아 tokenize 로 착지경로 획득. 실측 전건 deny·과차단 0. bypass-corpus `notations()` 상시편입.
+  대장 SEC-300 verified. 커밋 `e79a9c6`.
+- **11차 독립 재검증 진행 중**(`scratchpad/sec300-verify.md`, VERDICT: HOLDS/BROKEN/NEW-FINDINGS).
+
+### ⚠️ 사고: 자기 참조 self-enforcement (CLAUDE.md 함정 실제 발생)
+- 10차 검증자(또는 프로브)가 `CLAUDE_PROJECT_DIR` 없이 `harness init` 을 돌려 **repo 루트에 `.harness/` 생성**
+  → 설치된 훅이 자기 소스 repo 에 설계트랙 강제(내 소스 편집이 P0 deny 됨). **삭제로 복구**(untracked, bare init).
+  **다음: 서브에이전트 지시에 `CLAUDE_PROJECT_DIR` 매 명령 유지 강조**(이미 11차 지시엔 넣음). repo `.harness/` 는 사고물.
+
+### ULTRAGOAL 플랜 (7 스토리, `.omc/ultragoal/` gitignored·로컬 durable)
+G001 축2 → G002 축5 → G003 축1 → G004 축6 → G005 축7 → G006 재감정(루프) → G007 최종게이트.
+`/goal` 아직 사용자 미입력(자동연속 조건). 관리: `omc ultragoal status`·`checkpoint --goal-id <id> --status complete`.
 
 ### 사용자 지시: `/ultragoal 출하 가능할때까지 감사→보완 사이클 계속 반복`
 - **ultragoal 플랜 생성**(`.omc/ultragoal/`, --force 로 낡은 라운드3 교체 · 백업 `scratchpad/ultragoal-round3-backup/`).
