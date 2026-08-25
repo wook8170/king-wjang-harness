@@ -160,18 +160,49 @@ describe('[COST-177] 폴백은 손상 저널에서도 싸다 — 가장 필요�
     expect(j.events.map(e => e.type)).toEqual(['phase-set', 'gate-approved']);
   });
 
+  /**
+   * [ENG-278] **문턱을 밀리초가 아니라 「예외 폭주 그 자체」와의 비교로 잡는다.**
+   *
+   * 원래는 `< 200ms` 였다. 잡으려는 것은 「줄마다 예외」라는 **부류**인데, 절대 밀리초는
+   * 머신 속도를 적어 둔 것이라 회귀 없이도 빨강이 된다(이 머신 실측 345ms).
+   * 그래서 **같은 입력에 대해 폭주 버전을 실제로 돌려** 기준선을 그 자리에서 만든다 —
+   * 느린 머신은 양쪽을 똑같이 늦추므로 비율은 흔들리지 않는다.
+   * 실측 분리도는 자릿수다(구현 26ms vs 폭주 10,026ms = 385배).
+   */
   it('10만 줄 전부 손상이어도 예외 폭주로 느려지지 않는다', () => {
     const root = setup();
     journal(root, Array.from({ length: 100_000 }, () => '{broken line ' + 'x'.repeat(40)));
-    readJournalForReplay(root);                       // 워밍업
-    const t0 = Date.now();
-    const j = readJournalForReplay(root);
-    const ms = Date.now() - t0;
-    expect(j.corruptLines).toBe(100_000);
-    // 수정 전 실측 p95 573ms(같은 머신). 문턱은 넉넉히 잡는다 — 잡으려는 것은
-    // 「줄마다 예외」라는 **부류**이지 특정 머신의 밀리초가 아니다.
-    expect(ms, `손상 저널 폴백이 ${ms}ms 걸렸다 — 예외 폭주가 돌아왔는지 보라`).toBeLessThan(200);
-  });
+    expect(readJournalForReplay(root).corruptLines).toBe(100_000);
+
+    // 기준선은 이 머신에서 지금 만든다 — 같은 내용을 「줄마다 예외」로 훑는 버전.
+    const ctl = setup();
+    const lines = Array.from({ length: 10_000 }, () => '{broken line ' + 'x'.repeat(40));
+    journal(ctl, lines);
+    const file = path.join(ctl, '.harness/events.jsonl');
+    const storm = (): number => {
+      let n = 0;
+      for (const l of fs.readFileSync(file, 'utf8').split('\n')) {
+        if (!l) continue;
+        try { JSON.parse(l); } catch { n++; }
+      }
+      return n;
+    };
+    const best = (f: () => unknown): number => {
+      let b = Infinity;
+      for (let i = 0; i < 2; i++) {
+        const t0 = process.hrtime.bigint();
+        f();
+        b = Math.min(b, Number(process.hrtime.bigint() - t0) / 1e6);
+      }
+      return b;
+    };
+    best(() => readJournalForReplay(ctl)); best(storm);            // 워밍업(둘 다)
+    const msImpl = best(() => readJournalForReplay(ctl));
+    const msStorm = best(storm);
+
+    expect(msImpl, `구현 ${msImpl.toFixed(0)}ms vs 예외 폭주 ${msStorm.toFixed(0)}ms — 폭주가 돌아왔는지 보라`)
+      .toBeLessThan(msStorm / 10);
+  }, 60_000);
 });
 
 describe('[UX-182] 한 문장 안의 두 이름은 같아야 한다', () => {

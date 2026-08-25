@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initHarness, readState, writeState } from '../src/state';
 import { handleHook, isWriteTool } from '../src/hook';
-import { SHELLS_TAKING_C, isReadOnlyCommand } from '../src/bashwrite';
+import { SHELLS_TAKING_C, isReadOnlyCommand, scanBashWrites, PATH_MAX_GUESS } from '../src/bashwrite';
 import { isDeployCommand, loadProfile } from '../src/profile';
 import type { Phase } from '../src/types';
 
@@ -209,22 +209,62 @@ describe('[SEC-233] 읽지 못한 페이로드는 통과가 아니다', () => {
  * 속도가 다르기 때문이고, **2차가 살아나면 이 여유로는 못 덮는다**(수십 초가 된다).
  */
 describe('[COST-260] 긴 명령에서도 판정이 끝난다 — 멈추는 훅은 통과하는 훅이다', () => {
-  it('★ `cd` + 리다이렉트 800세그먼트가 상한 안에 끝난다', () => {
+  /**
+   * [ENG-278] **이 검사는 「시간」이 아니라 「상한이 걸렸는가」를 본다.**
+   *
+   * 원래 여기엔 `800세그먼트 < 2000ms` 하나만 있었다. 그 문턱은 **저자 머신의 속도**를
+   * 적어 둔 것이었고, 다른 머신에서는 회귀가 없어도 빨강이 된다 — 실측으로 3회 중 2회
+   * 실패했다(3548ms · 4190ms · 통과). 그런데 같은 측정을 [COST-260] 을 **고친 그 커밋**
+   * (`6703ed8`)에서 돌리면 오히려 **더 느리다**(800세그먼트 3925ms vs 현재 2574ms).
+   * 즉 빨강의 원인은 회귀가 아니라 문턱이었다. 흔들리는 검사는 이 리포가 싫어하는
+   * 부류다 — 우연을 고정하고, 사람이 빨강을 무시하게 만든다.
+   *
+   * 그래서 **[COST-260] 의 처방 자체**를 단언한다: 가상 cwd 에 길이 상한(`PATH_MAX_GUESS`)이
+   * 있고, 그것을 넘으면 대상이 **미해결로 올라간다**. 이 단언은 시간에 의존하지 않으므로
+   * 부하로 흔들리지 않는다. 상한이 **방어를 되돌리지 않는다**는 짝도 함께 잰다 —
+   * 상한만 재면 「전부 모른다고 답하기」로도 초록이 되기 때문이다.
+   */
+  const deepCd = (n: number): string => Array.from({ length: n }, () => 'cd x').join(' ; ');
+
+  it('★ 가상 cwd 상한이 실제로 걸린다 — 넘으면 「모른다」로 올라간다', () => {
+    // 경계 아래: 그대로 해석된다(상한이 정상 명령을 잡아먹지 않는다).
+    const under = scanBashWrites(`${deepCd(2040)} ; echo x > f`);
+    expect(under.unresolvedTargets, '상한 아래인데 미해결로 올라갔다').toEqual([]);
+    expect(under.targets.some(t => t.length > PATH_MAX_GUESS / 2), '해석된 대상이 없다').toBe(true);
+
+    // 경계 위: 해석을 포기하고 사실(「모른다」)로 올린다 — 그것이 2차를 끊는 자리다.
+    const over = scanBashWrites(`${deepCd(2050)} ; echo x > f`);
+    expect(over.unresolvedTargets, '상한을 넘었는데 계속 해석했다 — 2차가 살아났다').toContain('f');
+  });
+
+  it('상한을 넘어도 하네스 소유 이름은 막힌다 — 상한이 방어를 되돌리지 않는다', () => {
+    const root = setup('P0');
+    // 경로가 안 풀려도 **파일 이름만으로** 지킨다(`unresolvedTargets` 계약).
+    expect(denied(bash(root, `${deepCd(2050)} ; echo boom > .harness/config.yaml`)), '상대경로를 놓쳤다').toBe(true);
+    expect(denied(bash(root, `${deepCd(2050)} ; echo boom > config.yaml`)), '이름만 남은 코어 파일을 놓쳤다').toBe(true);
+  });
+
+  it('상한을 넘어도 무해한 쓰기는 통과한다 — 과차단은 결함과 같은 무게다', () => {
+    const root = setup('P0');
+    expect(denied(bash(root, `${deepCd(2050)} ; echo ok > notes.txt`)), '깊은 cwd 를 이유로 과차단했다').toBe(false);
+  });
+
+  it('★ 800세그먼트 판정이 훅 타임아웃 안에서 끝난다 — 2차면 자릿수로 벌어진다', () => {
     const root = setup('P0');
     const cmd = Array.from({ length: 800 }, () => 'cd x > f').join(' ; ');
     const t0 = process.hrtime.bigint();
     bash(root, cmd);
     const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    // 수정 전 실측 ~15,000ms · 수정 후 ~200ms. 2초는 느린 머신까지 덮되 2차는 못 덮는 여유다.
-    expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 — 2차가 살아났다`).toBeLessThan(2000);
+    /**
+     * [ENG-278] 문턱을 **훅 자신의 계약**에서 가져온다 — `hooks/hooks.json` 의 timeout 은
+     * 10초이고 **타임아웃은 fail-open** 이다. 8초는 그 아래이면서, 관측된 최악
+     * (부하 있는 병렬 실행에서 4265ms)의 두 배에 가깝다. 2차 회귀는 이 여유로 못 덮는다 —
+     * 수정 전 실측이 저자 머신에서 15초였고, 느린 머신에서는 분 단위가 된다.
+     * **이 검사는 자릿수 회귀만 잡는다.** 상수 회귀는 위 구조 단언이 맡는다.
+     */
+    expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 — 2차가 살아났다`).toBeLessThan(8000);
   }, 30_000);
 
-  /**
-   * 「배가 비율이 3배 미만」 검사도 넣어 봤으나 **뺐다** — 시간 비율은 다른 테스트와 병렬로
-   * 돌 때의 부하에 흔들려 초록·빨강이 갈렸다. 흔들리는 검사는 이 리포가 싫어하는 부류다
-   * (우연을 고정하고, 사람이 빨강을 무시하게 만든다). 2차 회귀는 **절대 상한**이 확실히
-   * 잡는다 — 2차면 800세그먼트가 15초이고, 위 2초 문턱을 부하로 설명할 수 없다.
-   */
 
   it('긴 명령이 판정을 흐리지 않는다 — 위반은 그대로 잡힌다', () => {
     // 성능만 재면 「전부 통과」로도 초록이 된다. 짝을 함께 잰다.
