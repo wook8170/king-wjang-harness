@@ -7907,6 +7907,7 @@ function docsForPhase(root, phase) {
 }
 
 // core/src/gate.ts
+var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
     const real = fs6.realpathSync(path5.resolve(root, rel));
@@ -7924,7 +7925,7 @@ var MIN_SUBSTANCE_CHARS = 80;
 var MIN_DISTINCT_CHARS = 12;
 var MIN_WORDS = 5;
 function distinctCharCount(text) {
-  return new Set(text.replace(/[^\p{L}\p{N}]/gu, "")).size;
+  return new Set(text.replace(NON_ALNUM_RE, "")).size;
 }
 function wordCount(text) {
   return text.split(/\s+/u).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
@@ -7974,7 +7975,7 @@ function assertSubstantive(root, arts) {
     );
   }
   const textual = arts.filter((a) => !a.binary);
-  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(/[^\p{L}\p{N}]/gu, "");
+  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(NON_ALNUM_RE, "");
   if (textual.length > 0 && residual.length === 0) {
     throw new Error(
       tr(root, {
@@ -8337,7 +8338,7 @@ function bumpNode(root, id) {
   const affectedWaves = [];
   const unverifiable = [];
   if (fs7.existsSync(wavesDir(root))) {
-    for (const f2 of fs7.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+    for (const f2 of fs7.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
@@ -8600,6 +8601,12 @@ function hasMeasuredEvidence(root, waveId) {
 }
 
 // core/src/wave.ts
+var isWaveFile = (name) => WAVE_FILE_RE.test(name);
+var WAVE_FILE_RE = /^wave-\d+\.md$/;
+var waveNumberOf = (name) => {
+  const m = /^wave-(\d+)\.md$/.exec(name);
+  return m ? Number(m[1]) : void 0;
+};
 function parseWave(txt, lang = DEFAULT_LANG) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
@@ -8635,7 +8642,7 @@ function readWave(root, id) {
 function listWaves(root) {
   if (!fs12.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs12.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs12.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
       out.push(parseWave(fs12.readFileSync(path11.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
@@ -8663,8 +8670,8 @@ function nextWaveId(root) {
   const nums = [];
   if (fs12.existsSync(wavesDir(root))) {
     for (const f2 of fs12.readdirSync(wavesDir(root))) {
-      const m = /^wave-(\d+)\.md$/.exec(f2);
-      if (m) nums.push(parseInt(m[1], 10));
+      const n = waveNumberOf(f2);
+      if (n !== void 0) nums.push(n);
     }
   }
   for (const ev of readEvents(root)) {
@@ -8868,7 +8875,7 @@ function waveEntries(root, t) {
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
-  for (const f2 of files.filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt(() => readWave(root, id).meta);
     if (r.ok) entries.push({ id, meta: r.value });
@@ -9351,7 +9358,7 @@ function waveEntries2(root, t) {
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
-  for (const f2 of files.filter((n) => /^wave-\d+\.md$/.test(n)).sort()) {
+  for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt2(() => parseWave(fs14.readFileSync(path13.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });

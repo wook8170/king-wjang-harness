@@ -17,6 +17,20 @@ import { validateEvidence } from './evidence';
  * 호출측이 쥔 파일명(id 파라미터) 기준이다 (writeWave 참조).
  */
 /** lang 은 호출측(readWave)이 root 에서 해석해 넘긴다 — 순수 파서가 파일을 읽지 않게. */
+/**
+ * [ENG-294] **웨이브 파일 이름 규칙은 한 벌이다.**
+ * 같은 정규식이 `adr`·`ledger`·`report`·`ship`·`wave` 다섯 파일에 흩어져 있었다 —
+ * 이름 규칙이 바뀌면 다섯 곳이 함께 바뀌어야 하고, 한 곳만 빠지면 그 표면에서만
+ * 웨이브가 조용히 사라진다. 정본은 여기 하나다.
+ */
+export const isWaveFile = (name: string): boolean => WAVE_FILE_RE.test(name);
+const WAVE_FILE_RE = /^wave-\d+\.md$/;
+/** 파일 이름에서 웨이브 번호 — 같은 규칙에서 파생된다. */
+export const waveNumberOf = (name: string): number | undefined => {
+  const m = /^wave-(\d+)\.md$/.exec(name);
+  return m ? Number(m[1]) : undefined;
+};
+
 export function parseWave(txt: string, lang: Lang = DEFAULT_LANG): { meta: WaveMeta; body: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
   if (!m) throw new Error(pick({ en: 'Malformed wave file: no frontmatter', ko: '웨이브 파일 형식 오류: frontmatter가 없다' }, lang));
@@ -52,7 +66,7 @@ export function readWave(root: string, id: string): { meta: WaveMeta; body: stri
 export function listWaves(root: string): WaveMeta[] {
   if (!fs.existsSync(wavesDir(root))) return [];
   const out: WaveMeta[] = [];
-  for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
+  for (const f of fs.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
       out.push(parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8'), langFor(root)).meta);
     } catch {
@@ -107,8 +121,8 @@ function nextWaveId(root: string): string {
   const nums: number[] = [];
   if (fs.existsSync(wavesDir(root))) {
     for (const f of fs.readdirSync(wavesDir(root))) {
-      const m = /^wave-(\d+)\.md$/.exec(f);
-      if (m) nums.push(parseInt(m[1], 10));
+      const n = waveNumberOf(f);
+      if (n !== undefined) nums.push(n);
     }
   }
   for (const ev of readEvents(root)) {

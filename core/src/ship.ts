@@ -54,7 +54,7 @@ import { hasMeasuredEvidence } from './evidence';
 import { measuredOnlyViolation } from './gate';
 import { renderRtm } from './report';
 import { readState } from './state';
-import { parseWave } from './wave';
+import { parseWave, isWaveFile } from './wave';
 import { SHIP_PHASES } from './types';
 import type { WaveMeta } from './types';
 
@@ -509,7 +509,7 @@ function waveEntries(root: string, t: Tr): { entries: { id: string; meta: WaveMe
   } catch (e) {
     return { entries, unreadable: [`${t({ en: 'cannot read the waves directory', ko: '웨이브 디렉토리를 읽을 수 없다' })}: ${(e as Error).message}`] };
   }
-  for (const f of files.filter(n => /^wave-\d+\.md$/.test(n)).sort()) {
+  for (const f of files.filter(isWaveFile).sort()) {
     const id = f.replace(/\.md$/, '');
     const r = attempt(() => parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8')).meta);
     if (r.ok) entries.push({ id, meta: r.value });

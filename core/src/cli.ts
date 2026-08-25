@@ -10,6 +10,7 @@
  *      여기서는 CLI 가 직접 쓰는 phase-set·backtrack 두 분기가 대상이다.
  */
 import * as fs from 'node:fs';
+import { URL_SCHEME_RE } from './bashwrite';
 import * as tty from 'node:tty';
 import * as path from 'node:path';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
@@ -357,7 +358,7 @@ function harnessVersion(): string {
 function warnUnresolvedEvidence(root: string, evidence: string, lang: Lang): void {
   const raw = (evidence ?? '').trim();
   if (!raw) return;
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return;          // URL — 파일이 아니다
+  if (URL_SCHEME_RE.test(raw)) return;          // URL — 파일이 아니다
   const p0 = raw.replace(/:\d+(?::\d+)?$/, '');              // `path:line[:col]`
   if (!p0 || !/[/.]/.test(p0)) return;                       // 경로처럼 안 생겼다 — 판단하지 않는다
   if (path.isAbsolute(p0)) return;                           // 프로젝트 밖 — 여기서 알 수 없다

@@ -37,7 +37,7 @@ import { verifyGate, readGateFeedback, submissionSignals, MIN_SUBSTANCE_CHARS } 
 import { loadLedger, getNode } from './ledger';
 import { docsForPhase, inspectRegistry, staleDocs, loadRegistry } from './registry';
 import { readState } from './state';
-import { readWave, listWaves } from './wave';
+import { readWave, listWaves, isWaveFile } from './wave';
 import { PHASES } from './types';
 import type { DocNode, LedgerNode, Phase, WaveMeta } from './types';
 import { pick, type Lang, type Msg } from './i18n';
@@ -140,7 +140,7 @@ function waveEntries(root: string, t: Tr): { entries: { id: string; meta: WaveMe
   } catch (e) {
     return { entries, unreadable: [`${t({ en: 'cannot read the waves directory', ko: '웨이브 디렉토리를 읽을 수 없다' })}: ${(e as Error).message}`] };
   }
-  for (const f of files.filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
+  for (const f of files.filter(isWaveFile).sort()) {
     const id = f.replace(/\.md$/, '');
     const r = attempt(() => readWave(root, id).meta);
     if (r.ok) entries.push({ id, meta: r.value });

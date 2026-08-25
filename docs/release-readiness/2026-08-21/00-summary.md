@@ -121,7 +121,7 @@
 > [COST-261](stdin 상한이 타임아웃보다 커서 그 사이가 fail-open) ·
 > [COST-262](벤치가 명령 파싱 경로를 안 봐서 2차 회귀가 CI 에 안 걸리던 것 — **게이트 신설**).
 > 선제 조사로 [SEC-259](위치 가정 잔여 3도구)도 함께 닫았다. **open 0**.
-> 대장: **verified 309 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
+> 대장: **verified 310 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
 
 ---
 
@@ -131,7 +131,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 309 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
+> 대장 집계: **verified** 310 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데
@@ -455,19 +455,19 @@ p95 < 150ms 확인 → 대장 PERF-26 을 `fixed` → `verified` 로 올린다.
 
 | 게이트 | 목표 | 최종 실측 | 판정 |
 |---|---|---|---|
-| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1362 passed ×3, 56 파일** (라운드 3-R 재측정 · 배포본 1345 + 리포 전용 17) | ✅ |
-| G2 타입 | 오류 0 | `tsc --noEmit` exit 0 | ✅ |
-| G3 빌드·자체완결 | 맨 클론서 `--version`·`init`·`status` exit 0 | 전부 exit 0 (+`doctor`) | ✅ |
-| G4 훅 무해 | 4이벤트 × 4입력 exit 0 · 미초기화 0바이트 | **12/12 exit 0**, 0바이트 확인 | ✅ |
-| G5 훅 강제력 | 소스·코어파일·경로우회·배포Bash deny · stop block | **Write/Edit + Bash 표면 전건 deny** | ✅ (라운드1) |
-| G6 🔴 MCP 승인 불가 | 승인 시도 후 상태 불변 | **submitted 불변**, 우회 3종 거절 · 저널 위조 경로도 차단 | ✅ (라운드1) |
-| G7 결정성 | 3회 동일·`Math.random` 0·마이그레이션 양방향 | 동일 · 실사용 0 · 왕복 성공 | ✅ |
-| G8 공급망 | 프로덕션 도달 crit/high 0 | `npm audit --omit=dev` **0** | ✅ |
-| G9 훅 지연 | 폴백이 **더하는** p95 비용 < 50ms — **저널 부류마다**(현실 분포·손상) | **현실 분포 14.6ms · 50% 손상 8.0ms · 100% 손상 11.6ms**(전부 문턱 안, 라운드 3-J 재측정). [COST-177] 이전에는 손상 저널이 269~573ms 였다. wall 절대값은 기록으로: 정상 133ms / 폴백 162ms, 그중 **Node 기동 99ms**. 적대적 100% 상태전이 49.4ms 는 **도달 불가라 문턱 미적용·기록만**([COST-178]). `evidence/cost-177-journal-shapes.log` · `evidence/perf-139-latency.log` · 사유는 `gates.md` | ✅ **감정자 재검증 통과** |
-| G10 이력 비밀 | 0 | gitleaks **177 커밋 no leaks**(라운드 3-K 재측정) | ✅ |
-| G11 CLI 계약 | `--help` exit 0 · 침묵 성공 0 | `--help` exit 0 + 20군 나열 · 침묵 성공 0 | ✅ (라운드1) |
-| G12 관측성 | 조용한 실패 0 · doctor 가 상태 반영 | 침묵 catch 5/5 ✅ · 승인 후 doctor `ok:true` · 복구 거부 해소 | ✅ (라운드1) |
-| G13 패키징 | 선언 산출물 누락 0 | 매니페스트·스킬 11·에이전트 5·dist 전부 존재 | ✅ |
+| G1 테스트 | 전건 pass·fail 0·skip 0·3회 동일 | **1364 passed ×3, 57 파일** (라운드 3-R 재측정 · 배포본 1347 + 리포 전용 17) | ✅ |
+| G2 타입 | 오류 0 | `tsc --noEmit` exit 0 (라운드 3-R 재측정) | ✅ |
+| G3 빌드·자체완결 | 맨 클론서 `--version`·`init`·`status` exit 0 | `git archive` 로 뽑은 맨 트리에서 전부 exit 0 (라운드 3-R 재측정) | ✅ |
+| G4 훅 무해 | 4이벤트 × 4입력 exit 0 · 미초기화 0바이트 | **32/32 exit 0** · 미초기화 출력 **0/16** (라운드 3-R 재측정, 초기화·미초기화 두 트리) | ✅ |
+| G5 훅 강제력 | 소스·코어파일·경로우회·배포Bash deny · stop block | **우회 코퍼스 304 표기 전건 deny** + 잠금 19 전건 deny + **허용 64 전건 통과**(`core/test/bypass-corpus.test.ts`, 매 실행마다 재측정) · stop 가드 **미정산 block → `wave update` 후 통과** 실측 (라운드 3-R) | ✅ |
+| G6 🔴 MCP 승인 불가 | 승인 시도 후 상태 불변 | `callTool(harness_gate_approve)` **4형태 전부 거절**(`force:true` 포함) · phase·gates 불변 · 저널 `gate-approved` **0줄** (라운드 3-R 재측정) | ✅ |
+| G7 결정성 | 3회 동일·`Math.random` 0·마이그레이션 양방향 | 1364 ×3 동일 · `Math.random` **실사용 0**(2건 모두 주석) · 왕복 성공 (라운드 3-R 재측정) | ✅ |
+| G8 공급망 | 프로덕션 도달 crit/high 0 | `npm audit --omit=dev` **0 vulnerabilities** (라운드 3-R 재측정) | ✅ |
+| G9 훅 지연 | 폴백이 **더하는** p95 비용 < 50ms — **저널 부류마다** | 10만 줄 저널 3부류 재측정(라운드 3-R): 현실 분포 **+24.5ms** · 50% 손상 **+16.8ms** · 100% 손상 **+11.0ms** — 전부 문턱 안 | ✅ |
+| G10 이력 비밀 | 0 | gitleaks **226 커밋 no leaks** (라운드 3-R 재측정) | ✅ |
+| G11 CLI 계약 | `--help` exit 0 · 침묵 성공 0 | `--help` exit 0 + **20 명령군** 나열 · 침묵 성공 0 (라운드 3-R 재측정) | ✅ |
+| G12 관측성 | 조용한 실패 0 · doctor 가 상태 반영 | `doctor` **ok=true · issues 0 · warnings 0** (라운드 3-R 재측정) | ✅ |
+| G13 패키징 | 선언 산출물 누락 0 | `plugin.json` · dist 2 · **스킬 11 · 에이전트 5** 전부 존재 (라운드 3-R 재측정) | ✅ |
 
 ---
 

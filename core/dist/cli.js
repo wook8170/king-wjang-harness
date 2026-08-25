@@ -7368,6 +7368,1073 @@ __export(cli_exports, {
 });
 module.exports = __toCommonJS(cli_exports);
 var fs22 = __toESM(require("fs"));
+
+// core/src/bashwrite.ts
+var SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
+var MUTATING_TOKENS = [
+  // [EFF-214] `sed`·`awk`·`perl` 은 **이름만으로 변형이 아니다.** `-i` 없는 `sed -n '1,5p' f`·
+  // `awk 'NR<3' f` 는 순수 조회인데, 이름으로 `mutating` 을 세우는 바람에 안전망이 발화해
+  // **저널을 읽는 것까지 막혔다** — 「디버깅으로 저널을 읽는 것은 정당하다」는 이 파일의
+  // 원칙과 정면으로 어긋났다. 제자리 편집(`-i`)일 때만 아래 `case` 에서 세운다.
+  ">",
+  ">>",
+  "tee",
+  "touch",
+  "rm",
+  "mv",
+  "cp",
+  "dd",
+  "truncate",
+  "install",
+  "ln",
+  "chmod",
+  "chown",
+  "python",
+  "python3",
+  "node",
+  "ruby",
+  "eval",
+  // [SEC-101] 없애는 것도 변형이다 — `rmdir` 와 `find … -delete` 가 목록 밖이라
+  // 안전망(`mutating` AND 조건)이 아예 걸리지 않았다.
+  "rmdir",
+  "find"
+];
+function tokenize(segment) {
+  const out = [];
+  let cur = "";
+  let quote = null;
+  for (const ch of segment) {
+    if (quote) {
+      if (ch === quote) quote = null;
+      else cur += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (cur) {
+        out.push(cur);
+        cur = "";
+      }
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+var DASH_C_RE = /^-[a-z]*c$/;
+var URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+var isFlag = (t) => t.startsWith("-");
+var looksLikePath = (t) => t !== "" && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes("/") || /\.[A-Za-z0-9]+$/.test(t));
+var DYNAMIC_CD = /[$`*?~]/;
+function normalizePath(p) {
+  const abs = p.startsWith("/");
+  const parts = [];
+  for (const seg of p.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") {
+      const top = parts[parts.length - 1];
+      if (parts.length > 0 && top !== "..") parts.pop();
+      else if (!abs) parts.push("..");
+      continue;
+    }
+    parts.push(seg);
+  }
+  return (abs ? "/" : "") + parts.join("/");
+}
+var PATH_MAX_GUESS = 4096;
+var CWD_MAX = PATH_MAX_GUESS;
+function advanceCwd(cwd, op) {
+  if (op === void 0 || op === "-" || DYNAMIC_CD.test(op)) return null;
+  if (op.startsWith("/")) return normalizePath(op);
+  if (cwd === null) return null;
+  if (cwd.length + op.length + 1 > CWD_MAX) return null;
+  return normalizePath((cwd ? cwd + "/" : "") + op);
+}
+function resolveIn(cwd, p) {
+  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
+  if (pwdHead !== null) {
+    if (cwd === null) return null;
+    const rest = p.slice(pwdHead[0].length).replace(/^\//, "");
+    const joined = rest === "" ? cwd === "" ? "." : cwd : cwd === "" ? rest : `${cwd}/${rest}`;
+    return /[$`]/.test(joined) ? null : normalizePath(joined);
+  }
+  if (/[$`]/.test(p)) return null;
+  if (p.startsWith("/") || p.startsWith("~")) return p;
+  if (cwd === null) return null;
+  if (cwd === "") return p;
+  return normalizePath(cwd + "/" + p);
+}
+function envChdirOf(tokens) {
+  for (let i = 0; i < tokens.length; i++) {
+    const head = (tokens[i] ?? "").split("/").pop() ?? "";
+    if (head !== "env") continue;
+    for (let k = i + 1; k < tokens.length; k++) {
+      const a = tokens[k];
+      if (a === "-C" || a === "--chdir") return tokens[k + 1];
+      if (a.startsWith("--chdir=")) return a.slice("--chdir=".length);
+      if (a.startsWith("-C") && a.length > 2) return a.slice(2);
+      if (!isFlag(a) && !ENV_ASSIGN_RE.test(a)) break;
+    }
+  }
+  return void 0;
+}
+function segmentsWithIndex(cmd) {
+  const out = [];
+  let last = 0;
+  let quote = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    const two = cmd.slice(i, i + 2);
+    const len = two === "||" || two === "&&" ? 2 : ";|&\n()".includes(ch) ? 1 : 0;
+    if (len === 0) continue;
+    out.push({ text: cmd.slice(last, i), start: last, cwd: "", tokens: [] });
+    last = i + len;
+    i += len - 1;
+  }
+  out.push({ text: cmd.slice(last), start: last, cwd: "", tokens: [] });
+  const BRANCH_END = /* @__PURE__ */ new Set(["else", "elif", "fi", "done", "esac"]);
+  let cwd = "";
+  let sawCd = false;
+  for (const seg of out) {
+    const tokens = tokenize(seg.text);
+    seg.tokens = tokens;
+    if (sawCd && tokens.some((t) => BRANCH_END.has(t))) cwd = null;
+    seg.cwd = cwd;
+    if (tokens.length === 0) continue;
+    const chdir = envChdirOf(tokens);
+    if (chdir !== void 0) seg.cwd = advanceCwd(cwd, chdir);
+    const { name, args } = commandName(tokens);
+    if (name === "cd" || name === "pushd") {
+      cwd = advanceCwd(cwd, args.find((a) => !isFlag(a)));
+      sawCd = true;
+    }
+  }
+  return out;
+}
+function cwdAt(segs, index) {
+  let lo = 0;
+  let hi = segs.length - 1;
+  let cwd = "";
+  while (lo <= hi) {
+    const mid = lo + hi >> 1;
+    if (segs[mid].start <= index) {
+      cwd = segs[mid].cwd;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return cwd;
+}
+var PREFIX_COMMANDS = /* @__PURE__ */ new Set([
+  "sudo",
+  "doas",
+  "env",
+  "nohup",
+  "time",
+  "command",
+  "exec",
+  "nice",
+  "ionice",
+  "stdbuf",
+  "setsid",
+  "timeout",
+  "unbuffer",
+  "script",
+  "proxychains",
+  "chroot",
+  // [EFF-108] 패키지 러너도 감싸기만 한다 — `npx prisma migrate deploy` 의 실행 단위는
+  // `prisma migrate deploy` 다. 벗기지 않으면 배포 판정이 러너 한 겹으로 빗나간다.
+  // `npm` 은 넣지 않는다 — `npm publish` 는 `npm` 자체가 실행 단위다.
+  "npx",
+  "bunx",
+  "pnpx",
+  // [ENG-217] `busybox` 도 감싸기만 한다 — `busybox sh -c '…'` 의 실행 단위는 `sh -c '…'` 다.
+  "busybox"
+]);
+var PREFIX_FLAG_VALUE = {
+  sudo: /* @__PURE__ */ new Set([
+    "-u",
+    "-g",
+    "-C",
+    "-p",
+    "-D",
+    "-h",
+    "-U",
+    "-r",
+    "-t",
+    "--user",
+    "--group",
+    "--close-from",
+    "--prompt",
+    "--chdir",
+    "--host",
+    "--other-user",
+    "--role",
+    "--type"
+  ]),
+  doas: /* @__PURE__ */ new Set(["-u", "-C"]),
+  env: /* @__PURE__ */ new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"]),
+  nice: /* @__PURE__ */ new Set(["-n", "--adjustment"]),
+  ionice: /* @__PURE__ */ new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
+  timeout: /* @__PURE__ */ new Set(["-k", "-s", "--kill-after", "--signal"]),
+  stdbuf: /* @__PURE__ */ new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
+  chroot: /* @__PURE__ */ new Set(["--userspec", "--groups"]),
+  script: /* @__PURE__ */ new Set(["-c", "--command", "--logging-format", "-B", "-I", "-O", "-T"]),
+  npx: /* @__PURE__ */ new Set(["-p", "-c", "--package", "--call"]),
+  bunx: /* @__PURE__ */ new Set(["-p", "--package"]),
+  pnpx: /* @__PURE__ */ new Set(["-p", "--package"])
+};
+var EMPTY_FLAGS = /* @__PURE__ */ new Set();
+var SHELL_KEYWORDS = /* @__PURE__ */ new Set([
+  "{",
+  "}",
+  "then",
+  "else",
+  "elif",
+  "do",
+  "done",
+  "fi",
+  "esac",
+  "in",
+  "!",
+  "if",
+  "while",
+  "until",
+  "case"
+]);
+function commandName(tokens) {
+  let i = 0;
+  let lastPrefix = -1;
+  for (; ; ) {
+    while (i < tokens.length && SHELL_KEYWORDS.has(tokens[i])) i++;
+    while (i < tokens.length && ENV_ASSIGN_RE.test(tokens[i])) i++;
+    const head = (tokens[i] ?? "").split("/").pop() ?? "";
+    if (!PREFIX_COMMANDS.has(head)) break;
+    lastPrefix = i;
+    const takesValue = PREFIX_FLAG_VALUE[head] ?? EMPTY_FLAGS;
+    i++;
+    while (i < tokens.length) {
+      const t = tokens[i];
+      if (isFlag(t)) {
+        i += takesValue.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
+        continue;
+      }
+      if (/^\d+(\.\d+)?[smhd]?$/.test(t)) {
+        i++;
+        continue;
+      }
+      break;
+    }
+  }
+  let raw = tokens[i] ?? "";
+  if (/[\s<>|]/.test(raw) && lastPrefix >= 0) {
+    i = lastPrefix;
+    raw = tokens[i] ?? "";
+  }
+  if (/[\s<>|]/.test(raw)) return { name: "", args: [] };
+  return { name: raw.split("/").pop() ?? "", args: tokens.slice(i + 1) };
+}
+var SHELLS_TAKING_C = [
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "ash",
+  "busybox"
+];
+var INTERPRETERS = /* @__PURE__ */ new Set([
+  ...SHELLS_TAKING_C,
+  "node",
+  "nodejs",
+  "deno",
+  "bun",
+  "python",
+  "python2",
+  "python3",
+  "perl",
+  "ruby",
+  "php",
+  "osascript"
+]);
+var PROGRAM_FLAG = /^-(?:[A-Za-z]*c|e|E|-eval|-command)$/;
+var startsWithSubstitution = (a) => a.startsWith("$(") || a.startsWith("`");
+function opaqueExecOf(cmd) {
+  const runners = [...SHELLS_TAKING_C, "source", "."].map((r) => r.replace(/[.]/g, "\\.")).join("|");
+  const proc = new RegExp(`(?:^|[\\s;&|])(${runners})\\s+(?:-\\S+\\s+)*<\\(`).exec(cmd);
+  if (proc) return `${proc[1]} <(\u2026)`;
+  const OR = "\0";
+  const parts = cmd.replace(/\|\|/g, OR).split("|");
+  for (let i = 0; i < parts.length; i++) {
+    const chunks = parts[i].split(OR).join("||").split(/(?:&&|\|\||;|\n)/);
+    for (let k = 0; k < chunks.length; k++) {
+      const { name, args } = commandName(tokenize(chunks[k]));
+      if (name === "eval") {
+        if (args.some(startsWithSubstitution)) return 'eval "$(\u2026)"';
+        continue;
+      }
+      if (!INTERPRETERS.has(name)) continue;
+      const flagIdx = args.findIndex((a) => PROGRAM_FLAG.test(a));
+      if (flagIdx >= 0) {
+        const prog = args[flagIdx + 1];
+        if (prog !== void 0 && startsWithSubstitution(prog)) return `${name} -c "$(\u2026)"`;
+        continue;
+      }
+      if (args.some((a) => /^-[A-Za-z]*s$/.test(a))) return `${name} -s`;
+      if (args.includes("/dev/stdin") || args.includes("-")) return `${name} /dev/stdin`;
+      if (args.some((a) => !isFlag(a) && !ENV_ASSIGN_RE.test(a))) continue;
+      if (i > 0 && k === 0) return `${name} \u2190 pipe`;
+    }
+  }
+  return void 0;
+}
+function redirectTargets(segment) {
+  const out = [];
+  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
+  let m;
+  while ((m = re.exec(segment)) !== null) {
+    const amp = m[1] === "&";
+    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? "";
+    if (amp && /^\d+$/.test(t)) continue;
+    if (t && !t.startsWith("&")) out.push({ path: t, index: m.index });
+  }
+  return out;
+}
+var XARGS_FLAG_VALUE = /* @__PURE__ */ new Set([
+  "-L",
+  "-n",
+  "-P",
+  "-s",
+  "-d",
+  "-E",
+  "-a",
+  "--max-args",
+  "--max-procs",
+  "--delimiter",
+  "--max-chars",
+  "--arg-file"
+]);
+function parseXargs(args) {
+  let mark;
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (!isFlag(a)) break;
+    if (a === "-I") {
+      const next = args[i + 1];
+      if (next !== void 0 && !isFlag(next)) {
+        mark ??= next;
+        i += 2;
+        continue;
+      }
+      mark ??= "{}";
+      i += 1;
+      continue;
+    }
+    if (a === "-i" || a === "--replace") {
+      mark ??= "{}";
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("--replace=")) {
+      mark ??= a.slice("--replace=".length);
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("-I") && a.length > 2) {
+      mark ??= a.slice(2);
+      i += 1;
+      continue;
+    }
+    if (a.startsWith("-i") && a.length > 2) {
+      mark ??= a.slice(2);
+      i += 1;
+      continue;
+    }
+    i += XARGS_FLAG_VALUE.has(a) && i + 1 < args.length && !isFlag(args[i + 1]) ? 2 : 1;
+  }
+  return { mark, rest: args.slice(i) };
+}
+var replaceMarkOf = (args) => parseXargs(args).mark;
+var innerCommandOf = (args) => parseXargs(args).rest;
+function scriptFiles(name, args) {
+  const carriesProgram = (a) => /^-[A-Za-z]*[ef]$/.test(a) || name !== "sed" && /^-[A-Za-z]*e[A-Za-z]*$/.test(a);
+  const operands = [];
+  let programTaken = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (isFlag(a)) {
+      if (carriesProgram(a)) {
+        programTaken = true;
+        i++;
+      }
+      continue;
+    }
+    operands.push(a);
+  }
+  const files = programTaken ? operands : operands.slice(1);
+  return files.filter(looksLikePath);
+}
+var READ_ONLY_HEADS = [
+  "ls",
+  "pwd",
+  "cat",
+  "head",
+  "tail",
+  "wc",
+  "grep",
+  "rg",
+  "egrep",
+  "fgrep",
+  "file",
+  "stat",
+  "du",
+  "df",
+  "which",
+  "type",
+  "printenv",
+  "date",
+  "whoami",
+  "echo",
+  "uniq",
+  "cut",
+  "column",
+  "nl",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+  "diff",
+  "cmp",
+  "shasum",
+  "tree",
+  "ps",
+  "uname",
+  "hostname",
+  "id",
+  "groups",
+  "less",
+  "more",
+  /**
+   * [EFF-289] **아무것도 쓰지 않는 셸 내장이 「모르는 명령」으로 분류돼 있었다.**
+   * `test -f x && cat .harness/config.yaml` · `true; cat …` 처럼 **접두 한 조각**이
+   * 명령 전체를 `mutating` 으로 만들고, 그러면 「대상이 없을 때 언급을 본다」 안전망이
+   * 발화해 **순수 조회가 「쓸 수 없다」는 사유로** 거부됐다 — 사유까지 사실과 달랐다.
+   * 여기 적는 것은 인자를 무엇으로 주든 파일을 만들지 않는 것들만이다
+   * (`trap`·`eval`·`exec`·`source` 는 **넣지 않는다** — 남의 명령을 실행한다).
+   */
+  "true",
+  "false",
+  ":",
+  "test",
+  "[",
+  "[[",
+  "]]",
+  "sleep",
+  "wait",
+  "break",
+  "continue",
+  "shift",
+  "return",
+  "exit",
+  "set",
+  "unset",
+  "export",
+  "readonly",
+  "local",
+  "popd",
+  "dirs",
+  "jobs",
+  "umask",
+  "ulimit",
+  "times",
+  "help"
+];
+var CONDITIONAL_WRITERS = {
+  // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
+  // 이 조건을 통째로 비껴갔다. `yq`·`jq` 줄에는 롱폼이 있는데 여기만 빠져 있던
+  // **거울 자리 누락**이다(같은 표에서 한 줄만 좁았다).
+  sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x.startsWith("--in-place")),
+  /**
+   * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
+   * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
+   * `open(F,">",…)` 로 정책이 덮인다. `-i` 만 보던 조건은 **제자리 편집**만 변형으로 쳤고,
+   * 그래서 이 도구가 할 수 있는 일 중 가장 넓은 형태가 조회로 분류됐다.
+   *
+   * [EFF-214] 가 과차단을 고치며 이 도구들을 조회 쪽으로 옮겼고, [SEC-221] 이 그 목록의
+   * 의미를 「모든 형태에서 조회인 것만」으로 바꿨다 — 그런데 `perl` 의 조건 자체가
+   * 여전히 좁았다. **같은 부류의 세 번째 재발이다**(`awk -i inplace` · `yq -i` 에 이어).
+   *
+   * `ruby -e`·`python -c` 는 다른 경로로 이미 막히지만, 여기 함께 적는 이유는 **한 곳에서
+   * 같은 답을 내게** 하려는 것이다 — 답이 두 곳에 있으면 언젠가 한쪽만 고쳐진다.
+   */
+  perl: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
+  ruby: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
+  awk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
+  gawk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
+  yq: (a) => a.some((x) => x === "-i" || x === "--inplace" || x === "--in-place"),
+  jq: (a) => a.some((x) => x === "-i" || x === "--in-place"),
+  sort: (a) => a.some((x) => x === "-o" || x.startsWith("--output")),
+  tr: () => false
+};
+var READ_ONLY_GIT = [
+  "status",
+  "log",
+  "diff",
+  "show",
+  "blame",
+  "branch",
+  "remote",
+  "rev-parse",
+  "describe",
+  "ls-files",
+  "shortlog",
+  "reflog",
+  "grep",
+  "cat-file"
+];
+function isReadOnlyCommand(cmd) {
+  if (cmd.trim() === "") return false;
+  const scan = scanBashWrites(cmd);
+  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  const lines = commandLines(cmd);
+  if (lines.length === 0) return false;
+  return lines.every((l) => {
+    const [head, second, ...rest] = l.split(/\s+/);
+    if (head === "git") return second !== void 0 && READ_ONLY_GIT.includes(second);
+    const cond = CONDITIONAL_WRITERS[head];
+    if (cond !== void 0) return !cond([second ?? "", ...rest]);
+    return READ_ONLY_HEADS.includes(head);
+  });
+}
+var MKTEMP_VALUE = /^\$\(\s*mktemp\b[^)]*\)$|^`\s*mktemp\b[^`]*`$/;
+function staticAssignments(cmd, env = {}) {
+  const out = /* @__PURE__ */ new Map();
+  for (const m2 of cmd.matchAll(
+    /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=(\$\([^)]*\)|`[^`]*`)/g
+  )) {
+    if (!MKTEMP_VALUE.test(m2[2]) || out.has(m2[1])) continue;
+    const tmp = (env.TMPDIR ?? "/tmp").replace(/\/$/, "");
+    out.set(m2[1], `${tmp}/mktemp-generated`);
+  }
+  const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
+  let m;
+  while ((m = re.exec(cmd)) !== null) {
+    const raw = m[2].replace(/^["']|["']$/g, "");
+    if (/[$`]/.test(raw)) continue;
+    if (!out.has(m[1])) out.set(m[1], raw);
+  }
+  return out;
+}
+function expandBraceDefaults(cmd, env) {
+  return cmd.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-)([^}]*)\}/g,
+    (_m, name, fallback) => env[name] ?? fallback
+  );
+}
+var FOR_LOOP = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]*?)\s*(?:;|\n)\s*do\b([\s\S]*?)\bdone\b/g;
+function expandStaticForLoops(cmd) {
+  return cmd.replace(FOR_LOOP, (whole, name, listRaw, body) => {
+    if (/\bfor\b/.test(body)) return whole;
+    const words = listRaw.trim().split(/\s+/).filter((w) => w !== "");
+    if (words.length === 0 || words.length > 32) return whole;
+    if (words.some((w) => /[$`*?[\]{}~"']/.test(w))) return whole;
+    const re = new RegExp(`\\$\\{${name}\\}|\\$${name}(?![A-Za-z0-9_])`, "g");
+    return words.map((w) => body.replace(re, w)).join(" ; ");
+  });
+}
+function expandStaticVars(rawCmd, env = {}) {
+  const cmd = expandStaticForLoops(expandBraceDefaults(rawCmd, env));
+  const vars = staticAssignments(cmd, env);
+  const lookup = (name) => {
+    const local = vars.get(name);
+    if (local !== void 0) return local;
+    if (name === "PWD" || name === "OLDPWD") return void 0;
+    const e = env[name];
+    return e !== void 0 && e !== "" && !/[\s$`"'<>|;&()]/.test(e) ? e : void 0;
+  };
+  return cmd.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (whole, a, b) => lookup(a ?? b ?? "") ?? whole
+  );
+}
+function flagValues(args, names) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    for (const nm of names) {
+      if (nm.length === 1) {
+        if (!a.startsWith("--") && a.startsWith("-") && a.length > 1) {
+          const at = a.indexOf(nm, 1);
+          if (at > 0) {
+            const tail = a.slice(at + 1);
+            if (tail !== "") out.push(tail);
+            else {
+              const v = args[i + 1];
+              if (v !== void 0 && !isFlag(v)) out.push(v);
+            }
+          }
+        }
+      } else {
+        if (a === `--${nm}`) {
+          const v = args[i + 1];
+          if (v !== void 0 && !isFlag(v)) out.push(v);
+        } else if (a.startsWith(`--${nm}=`)) out.push(a.slice(nm.length + 3));
+      }
+    }
+  }
+  return out;
+}
+function targetDirectory(args) {
+  return flagValues(args, ["t", "target-directory"])[0] ?? null;
+}
+function sourcesFor(operands, dir) {
+  let dropped = false;
+  return operands.filter((o) => {
+    if (!dropped && o === dir) {
+      dropped = true;
+      return false;
+    }
+    return true;
+  });
+}
+var LINK_MAKERS = /* @__PURE__ */ new Set(["ln", "link"]);
+function dirOf(p) {
+  const i = p.lastIndexOf("/");
+  return i <= 0 ? "" : p.slice(0, i);
+}
+function cpMakesLink(args) {
+  return args.some((a) => a === "--link" || !a.startsWith("--") && a.startsWith("-") && a.includes("l"));
+}
+function underDir(dir, sources) {
+  const base = dir.replace(/\/+$/, "");
+  return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
+}
+function scanBashWrites(rawCmd, env = {}) {
+  const cmd = expandStaticVars(rawCmd, env);
+  const targets = [];
+  const aliases = [];
+  const placed = [];
+  const linkSources = [];
+  let mutating = false;
+  let patchesWorkingTree = false;
+  let appliesPatch = false;
+  const patchFiles = [];
+  let opaqueExec = opaqueExecOf(cmd);
+  const unresolvedTargets = [];
+  const segs = segmentsWithIndex(cmd);
+  const substMarks = /* @__PURE__ */ new Set();
+  for (const seg of segs) {
+    const t = seg.tokens;
+    if (t.length === 0) continue;
+    const c = commandName(t);
+    if (c.name === "xargs") {
+      const mk = replaceMarkOf(c.args);
+      if (mk !== void 0 && mk !== "") substMarks.add(mk);
+    } else if (c.name === "find" && c.args.some((a) => ["-exec", "-execdir", "-ok", "-okdir"].includes(a))) {
+      substMarks.add("{}");
+    }
+  }
+  const isSubst = (t) => [...substMarks].some((m) => t.includes(m));
+  const redirects = redirectTargets(cmd);
+  if (redirects.length > 0) mutating = true;
+  for (const r of redirects) {
+    if (isSubst(r.path)) {
+      unresolvedTargets.push(r.path);
+      continue;
+    }
+    const resolved = resolveIn(cwdAt(segs, r.index), r.path);
+    if (resolved === null) unresolvedTargets.push(r.path);
+    else {
+      targets.push(resolved);
+      placed.push({ path: resolved, at: r.index });
+    }
+  }
+  for (const seg of segs) {
+    const segment = seg.text;
+    const firstNew = targets.length;
+    const tokens = seg.tokens;
+    if (tokens.length === 0) continue;
+    const { name, args } = commandName(tokens);
+    if (LINK_MAKERS.has(name) || name === "cp" && cpMakesLink(args)) {
+      const ops = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
+      if (ops.length >= 2) {
+        const rawTarget = ops[ops.length - 2];
+        const dst = resolveIn(seg.cwd, ops[ops.length - 1]);
+        const symbolicLink = args.some((a) => a === "-s" || a === "--symbolic" || !a.startsWith("--") && a.startsWith("-") && !a.startsWith("--") && a.includes("s"));
+        const base = symbolicLink && !rawTarget.startsWith("/") && dst !== null ? dirOf(dst) : seg.cwd;
+        const src = resolveIn(base, rawTarget);
+        if (src !== null && dst !== null && dst !== src) aliases.push({ alias: dst, real: src, at: seg.start });
+        if (src !== null) linkSources.push({ path: src, at: seg.start });
+      }
+    }
+    if (MUTATING_TOKENS.includes(name)) mutating = true;
+    const condWriter = CONDITIONAL_WRITERS[name];
+    const segmentWrites = condWriter !== void 0 ? condWriter(args) : !READ_ONLY_HEADS.includes(name);
+    if (seg.cwd === null && segmentWrites) unresolvedTargets.push(...args.filter(looksLikePath));
+    const paths = args.filter(looksLikePath);
+    const operands = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
+    switch (name) {
+      case "tee":
+      case "touch":
+      case "rm":
+      case "truncate":
+      case "unlink":
+        targets.push(...paths);
+        break;
+      case "sed":
+      case "perl":
+      case "ruby":
+        if (CONDITIONAL_WRITERS[name]?.(args) === true) {
+          mutating = true;
+          targets.push(...scriptFiles(name, args));
+          const inline = args.filter((a, i) => ["-e", "-E"].includes(args[i - 1] ?? ""));
+          for (const code of inline) targets.push(...pathLikeMentions(code));
+        }
+        break;
+      case "cp":
+      case "install": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          targets.push(...underDir(dir, sourcesFor(operands, dir)));
+          break;
+        }
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (name === "cp" && cpMakesLink(args) && operands.length >= 2) {
+          targets.push(...operands.slice(0, -1));
+        }
+        break;
+      }
+      case "mv": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          const srcs = sourcesFor(operands, dir);
+          targets.push(...underDir(dir, srcs));
+          targets.push(...srcs);
+          break;
+        }
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
+        break;
+      }
+      case "rmdir":
+        targets.push(...paths);
+        break;
+      case "ln":
+      case "link": {
+        const dir = targetDirectory(args);
+        if (dir !== null) {
+          targets.push(...underDir(dir, sourcesFor(operands, dir)));
+          break;
+        }
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        break;
+      }
+      case "dd":
+        for (const a of args) if (a.startsWith("of=")) targets.push(a.slice(3));
+        break;
+      case "curl":
+      case "wget": {
+        const named = name === "curl" ? ["-o", "--output"] : ["-O", "--output-document", "--output-file"];
+        for (let i = 0; i < args.length - 1; i++) {
+          if (named.includes(args[i]) && looksLikePath(args[i + 1])) targets.push(args[i + 1]);
+        }
+        break;
+      }
+      case "prettier":
+      case "eslint":
+        if (args.some((a) => a === "--write" || a === "--fix")) targets.push(...paths);
+        break;
+      case "patch":
+      case "ed":
+      case "ex":
+        targets.push(...paths);
+        break;
+      case "tar":
+      case "unzip":
+      case "bsdtar": {
+        targets.push(...name === "unzip" ? flagValues(args, ["d"]) : flagValues(args, ["C", "directory"]));
+        break;
+      }
+      case "rsync":
+      case "scp":
+        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
+        if (name === "rsync") {
+          targets.push(...flagValues(args, [
+            "backup-dir",
+            "write-batch",
+            "only-write-batch",
+            "log-file",
+            "partial-dir",
+            "temp-dir"
+          ]));
+        }
+        break;
+      case "sponge":
+        targets.push(...operands);
+        break;
+      case "vim":
+      case "vi":
+      case "nvim":
+        if (args.some((a) => /^-(es|s|c|S)$/.test(a) || a === "--cmd")) targets.push(...paths);
+        break;
+      case "git": {
+        if (args.some((a) => a === "apply" || a === "am")) {
+          patchesWorkingTree = true;
+          mutating = true;
+          appliesPatch = true;
+          patchFiles.push(...operands.filter(
+            (a) => a !== "apply" && a !== "am" && a !== "git" && !/^[<>|&]+$/.test(a)
+          ));
+        }
+        const RESTORE = ["checkout", "restore", "stash", "reset", "revert"];
+        const verb = operands.find((a) => RESTORE.includes(a));
+        if (verb !== void 0) {
+          const dashdash = args.indexOf("--");
+          if (dashdash >= 0 && dashdash + 1 < args.length) {
+            targets.push(...args.slice(dashdash + 1).filter((a) => !isFlag(a)));
+            mutating = true;
+          } else if (verb === "restore") {
+            targets.push(...operands.filter((a) => a !== "restore"));
+            mutating = true;
+          } else if (verb !== "stash" || operands.includes("pop") || operands.includes("apply")) {
+            patchesWorkingTree = true;
+            mutating = true;
+          }
+        }
+        const ci = operands.indexOf("clone");
+        if (ci >= 0) {
+          const rest = operands.slice(ci + 1).filter((a) => !URL_SCHEME_RE.test(a) && !a.includes("@"));
+          if (rest.length >= 1) targets.push(rest[rest.length - 1]);
+          targets.push(...flagValues(args, ["separate-git-dir"]));
+        }
+        break;
+      }
+      /**
+       * [ENG-226] **셸 목록의 다섯 번째 사본이 `case` 라벨로 숨어 있었다.**
+       * `fish`·`ash`·`busybox` 가 빠져 `ash -c 'cd src && echo x > app.ts'` 가 통과했다 —
+       * 래퍼 안쪽이 아예 안 열려서 `cd` 추적도 안 됐다.
+       *
+       * `case` 라벨은 정본(`SHELLS_TAKING_C`)에서 생성할 수 없다. 그래서 **드리프트를 테스트로
+       * 못 박는다** — 정본의 모든 셸에 대해 이 분기가 안쪽을 여는지 전수 검사한다
+       * (`blocker-3j.test.ts` [ENG-226]). 라벨이 빠지면 그 테스트가 먼저 깨진다.
+       */
+      case "sh":
+      case "bash":
+      case "zsh":
+      case "dash":
+      case "ksh":
+      case "fish":
+      case "ash":
+      case "busybox":
+      case "eval": {
+        const inner = [];
+        if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
+        else {
+          for (let i = 0; i < args.length; i++) {
+            if (DASH_C_RE.test(args[i]) && i + 1 < args.length) {
+              inner.push(args[i + 1]);
+              i++;
+            }
+          }
+        }
+        for (const chunk of inner) {
+          const sub = scanBashWrites(chunk);
+          targets.push(...sub.targets);
+          unresolvedTargets.push(...sub.unresolvedTargets);
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) {
+            appliesPatch = true;
+            patchFiles.push(...sub.patchFiles);
+          }
+          opaqueExec ??= sub.opaqueExec;
+        }
+        break;
+      }
+      case "find": {
+        if (args.some((a) => a === "-delete")) {
+          for (const a of args) {
+            if (isFlag(a) || a.startsWith("-")) break;
+            targets.push(a);
+          }
+        }
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i] !== "-exec" && args[i] !== "-execdir" && args[i] !== "-ok" && args[i] !== "-okdir") continue;
+          const inner = commandName(args.slice(i + 1));
+          if (!inner.name) continue;
+          const innerScan = scanBashWrites([inner.name, ...inner.args].join(" "));
+          if (innerScan.mutating) {
+            mutating = true;
+            patchesWorkingTree = true;
+          }
+          targets.push(...innerScan.targets.filter((t) => t !== "{}"));
+          unresolvedTargets.push(...innerScan.unresolvedTargets);
+        }
+        break;
+      }
+      case "xargs": {
+        const inner = innerCommandOf(args);
+        if (inner.length > 0) {
+          const sub = scanBashWrites(inner.join(" "));
+          const mark = replaceMarkOf(args);
+          for (const t of sub.targets) {
+            if (mark !== void 0 && t.includes(mark)) unresolvedTargets.push(t);
+            else targets.push(t);
+          }
+          unresolvedTargets.push(...sub.unresolvedTargets);
+          if (sub.mutating) mutating = true;
+          if (sub.patchesWorkingTree) patchesWorkingTree = true;
+          if (sub.appliesPatch) {
+            appliesPatch = true;
+            patchFiles.push(...sub.patchFiles);
+          }
+          opaqueExec ??= sub.opaqueExec;
+        }
+        break;
+      }
+      default: {
+        const cond = CONDITIONAL_WRITERS[name];
+        if (cond?.(args)) {
+          mutating = true;
+          targets.push(...paths);
+          break;
+        }
+        if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) mutating = true;
+        break;
+      }
+    }
+    for (let i = firstNew; i < targets.length; i++) {
+      const resolved = resolveIn(seg.cwd, targets[i]);
+      if (resolved === null) {
+        unresolvedTargets.push(targets[i]);
+        targets[i] = "";
+      } else {
+        targets[i] = resolved;
+        placed.push({ path: resolved, at: seg.start });
+      }
+    }
+  }
+  for (const { path: p } of linkSources) targets.push(p);
+  for (const { alias, real, at } of aliases) {
+    for (const { path: t, at: tAt } of placed) {
+      if (tAt <= at) continue;
+      if (t === alias) targets.push(real);
+      else if (t.startsWith(`${alias}/`)) {
+        const rest = t.slice(alias.length + 1);
+        targets.push(real === "" ? rest : `${real}/${rest}`);
+      }
+    }
+  }
+  return {
+    targets: [...new Set(targets.filter(Boolean))],
+    mutating,
+    patchesWorkingTree,
+    appliesPatch,
+    opaqueExec,
+    patchFiles: [...new Set(patchFiles.filter(Boolean))],
+    unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
+    // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
+    blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
+  };
+}
+function isDryRun(line) {
+  return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
+}
+function judgeableLines(cmd) {
+  return commandLines(cmd).filter((line) => !isDryRun(line));
+}
+function commandLines(cmd) {
+  const out = [];
+  for (const segment of cmd.split(SEGMENT_SPLIT)) {
+    const tokens = tokenize(segment);
+    if (tokens.length === 0) continue;
+    const { name, args } = commandName(tokens);
+    if (!name) continue;
+    out.push([name, ...args].join(" ").trim());
+    const inner = [];
+    if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
+    else if (SHELLS_TAKING_C.includes(name)) {
+      for (let i = 0; i < args.length; i++) {
+        if (DASH_C_RE.test(args[i]) && i + 1 < args.length) {
+          inner.push(args[i + 1]);
+          i++;
+        }
+      }
+    } else if (name === "xargs") {
+      const sub = innerCommandOf(args);
+      if (sub.length > 0) inner.push(sub.join(" "));
+    } else if (name === "find") {
+      for (let i = 0; i < args.length - 1; i++) {
+        if (["-exec", "-execdir", "-ok", "-okdir"].includes(args[i])) {
+          inner.push(args.slice(i + 1).filter((a) => a !== ";" && a !== "+" && a !== "{}").join(" "));
+        }
+      }
+    }
+    for (const chunk of inner) out.push(...commandLines(chunk));
+  }
+  return out;
+}
+function runsCommand(cmd, phrase) {
+  const p = phrase.trim();
+  if (!p) return false;
+  return commandLines(cmd).some((l) => l === p || l.startsWith(`${p} `));
+}
+var SUBSTITUTION_SCRIPT = /^[sy]\/[^/]*\/[^/]*\/[gimIpe0-9]*$/;
+function pathLikeMentions(cmd) {
+  const out = [];
+  const add = (t) => {
+    if (t && !out.includes(t)) out.push(t);
+  };
+  for (const seg of segmentsWithIndex(cmd)) {
+    const text = seg.text;
+    const re = /\/[A-Za-z0-9_.\-\/]*/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      let from = m.index;
+      while (from > 0 && /[A-Za-z0-9_.\-]/.test(text[from - 1])) from--;
+      const t = text.slice(from, m.index + m[0].length);
+      re.lastIndex = from + t.length;
+      if (isFlag(t) || !looksLikePath(t)) continue;
+      if (SUBSTITUTION_SCRIPT.test(t)) continue;
+      const before = text[from - 1] ?? "";
+      const after = text[from + t.length] ?? "";
+      if (after === ":") continue;
+      if (before === "@" || before === ":") continue;
+      const resolved = resolveIn(seg.cwd, t);
+      if (resolved !== null) add(resolved);
+    }
+    if (seg.cwd !== null && seg.cwd !== "") {
+      for (const t of seg.tokens) {
+        if (t.includes("/") || isFlag(t) || !looksLikePath(t)) continue;
+        if (SUBSTITUTION_SCRIPT.test(t)) continue;
+        const resolved = resolveIn(seg.cwd, t);
+        if (resolved !== null) add(resolved);
+      }
+    }
+  }
+  return out;
+}
+function mentionsPath(cmd, needles) {
+  return needles.find((n) => cmd.includes(n));
+}
+
+// core/src/cli.ts
 var tty = __toESM(require("tty"));
 var path20 = __toESM(require("path"));
 
@@ -7867,7 +8934,7 @@ function bumpNode(root, id) {
   const affectedWaves = [];
   const unverifiable = [];
   if (fs4.existsSync(wavesDir(root))) {
-    for (const f2 of fs4.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+    for (const f2 of fs4.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
@@ -9244,6 +10311,12 @@ function buildComparisonPacket(root, opts) {
 }
 
 // core/src/wave.ts
+var isWaveFile = (name) => WAVE_FILE_RE.test(name);
+var WAVE_FILE_RE = /^wave-\d+\.md$/;
+var waveNumberOf = (name) => {
+  const m = /^wave-(\d+)\.md$/.exec(name);
+  return m ? Number(m[1]) : void 0;
+};
 function parseWave(txt, lang = DEFAULT_LANG) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
@@ -9279,7 +10352,7 @@ function readWave(root, id) {
 function listWaves(root) {
   if (!fs9.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs9.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs9.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
       out.push(parseWave(fs9.readFileSync(path8.join(wavesDir(root), f2), "utf8"), langFor(root)).meta);
     } catch {
@@ -9307,8 +10380,8 @@ function nextWaveId(root) {
   const nums = [];
   if (fs9.existsSync(wavesDir(root))) {
     for (const f2 of fs9.readdirSync(wavesDir(root))) {
-      const m = /^wave-(\d+)\.md$/.exec(f2);
-      if (m) nums.push(parseInt(m[1], 10));
+      const n = waveNumberOf(f2);
+      if (n !== void 0) nums.push(n);
     }
   }
   for (const ev of readEvents(root)) {
@@ -10522,6 +11595,7 @@ function docsForPhase(root, phase) {
 }
 
 // core/src/gate.ts
+var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
     const real = fs14.realpathSync(path12.resolve(root, rel));
@@ -10539,7 +11613,7 @@ var MIN_SUBSTANCE_CHARS = 80;
 var MIN_DISTINCT_CHARS = 12;
 var MIN_WORDS = 5;
 function distinctCharCount(text) {
-  return new Set(text.replace(/[^\p{L}\p{N}]/gu, "")).size;
+  return new Set(text.replace(NON_ALNUM_RE, "")).size;
 }
 function wordCount(text) {
   return text.split(/\s+/u).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
@@ -10589,7 +11663,7 @@ function assertSubstantive(root, arts) {
     );
   }
   const textual = arts.filter((a) => !a.binary);
-  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(/[^\p{L}\p{N}]/gu, "");
+  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(NON_ALNUM_RE, "");
   if (textual.length > 0 && residual.length === 0) {
     throw new Error(
       tr(root, {
@@ -11052,7 +12126,7 @@ function waveEntries(root, t) {
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
-  for (const f2 of files.filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt(() => readWave(root, id).meta);
     if (r.ok) entries.push({ id, meta: r.value });
@@ -11770,7 +12844,7 @@ function waveEntries2(root, t) {
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
-  for (const f2 of files.filter((n) => /^wave-\d+\.md$/.test(n)).sort()) {
+  for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
     const r = attempt2(() => parseWave(fs16.readFileSync(path14.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
@@ -12308,1068 +13382,6 @@ function lastTier(root) {
   }
 }
 
-// core/src/bashwrite.ts
-var SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
-var MUTATING_TOKENS = [
-  // [EFF-214] `sed`·`awk`·`perl` 은 **이름만으로 변형이 아니다.** `-i` 없는 `sed -n '1,5p' f`·
-  // `awk 'NR<3' f` 는 순수 조회인데, 이름으로 `mutating` 을 세우는 바람에 안전망이 발화해
-  // **저널을 읽는 것까지 막혔다** — 「디버깅으로 저널을 읽는 것은 정당하다」는 이 파일의
-  // 원칙과 정면으로 어긋났다. 제자리 편집(`-i`)일 때만 아래 `case` 에서 세운다.
-  ">",
-  ">>",
-  "tee",
-  "touch",
-  "rm",
-  "mv",
-  "cp",
-  "dd",
-  "truncate",
-  "install",
-  "ln",
-  "chmod",
-  "chown",
-  "python",
-  "python3",
-  "node",
-  "ruby",
-  "eval",
-  // [SEC-101] 없애는 것도 변형이다 — `rmdir` 와 `find … -delete` 가 목록 밖이라
-  // 안전망(`mutating` AND 조건)이 아예 걸리지 않았다.
-  "rmdir",
-  "find"
-];
-function tokenize(segment) {
-  const out = [];
-  let cur = "";
-  let quote = null;
-  for (const ch of segment) {
-    if (quote) {
-      if (ch === quote) quote = null;
-      else cur += ch;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    if (/\s/.test(ch)) {
-      if (cur) {
-        out.push(cur);
-        cur = "";
-      }
-      continue;
-    }
-    cur += ch;
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-var isFlag = (t) => t.startsWith("-");
-var looksLikePath = (t) => t !== "" && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes("/") || /\.[A-Za-z0-9]+$/.test(t));
-var DYNAMIC_CD = /[$`*?~]/;
-function normalizePath(p) {
-  const abs = p.startsWith("/");
-  const parts = [];
-  for (const seg of p.split("/")) {
-    if (seg === "" || seg === ".") continue;
-    if (seg === "..") {
-      const top = parts[parts.length - 1];
-      if (parts.length > 0 && top !== "..") parts.pop();
-      else if (!abs) parts.push("..");
-      continue;
-    }
-    parts.push(seg);
-  }
-  return (abs ? "/" : "") + parts.join("/");
-}
-var PATH_MAX_GUESS = 4096;
-var CWD_MAX = PATH_MAX_GUESS;
-function advanceCwd(cwd, op) {
-  if (op === void 0 || op === "-" || DYNAMIC_CD.test(op)) return null;
-  if (op.startsWith("/")) return normalizePath(op);
-  if (cwd === null) return null;
-  if (cwd.length + op.length + 1 > CWD_MAX) return null;
-  return normalizePath((cwd ? cwd + "/" : "") + op);
-}
-function resolveIn(cwd, p) {
-  const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])/.exec(p);
-  if (pwdHead !== null) {
-    if (cwd === null) return null;
-    const rest = p.slice(pwdHead[0].length).replace(/^\//, "");
-    const joined = rest === "" ? cwd === "" ? "." : cwd : cwd === "" ? rest : `${cwd}/${rest}`;
-    return /[$`]/.test(joined) ? null : normalizePath(joined);
-  }
-  if (/[$`]/.test(p)) return null;
-  if (p.startsWith("/") || p.startsWith("~")) return p;
-  if (cwd === null) return null;
-  if (cwd === "") return p;
-  return normalizePath(cwd + "/" + p);
-}
-function envChdirOf(tokens) {
-  for (let i = 0; i < tokens.length; i++) {
-    const head = (tokens[i] ?? "").split("/").pop() ?? "";
-    if (head !== "env") continue;
-    for (let k = i + 1; k < tokens.length; k++) {
-      const a = tokens[k];
-      if (a === "-C" || a === "--chdir") return tokens[k + 1];
-      if (a.startsWith("--chdir=")) return a.slice("--chdir=".length);
-      if (a.startsWith("-C") && a.length > 2) return a.slice(2);
-      if (!isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) break;
-    }
-  }
-  return void 0;
-}
-function segmentsWithIndex(cmd) {
-  const out = [];
-  let last = 0;
-  let quote = null;
-  for (let i = 0; i < cmd.length; i++) {
-    const ch = cmd[i];
-    if (quote) {
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    const two = cmd.slice(i, i + 2);
-    const len = two === "||" || two === "&&" ? 2 : ";|&\n()".includes(ch) ? 1 : 0;
-    if (len === 0) continue;
-    out.push({ text: cmd.slice(last, i), start: last, cwd: "", tokens: [] });
-    last = i + len;
-    i += len - 1;
-  }
-  out.push({ text: cmd.slice(last), start: last, cwd: "", tokens: [] });
-  const BRANCH_END = /* @__PURE__ */ new Set(["else", "elif", "fi", "done", "esac"]);
-  let cwd = "";
-  let sawCd = false;
-  for (const seg of out) {
-    const tokens = tokenize(seg.text);
-    seg.tokens = tokens;
-    if (sawCd && tokens.some((t) => BRANCH_END.has(t))) cwd = null;
-    seg.cwd = cwd;
-    if (tokens.length === 0) continue;
-    const chdir = envChdirOf(tokens);
-    if (chdir !== void 0) seg.cwd = advanceCwd(cwd, chdir);
-    const { name, args } = commandName(tokens);
-    if (name === "cd" || name === "pushd") {
-      cwd = advanceCwd(cwd, args.find((a) => !isFlag(a)));
-      sawCd = true;
-    }
-  }
-  return out;
-}
-function cwdAt(segs, index) {
-  let lo = 0;
-  let hi = segs.length - 1;
-  let cwd = "";
-  while (lo <= hi) {
-    const mid = lo + hi >> 1;
-    if (segs[mid].start <= index) {
-      cwd = segs[mid].cwd;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return cwd;
-}
-var PREFIX_COMMANDS = /* @__PURE__ */ new Set([
-  "sudo",
-  "doas",
-  "env",
-  "nohup",
-  "time",
-  "command",
-  "exec",
-  "nice",
-  "ionice",
-  "stdbuf",
-  "setsid",
-  "timeout",
-  "unbuffer",
-  "script",
-  "proxychains",
-  "chroot",
-  // [EFF-108] 패키지 러너도 감싸기만 한다 — `npx prisma migrate deploy` 의 실행 단위는
-  // `prisma migrate deploy` 다. 벗기지 않으면 배포 판정이 러너 한 겹으로 빗나간다.
-  // `npm` 은 넣지 않는다 — `npm publish` 는 `npm` 자체가 실행 단위다.
-  "npx",
-  "bunx",
-  "pnpx",
-  // [ENG-217] `busybox` 도 감싸기만 한다 — `busybox sh -c '…'` 의 실행 단위는 `sh -c '…'` 다.
-  "busybox"
-]);
-var PREFIX_FLAG_VALUE = {
-  sudo: /* @__PURE__ */ new Set([
-    "-u",
-    "-g",
-    "-C",
-    "-p",
-    "-D",
-    "-h",
-    "-U",
-    "-r",
-    "-t",
-    "--user",
-    "--group",
-    "--close-from",
-    "--prompt",
-    "--chdir",
-    "--host",
-    "--other-user",
-    "--role",
-    "--type"
-  ]),
-  doas: /* @__PURE__ */ new Set(["-u", "-C"]),
-  env: /* @__PURE__ */ new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"]),
-  nice: /* @__PURE__ */ new Set(["-n", "--adjustment"]),
-  ionice: /* @__PURE__ */ new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
-  timeout: /* @__PURE__ */ new Set(["-k", "-s", "--kill-after", "--signal"]),
-  stdbuf: /* @__PURE__ */ new Set(["-i", "-o", "-e", "--input", "--output", "--error"]),
-  chroot: /* @__PURE__ */ new Set(["--userspec", "--groups"]),
-  script: /* @__PURE__ */ new Set(["-c", "--command", "--logging-format", "-B", "-I", "-O", "-T"]),
-  npx: /* @__PURE__ */ new Set(["-p", "-c", "--package", "--call"]),
-  bunx: /* @__PURE__ */ new Set(["-p", "--package"]),
-  pnpx: /* @__PURE__ */ new Set(["-p", "--package"])
-};
-var EMPTY_FLAGS = /* @__PURE__ */ new Set();
-var SHELL_KEYWORDS = /* @__PURE__ */ new Set([
-  "{",
-  "}",
-  "then",
-  "else",
-  "elif",
-  "do",
-  "done",
-  "fi",
-  "esac",
-  "in",
-  "!",
-  "if",
-  "while",
-  "until",
-  "case"
-]);
-function commandName(tokens) {
-  let i = 0;
-  let lastPrefix = -1;
-  for (; ; ) {
-    while (i < tokens.length && SHELL_KEYWORDS.has(tokens[i])) i++;
-    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
-    const head = (tokens[i] ?? "").split("/").pop() ?? "";
-    if (!PREFIX_COMMANDS.has(head)) break;
-    lastPrefix = i;
-    const takesValue = PREFIX_FLAG_VALUE[head] ?? EMPTY_FLAGS;
-    i++;
-    while (i < tokens.length) {
-      const t = tokens[i];
-      if (isFlag(t)) {
-        i += takesValue.has(t) && i + 1 < tokens.length && !isFlag(tokens[i + 1]) ? 2 : 1;
-        continue;
-      }
-      if (/^\d+(\.\d+)?[smhd]?$/.test(t)) {
-        i++;
-        continue;
-      }
-      break;
-    }
-  }
-  let raw = tokens[i] ?? "";
-  if (/[\s<>|]/.test(raw) && lastPrefix >= 0) {
-    i = lastPrefix;
-    raw = tokens[i] ?? "";
-  }
-  if (/[\s<>|]/.test(raw)) return { name: "", args: [] };
-  return { name: raw.split("/").pop() ?? "", args: tokens.slice(i + 1) };
-}
-var SHELLS_TAKING_C = [
-  "sh",
-  "bash",
-  "zsh",
-  "dash",
-  "ksh",
-  "fish",
-  "ash",
-  "busybox"
-];
-var INTERPRETERS = /* @__PURE__ */ new Set([
-  ...SHELLS_TAKING_C,
-  "node",
-  "nodejs",
-  "deno",
-  "bun",
-  "python",
-  "python2",
-  "python3",
-  "perl",
-  "ruby",
-  "php",
-  "osascript"
-]);
-var PROGRAM_FLAG = /^-(?:[A-Za-z]*c|e|E|-eval|-command)$/;
-var startsWithSubstitution = (a) => a.startsWith("$(") || a.startsWith("`");
-function opaqueExecOf(cmd) {
-  const runners = [...SHELLS_TAKING_C, "source", "."].map((r) => r.replace(/[.]/g, "\\.")).join("|");
-  const proc = new RegExp(`(?:^|[\\s;&|])(${runners})\\s+(?:-\\S+\\s+)*<\\(`).exec(cmd);
-  if (proc) return `${proc[1]} <(\u2026)`;
-  const OR = "\0";
-  const parts = cmd.replace(/\|\|/g, OR).split("|");
-  for (let i = 0; i < parts.length; i++) {
-    const chunks = parts[i].split(OR).join("||").split(/(?:&&|\|\||;|\n)/);
-    for (let k = 0; k < chunks.length; k++) {
-      const { name, args } = commandName(tokenize(chunks[k]));
-      if (name === "eval") {
-        if (args.some(startsWithSubstitution)) return 'eval "$(\u2026)"';
-        continue;
-      }
-      if (!INTERPRETERS.has(name)) continue;
-      const flagIdx = args.findIndex((a) => PROGRAM_FLAG.test(a));
-      if (flagIdx >= 0) {
-        const prog = args[flagIdx + 1];
-        if (prog !== void 0 && startsWithSubstitution(prog)) return `${name} -c "$(\u2026)"`;
-        continue;
-      }
-      if (args.some((a) => /^-[A-Za-z]*s$/.test(a))) return `${name} -s`;
-      if (args.includes("/dev/stdin") || args.includes("-")) return `${name} /dev/stdin`;
-      if (args.some((a) => !isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a))) continue;
-      if (i > 0 && k === 0) return `${name} \u2190 pipe`;
-    }
-  }
-  return void 0;
-}
-function redirectTargets(segment) {
-  const out = [];
-  const re = /\d*>>?([|&])?\s*(?:\\"([^"]*)\\"|\\'([^']*)\\'|"([^"]*)"|'([^']*)'|([^\s;|&<>()"'\\]+))/g;
-  let m;
-  while ((m = re.exec(segment)) !== null) {
-    const amp = m[1] === "&";
-    const t = m[2] ?? m[3] ?? m[4] ?? m[5] ?? m[6] ?? "";
-    if (amp && /^\d+$/.test(t)) continue;
-    if (t && !t.startsWith("&")) out.push({ path: t, index: m.index });
-  }
-  return out;
-}
-var XARGS_FLAG_VALUE = /* @__PURE__ */ new Set([
-  "-L",
-  "-n",
-  "-P",
-  "-s",
-  "-d",
-  "-E",
-  "-a",
-  "--max-args",
-  "--max-procs",
-  "--delimiter",
-  "--max-chars",
-  "--arg-file"
-]);
-function parseXargs(args) {
-  let mark;
-  let i = 0;
-  while (i < args.length) {
-    const a = args[i];
-    if (!isFlag(a)) break;
-    if (a === "-I") {
-      const next = args[i + 1];
-      if (next !== void 0 && !isFlag(next)) {
-        mark ??= next;
-        i += 2;
-        continue;
-      }
-      mark ??= "{}";
-      i += 1;
-      continue;
-    }
-    if (a === "-i" || a === "--replace") {
-      mark ??= "{}";
-      i += 1;
-      continue;
-    }
-    if (a.startsWith("--replace=")) {
-      mark ??= a.slice("--replace=".length);
-      i += 1;
-      continue;
-    }
-    if (a.startsWith("-I") && a.length > 2) {
-      mark ??= a.slice(2);
-      i += 1;
-      continue;
-    }
-    if (a.startsWith("-i") && a.length > 2) {
-      mark ??= a.slice(2);
-      i += 1;
-      continue;
-    }
-    i += XARGS_FLAG_VALUE.has(a) && i + 1 < args.length && !isFlag(args[i + 1]) ? 2 : 1;
-  }
-  return { mark, rest: args.slice(i) };
-}
-var replaceMarkOf = (args) => parseXargs(args).mark;
-var innerCommandOf = (args) => parseXargs(args).rest;
-function scriptFiles(name, args) {
-  const carriesProgram = (a) => /^-[A-Za-z]*[ef]$/.test(a) || name !== "sed" && /^-[A-Za-z]*e[A-Za-z]*$/.test(a);
-  const operands = [];
-  let programTaken = false;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (isFlag(a)) {
-      if (carriesProgram(a)) {
-        programTaken = true;
-        i++;
-      }
-      continue;
-    }
-    operands.push(a);
-  }
-  const files = programTaken ? operands : operands.slice(1);
-  return files.filter(looksLikePath);
-}
-var READ_ONLY_HEADS = [
-  "ls",
-  "pwd",
-  "cat",
-  "head",
-  "tail",
-  "wc",
-  "grep",
-  "rg",
-  "egrep",
-  "fgrep",
-  "file",
-  "stat",
-  "du",
-  "df",
-  "which",
-  "type",
-  "printenv",
-  "date",
-  "whoami",
-  "echo",
-  "uniq",
-  "cut",
-  "column",
-  "nl",
-  "basename",
-  "dirname",
-  "realpath",
-  "readlink",
-  "diff",
-  "cmp",
-  "shasum",
-  "tree",
-  "ps",
-  "uname",
-  "hostname",
-  "id",
-  "groups",
-  "less",
-  "more",
-  /**
-   * [EFF-289] **아무것도 쓰지 않는 셸 내장이 「모르는 명령」으로 분류돼 있었다.**
-   * `test -f x && cat .harness/config.yaml` · `true; cat …` 처럼 **접두 한 조각**이
-   * 명령 전체를 `mutating` 으로 만들고, 그러면 「대상이 없을 때 언급을 본다」 안전망이
-   * 발화해 **순수 조회가 「쓸 수 없다」는 사유로** 거부됐다 — 사유까지 사실과 달랐다.
-   * 여기 적는 것은 인자를 무엇으로 주든 파일을 만들지 않는 것들만이다
-   * (`trap`·`eval`·`exec`·`source` 는 **넣지 않는다** — 남의 명령을 실행한다).
-   */
-  "true",
-  "false",
-  ":",
-  "test",
-  "[",
-  "[[",
-  "]]",
-  "sleep",
-  "wait",
-  "break",
-  "continue",
-  "shift",
-  "return",
-  "exit",
-  "set",
-  "unset",
-  "export",
-  "readonly",
-  "local",
-  "popd",
-  "dirs",
-  "jobs",
-  "umask",
-  "ulimit",
-  "times",
-  "help"
-];
-var CONDITIONAL_WRITERS = {
-  // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
-  // 이 조건을 통째로 비껴갔다. `yq`·`jq` 줄에는 롱폼이 있는데 여기만 빠져 있던
-  // **거울 자리 누락**이다(같은 표에서 한 줄만 좁았다).
-  sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x.startsWith("--in-place")),
-  /**
-   * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
-   * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
-   * `open(F,">",…)` 로 정책이 덮인다. `-i` 만 보던 조건은 **제자리 편집**만 변형으로 쳤고,
-   * 그래서 이 도구가 할 수 있는 일 중 가장 넓은 형태가 조회로 분류됐다.
-   *
-   * [EFF-214] 가 과차단을 고치며 이 도구들을 조회 쪽으로 옮겼고, [SEC-221] 이 그 목록의
-   * 의미를 「모든 형태에서 조회인 것만」으로 바꿨다 — 그런데 `perl` 의 조건 자체가
-   * 여전히 좁았다. **같은 부류의 세 번째 재발이다**(`awk -i inplace` · `yq -i` 에 이어).
-   *
-   * `ruby -e`·`python -c` 는 다른 경로로 이미 막히지만, 여기 함께 적는 이유는 **한 곳에서
-   * 같은 답을 내게** 하려는 것이다 — 답이 두 곳에 있으면 언젠가 한쪽만 고쳐진다.
-   */
-  perl: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
-  ruby: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x === "-e" || x === "-E"),
-  awk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
-  gawk: (a) => a.some((x) => x === "-i" || x === "--include" || x === "inplace"),
-  yq: (a) => a.some((x) => x === "-i" || x === "--inplace" || x === "--in-place"),
-  jq: (a) => a.some((x) => x === "-i" || x === "--in-place"),
-  sort: (a) => a.some((x) => x === "-o" || x.startsWith("--output")),
-  tr: () => false
-};
-var READ_ONLY_GIT = [
-  "status",
-  "log",
-  "diff",
-  "show",
-  "blame",
-  "branch",
-  "remote",
-  "rev-parse",
-  "describe",
-  "ls-files",
-  "shortlog",
-  "reflog",
-  "grep",
-  "cat-file"
-];
-function isReadOnlyCommand(cmd) {
-  if (cmd.trim() === "") return false;
-  const scan = scanBashWrites(cmd);
-  if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
-  const lines = commandLines(cmd);
-  if (lines.length === 0) return false;
-  return lines.every((l) => {
-    const [head, second, ...rest] = l.split(/\s+/);
-    if (head === "git") return second !== void 0 && READ_ONLY_GIT.includes(second);
-    const cond = CONDITIONAL_WRITERS[head];
-    if (cond !== void 0) return !cond([second ?? "", ...rest]);
-    return READ_ONLY_HEADS.includes(head);
-  });
-}
-var MKTEMP_VALUE = /^\$\(\s*mktemp\b[^)]*\)$|^`\s*mktemp\b[^`]*`$/;
-function staticAssignments(cmd, env = {}) {
-  const out = /* @__PURE__ */ new Map();
-  for (const m2 of cmd.matchAll(
-    /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=(\$\([^)]*\)|`[^`]*`)/g
-  )) {
-    if (!MKTEMP_VALUE.test(m2[2]) || out.has(m2[1])) continue;
-    const tmp = (env.TMPDIR ?? "/tmp").replace(/\/$/, "");
-    out.set(m2[1], `${tmp}/mktemp-generated`);
-  }
-  const re = /(?:^|[;&|(\s])([A-Za-z_][A-Za-z0-9_]*)=("[^"$`]*"|'[^'$`]*'|[^\s;|&<>()"'`$]+)/g;
-  let m;
-  while ((m = re.exec(cmd)) !== null) {
-    const raw = m[2].replace(/^["']|["']$/g, "");
-    if (/[$`]/.test(raw)) continue;
-    if (!out.has(m[1])) out.set(m[1], raw);
-  }
-  return out;
-}
-function expandBraceDefaults(cmd, env) {
-  return cmd.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-)([^}]*)\}/g,
-    (_m, name, fallback) => env[name] ?? fallback
-  );
-}
-var FOR_LOOP = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]*?)\s*(?:;|\n)\s*do\b([\s\S]*?)\bdone\b/g;
-function expandStaticForLoops(cmd) {
-  return cmd.replace(FOR_LOOP, (whole, name, listRaw, body) => {
-    if (/\bfor\b/.test(body)) return whole;
-    const words = listRaw.trim().split(/\s+/).filter((w) => w !== "");
-    if (words.length === 0 || words.length > 32) return whole;
-    if (words.some((w) => /[$`*?[\]{}~"']/.test(w))) return whole;
-    const re = new RegExp(`\\$\\{${name}\\}|\\$${name}(?![A-Za-z0-9_])`, "g");
-    return words.map((w) => body.replace(re, w)).join(" ; ");
-  });
-}
-function expandStaticVars(rawCmd, env = {}) {
-  const cmd = expandStaticForLoops(expandBraceDefaults(rawCmd, env));
-  const vars = staticAssignments(cmd, env);
-  const lookup = (name) => {
-    const local = vars.get(name);
-    if (local !== void 0) return local;
-    if (name === "PWD" || name === "OLDPWD") return void 0;
-    const e = env[name];
-    return e !== void 0 && e !== "" && !/[\s$`"'<>|;&()]/.test(e) ? e : void 0;
-  };
-  return cmd.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-    (whole, a, b) => lookup(a ?? b ?? "") ?? whole
-  );
-}
-function flagValues(args, names) {
-  const out = [];
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    for (const nm of names) {
-      if (nm.length === 1) {
-        if (!a.startsWith("--") && a.startsWith("-") && a.length > 1) {
-          const at = a.indexOf(nm, 1);
-          if (at > 0) {
-            const tail = a.slice(at + 1);
-            if (tail !== "") out.push(tail);
-            else {
-              const v = args[i + 1];
-              if (v !== void 0 && !isFlag(v)) out.push(v);
-            }
-          }
-        }
-      } else {
-        if (a === `--${nm}`) {
-          const v = args[i + 1];
-          if (v !== void 0 && !isFlag(v)) out.push(v);
-        } else if (a.startsWith(`--${nm}=`)) out.push(a.slice(nm.length + 3));
-      }
-    }
-  }
-  return out;
-}
-function targetDirectory(args) {
-  return flagValues(args, ["t", "target-directory"])[0] ?? null;
-}
-function sourcesFor(operands, dir) {
-  let dropped = false;
-  return operands.filter((o) => {
-    if (!dropped && o === dir) {
-      dropped = true;
-      return false;
-    }
-    return true;
-  });
-}
-var LINK_MAKERS = /* @__PURE__ */ new Set(["ln", "link"]);
-function dirOf(p) {
-  const i = p.lastIndexOf("/");
-  return i <= 0 ? "" : p.slice(0, i);
-}
-function cpMakesLink(args) {
-  return args.some((a) => a === "--link" || !a.startsWith("--") && a.startsWith("-") && a.includes("l"));
-}
-function underDir(dir, sources) {
-  const base = dir.replace(/\/+$/, "");
-  return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
-}
-function scanBashWrites(rawCmd, env = {}) {
-  const cmd = expandStaticVars(rawCmd, env);
-  const targets = [];
-  const aliases = [];
-  const placed = [];
-  const linkSources = [];
-  let mutating = false;
-  let patchesWorkingTree = false;
-  let appliesPatch = false;
-  const patchFiles = [];
-  let opaqueExec = opaqueExecOf(cmd);
-  const unresolvedTargets = [];
-  const segs = segmentsWithIndex(cmd);
-  const substMarks = /* @__PURE__ */ new Set();
-  for (const seg of segs) {
-    const t = seg.tokens;
-    if (t.length === 0) continue;
-    const c = commandName(t);
-    if (c.name === "xargs") {
-      const mk = replaceMarkOf(c.args);
-      if (mk !== void 0 && mk !== "") substMarks.add(mk);
-    } else if (c.name === "find" && c.args.some((a) => ["-exec", "-execdir", "-ok", "-okdir"].includes(a))) {
-      substMarks.add("{}");
-    }
-  }
-  const isSubst = (t) => [...substMarks].some((m) => t.includes(m));
-  const redirects = redirectTargets(cmd);
-  if (redirects.length > 0) mutating = true;
-  for (const r of redirects) {
-    if (isSubst(r.path)) {
-      unresolvedTargets.push(r.path);
-      continue;
-    }
-    const resolved = resolveIn(cwdAt(segs, r.index), r.path);
-    if (resolved === null) unresolvedTargets.push(r.path);
-    else {
-      targets.push(resolved);
-      placed.push({ path: resolved, at: r.index });
-    }
-  }
-  for (const seg of segs) {
-    const segment = seg.text;
-    const firstNew = targets.length;
-    const tokens = seg.tokens;
-    if (tokens.length === 0) continue;
-    const { name, args } = commandName(tokens);
-    if (LINK_MAKERS.has(name) || name === "cp" && cpMakesLink(args)) {
-      const ops = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
-      if (ops.length >= 2) {
-        const rawTarget = ops[ops.length - 2];
-        const dst = resolveIn(seg.cwd, ops[ops.length - 1]);
-        const symbolicLink = args.some((a) => a === "-s" || a === "--symbolic" || !a.startsWith("--") && a.startsWith("-") && !a.startsWith("--") && a.includes("s"));
-        const base = symbolicLink && !rawTarget.startsWith("/") && dst !== null ? dirOf(dst) : seg.cwd;
-        const src = resolveIn(base, rawTarget);
-        if (src !== null && dst !== null && dst !== src) aliases.push({ alias: dst, real: src, at: seg.start });
-        if (src !== null) linkSources.push({ path: src, at: seg.start });
-      }
-    }
-    if (MUTATING_TOKENS.includes(name)) mutating = true;
-    const condWriter = CONDITIONAL_WRITERS[name];
-    const segmentWrites = condWriter !== void 0 ? condWriter(args) : !READ_ONLY_HEADS.includes(name);
-    if (seg.cwd === null && segmentWrites) unresolvedTargets.push(...args.filter(looksLikePath));
-    const paths = args.filter(looksLikePath);
-    const operands = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
-    switch (name) {
-      case "tee":
-      case "touch":
-      case "rm":
-      case "truncate":
-      case "unlink":
-        targets.push(...paths);
-        break;
-      case "sed":
-      case "perl":
-      case "ruby":
-        if (CONDITIONAL_WRITERS[name]?.(args) === true) {
-          mutating = true;
-          targets.push(...scriptFiles(name, args));
-          const inline = args.filter((a, i) => ["-e", "-E"].includes(args[i - 1] ?? ""));
-          for (const code of inline) targets.push(...pathLikeMentions(code));
-        }
-        break;
-      case "cp":
-      case "install": {
-        const dir = targetDirectory(args);
-        if (dir !== null) {
-          targets.push(...underDir(dir, sourcesFor(operands, dir)));
-          break;
-        }
-        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
-        if (name === "cp" && cpMakesLink(args) && operands.length >= 2) {
-          targets.push(...operands.slice(0, -1));
-        }
-        break;
-      }
-      case "mv": {
-        const dir = targetDirectory(args);
-        if (dir !== null) {
-          const srcs = sourcesFor(operands, dir);
-          targets.push(...underDir(dir, srcs));
-          targets.push(...srcs);
-          break;
-        }
-        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
-        if (operands.length >= 2) targets.push(...operands.slice(0, -1));
-        break;
-      }
-      case "rmdir":
-        targets.push(...paths);
-        break;
-      case "ln":
-      case "link": {
-        const dir = targetDirectory(args);
-        if (dir !== null) {
-          targets.push(...underDir(dir, sourcesFor(operands, dir)));
-          break;
-        }
-        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
-        break;
-      }
-      case "dd":
-        for (const a of args) if (a.startsWith("of=")) targets.push(a.slice(3));
-        break;
-      case "curl":
-      case "wget": {
-        const named = name === "curl" ? ["-o", "--output"] : ["-O", "--output-document", "--output-file"];
-        for (let i = 0; i < args.length - 1; i++) {
-          if (named.includes(args[i]) && looksLikePath(args[i + 1])) targets.push(args[i + 1]);
-        }
-        break;
-      }
-      case "prettier":
-      case "eslint":
-        if (args.some((a) => a === "--write" || a === "--fix")) targets.push(...paths);
-        break;
-      case "patch":
-      case "ed":
-      case "ex":
-        targets.push(...paths);
-        break;
-      case "tar":
-      case "unzip":
-      case "bsdtar": {
-        targets.push(...name === "unzip" ? flagValues(args, ["d"]) : flagValues(args, ["C", "directory"]));
-        break;
-      }
-      case "rsync":
-      case "scp":
-        if (operands.length >= 1) targets.push(operands[operands.length - 1]);
-        if (name === "rsync") {
-          targets.push(...flagValues(args, [
-            "backup-dir",
-            "write-batch",
-            "only-write-batch",
-            "log-file",
-            "partial-dir",
-            "temp-dir"
-          ]));
-        }
-        break;
-      case "sponge":
-        targets.push(...operands);
-        break;
-      case "vim":
-      case "vi":
-      case "nvim":
-        if (args.some((a) => /^-(es|s|c|S)$/.test(a) || a === "--cmd")) targets.push(...paths);
-        break;
-      case "git": {
-        if (args.some((a) => a === "apply" || a === "am")) {
-          patchesWorkingTree = true;
-          mutating = true;
-          appliesPatch = true;
-          patchFiles.push(...operands.filter(
-            (a) => a !== "apply" && a !== "am" && a !== "git" && !/^[<>|&]+$/.test(a)
-          ));
-        }
-        const RESTORE = ["checkout", "restore", "stash", "reset", "revert"];
-        const verb = operands.find((a) => RESTORE.includes(a));
-        if (verb !== void 0) {
-          const dashdash = args.indexOf("--");
-          if (dashdash >= 0 && dashdash + 1 < args.length) {
-            targets.push(...args.slice(dashdash + 1).filter((a) => !isFlag(a)));
-            mutating = true;
-          } else if (verb === "restore") {
-            targets.push(...operands.filter((a) => a !== "restore"));
-            mutating = true;
-          } else if (verb !== "stash" || operands.includes("pop") || operands.includes("apply")) {
-            patchesWorkingTree = true;
-            mutating = true;
-          }
-        }
-        const ci = operands.indexOf("clone");
-        if (ci >= 0) {
-          const rest = operands.slice(ci + 1).filter((a) => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes("@"));
-          if (rest.length >= 1) targets.push(rest[rest.length - 1]);
-          targets.push(...flagValues(args, ["separate-git-dir"]));
-        }
-        break;
-      }
-      /**
-       * [ENG-226] **셸 목록의 다섯 번째 사본이 `case` 라벨로 숨어 있었다.**
-       * `fish`·`ash`·`busybox` 가 빠져 `ash -c 'cd src && echo x > app.ts'` 가 통과했다 —
-       * 래퍼 안쪽이 아예 안 열려서 `cd` 추적도 안 됐다.
-       *
-       * `case` 라벨은 정본(`SHELLS_TAKING_C`)에서 생성할 수 없다. 그래서 **드리프트를 테스트로
-       * 못 박는다** — 정본의 모든 셸에 대해 이 분기가 안쪽을 여는지 전수 검사한다
-       * (`blocker-3j.test.ts` [ENG-226]). 라벨이 빠지면 그 테스트가 먼저 깨진다.
-       */
-      case "sh":
-      case "bash":
-      case "zsh":
-      case "dash":
-      case "ksh":
-      case "fish":
-      case "ash":
-      case "busybox":
-      case "eval": {
-        const inner = [];
-        if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
-        else {
-          for (let i = 0; i < args.length; i++) {
-            if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) {
-              inner.push(args[i + 1]);
-              i++;
-            }
-          }
-        }
-        for (const chunk of inner) {
-          const sub = scanBashWrites(chunk);
-          targets.push(...sub.targets);
-          unresolvedTargets.push(...sub.unresolvedTargets);
-          if (sub.mutating) mutating = true;
-          if (sub.patchesWorkingTree) patchesWorkingTree = true;
-          if (sub.appliesPatch) {
-            appliesPatch = true;
-            patchFiles.push(...sub.patchFiles);
-          }
-          opaqueExec ??= sub.opaqueExec;
-        }
-        break;
-      }
-      case "find": {
-        if (args.some((a) => a === "-delete")) {
-          for (const a of args) {
-            if (isFlag(a) || a.startsWith("-")) break;
-            targets.push(a);
-          }
-        }
-        for (let i = 0; i < args.length - 1; i++) {
-          if (args[i] !== "-exec" && args[i] !== "-execdir" && args[i] !== "-ok" && args[i] !== "-okdir") continue;
-          const inner = commandName(args.slice(i + 1));
-          if (!inner.name) continue;
-          const innerScan = scanBashWrites([inner.name, ...inner.args].join(" "));
-          if (innerScan.mutating) {
-            mutating = true;
-            patchesWorkingTree = true;
-          }
-          targets.push(...innerScan.targets.filter((t) => t !== "{}"));
-          unresolvedTargets.push(...innerScan.unresolvedTargets);
-        }
-        break;
-      }
-      case "xargs": {
-        const inner = innerCommandOf(args);
-        if (inner.length > 0) {
-          const sub = scanBashWrites(inner.join(" "));
-          const mark = replaceMarkOf(args);
-          for (const t of sub.targets) {
-            if (mark !== void 0 && t.includes(mark)) unresolvedTargets.push(t);
-            else targets.push(t);
-          }
-          unresolvedTargets.push(...sub.unresolvedTargets);
-          if (sub.mutating) mutating = true;
-          if (sub.patchesWorkingTree) patchesWorkingTree = true;
-          if (sub.appliesPatch) {
-            appliesPatch = true;
-            patchFiles.push(...sub.patchFiles);
-          }
-          opaqueExec ??= sub.opaqueExec;
-        }
-        break;
-      }
-      default: {
-        const cond = CONDITIONAL_WRITERS[name];
-        if (cond?.(args)) {
-          mutating = true;
-          targets.push(...paths);
-          break;
-        }
-        if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) mutating = true;
-        break;
-      }
-    }
-    for (let i = firstNew; i < targets.length; i++) {
-      const resolved = resolveIn(seg.cwd, targets[i]);
-      if (resolved === null) {
-        unresolvedTargets.push(targets[i]);
-        targets[i] = "";
-      } else {
-        targets[i] = resolved;
-        placed.push({ path: resolved, at: seg.start });
-      }
-    }
-  }
-  for (const { path: p } of linkSources) targets.push(p);
-  for (const { alias, real, at } of aliases) {
-    for (const { path: t, at: tAt } of placed) {
-      if (tAt <= at) continue;
-      if (t === alias) targets.push(real);
-      else if (t.startsWith(`${alias}/`)) {
-        const rest = t.slice(alias.length + 1);
-        targets.push(real === "" ? rest : `${real}/${rest}`);
-      }
-    }
-  }
-  return {
-    targets: [...new Set(targets.filter(Boolean))],
-    mutating,
-    patchesWorkingTree,
-    appliesPatch,
-    opaqueExec,
-    patchFiles: [...new Set(patchFiles.filter(Boolean))],
-    unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
-    // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
-    blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
-  };
-}
-function isDryRun(line) {
-  return /(?:^|\s)--dry[-_]?run(?:[=\s]|$)/.test(line);
-}
-function judgeableLines(cmd) {
-  return commandLines(cmd).filter((line) => !isDryRun(line));
-}
-function commandLines(cmd) {
-  const out = [];
-  for (const segment of cmd.split(SEGMENT_SPLIT)) {
-    const tokens = tokenize(segment);
-    if (tokens.length === 0) continue;
-    const { name, args } = commandName(tokens);
-    if (!name) continue;
-    out.push([name, ...args].join(" ").trim());
-    const inner = [];
-    if (name === "eval") inner.push(...args.filter((a) => !isFlag(a)));
-    else if (SHELLS_TAKING_C.includes(name)) {
-      for (let i = 0; i < args.length; i++) {
-        if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) {
-          inner.push(args[i + 1]);
-          i++;
-        }
-      }
-    } else if (name === "xargs") {
-      const sub = innerCommandOf(args);
-      if (sub.length > 0) inner.push(sub.join(" "));
-    } else if (name === "find") {
-      for (let i = 0; i < args.length - 1; i++) {
-        if (["-exec", "-execdir", "-ok", "-okdir"].includes(args[i])) {
-          inner.push(args.slice(i + 1).filter((a) => a !== ";" && a !== "+" && a !== "{}").join(" "));
-        }
-      }
-    }
-    for (const chunk of inner) out.push(...commandLines(chunk));
-  }
-  return out;
-}
-function runsCommand(cmd, phrase) {
-  const p = phrase.trim();
-  if (!p) return false;
-  return commandLines(cmd).some((l) => l === p || l.startsWith(`${p} `));
-}
-var SUBSTITUTION_SCRIPT = /^[sy]\/[^/]*\/[^/]*\/[gimIpe0-9]*$/;
-function pathLikeMentions(cmd) {
-  const out = [];
-  const add = (t) => {
-    if (t && !out.includes(t)) out.push(t);
-  };
-  for (const seg of segmentsWithIndex(cmd)) {
-    const text = seg.text;
-    const re = /\/[A-Za-z0-9_.\-\/]*/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      let from = m.index;
-      while (from > 0 && /[A-Za-z0-9_.\-]/.test(text[from - 1])) from--;
-      const t = text.slice(from, m.index + m[0].length);
-      re.lastIndex = from + t.length;
-      if (isFlag(t) || !looksLikePath(t)) continue;
-      if (SUBSTITUTION_SCRIPT.test(t)) continue;
-      const before = text[from - 1] ?? "";
-      const after = text[from + t.length] ?? "";
-      if (after === ":") continue;
-      if (before === "@" || before === ":") continue;
-      const resolved = resolveIn(seg.cwd, t);
-      if (resolved !== null) add(resolved);
-    }
-    if (seg.cwd !== null && seg.cwd !== "") {
-      for (const t of seg.tokens) {
-        if (t.includes("/") || isFlag(t) || !looksLikePath(t)) continue;
-        if (SUBSTITUTION_SCRIPT.test(t)) continue;
-        const resolved = resolveIn(seg.cwd, t);
-        if (resolved !== null) add(resolved);
-      }
-    }
-  }
-  return out;
-}
-function mentionsPath(cmd, needles) {
-  return needles.find((n) => cmd.includes(n));
-}
-
 // core/src/profile.ts
 var fs18 = __toESM(require("fs"));
 var path16 = __toESM(require("path"));
@@ -13709,7 +13721,6 @@ function isWriteTool(tool) {
 }
 var MCP_WRITE_MATCHER = "mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir|store|upload|truncate|set_file|set_content|replace).*";
 var PREFIX_SET = /* @__PURE__ */ new Set([...PREFIX_COMMANDS, "xargs"]);
-var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 var PREFIX_FLAG_RE = /^-\S+$/;
 var PREFIX_FLAG_VALUE_RE = /^[A-Za-z_][\w.-]*$/;
 var PREFIX_NUMBER_RE = /^\d+(?:\.\d+)?[smhd]?$/;
@@ -14786,7 +14797,7 @@ function referencingWaves(root, id) {
   const affected = [];
   const unverifiable = [];
   if (!fs20.existsSync(wavesDir(root))) return { affected, unverifiable };
-  for (const f2 of fs20.readdirSync(wavesDir(root)).filter((f3) => /^wave-\d+\.md$/.test(f3)).sort()) {
+  for (const f2 of fs20.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     const stem = f2.replace(/\.md$/, "");
     let txt;
     try {
@@ -15296,7 +15307,7 @@ function harnessVersion() {
 function warnUnresolvedEvidence(root, evidence, lang) {
   const raw = (evidence ?? "").trim();
   if (!raw) return;
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return;
+  if (URL_SCHEME_RE.test(raw)) return;
   const p0 = raw.replace(/:\d+(?::\d+)?$/, "");
   if (!p0 || !/[/.]/.test(p0)) return;
   if (path20.isAbsolute(p0)) return;

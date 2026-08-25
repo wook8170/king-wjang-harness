@@ -58,6 +58,18 @@ function tokenize(segment: string): string[] {
   return out;
 }
 
+/**
+ * [ENG-294] **`NAME=VALUE` 는 하나의 규칙이다.** 같은 정규식이 이 파일 세 곳과 `hook.ts` 에
+ * 각각 적혀 있었다 — 한 곳만 넓히면 나머지가 조용히 좁은 채로 남는다.
+ */
+export const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/** `-c`·`-lc`·`-xc` — c 가 섞인 플래그 다음이 명령 문자열이다(정본 한 벌). */
+const DASH_C_RE = /^-[a-z]*c$/;
+
+/** URL 스킴 — 파일 경로가 아니다(정본 한 벌, 대소문자 무시). */
+export const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 const isFlag = (t: string): boolean => t.startsWith('-');
 
 /** 경로처럼 보이는 토큰만 후보로 본다 — `sed` 의 스크립트 인자를 파일로 오인하지 않게. */
@@ -172,7 +184,7 @@ function envChdirOf(tokens: string[]): string | undefined {
       if (a === '-C' || a === '--chdir') return tokens[k + 1];
       if (a.startsWith('--chdir=')) return a.slice('--chdir='.length);
       if (a.startsWith('-C') && a.length > 2) return a.slice(2);
-      if (!isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) break;   // 감싼 명령이 시작됐다
+      if (!isFlag(a) && !ENV_ASSIGN_RE.test(a)) break;   // 감싼 명령이 시작됐다
     }
   }
   return undefined;
@@ -334,7 +346,7 @@ function commandName(tokens: string[]): { name: string; args: string[] } {
   let lastPrefix = -1;                                                             // [SEC-280] 되돌아갈 자리
   for (;;) {
     while (i < tokens.length && SHELL_KEYWORDS.has(tokens[i])) i++;                // [SEC-288] 키워드
-    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;   // env 대입
+    while (i < tokens.length && ENV_ASSIGN_RE.test(tokens[i])) i++;   // env 대입
     const head = (tokens[i] ?? '').split('/').pop() ?? '';
     if (!PREFIX_COMMANDS.has(head)) break;
     lastPrefix = i;
@@ -483,7 +495,7 @@ function opaqueExecOf(cmd: string): string | undefined {
       if (args.includes('/dev/stdin') || args.includes('-')) return `${name} /dev/stdin`;
 
       // 스크립트 파일을 받았으면 그 파일은 읽을 수 있다(호출측이 본문을 이어 붙인다).
-      if (args.some(a => !isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a))) continue;
+      if (args.some(a => !isFlag(a) && !ENV_ASSIGN_RE.test(a))) continue;
 
       // 인자 없는 해석기가 파이프 뒤에 있다 = 파이프가 곧 프로그램이다.
       if (i > 0 && k === 0) return `${name} ← pipe`;
@@ -1250,7 +1262,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         // `git clone <url> <dir>` 은 저장소를 통째로 그 자리에 푼다. URL 은 대상이 아니다.
         const ci = operands.indexOf('clone');
         if (ci >= 0) {
-          const rest = operands.slice(ci + 1).filter(a => !/^[a-z][a-z0-9+.-]*:\/\//.test(a) && !a.includes('@'));
+          const rest = operands.slice(ci + 1).filter(a => !URL_SCHEME_RE.test(a) && !a.includes('@'));
           if (rest.length >= 1) targets.push(rest[rest.length - 1]);
           // [SEC-259] `--separate-git-dir=DIR` 은 저장소 실체를 그 자리에 만든다 — 위치가 아니라 플래그다.
           targets.push(...flagValues(args, ['separate-git-dir']));
@@ -1285,7 +1297,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         else {
           for (let i = 0; i < args.length; i++) {
             // `-c`·`-lc`·`-xc` 처럼 c 가 섞인 플래그 다음이 명령 문자열이다.
-            if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
+            if (DASH_C_RE.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
           }
         }
         for (const chunk of inner) {
@@ -1498,7 +1510,7 @@ export function commandLines(cmd: string): string[] {
     if (name === 'eval') inner.push(...args.filter(a => !isFlag(a)));
     else if ((SHELLS_TAKING_C as readonly string[]).includes(name)) {
       for (let i = 0; i < args.length; i++) {
-        if (/^-[a-z]*c$/.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
+        if (DASH_C_RE.test(args[i]) && i + 1 < args.length) { inner.push(args[i + 1]); i++; }
       }
     } else if (name === 'xargs') {
       const sub = innerCommandOf(args);

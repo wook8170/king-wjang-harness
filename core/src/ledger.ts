@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { ledgerPath, wavesDir } from './paths';
 import { tr } from './tr';
-import { parseWave, markStale } from './wave';
+import { parseWave, markStale, isWaveFile } from './wave';
 import { appendEvent } from './events';
 import { readState } from './state';
 import type { LedgerNode, WaveMeta } from './types';
@@ -90,7 +90,7 @@ export function bumpNode(
   const affectedWaves: string[] = [];
   const unverifiable: string[] = [];
   if (fs.existsSync(wavesDir(root))) {
-    for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
+    for (const f of fs.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f.replace(/\.md$/, '');
       let txt: string;
       try {

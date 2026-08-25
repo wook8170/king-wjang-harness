@@ -74,6 +74,9 @@ import type { EvidenceGrade, GateRecord, HarnessState, Phase } from './types';
  * 해석 실패(없는 파일)나 루트 밖은 **적힌 그대로** 돌려준다 — 존재 여부는 readArtifact 가,
  * 루트 밖은 assertInsideRoot 가 각자의 문구로 말해야 하기 때문이다(여기서 삼키면 사유가 바뀐다).
  */
+/** [ENG-294] 「글자도 숫자도 아닌 것」 — 같은 규칙이 이 파일에 두 벌이었다. */
+const NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
+
 function canonicalRel(root: string, rel: string): string {
   try {
     const real = fs.realpathSync(path.resolve(root, rel));
@@ -130,7 +133,7 @@ export const MIN_WORDS = 5;
 
 /** 글자·숫자만 남긴 고유 코드포인트 수 — 스크립트에 중립적이다(한글·가나·한자 모두 잘 늘어난다). */
 export function distinctCharCount(text: string): number {
-  return new Set(text.replace(/[^\p{L}\p{N}]/gu, '')).size;
+  return new Set(text.replace(NON_ALNUM_RE, '')).size;
 }
 
 /** 공백으로 끊은 낱말 수 — 띄어쓰기가 없는 언어에서는 작게 나오므로 **단독 판정에 쓰지 않는다**. */
@@ -222,7 +225,7 @@ function assertSubstantive(root: string, arts: ArtifactRead[]): void {
   const residual = textual.map(a => a.text).join('\n')
     .replace(PLACEHOLDER_WORDS, '')
     .replace(PLACEHOLDER_WORDS_KO, '')
-    .replace(/[^\p{L}\p{N}]/gu, '');
+    .replace(NON_ALNUM_RE, '');
   if (textual.length > 0 && residual.length === 0) {
     throw new Error(
       tr(root, {

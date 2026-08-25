@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, PATH_MAX_GUESS } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -101,7 +101,7 @@ export const MCP_WRITE_MATCHER =
  * 이 판정은 넓게 틀리면 위험하고 좁게 틀리면 안전하다.
  */
 const PREFIX_SET = new Set<string>([...PREFIX_COMMANDS, 'xargs']);
-const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+// [ENG-294] 정본은 `bashwrite.ts` 다 — 여기서 다시 적지 않는다.
 const PREFIX_FLAG_RE = /^-\S+$/;
 /** 플래그가 데려오는 값(`sudo -u me`). 숫자는 아래 규칙이 따로 받는다. */
 const PREFIX_FLAG_VALUE_RE = /^[A-Za-z_][\w.-]*$/;

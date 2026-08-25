@@ -52,7 +52,7 @@ import { tr } from './tr';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { getNode, upsertNode } from './ledger';
-import { parseWave, markStale } from './wave';
+import { parseWave, markStale, isWaveFile } from './wave';
 import type { LedgerNode, Phase, WaveMeta } from './types';
 
 export const adrDir = (root: string) => path.join(designDir(root), 'adr');
@@ -227,7 +227,7 @@ function referencingWaves(root: string, id: string): { affected: string[]; unver
   const affected: string[] = [];
   const unverifiable: string[] = [];
   if (!fs.existsSync(wavesDir(root))) return { affected, unverifiable };
-  for (const f of fs.readdirSync(wavesDir(root)).filter(f => /^wave-\d+\.md$/.test(f)).sort()) {
+  for (const f of fs.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     const stem = f.replace(/\.md$/, '');
     let txt: string;
     try {
