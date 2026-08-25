@@ -67,8 +67,12 @@ tsc 0 · build OK · 대장 lint R1–R13(300행)** · 워킹트리 clean · **�
 
 - **사용자 판단**(위 세 선택지) — 이것이 유일한 블로커다.
 - 축 3·4 는 3-P 기준 3.9 / 3.0 (이번 봉인분 미반영). 필요하면 재감정 가능.
-- 아티팩트는 **3-P 기준**이다(3-Q 미반영): https://claude.ai/code/artifact/5c1f5e92-e547-4768-a036-4469bffcbe66
-  갱신은 `$SCRATCH/art/verdict.html` 수정 후 **같은 파일 경로**로 `Artifact` 재호출(URL 유지).
+- 아티팩트 **재발행 완료 · 3-Q 반영**: https://claude.ai/code/artifact/ce3ebbc2-dace-4f6c-9578-463fdfbf1b19
+  **옛 URL `5c1f5e92-…` 는 삭제돼 열리지 않는다**(WebFetch = artifact not found · list 에도 없음).
+  소스는 `$SCRATCH/art/verdict.html`(2026-08-25 세션 `96896381…` 로 복사해 왔다).
+  갱신은 **같은 파일 경로**로 `Artifact` 재호출(URL 유지) · 다른 세션에서는 `url` 파라미터로 위 주소를 넘긴다.
+  반영분: meta(`089f039`·1327 tests·300행) · 대장 집계(BLOCKER 28 · HIGH 42 · MED 101 · LOW 112 · 유예 5 · 기각 3)
+  · 이력표 3-Q 열 · 연대기 열네 번째 · 신설 2절(「이번 라운드에 되돌린 것」 = SEC-275, 「멈춘 지점」 = 관측 한계 + 세 선택지).
 
 ### 시스템 지식 (함정·환경)
 
