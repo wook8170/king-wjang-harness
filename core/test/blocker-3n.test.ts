@@ -520,6 +520,54 @@ describe('[SEC-299] 경로형 대상 전부를 판정한다 — 하나만 보면
       expect(denied(out), `과차단: ${name} — ${reason(out)}`).toBe(false);
     }
   });
+
+  /**
+   * [SEC-299/F1] **named 필드가 있으면 나머지를 안 보던 단락이 첫 봉인을 무효화했다.**
+   * 독립 감정(9차)이 실측: `{file_path:'ok.md', path:core}` 한 필드로 코어·정책 차단이 재개통됐다
+   * (공백 `' '` 파일명·`notebook_path` 도 동일). named 를 union 으로 바꿔 항상 전 필드를 스캔한다.
+   */
+  it('F1 named-target 디코이: file_path/notebook_path 를 미끼로 둬도 뒤의 코어·정책을 막는다', () => {
+    for (const phase of ['P0', 'P7'] as Phase[]) {
+      const root = setup(phase);
+      const cases: Array<Record<string, unknown>> = [
+        { file_path: 'ok.md', path: '.harness/state.json', content: 'x' },
+        { file_path: ' ', path: '.harness/state.json', content: 'x' },
+        { notebook_path: 'ok.md', path: '.harness/profile/profile.yaml' },
+        { file_path: 'ok.md', ref: '.harness/events.jsonl' },       // weak-key 로 코어를 겨눔 → coreOnly 로 잡힘
+        { path: '.harness/' + './'.repeat(2200) + 'state.json' },   // [F4] 길이상한 우회(./ 패딩, core 로 정규화)
+      ];
+      for (const args of cases) {
+        expect(denied(mcp(root, 'mcp__fs__write_file', args)), `통과했다(${phase}): ${JSON.stringify(args).slice(0, 60)}`).toBe(true);
+      }
+    }
+  });
+
+  /**
+   * [SEC-299/F2] **「전부 판정」은 참조성 필드(템플릿·스키마참조)가 소스를 가리킬 때 정상 문서쓰기를
+   * 과차단했다.** weak-key(목적지 아닌 key) 대상은 코어·정책까지만 보고 설계트랙 소스 판정은 건너뛴다.
+   * 과차단은 이 제품에서 결함과 같은 무게(OPS-74).
+   */
+  it('★ F2 부차 소스 참조 필드가 정상 문서쓰기를 과차단하지 않는다 (소스 판정은 주 대상에만)', () => {
+    const root = setup('P0');
+    fs.mkdirSync(path.join(root, 'docs'), { recursive: true });
+    // [9차-2] 소스 판정은 주 대상(raw)에만 — 부차 필드가 소스를 가리켜도(weak 든 strong DEST-key 든)
+    // 정상 문서쓰기를 막지 않는다. 코어/정책은 부차 필드여도 여전히 잡힌다(위 F1 테스트가 그것).
+    const okCases: Array<Record<string, unknown>> = [
+      { path: 'docs/n.md', options: { template: 'src/base.ts' } },  // weak-key 소스참조
+      { path: 'docs/n.md', schema_ref: 'app/x.ts' },
+      { path: 'docs/n.md', dest: 'src/app.ts' },                    // strong-key(dest) 부차 소스참조
+      { file_path: 'docs/n.md', output_path: 'lib/y.ts' },
+    ];
+    for (const args of okCases) {
+      const out = mcp(root, 'mcp__fs__write_file', args);
+      expect(denied(out), `과차단: ${JSON.stringify(args)} — ${reason(out)}`).toBe(false);
+    }
+    // 주 대상이 소스면 여전히 막는다 — 소스 차단 자체가 죽지 않았는지 대조.
+    expect(denied(mcp(root, 'mcp__fs__write_file', { dest: 'src/app.ts' })),
+      '주 대상 = 소스는 막아야 한다').toBe(true);
+    expect(denied(mcp(root, 'mcp__fs__write_file', { path: 'src/app.ts' })),
+      '직접 소스는 막아야 한다').toBe(true);
+  });
 });
 
 /**

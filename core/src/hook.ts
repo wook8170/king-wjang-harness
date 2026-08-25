@@ -1125,6 +1125,9 @@ function judgeWritePath(
   root: string, state: HarnessState, config: HarnessConfig,
   rawPath: string, degraded: Degraded | null, fromBash: boolean,
   getProfile: () => Profile,
+  // [SEC-299/F2] coreOnly: weak-key(목적지 아닌데 값만 경로형) 대상은 코어·정책까지만 보고
+  // 설계트랙 소스 판정은 건너뛴다 — 소스 참조 필드가 정상 문서쓰기를 과차단하지 않도록.
+  coreOnly = false,
 ): object | null {
   const lang = config.lang;
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
@@ -1368,6 +1371,10 @@ function judgeWritePath(
 
   if (!(DESIGN_PHASES as readonly string[]).includes(state.phase)) return null;
 
+  // [SEC-299/F2] 여기부터가 설계트랙 소스 판정이다. weak-key(목적지 아닌 참조성 필드) 대상은
+  // 코어·정책까지만 보고 여기서 멈춘다 — 위 코어/정책/글롭/git/하드링크 검사는 이미 다 지났다.
+  if (coreOnly) return null;
+
   const allowed = [rel, realRel].some(
     r => r !== '' && (allowList(config).some(pre => r.startsWith(pre)) || /^[^/]+\.md$/.test(r)),
   );
@@ -1503,20 +1510,35 @@ function preTool(
    * 그대로 인용하게 하려는 것이다.
    */
   const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? '');
-  const extraTargets: string[] = [];
   /**
    * [SEC-299] **후보를 하나 뽑아 하나만 판정하면, 나머지 대상은 안 본다.**
    *
-   * [SEC-265] 는 대상을 「경로처럼 생긴 문자열 필드 **전부**」로 넓힌다고 적어 놓고, 실제로는
-   * ① `typeof value!=='string'` 로 걸러 **배열·중첩 안의 문자열을 못 보고**(8-A2) ② 아래에서
-   * `extraTargets[0]` **하나만** 판정했다(8-A1). 그래서 `{paths:[core]}`·`{target:{path:core}}`
-   * 로 감싸거나 `{note:'ok.md', dst:core}` 로 앞에 디코이 경로를 두면 진짜 대상이 샜다 —
-   * 코어 파일뿐 아니라 프로파일(POLICY_FILES)까지 덮여 [SEC-69]·[SEC-49/50/51] 이 재개통됐다.
+   * [SEC-265] 는 대상을 「경로처럼 생긴 문자열 필드 **전부**」로 넓힌다 적었지만 실제로는 top-level
+   * string 하나만 봤다(8-A1). 그래서 배열·중첩·디코이로 감싸면 진짜 대상이 샜다. **배열·중첩까지
+   * 재귀로 모으고 전부 판정**한다.
    *
-   * 그래서 **배열·중첩까지 재귀로 모으고**, 아래 `judgeWritePath` 가 `raw` 하나가 아니라
-   * `writeTargets` **전부**를 본다(하나라도 걸리면 deny). 같은 key 제외·길이·경로형 필터를
-   * 재귀 안에서도 그대로 적용해 과차단을 넓히지 않는다.
+   * [SEC-299/F1] **named 필드가 있으면 나머지를 안 보던 단락(short-circuit)이 그 「전부」를 무효화했다** —
+   * 독립 감정(9차)이 실측: `{file_path:'ok.md', path:core}` 한 필드로 코어·정책·소스 차단이 재개통됐다.
+   * "스키마를 모르니 전부 본다"면서 "알려진 이름 하나가 있으면 나머지를 안 본다"는 모순이다. 그래서
+   * named 를 **union** 으로 두고(단락 없음) 항상 전 필드를 스캔한다.
+   *
+   * [SEC-299/F2] 대신 «전부 판정」은 **참조성 필드(템플릿·스키마참조)가 소스를 가리킬 때** 정상
+   * 문서쓰기를 과차단한다. 그래서 역할을 나눈다:
+   *   - **strong** — key 가 쓰기 목적지를 뜻하거나(`path|file|dest|target|out|to|notebook`) named 필드 →
+   *     **전 규칙**(코어·정책 + 설계트랙 소스) 판정.
+   *   - **weak** — key 는 목적지가 아닌데 값만 경로처럼 생김 → **코어·정책만**(`coreOnly`). 디코이가
+   *     코어/정책을 겨누면 여전히 잡히고(그 파일들은 참조될 이유가 없다), 소스 참조는 과차단하지 않는다.
+   * 남는 한계(정직 고지): weak-key 로 **소스**를 겨눈 디코이(`{file_path:ok, ref:src}`)는 설계트랙에서
+   * 통과한다 — 소스/설계 분리는 이 제품에서 «벽이 아니라 과속방지턱»이고, 스키마를 모르는 한 참조와
+   * 디코이는 구조가 같아 위치로 못 가른다. README 「알려진 한계」에 적는다.
    */
+  const strongTargets: string[] = [];
+  const weakTargets: string[] = [];
+  // named(file_path/notebook_path)는 **알려진 쓰기 대상**이라 아래 수집 필터(개행·길이·key)와
+  // 무관하게 항상 판정한다 — 원래 동작. [SEC-12] 개행·ANSI 가 든 루트밖 경로도 그대로 사유에
+  // 인용돼야 하는데, 수집 필터의 `\n` 배제에 걸리면 「경로 없음」으로 오판된다.
+  if (namedTarget !== '') strongTargets.push(namedTarget);
+  const DEST_KEY = /path|file|dest|target|out$|to$|notebook/i;
   const collectTargets = (key: string, value: unknown): void => {
     if (Array.isArray(value)) { for (const v of value) collectTargets(key, v); return; }
     if (value && typeof value === 'object') {
@@ -1524,18 +1546,23 @@ function preTool(
       return;
     }
     if (typeof value !== 'string' || value === '') return;
-    // 내용(`content`·`new_string` 등)은 대상이 아니다 — 경로처럼 생긴 **짧은** 값만 본다.
+    // 내용(`content`·`new_string` 등)은 대상이 아니다.
     if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) return;
-    // [ENG-273] 같은 개념(경로 길이 상한)은 같은 정본을 쓴다 — 리터럴이 두 벌이면
-    // 한쪽만 바뀌고 그 차이를 아무도 모른다.
-    if (value.length > PATH_MAX_GUESS || value.includes('\n')) return;
-    if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+    if (value.includes('\n')) return;
+    // [SEC-299/F4] 길이상한은 «경로가 아닌 큰 덩어리」를 거르려는 것이다 — `/` 를 포함한 경로형
+    // 값은 아무리 길어도(`./` 패딩으로 상한을 넘겨 core 로 정규화되는 우회) 판정에서 빼지 않는다.
+    if (value.length > PATH_MAX_GUESS && !value.includes('/')) return;
+    if (DEST_KEY.test(key)) strongTargets.push(value);
+    else if (looksLikePath(value)) weakTargets.push(value);
   };
-  if (namedTarget === '' && input.tool_input && typeof input.tool_input === 'object') {
+  if (input.tool_input && typeof input.tool_input === 'object') {
     for (const [key, value] of Object.entries(input.tool_input as Record<string, unknown>)) collectTargets(key, value);
   }
-  const writeTargets = namedTarget !== '' ? [namedTarget] : extraTargets;
-  const raw = writeTargets[0] ?? '';
+  const uniq = (xs: string[]): string[] => [...new Set(xs)];
+  const strong = uniq(strongTargets);
+  const weak = uniq(weakTargets).filter(w => !strong.includes(w));
+  // raw 는 rel/realRel·frozen·block_raw_values 의 «주 대상» 우선순위용 — named 이 있으면 그것.
+  const raw = namedTarget !== '' ? namedTarget : (strong[0] ?? weak[0] ?? '');
   // 리터럴 공간(rel)과 realpath 공간(realRel) 을 함께 계산해, 아래 모든 프리픽스/파일명
   // 매치(CORE_FILES 보호, 설계 allowlist, 구축 트랙 `.harness/design/` 보호)에 "두 공간 중
   // 하나라도 걸리면 매치"로 쓴다. root 자체가 심링크면 리터럴 공간이 새고(C3), root
@@ -1562,13 +1589,19 @@ function preTool(
   // 판정은 한 벌이다 — judgeWritePath 가 코어 파일 보호(페이즈 무관)와 설계 트랙 허용목록을
   // 함께 본다. Bash 리다이렉트도 아래에서 **같은 함수**로 보낸다.
   if (isWrite) {
-    if (inDesign && writeTargets.every(t => !t.trim())) {
+    const targets = [...strong, ...weak];
+    if (inDesign && targets.every(t => !t.trim())) {
       return deny(L('No file path in the tool input — blocked (safe default).',
         '도구 입력에 파일 경로가 없다 — 차단(안전 기본값).'), degraded, lang);
     }
     // [SEC-299] 대상 하나가 아니라 **전부**를 판정한다 — 하나라도 걸리면 deny.
-    for (const t of writeTargets) {
-      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile);
+    // [SEC-299/9차-2] 코어·정책은 **전 대상**에, 설계트랙 «소스» 판정은 **주 대상(raw)에만**.
+    // 그렇지 않으면 정상 문서쓰기가 부차 DEST-key 소스참조(`{file_path:docs, dst:src}`)로 과차단된다 —
+    // 독립 재검증이 이 신규 과차단을 잡았다. 코어/정책 디코이는 부차 필드여도 여전히 잡힌다(coreOnly).
+    // 남는 한계(공시): 부차 필드로 «소스」를 겨눈 디코이는 설계트랙을 통과한다 — 소스/설계 분리는
+    // 이 제품에서 «벽이 아니라 과속방지턱»이고, 스키마를 모르면 참조와 디코이는 구조가 같다.
+    for (const t of targets) {
+      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile, t !== raw);
       if (verdict) return verdict;
     }
   }

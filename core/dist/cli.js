@@ -14259,7 +14259,7 @@ function targetLost(cmd, targets) {
   }
   return void 0;
 }
-function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile) {
+function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile, coreOnly = false) {
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
   const raw = rawPath.trim();
@@ -14390,6 +14390,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     }
   }
   if (!DESIGN_PHASES.includes(state.phase)) return null;
+  if (coreOnly) return null;
   const allowed = [rel, realRel].some(
     (r) => r !== "" && (allowList(config).some((pre) => r.startsWith(pre)) || /^[^/]+\.md$/.test(r))
   );
@@ -14432,7 +14433,10 @@ function preTool(root, state, config, input, degraded) {
   const isWrite = isWriteTool(tool);
   const inDesign = DESIGN_PHASES.includes(state.phase);
   const namedTarget = String(input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? "");
-  const extraTargets = [];
+  const strongTargets = [];
+  const weakTargets = [];
+  if (namedTarget !== "") strongTargets.push(namedTarget);
+  const DEST_KEY = /path|file|dest|target|out$|to$|notebook/i;
   const collectTargets = (key, value) => {
     if (Array.isArray(value)) {
       for (const v of value) collectTargets(key, v);
@@ -14444,27 +14448,32 @@ function preTool(root, state, config, input, degraded) {
     }
     if (typeof value !== "string" || value === "") return;
     if (/^(content|new_string|old_string|text|body|data)$/i.test(key)) return;
-    if (value.length > PATH_MAX_GUESS || value.includes("\n")) return;
-    if (/path|file|dest|target|to$/i.test(key) || looksLikePath(value)) extraTargets.push(value);
+    if (value.includes("\n")) return;
+    if (value.length > PATH_MAX_GUESS && !value.includes("/")) return;
+    if (DEST_KEY.test(key)) strongTargets.push(value);
+    else if (looksLikePath(value)) weakTargets.push(value);
   };
-  if (namedTarget === "" && input.tool_input && typeof input.tool_input === "object") {
+  if (input.tool_input && typeof input.tool_input === "object") {
     for (const [key, value] of Object.entries(input.tool_input)) collectTargets(key, value);
   }
-  const writeTargets = namedTarget !== "" ? [namedTarget] : extraTargets;
-  const raw = writeTargets[0] ?? "";
+  const uniq = (xs) => [...new Set(xs)];
+  const strong = uniq(strongTargets);
+  const weak = uniq(weakTargets).filter((w) => !strong.includes(w));
+  const raw = namedTarget !== "" ? namedTarget : strong[0] ?? weak[0] ?? "";
   const rel = raw ? relPath(root, raw) : "";
   const realRel = raw ? realRelPath(root, raw) : "";
   let profileCache = null;
   const getProfile = () => profileCache ??= loadProfile(root);
   if (isWrite) {
-    if (inDesign && writeTargets.every((t) => !t.trim())) {
+    const targets = [...strong, ...weak];
+    if (inDesign && targets.every((t) => !t.trim())) {
       return deny(L(
         "No file path in the tool input \u2014 blocked (safe default).",
         "\uB3C4\uAD6C \uC785\uB825\uC5D0 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC5C6\uB2E4 \u2014 \uCC28\uB2E8(\uC548\uC804 \uAE30\uBCF8\uAC12)."
       ), degraded, lang);
     }
-    for (const t of writeTargets) {
-      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile);
+    for (const t of targets) {
+      const verdict = judgeWritePath(root, state, config, t, degraded, false, getProfile, t !== raw);
       if (verdict) return verdict;
     }
   }
