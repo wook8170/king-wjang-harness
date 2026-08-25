@@ -15,9 +15,14 @@
 - **11차 독립 재검증 = BROKEN** (`\`+개행 줄이음 미처리 — 셸은 잇는데 하네스는 개행을 세그먼트 경계로
   쪼개 대상이 `\` 에서 잘림; config.yaml 실덮힘·게이트위조·배포게이트 끝단 재현). **봉인**: `foldLineContinuations`
   를 `scanBashWrites`·`commandLines` 진입 «세그먼트 분해 전»에. 실측 전건 deny·과차단 0. 커밋 `c092a1a`. 1384 green.
-- **12차 독립 재검증 진행 중**(`scratchpad/sec300-verify2.md`) — 줄이음 봉인 반증 + 남은 셸 파싱 엣지
-  (`$'...'`·`${}`·glob·brace·프로세스치환 등). CLEAN 나오면 **G001 checkpoint→G002**, 새 발견 시 보완 반복.
-  ★ 축2 는 9·10·11차 연속으로 매번 새 우회를 냈다 — 「새 우회 0」 한 스윕이 나와야 G001 닫힘.
+- **12차 = NEW-FINDINGS 2건 CRITICAL**(줄이음 봉인은 유지): **SEC-301** ANSI-C `$'\x2e'`→`.` 로 «허용
+  디렉토리 .harness/» 안 코어 파일명 조립(tokenize 미해석) · **SEC-302** `~+`(=$PWD)/`~-` 물결을 홈으로
+  오취급(resolveIn). 둘 다 봉인: tokenize 에 `decodeAnsiC`, resolveIn pwdHead 에 `~+` 합류·`~-` 미해결.
+  실측 deny·과차단 0·상시 코퍼스·대장 verified 318. 커밋 `164b195`.
+- **★ 셸 dequoting 5종 다 잡음**: 따옴표·역슬래시·줄이음·ANSI-C·물결. 남은 부류: `${var}` 확장·글롭
+  실파일매치·중괄호·명령/프로세스치환·산술. 12차가 그중 다수 「DENY 유지」 확인(blindTargets/글롭 dir-check).
+- **13차 독립 재검증 진행 중**(`scratchpad/sec300-verify3.md`) — 남은 부류 전수. **CLEAN(새 우회 0) 나오면
+  G001(축2) checkpoint → G002(축5).** 새 발견 시 계속 봉인. (축2 는 5라운드 연속 우회를 냈으니 신중히.)
 
 ### ⚠️ 사고: 자기 참조 self-enforcement (CLAUDE.md 함정 실제 발생)
 - 10차 검증자(또는 프로브)가 `CLAUDE_PROJECT_DIR` 없이 `harness init` 을 돌려 **repo 루트에 `.harness/` 생성**
