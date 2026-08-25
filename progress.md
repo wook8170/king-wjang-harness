@@ -1,5 +1,50 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (8) — 커밋 완료 · 자동설치 좌표 실측 확정 · Claude Design 협업 설계 정리
+
+**정본.** `main` HEAD `1a81f5b` · 워킹트리 clean · 미푸시 **20** ·
+1377 tests green(직전 웨이브 ×3 동일) · tsc 0 · 대장 verified 314 · open 0.
+
+### 이번에 한 일
+- **커밋 2개** — `09e8870`(7차 봉인 SEC-297/298 + 스킬 확장 P7~P9·companion·자동설치) ·
+  `1a81f5b`(자동설치 좌표 실측 확정). **이 리포 관례대로 main 에 직접 커밋**(브랜치 안 팜).
+- **자동설치 좌표 = 실측**(`~/.claude/plugins/installed_plugins.json`·`known_marketplaces.json`):
+  - superpowers → `obra/superpowers-marketplace` → `superpowers@superpowers-marketplace`
+  - oh-my-claudecode → `Yeachan-Heo/oh-my-claudecode` → `oh-my-claudecode@omc`
+  - 마켓 이름은 매니페스트가 정한다(add 경로≠install 이름 — omc 가 그 예). 드라이버 스킬에 명시.
+- **Claude Design 협업 설계 답변**(코드 변경 없음, 조사·설명만). 아래 시스템 지식에 요지.
+
+### ★ 시스템 지식 — Claude Design 통합 (다음 세션이 알 것)
+정본: `core/src/design.ts` 헤더 + README §83~90. 원칙 한 줄: **코어·훅은 네트워크 무접촉,
+캔버스 fetch 는 에이전트(WebFetch)의 일, 코어는 받아온 본문을 대조·개정·기록만.**
+- 분업: 에이전트가 캔버스 본문 fetch → `harness design sync <UX-x> --from <파일>` →
+  `syncCanvas(root,id,fetchedContent)`. 본문이 문자열 아니면 즉시 거부(design.ts:225).
+- 1:1 매핑 척추: 아트보드1 ↔ UX노드1. `UX-` 아닌 id 는 링크 불가. `design link --ux --url`.
+- 캔버스 수정 = 정식 개정: 본문 SHA-256 ≠ 승인 해시면 노드 version++ + 참조 웨이브 STALE 전파
+  (`reviseNode`). STALE 확신 못 하는 건 `unverifiable` 로 드러냄.
+- 토큰 원천은 캔버스 «아님» → `design-tokens.json`(HTML 정본 CSS 블록). 어긋나면 HTML 이김.
+  캔버스→토큰 역수입 경로 «의도적으로 없음»(단일 원천 보호).
+- P4 추출 2종: `extractInventory`(data-component 관례, 절대 throw 안 함) · `recordBaseline`(2x PNG).
+- 피드백 루프: `gate feedback <P> --from <코멘트파일>` → 리뷰 패킷에 개정 근거(cli.ts:845).
+- 열화 경로: 캔버스 편집 불가 환경은 view-and-export + 코멘트. `recordBaseline` 은 링크 없어도 동작.
+- 미탑재(정직 고지): 캔버스 «네트워크 자동 fetch». `sync --from` 은 직접 export 한 파일. 의도된 결과.
+
+### 다음 즉시 할 일
+1. **푸시 여부** — 미푸시 20. 사용자 결정 대기.
+2. 감정확인 8차(MCP 인자 배열·중첩, 프로파일 조작, 훅 페이로드 극단값) · 축 1·5·6·7 재감정.
+3. (선택) 자동설치 스킬을 실제 샌드박스에서 E2E 구동해 install 명령 정확성 실측(지금은 좌표만 확정).
+
+### 미해결 · 확인 대기
+- **미푸시 20** — 커밋은 다 됨, 푸시만 사용자 결정.
+- 축 1·5·6·7 은 3-N 기준 → 판정 「출하 불가」 유지 · 구현자=감정자(OPS-74).
+
+### 함정 (그대로 유효)
+- `skills/`·`agents/` 영어 전용(i18n 테스트). README 4언어.
+- 대장 인용은 README/소스 줄 참조 — README 편집 시 밀린다. reanchor → 「후보 0개」는 수동 → sync.
+- `run(argv,root)` 은 던지지 않고 종료코드. PATH 의 harness 는 구 빌드 → 리포 `bin/harness` 절대경로.
+
+---
+
 ## 2026-08-26 (7) — 스킬 확장: P7~P9 네이티브(b) + companion 참조(a) + 드라이버 check→자동설치(c)
 
 **정본.** `main` HEAD(미커밋 — 워킹트리에 7차 봉인 + 스킬 확장) · 미푸시 18(+커밋 예정) ·
