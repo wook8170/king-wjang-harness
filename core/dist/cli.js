@@ -11939,15 +11939,21 @@ function segmentsWithIndex(cmd) {
     i += len - 1;
   }
   out.push({ text: cmd.slice(last), start: last, cwd: "" });
+  const BRANCH_END = /* @__PURE__ */ new Set(["else", "elif", "fi", "done", "esac"]);
   let cwd = "";
+  let sawCd = false;
   for (const seg of out) {
-    seg.cwd = cwd;
     const tokens = tokenize(seg.text);
+    if (sawCd && tokens.some((t) => BRANCH_END.has(t))) cwd = null;
+    seg.cwd = cwd;
     if (tokens.length === 0) continue;
     const chdir = envChdirOf(tokens);
     if (chdir !== void 0) seg.cwd = advanceCwd(cwd, chdir);
     const { name, args } = commandName(tokens);
-    if (name === "cd" || name === "pushd") cwd = advanceCwd(cwd, args.find((a) => !isFlag(a)));
+    if (name === "cd" || name === "pushd") {
+      cwd = advanceCwd(cwd, args.find((a) => !isFlag(a)));
+      sawCd = true;
+    }
   }
   return out;
 }
@@ -12026,10 +12032,28 @@ var PREFIX_FLAG_VALUE = {
   pnpx: /* @__PURE__ */ new Set(["-p", "--package"])
 };
 var EMPTY_FLAGS = /* @__PURE__ */ new Set();
+var SHELL_KEYWORDS = /* @__PURE__ */ new Set([
+  "{",
+  "}",
+  "then",
+  "else",
+  "elif",
+  "do",
+  "done",
+  "fi",
+  "esac",
+  "in",
+  "!",
+  "if",
+  "while",
+  "until",
+  "case"
+]);
 function commandName(tokens) {
   let i = 0;
   let lastPrefix = -1;
   for (; ; ) {
+    while (i < tokens.length && SHELL_KEYWORDS.has(tokens[i])) i++;
     while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
     const head = (tokens[i] ?? "").split("/").pop() ?? "";
     if (!PREFIX_COMMANDS.has(head)) break;
@@ -12238,7 +12262,41 @@ var READ_ONLY_HEADS = [
   "id",
   "groups",
   "less",
-  "more"
+  "more",
+  /**
+   * [EFF-289] **아무것도 쓰지 않는 셸 내장이 「모르는 명령」으로 분류돼 있었다.**
+   * `test -f x && cat .harness/config.yaml` · `true; cat …` 처럼 **접두 한 조각**이
+   * 명령 전체를 `mutating` 으로 만들고, 그러면 「대상이 없을 때 언급을 본다」 안전망이
+   * 발화해 **순수 조회가 「쓸 수 없다」는 사유로** 거부됐다 — 사유까지 사실과 달랐다.
+   * 여기 적는 것은 인자를 무엇으로 주든 파일을 만들지 않는 것들만이다
+   * (`trap`·`eval`·`exec`·`source` 는 **넣지 않는다** — 남의 명령을 실행한다).
+   */
+  "true",
+  "false",
+  ":",
+  "test",
+  "[",
+  "[[",
+  "]]",
+  "sleep",
+  "wait",
+  "break",
+  "continue",
+  "shift",
+  "return",
+  "exit",
+  "set",
+  "unset",
+  "export",
+  "readonly",
+  "local",
+  "popd",
+  "dirs",
+  "jobs",
+  "umask",
+  "ulimit",
+  "times",
+  "help"
 ];
 var CONDITIONAL_WRITERS = {
   // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
@@ -12459,7 +12517,9 @@ function scanBashWrites(rawCmd, env = {}) {
       }
     }
     if (MUTATING_TOKENS.includes(name)) mutating = true;
-    if (seg.cwd === null) unresolvedTargets.push(...args.filter(looksLikePath));
+    const condWriter = CONDITIONAL_WRITERS[name];
+    const segmentWrites = condWriter !== void 0 ? condWriter(args) : !READ_ONLY_HEADS.includes(name);
+    if (seg.cwd === null && segmentWrites) unresolvedTargets.push(...args.filter(looksLikePath));
     const paths = args.filter(looksLikePath);
     const operands = args.filter((a) => !isFlag(a) && !/^[a-z]+=/.test(a));
     switch (name) {
@@ -13699,6 +13759,18 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
+  const GIT_EXEC_PATHS = [".git/hooks", ".git/config"];
+  const gitExec = GIT_EXEC_PATHS.find((g) => spaces.some((r) => r === g || r.startsWith(`${g}/`) || coversPath(r, g)));
+  if (gitExec !== void 0) {
+    return deny(
+      L(
+        `${sanitizeUntrusted(raw)} is under ${gitExec}, which git runs later \u2014 outside anything this hook can see. A script placed there runs on the next commit and can change the event journal that decides whether a gate is approved. Use harness commands instead.`,
+        `${sanitizeUntrusted(raw)} \uC740(\uB294) ${gitExec} \uC544\uB798\uB2E4 \u2014 **git \uC774 \uB098\uC911\uC5D0 \uC2E4\uD589\uD558\uB294 \uC790\uB9AC**\uC774\uACE0, \uADF8 \uC2E4\uD589\uC740 \uC774 \uD6C5\uC774 \uBCFC \uC218 \uC5C6\uB2E4. \uAC70\uAE30 \uB123\uC740 \uC2A4\uD06C\uB9BD\uD2B8\uB294 \uB2E4\uC74C \uCEE4\uBC0B\uC5D0\uC11C \uB3CC\uBA70 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uAE4C\uC9C0 \uBC14\uAFC0 \uC218 \uC788\uB2E4. harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+      ),
+      degraded,
+      lang
+    );
+  }
   const aliasOfCore = (() => {
     try {
       const abs = path17.resolve(root, raw);
@@ -13884,6 +13956,13 @@ function preTool(root, state, config, input, degraded) {
         `\uC2A4\uD06C\uB9BD\uD2B8 \uC0AC\uC2AC\uC774 ${SCRIPT_MAX_DEPTH}\uACB9\uC744 \uB118\uC5B4(${scripts.tooDeep.join(", ")}) \uD558\uB124\uC2A4\uAC00 \uB530\uB77C\uAC00\uAE30\uB97C \uBA48\uCDC4\uB2E4 \u2014 \uB9C8\uC9C0\uB9C9 \uB2E8\uACC4\uAC00 \uBB34\uC5C7\uC744 \uC4F0\uB294\uC9C0 \uC54C \uAE38\uC774 \uC5C6\uACE0, \uAC70\uAE30\uC5D0\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC5EC\uBD80\uB97C \uC815\uD558\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uB3C4 \uD3EC\uD568\uB41C\uB2E4. \uC0AC\uC2AC\uC744 \uD3C9\uD3C9\uD558\uAC8C \uB9CC\uB4E4\uAC70\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C.`
       ), degraded, lang);
     }
+    const hooksPathLine = judgeableLines(cmd).find((l) => /(^|\s)core\.hookspath(=|\s|$)/i.test(l) && !/(^|\s)(--get|--get-all|--list|-l)(\s|$)/.test(l));
+    if (hooksPathLine !== void 0) {
+      return deny(L(
+        "Pointing git at another hooks directory (`core.hooksPath`) opens the same deferred-execution channel as writing `.git/hooks/` \u2014 git would run those scripts where this hook cannot see them, including on the commit that changes the event journal.",
+        "`core.hooksPath` \uB85C \uD6C5 \uB514\uB809\uD1A0\uB9AC\uB97C \uC62E\uAE30\uB294 \uAC83\uC740 `.git/hooks/` \uC5D0 \uC4F0\uB294 \uAC83\uACFC **\uAC19\uC740 \uC9C0\uC5F0 \uC2E4\uD589 \uCC44\uB110**\uC744 \uC5F0\uB2E4 \u2014 git \uC774 \uADF8 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC774 \uD6C5\uC774 \uBCFC \uC218 \uC5C6\uB294 \uC790\uB9AC\uC5D0\uC11C \uC2E4\uD589\uD558\uACE0, \uAC70\uAE30\uC5D0\uB294 \uC774\uBCA4\uD2B8 \uC800\uB110\uC744 \uBC14\uAFB8\uB294 \uCEE4\uBC0B\uB3C4 \uD3EC\uD568\uB41C\uB2E4."
+      ), degraded, lang);
+    }
     const scan = scanBashWrites(cmd, process.env);
     const core = (t) => CORE_FILES.some((f2) => t.includes(f2)) || POLICY_PREFIXES.some((pre) => t.includes(pre));
     for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
@@ -13940,6 +14019,11 @@ function preTool(root, state, config, input, degraded) {
       for (const raw2 of scan.unresolvedTargets) {
         const prefix = raw2.split(/[$`{*?]/)[0];
         const dir = prefix.includes("/") ? prefix.slice(0, prefix.lastIndexOf("/") + 1) : "";
+        const base = raw2.split("/").pop() ?? "";
+        if (base !== "" && !/[$`{*?]/.test(base)) {
+          const byName = judgeWritePath(root, state, config, base, degraded, true, getProfile);
+          if (byName) return byName;
+        }
         if (dir === "") continue;
         const verdict = judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
         if (verdict) {

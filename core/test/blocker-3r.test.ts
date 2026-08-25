@@ -227,3 +227,117 @@ describe('[EFF-287] 정적 목록을 도는 `for` 는 리터럴과 같은 답을
     ]) expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
   });
 });
+
+describe('[SEC-288] 셸 키워드는 명령이 아니다 · 분기 뒤의 cwd 는 「모른다」', () => {
+  it('★ 복합문 안의 `cd` 를 본다', () => {
+    const root = setup();
+    for (const cmd of [
+      '{ cd .harness; echo x > config.yaml; }',
+      'if true; then cd .harness; echo x > config.yaml; fi',
+      'while true; do cd .harness; echo x > config.yaml; break; done',
+      'until false; do cd .harness; echo x > config.yaml; break; done',
+      'case x in x) cd .harness; echo x > config.yaml;; esac',
+      '(cd .harness && echo x > config.yaml)',
+      '{ cd src; echo x > app.ts; }',
+      'if true; then cd src; echo x > app.ts; fi',
+    ]) expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+  });
+
+  it('★ 분기가 끝나면 cwd 는 갈렸을 수 있다 — 마지막 `cd` 만 보지 않는다', () => {
+    const root = setup();
+    expect(denied(bash(root, 'if true; then cd .harness; else cd src; fi; echo x > config.yaml')),
+      '마지막 cd 만 보고 통과시켰다').toBe(true);
+    expect(denied(bash(root, 'if true; then cd src; else cd docs; fi; echo x > state.json')),
+      '갈린 cwd 뒤의 코어 이름을 놓쳤다').toBe(true);
+  });
+
+  it('복합문이라는 이유로 막지 않는다', () => {
+    const root = setup();
+    for (const cmd of ['{ cd docs; echo x > n.md; }', 'if true; then cd docs; echo x > n.md; fi',
+                       'if true; then echo x > docs/n.md; fi', 'case x in x) echo x > docs/n.md;; esac',
+                       'cd docs; if true; then ls; fi; echo x > n.md', '{ ls; }']) {
+      expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
+    }
+  });
+});
+
+describe('[EFF-289] 아무것도 쓰지 않는 내장은 조회다', () => {
+  it('접두 한 조각이 순수 조회를 「쓰기」로 만들지 않는다', () => {
+    const root = setup();
+    for (const cmd of ['test -f x && cat .harness/config.yaml', 'true; cat .harness/config.yaml',
+                       ': ; cat .harness/config.yaml', '[ -f x ] && cat .harness/config.yaml',
+                       'set -e; cat src/app.ts', 'export A=1; cat .harness/config.yaml',
+                       'if true; then cat .harness/config.yaml; fi']) {
+      expect(denied(bash(root, cmd)), `조회를 막았다: ${cmd}`).toBe(false);
+    }
+  });
+
+  it('내장을 앞에 붙여도 진짜 쓰기는 그대로 막힌다', () => {
+    const root = setup();
+    for (const cmd of ['test -f x && echo y > .harness/config.yaml', 'true; echo y > src/app.ts',
+                       ': ; echo y > .harness/state.json']) {
+      expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+    }
+  });
+});
+
+describe('[SEC-290] `.git/hooks/` 는 git 이 나중에 실행하는 자리다', () => {
+  const gitRoot = (): string => {
+    const root = setup();
+    fs.mkdirSync(path.join(root, '.git/hooks'), { recursive: true });
+    return root;
+  };
+
+  it('★ 훅 스크립트를 놓아 두는 경로가 막힌다 — 내용이 인코딩돼 있어도', () => {
+    const root = gitRoot();
+    for (const cmd of [
+      'echo x > .git/hooks/pre-commit', 'echo IyE= | base64 -d > .git/hooks/pre-commit',
+      'cp /tmp/x .git/hooks/pre-push', 'touch .git/hooks/post-commit',
+      'cd .git/hooks && echo x > pre-commit', 'tee .git/hooks/pre-commit < /dev/null',
+      'cp -r /tmp/h .git/hooks', 'mv /tmp/x .git/hooks/pre-commit', 'echo x > .git/config',
+    ]) expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+    // 도구 표면도 같은 판정 함수를 지난다
+    const out = handleHook(root, 'pre-tool',
+      { tool_name: 'Write', tool_input: { file_path: path.join(root, '.git/hooks/pre-commit'), content: 'x' } });
+    expect(denied(out), 'Write 도구로는 통과했다').toBe(true);
+  });
+
+  it('★ 훅 디렉토리를 «옮기는» 것도 같은 채널이다', () => {
+    const root = gitRoot();
+    for (const cmd of ['git config core.hooksPath /tmp/h', 'git config --local core.hooksPath /tmp/h',
+                       'git config --global core.hooksPath /tmp/h', 'git -c core.hooksPath=/tmp/h commit -m x']) {
+      expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('`.git/` 의 나머지와 평범한 git 사용은 막지 않는다', () => {
+    const root = gitRoot();
+    for (const cmd of ['echo x > .git/COMMIT_EDITMSG', 'git config user.name t',
+                       'git config --get core.editor', 'git config --list', 'git status',
+                       'git add -A && git commit -m x', 'cat .git/hooks/pre-commit', 'ls .git/hooks',
+                       'git config --get core.hooksPath', 'npx husky install']) {
+      expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
+    }
+  });
+});
+
+describe('[SEC-291] 디렉토리를 몰라도 이름은 보인다 — 그리고 설계 트랙은 이름으로도 판정한다', () => {
+  it('★ cwd 를 못 읽어도 소스 확장자는 잡힌다', () => {
+    const root = setup();
+    for (const cmd of [
+      'cd $D && echo x > app.ts', 'if true; then cd src; else cd docs; fi; echo x > app.ts',
+      'cd $D && echo x > bundle.js', 'cd $D; echo x > events.jsonl', 'cd $D; echo x > config.yaml',
+      'cd $D && tee events.jsonl < /dev/null', 'cd $D && cp /tmp/x state.json',
+      'cd $D && sed -i "" s/a/b/ app.ts',
+    ]) expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+  });
+
+  it('★ 조회의 인자는 쓰기 대상이 아니다 — cwd 를 몰라도 읽기는 읽기다', () => {
+    const root = setup();
+    for (const cmd of ['cd $D && cat app.ts', 'cd $D && grep x app.ts', 'cd $D && head -1 config.yaml',
+                       'cd $D && wc -l app.ts', 'cd $D && diff app.ts b.ts', 'cd $D && ls',
+                       'cd $D && sed s/a/b/ app.ts', 'cd $D && echo x > note.md']) {
+      expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
+    }
+  });
+});

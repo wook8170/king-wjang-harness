@@ -1166,6 +1166,37 @@ function judgeWritePath(
     );
   }
   /**
+   * [SEC-290] **`.git/hooks/` 는 「git 이 나중에 실행하는 자리」다.**
+   *
+   * 훅은 «에이전트가 지금 치는 명령»을 본다. 그런데 `.git/hooks/pre-commit` 에 스크립트를
+   * 넣어 두면 그 다음 `git commit` 이 그것을 **하네스가 못 보는 자리에서** 실행한다.
+   * 실측 사슬(끝단까지): 페이로드를 base64 로 넣어 `echo … | base64 -d > .git/hooks/pre-commit`
+   * → `chmod +x` → `git commit` — 세 명령 전부 통과하고 **저널에 위조 줄이 실제로 들어갔다.**
+   * 명령문에 보호 경로가 안 적히므로 언급 기반 안전망도 조용하다.
+   *
+   * `.git/config` 도 같은 자리다 — `core.hooksPath` 로 훅 디렉토리 자체를 옮길 수 있다.
+   * 이 둘만 막는다: `.git/` 의 나머지(`COMMIT_EDITMSG` 등)는 실행 채널이 아니다.
+   * 도구가 설치 중에 만드는 것(husky 등)은 이 판정을 지나지 않는다 — 여기서 보는 것은
+   * **에이전트가 친 명령의 쓰기 대상**이다.
+   */
+  const GIT_EXEC_PATHS = ['.git/hooks', '.git/config'];
+  const gitExec = GIT_EXEC_PATHS.find(g =>
+    spaces.some(r => r === g || r.startsWith(`${g}/`) || coversPath(r, g)));
+  if (gitExec !== undefined) {
+    return deny(
+      L(
+        `${sanitizeUntrusted(raw)} is under ${gitExec}, which git runs later — outside anything this `
+        + 'hook can see. A script placed there runs on the next commit and can change the event '
+        + 'journal that decides whether a gate is approved. Use harness commands instead.',
+        `${sanitizeUntrusted(raw)} 은(는) ${gitExec} 아래다 — **git 이 나중에 실행하는 자리**이고, `
+        + '그 실행은 이 훅이 볼 수 없다. 거기 넣은 스크립트는 다음 커밋에서 돌며 게이트 승인 여부를 '
+        + '정하는 이벤트 저널까지 바꿀 수 있다. harness 명령을 쓰라.',
+      ),
+      degraded, lang,
+    );
+  }
+
+  /**
    * [SEC-263] **경로가 아니라 파일 실체로 앵커한다 — 하드링크는 경로 층 아래에 있다.**
    *
    * 여섯 라운드의 봉인이 전부 **경로 문자열** 층에서 이뤄졌다. 심링크는 `realpath` 가 풀어
@@ -1570,6 +1601,26 @@ function preTool(
     // 없이 게이트가 열렸다. 페이즈와 무관하게 먼저 본다 — 코어 파일 보호가 페이즈 무관이므로.
     // [SEC-216] 훅은 자기 환경을 안다 — 그 사실을 스캐너에 넘겨 `$HOME` 같은 흔한 변수가
     // 펴지게 한다(프로젝트 밖 쓰기까지 「볼 수 없다」로 막지 않기 위해서다).
+    /**
+     * [SEC-290] **훅 디렉토리를 «옮기는» 것도 같은 자리다.**
+     * `.git/hooks/` 쓰기는 `judgeWritePath` 가 막는데, `git config core.hooksPath <dir>` 와
+     * `git -c core.hooksPath=<dir> …` 는 파일을 쓰지 않고 **같은 실행 채널을 연다**.
+     * 읽기(`--get`·`--list`)는 그대로 둔다 — 막을 것은 «정하는» 쪽이다.
+     */
+    const hooksPathLine = judgeableLines(cmd).find(l =>
+      /(^|\s)core\.hookspath(=|\s|$)/i.test(l)
+      && !/(^|\s)(--get|--get-all|--list|-l)(\s|$)/.test(l));
+    if (hooksPathLine !== undefined) {
+      return deny(L(
+        'Pointing git at another hooks directory (`core.hooksPath`) opens the same deferred-execution '
+        + 'channel as writing `.git/hooks/` — git would run those scripts where this hook cannot see '
+        + 'them, including on the commit that changes the event journal.',
+        '`core.hooksPath` 로 훅 디렉토리를 옮기는 것은 `.git/hooks/` 에 쓰는 것과 **같은 지연 실행 '
+        + '채널**을 연다 — git 이 그 스크립트를 이 훅이 볼 수 없는 자리에서 실행하고, 거기에는 '
+        + '이벤트 저널을 바꾸는 커밋도 포함된다.',
+      ), degraded, lang);
+    }
+
     const scan = scanBashWrites(cmd, process.env);
     /**
      * [SEC-B1] **가장 무거운 사유를 먼저 말한다.**
@@ -1732,6 +1783,23 @@ function preTool(
       for (const raw of scan.unresolvedTargets) {
         const prefix = raw.split(/[$`{*?]/)[0];
         const dir = prefix.includes('/') ? prefix.slice(0, prefix.lastIndexOf('/') + 1) : '';
+        /**
+         * [SEC-291] **디렉토리를 몰라도 «이름»은 보인다 — 그리고 설계 트랙은 이름으로도 판정한다.**
+         *
+         * `cd $D && echo x > app.ts` · `if …; then cd src; else cd docs; fi; echo x > app.ts` 는
+         * cwd 를 모르니 대상이 미해결로 올라간다. 그런데 설계 트랙 차단은 **확장자**로도
+         * 판정하고(`app.ts` 는 소스다), 그 판정은 디렉토리를 몰라도 내릴 수 있다 —
+         * 실제로 `echo x > app.ts` 는 거부인데 `cd $D && echo x > app.ts` 는 통과했다.
+         * 이름 기반 안전망이 코어 파일에만 있고 소스에는 없던 것이다([SEC-170] 의 절충이
+         * 한쪽 표적에만 적용돼 있었다).
+         *
+         * 규칙을 복제하지 않는다 — **같은 판정 함수**에 이름을 루트 상대경로로 물어본다.
+         */
+        const base = raw.split('/').pop() ?? '';
+        if (base !== '' && !/[$`{*?]/.test(base)) {
+          const byName = judgeWritePath(root, state, config, base, degraded, true, getProfile);
+          if (byName) return byName;
+        }
         if (dir === '') continue;                       // 정적 부분이 없다 — 말할 수 있는 게 없다
         /**
          * [QUAL-229] 예전에는 여기에 「보호 파일이 사는 디렉토리면 무조건 거부」 절이 하나 더

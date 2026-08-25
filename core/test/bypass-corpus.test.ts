@@ -81,6 +81,13 @@ const notations = (t: string): string[] => {
     `sudo env -C ${dir} sh -c "echo x > ${base}"`, `env -C ${dir} touch ${base}`,
     // [EFF-287] 정적 목록 루프 — 리터럴과 같은 답이어야 한다
     `for f in ${t}; do echo x > $f; done`, `for f in ${base}; do echo x > ${dir}/$f; done`,
+    // [SEC-288] 복합문 안의 `cd` · 분기 뒤의 갈린 cwd
+    `{ cd ${dir}; echo x > ${base}; }`, `if true; then cd ${dir}; echo x > ${base}; fi`,
+    `while true; do cd ${dir}; echo x > ${base}; break; done`,
+    `case x in x) cd ${dir}; echo x > ${base};; esac`,
+    `if true; then cd ${dir}; else cd docs; fi; echo x > ${base}`,
+    // [EFF-289] 무해 내장을 앞에 붙여도 쓰기는 쓰기다
+    `test -f q && echo x > ${t}`, `true; echo x > ${t}`, `: ; echo x > ${t}`,
   ];
 };
 
@@ -96,6 +103,10 @@ const LOCKS = [
   'A=HARNESS_ALLOW_FORCE; export $A=1; harness phase set P8 --force',
   'harness doctor --accept-policy', 'HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy',
   'npm publish', 'npm publish --force', 'docker push x', 'vercel --prod',
+  // [SEC-290] git 이 «나중에» 실행하는 자리 — 훅이 볼 수 없는 채널
+  'echo x > .git/hooks/pre-commit', 'echo IyE= | base64 -d > .git/hooks/pre-commit',
+  'cp /tmp/x .git/hooks/pre-push', 'touch .git/hooks/post-commit', 'echo x > .git/config',
+  'git config core.hooksPath /tmp/h', 'git -c core.hooksPath=/tmp/h commit -m x',
 ];
 
 /**
@@ -124,6 +135,11 @@ const ALLOWED = [
   'for f in docs/a.md; do echo x > $f; done', 'for f in docs/a.md docs/b.md; do echo x > $f; done',
   'for f in docs/a.md; do cat $f; done', 'for i in 1 2 3; do echo $i; done',
   'echo x > .harness/notes.md', 'echo x > .harness/design/out.md',
+  'test -f q && cat .harness/config.yaml', 'true; cat src/app.ts', ': ; ls',
+  '[ -f q ] && cat .harness/config.yaml', 'set -e; cat src/app.ts',
+  '{ cd docs; echo x > n6.md; }', 'if true; then echo x > docs/n7.md; fi',
+  'echo x > .git/COMMIT_EDITMSG', 'git config user.name t', 'git config --get core.hooksPath',
+  'git config --list', 'npx husky install', 'ls .git/hooks',
 ];
 
 describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시 잰다', () => {
@@ -133,7 +149,7 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
     for (const t of TARGETS) corpus.push(...verbs(t), ...wrappers(t), ...notations(t));
     const missed = corpus.filter(c => decide(root, c) !== 'deny');
     expect(missed, `${corpus.length}건 중 ${missed.length}건이 통과했다`).toEqual([]);
-    expect(corpus.length, '코퍼스가 줄었다 — 표기를 지우지 말고 더하라').toBeGreaterThanOrEqual(272);
+    expect(corpus.length, '코퍼스가 줄었다 — 표기를 지우지 말고 더하라').toBeGreaterThanOrEqual(304);
   }, 120_000);
 
   it('★ 잠금(`--force`·`--accept-policy`·배포)은 env 를 얹어도 열리지 않는다', () => {
@@ -147,6 +163,6 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
     const over = ALLOWED.filter(c => decide(root, c) === 'deny');
     expect(over, `${over.length}건을 과차단했다`).toEqual([]);
     expect(ALLOWED.length, '허용 표본이 줄었다 — 차단만 남기면 「전부 막기」가 초록이 된다')
-      .toBeGreaterThanOrEqual(51);
+      .toBeGreaterThanOrEqual(64);
   }, 60_000);
 });

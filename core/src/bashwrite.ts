@@ -204,10 +204,20 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
   }
   out.push({ text: cmd.slice(last), start: last, cwd: '' });
 
+  /**
+   * [SEC-288] **분기가 끝나면 cwd 는 「갈렸을 수 있다」.**
+   * `if …; then cd .harness; else cd src; fi; echo x > config.yaml` 에서 마지막 `cd` 만 보면
+   * `src/config.yaml` 로 읽혀 통과한다 — 실제로는 `.harness/config.yaml` 일 수 있다.
+   * 그래서 분기·구문 끝 키워드를 만나고 그 전에 `cd` 가 있었으면 **모른다(null)** 로 둔다.
+   * 모르면 대상이 미해결로 올라가고 이름 기반 안전망이 받는다.
+   */
+  const BRANCH_END = new Set(['else', 'elif', 'fi', 'done', 'esac']);
   let cwd: Cwd = '';
+  let sawCd = false;
   for (const seg of out) {
-    seg.cwd = cwd;
     const tokens = tokenize(seg.text);
+    if (sawCd && tokens.some(t => BRANCH_END.has(t))) cwd = null;
+    seg.cwd = cwd;
     if (tokens.length === 0) continue;
     /**
      * [SEC-285] **작업 디렉토리를 바꾸는 것은 `cd` 만이 아니다.**
@@ -219,7 +229,7 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
     const chdir = envChdirOf(tokens);
     if (chdir !== undefined) seg.cwd = advanceCwd(cwd, chdir);
     const { name, args } = commandName(tokens);
-    if (name === 'cd' || name === 'pushd') cwd = advanceCwd(cwd, args.find(a => !isFlag(a)));
+    if (name === 'cd' || name === 'pushd') { cwd = advanceCwd(cwd, args.find(a => !isFlag(a))); sawCd = true; }
   }
   return out;
 }
@@ -301,10 +311,23 @@ const EMPTY_FLAGS: ReadonlySet<string> = new Set();
  * 명령 이름에서 경로·env 접두·**접두 명령**을 벗긴다 (`sudo -u x /usr/bin/tee` → `tee`).
  * 벗기다가 남는 것이 없으면 이름은 빈 문자열이다 — 그건 판정 대상이 아니다.
  */
+/**
+ * [SEC-288] **셸 «키워드»는 명령이 아니다 — 그 뒤가 명령이다.**
+ *
+ * `{ cd .harness; echo x > config.yaml; }` 에서 첫 세그먼트는 `{ cd .harness` 다.
+ * 예전에는 `{` 를 명령 이름으로 읽어 **`cd` 를 못 봤고**, 그래서 뒤 세그먼트의 대상이
+ * 루트 기준(`config.yaml`)으로 풀려 보호를 비껴갔다 — `if …; then cd .harness; …` ·
+ * `while …; do cd .harness; …` 도 같다(`then`·`do` 가 이름 자리에 온다).
+ * 실측으로 셋 다 통과했다.
+ */
+const SHELL_KEYWORDS = new Set(['{', '}', 'then', 'else', 'elif', 'do', 'done', 'fi',
+  'esac', 'in', '!', 'if', 'while', 'until', 'case']);
+
 function commandName(tokens: string[]): { name: string; args: string[] } {
   let i = 0;
   let lastPrefix = -1;                                                             // [SEC-280] 되돌아갈 자리
   for (;;) {
+    while (i < tokens.length && SHELL_KEYWORDS.has(tokens[i])) i++;                // [SEC-288] 키워드
     while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;   // env 대입
     const head = (tokens[i] ?? '').split('/').pop() ?? '';
     if (!PREFIX_COMMANDS.has(head)) break;
@@ -603,6 +626,17 @@ const READ_ONLY_HEADS = [
   'du', 'df', 'which', 'type', 'printenv', 'date', 'whoami', 'echo',
   'uniq', 'cut', 'column', 'nl', 'basename', 'dirname', 'realpath', 'readlink', 'diff',
   'cmp', 'shasum', 'tree', 'ps', 'uname', 'hostname', 'id', 'groups', 'less', 'more',
+  /**
+   * [EFF-289] **아무것도 쓰지 않는 셸 내장이 「모르는 명령」으로 분류돼 있었다.**
+   * `test -f x && cat .harness/config.yaml` · `true; cat …` 처럼 **접두 한 조각**이
+   * 명령 전체를 `mutating` 으로 만들고, 그러면 「대상이 없을 때 언급을 본다」 안전망이
+   * 발화해 **순수 조회가 「쓸 수 없다」는 사유로** 거부됐다 — 사유까지 사실과 달랐다.
+   * 여기 적는 것은 인자를 무엇으로 주든 파일을 만들지 않는 것들만이다
+   * (`trap`·`eval`·`exec`·`source` 는 **넣지 않는다** — 남의 명령을 실행한다).
+   */
+  'true', 'false', ':', 'test', '[', '[[', ']]', 'sleep', 'wait',
+  'break', 'continue', 'shift', 'return', 'exit', 'set', 'unset', 'export', 'readonly',
+  'local', 'popd', 'dirs', 'jobs', 'umask', 'ulimit', 'times', 'help',
 ];
 
 /**
@@ -987,7 +1021,18 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     // 알 수 없다**. 변수 한 줄(`D=.harness; cd $D && tee events.jsonl`)로 방어가 다시 풀리면
     // 안 되므로, 경로처럼 생긴 인자를 전부 미해결로 올린다 — 호출측은 그중 **하네스 소유
     // 파일 이름**만 막는다(경로 전체가 아니라 이름만 보는 것이 과차단을 최소로 두는 선택이다).
-    if (seg.cwd === null) unresolvedTargets.push(...args.filter(looksLikePath));
+    /**
+     * [SEC-291] **조회의 인자는 쓰기 대상이 아니다.** 예전에는 호출측이 이 목록에서
+     * 「하네스 소유 파일 «이름»」만 봤으므로 조회 인자가 섞여도 무해했다. 이제는 호출측이
+     * 같은 판정 함수에 이름을 물어보므로(설계 트랙은 확장자로도 판정한다) 여기에 조회
+     * 인자를 넣으면 `cd $D && cat app.ts` 같은 **읽기가 거부된다.**
+     * 그래서 이 세그먼트가 실제로 쓰는 명령일 때만 올린다 — 분류는 아래 기본 분기와 같은 규칙이다.
+     */
+    const condWriter = CONDITIONAL_WRITERS[name];
+    const segmentWrites = condWriter !== undefined
+      ? condWriter(args)
+      : !READ_ONLY_HEADS.includes(name);
+    if (seg.cwd === null && segmentWrites) unresolvedTargets.push(...args.filter(looksLikePath));
 
     const paths = args.filter(looksLikePath);
     // **위치가 경로임을 말해 주는 자리**(cp/mv 의 목적지 등)에서는 `looksLikePath` 를 요구하지
