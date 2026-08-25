@@ -47,6 +47,7 @@ const verbs = (t: string): string[] => [
   `ln -sf /tmp/evil ${t}`, `python3 -c "open('${t}','w')"`,
   `node -e "require('fs').writeFileSync('${t}','x')"`, `ruby -e "File.write('${t}','x')"`,
   `ex -sc wq ${t}`, `awk 'BEGIN{print "x" > "${t}"}'`, `awk "BEGIN{print \\"x\\" > \\"${t}\\"}"`,
+  `sed --in-place=.bak s/a/b/ ${t}`, `sed --in-place s/a/b/ ${t}`, `sed -i.bak s/a/b/ ${t}`,
   `xargs -I{} sh -c "echo x > {}" <<< "${t}"`, `xargs -i sh -c "echo x > {}" <<< "${t}"`,
   `echo ${t} | xargs -I{} cp /tmp/x {}`, `find . -maxdepth 0 -exec sh -c "echo x > ${t}" ;`,
 ];
@@ -74,6 +75,12 @@ const notations = (t: string): string[] => {
     `mkdir d && ln -s ../ d/u && echo x > d/u/${t}`,
     `echo x > "${t}"`, `echo x > '${t}'`, `echo x > \\"${t}\\"`,
     `cd . && echo x > ${t}`, `cp -t ${dir} /tmp/${base}`,
+    // [SEC-285] `cd` 가 아닌 방법으로 자리를 옮기는 부류
+    `env -C ${dir} sh -c "echo x > ${base}"`, `env -C${dir} sh -c "echo x > ${base}"`,
+    `env --chdir=${dir} sh -c "echo x > ${base}"`, `env --chdir ${dir} sh -c "echo x > ${base}"`,
+    `sudo env -C ${dir} sh -c "echo x > ${base}"`, `env -C ${dir} touch ${base}`,
+    // [EFF-287] 정적 목록 루프 — 리터럴과 같은 답이어야 한다
+    `for f in ${t}; do echo x > $f; done`, `for f in ${base}; do echo x > ${dir}/$f; done`,
   ];
 };
 
@@ -111,6 +118,12 @@ const ALLOWED = [
   'find . -name "*.md" -exec cat {} ;', 'npm publish --dry-run', 'echo $PWD',
   'cd docs && pwd', 'diff src/app.ts /tmp/x', 'cp .harness/events.jsonl /tmp/backup.jsonl',
   'tar -cf /tmp/b.tar docs',
+  'env -C docs sh -c "echo x > n.md"', 'env --chdir=docs sh -c "echo x > n.md"',
+  'env -C .harness cat config.yaml', 'env -C .harness ls ; echo x > docs/n5.md',
+  'sed s/a/b/ src/app.ts', 'sed -n 1p .harness/config.yaml',
+  'for f in docs/a.md; do echo x > $f; done', 'for f in docs/a.md docs/b.md; do echo x > $f; done',
+  'for f in docs/a.md; do cat $f; done', 'for i in 1 2 3; do echo $i; done',
+  'echo x > .harness/notes.md', 'echo x > .harness/design/out.md',
 ];
 
 describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시 잰다', () => {
@@ -120,7 +133,7 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
     for (const t of TARGETS) corpus.push(...verbs(t), ...wrappers(t), ...notations(t));
     const missed = corpus.filter(c => decide(root, c) !== 'deny');
     expect(missed, `${corpus.length}건 중 ${missed.length}건이 통과했다`).toEqual([]);
-    expect(corpus.length, '코퍼스가 줄었다 — 표기를 지우지 말고 더하라').toBeGreaterThanOrEqual(228);
+    expect(corpus.length, '코퍼스가 줄었다 — 표기를 지우지 말고 더하라').toBeGreaterThanOrEqual(272);
   }, 120_000);
 
   it('★ 잠금(`--force`·`--accept-policy`·배포)은 env 를 얹어도 열리지 않는다', () => {
@@ -134,6 +147,6 @@ describe('우회 코퍼스 — 축2 「전부 deny」를 매 실행마다 다시
     const over = ALLOWED.filter(c => decide(root, c) === 'deny');
     expect(over, `${over.length}건을 과차단했다`).toEqual([]);
     expect(ALLOWED.length, '허용 표본이 줄었다 — 차단만 남기면 「전부 막기」가 초록이 된다')
-      .toBeGreaterThanOrEqual(39);
+      .toBeGreaterThanOrEqual(51);
   }, 60_000);
 });

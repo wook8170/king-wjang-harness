@@ -159,6 +159,25 @@ function resolveIn(cwd: Cwd, p: string): string | null {
   return normalizePath(cwd + '/' + p);
 }
 
+/**
+ * [SEC-285] `env` 가 지정하는 작업 디렉토리 — `-C DIR`·`--chdir DIR`·`--chdir=DIR`.
+ * 접두 명령이 여러 겹이어도(`sudo env -C …`) 훑는다.
+ */
+function envChdirOf(tokens: string[]): string | undefined {
+  for (let i = 0; i < tokens.length; i++) {
+    const head = (tokens[i] ?? '').split('/').pop() ?? '';
+    if (head !== 'env') continue;
+    for (let k = i + 1; k < tokens.length; k++) {
+      const a = tokens[k];
+      if (a === '-C' || a === '--chdir') return tokens[k + 1];
+      if (a.startsWith('--chdir=')) return a.slice('--chdir='.length);
+      if (a.startsWith('-C') && a.length > 2) return a.slice(2);
+      if (!isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) break;   // 감싼 명령이 시작됐다
+    }
+  }
+  return undefined;
+}
+
 /** 세그먼트를 **위치와 함께** 끊는다 — 리다이렉트는 원문 위치로 자기 cwd 를 찾아야 한다. */
 function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cwd: Cwd }> {
   const out: Array<{ text: string; start: number; cwd: Cwd }> = [];
@@ -190,6 +209,15 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
     seg.cwd = cwd;
     const tokens = tokenize(seg.text);
     if (tokens.length === 0) continue;
+    /**
+     * [SEC-285] **작업 디렉토리를 바꾸는 것은 `cd` 만이 아니다.**
+     * `env -C DIR cmd`·`env --chdir=DIR cmd` 는 감싼 명령을 **그 디렉토리에서** 돌린다 —
+     * `env -C .harness sh -c "echo x > config.yaml"` 이 통과했고 정책 파일이 실제로 덮였다.
+     * `cd` 와 달리 **그 세그먼트에만** 적용된다(뒤 세그먼트의 cwd 는 그대로다).
+     * [SEC-232]·[SEC-259]·[SEC-280] 과 같은 「플래그가 위치를 정한다」 부류의 네 번째다.
+     */
+    const chdir = envChdirOf(tokens);
+    if (chdir !== undefined) seg.cwd = advanceCwd(cwd, chdir);
     const { name, args } = commandName(tokens);
     if (name === 'cd' || name === 'pushd') cwd = advanceCwd(cwd, args.find(a => !isFlag(a)));
   }
@@ -585,7 +613,10 @@ const READ_ONLY_HEADS = [
  * 여기 적은 것만 신뢰한다. 적지 않은 도구는 `READ_ONLY_HEADS` 에 없으면 기본값이 변형이다.
  */
 const CONDITIONAL_WRITERS: Record<string, (args: readonly string[]) => boolean> = {
-  sed: a => a.some(x => x === '-i' || x.startsWith('-i')),
+  // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
+  // 이 조건을 통째로 비껴갔다. `yq`·`jq` 줄에는 롱폼이 있는데 여기만 빠져 있던
+  // **거울 자리 누락**이다(같은 표에서 한 줄만 좁았다).
+  sed: a => a.some(x => x === '-i' || x.startsWith('-i') || x.startsWith('--in-place')),
   /**
    * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
    * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
@@ -693,9 +724,33 @@ function expandBraceDefaults(cmd: string, env: Record<string, string | undefined
     (_m, name: string, fallback: string) => env[name] ?? fallback);
 }
 
+/**
+ * [EFF-287] **정적 목록을 도는 `for` 는 읽을 수 있다.**
+ *
+ * `for f in docs/a.md; do echo x > $f; done` 은 대상이 `$f` 라 「실행 시점에 계산된다」로
+ * 떨어져 **문서 쓰기까지 막혔다**. 그런데 목록이 전부 리터럴이면 무엇에 쓰는지 여기서
+ * 그대로 보인다 — 몰라서 막는 것과 알 수 있는데 막는 것은 다르다. 과차단은 이 제품에서
+ * 결함과 같은 무게이므로([SEC-275] 선례) 볼 수 있는 것은 편다([SEC-216] 과 같은 판단).
+ *
+ * **정적이 아니면 손대지 않는다** — 변수·치환·글롭·따옴표·중첩이 하나라도 있으면 그대로 두어
+ * 기존의 보수적 판정이 그대로 간다. 개수 상한은 명령문 하나가 판정을 부풀리지 않게 한다.
+ */
+const FOR_LOOP = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]*?)\s*(?:;|\n)\s*do\b([\s\S]*?)\bdone\b/g;
+
+function expandStaticForLoops(cmd: string): string {
+  return cmd.replace(FOR_LOOP, (whole: string, name: string, listRaw: string, body: string) => {
+    if (/\bfor\b/.test(body)) return whole;                       // 중첩은 손대지 않는다
+    const words = listRaw.trim().split(/\s+/).filter(w => w !== '');
+    if (words.length === 0 || words.length > 32) return whole;
+    if (words.some(w => /[$`*?[\]{}~"']/.test(w))) return whole;   // 정적이 아니다
+    const re = new RegExp(`\\$\\{${name}\\}|\\$${name}(?![A-Za-z0-9_])`, 'g');
+    return words.map(w => body.replace(re, w)).join(' ; ');
+  });
+}
+
 export function expandStaticVars(rawCmd: string, env: Record<string, string | undefined> = {}): string {
   // [UTIL-239] 브레이스 기본값을 먼저 편다 — 그래야 아래 치환이 볼 수 있는 정적 성분이 된다.
-  const cmd = expandBraceDefaults(rawCmd, env);
+  const cmd = expandStaticForLoops(expandBraceDefaults(rawCmd, env));
   const vars = staticAssignments(cmd, env);
   const lookup = (name: string): string | undefined => {
     const local = vars.get(name);

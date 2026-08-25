@@ -161,3 +161,69 @@ describe('[ENG-283] `xargs` 인자 해석이 한 벌이다 — 두 벌이면 느
     expect([...s.targets, ...s.unresolvedTargets], 'cp 의 목적지를 놓쳤다').toContain('src/app.ts');
   });
 });
+
+describe('[SEC-285] 작업 디렉토리를 바꾸는 것은 `cd` 만이 아니다', () => {
+  it('★ `env -C`·`--chdir` 로 옮겨도 그 자리의 규칙을 받는다', () => {
+    const root = setup();
+    for (const cmd of [
+      'env -C .harness sh -c "echo x > config.yaml"',
+      'env -C.harness sh -c "echo x > config.yaml"',
+      'env --chdir=.harness sh -c "echo x > config.yaml"',
+      'env --chdir .harness sh -c "echo x > config.yaml"',
+      'sudo env -C .harness sh -c "echo x > config.yaml"',
+      'env -C src sh -c "echo x > app.ts"',
+      'env -C .harness tee config.yaml < /dev/null',
+      'env -C .harness touch config.yaml',
+    ]) expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+  });
+
+  it('`env -C` 를 썼다는 이유로 막지 않는다 · 뒤 세그먼트의 cwd 는 그대로다', () => {
+    const root = setup();
+    for (const cmd of ['env -C docs sh -c "echo x > n.md"', 'env --chdir=docs sh -c "echo x > n.md"',
+                       'env -C docs ls', 'env -C .harness cat config.yaml', 'env -C docs touch n.md',
+                       // `env -C` 는 그 세그먼트만 — 다음 세그먼트는 루트에서 돈다.
+                       'env -C .harness ls ; echo x > docs/n.md']) {
+      expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
+    }
+  });
+});
+
+describe('[SEC-286] `sed --in-place=SUFFIX` 도 제자리 편집이다', () => {
+  it('★ 롱폼을 놓치지 않는다', () => {
+    const root = setup();
+    expect(denied(bash(root, 'sed --in-place=.bak s/a/b/ .harness/config.yaml')), '롱폼+접미를 놓쳤다').toBe(true);
+    expect(denied(bash(root, 'sed --in-place s/a/b/ src/app.ts')), '롱폼을 놓쳤다').toBe(true);
+    expect(denied(bash(root, 'sed -i.bak s/a/b/ src/app.ts')), '숏폼+접미를 놓쳤다').toBe(true);
+  });
+
+  it('제자리 편집이 아닌 `sed` 는 조회다', () => {
+    const root = setup();
+    expect(denied(bash(root, 'sed s/a/b/ src/app.ts')), '읽기를 막았다').toBe(false);
+    expect(denied(bash(root, 'sed -n 1p .harness/config.yaml')), '읽기를 막았다').toBe(false);
+  });
+});
+
+describe('[EFF-287] 정적 목록을 도는 `for` 는 리터럴과 같은 답을 낸다', () => {
+  it('★ 보호 대상이면 그대로 막힌다', () => {
+    const root = setup();
+    for (const cmd of [
+      'for f in .harness/config.yaml; do echo x > $f; done',
+      'for f in src/app.ts; do echo x > $f; done',
+      'for f in docs/a.md .harness/state.json; do echo x > $f; done',
+      'for f in config.yaml; do echo x > .harness/$f; done',
+      'for f in docs/*.md; do echo x > $f; done',          // 글롭 — 여전히 「모른다」
+      'for f in $LIST; do echo x > $f; done',              // 변수 — 여전히 「모른다」
+    ]) expect(denied(bash(root, cmd)), `놓쳤다: ${cmd}`).toBe(true);
+  });
+
+  it('무해한 목록은 통과한다 — 몰라서 막는 것과 알 수 있는데 막는 것은 다르다', () => {
+    const root = setup();
+    for (const cmd of [
+      'for f in docs/a.md; do echo x > $f; done',
+      'for f in docs/a.md docs/b.md; do echo x > $f; done',
+      'for f in docs/a.md; do echo x > ${f}; done',
+      'for f in docs/a.md; do cat $f; done',
+      'for i in 1 2 3; do echo $i; done',
+    ]) expect(denied(bash(root, cmd)), `과차단: ${cmd}`).toBe(false);
+  });
+});

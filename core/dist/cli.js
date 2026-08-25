@@ -11903,6 +11903,20 @@ function resolveIn(cwd, p) {
   if (cwd === "") return p;
   return normalizePath(cwd + "/" + p);
 }
+function envChdirOf(tokens) {
+  for (let i = 0; i < tokens.length; i++) {
+    const head = (tokens[i] ?? "").split("/").pop() ?? "";
+    if (head !== "env") continue;
+    for (let k = i + 1; k < tokens.length; k++) {
+      const a = tokens[k];
+      if (a === "-C" || a === "--chdir") return tokens[k + 1];
+      if (a.startsWith("--chdir=")) return a.slice("--chdir=".length);
+      if (a.startsWith("-C") && a.length > 2) return a.slice(2);
+      if (!isFlag(a) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) break;
+    }
+  }
+  return void 0;
+}
 function segmentsWithIndex(cmd) {
   const out = [];
   let last = 0;
@@ -11930,6 +11944,8 @@ function segmentsWithIndex(cmd) {
     seg.cwd = cwd;
     const tokens = tokenize(seg.text);
     if (tokens.length === 0) continue;
+    const chdir = envChdirOf(tokens);
+    if (chdir !== void 0) seg.cwd = advanceCwd(cwd, chdir);
     const { name, args } = commandName(tokens);
     if (name === "cd" || name === "pushd") cwd = advanceCwd(cwd, args.find((a) => !isFlag(a)));
   }
@@ -12225,7 +12241,10 @@ var READ_ONLY_HEADS = [
   "more"
 ];
 var CONDITIONAL_WRITERS = {
-  sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i")),
+  // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
+  // 이 조건을 통째로 비껴갔다. `yq`·`jq` 줄에는 롱폼이 있는데 여기만 빠져 있던
+  // **거울 자리 누락**이다(같은 표에서 한 줄만 좁았다).
+  sed: (a) => a.some((x) => x === "-i" || x.startsWith("-i") || x.startsWith("--in-place")),
   /**
    * [SEC-270] **인라인 코드는 조회가 아니다.** `perl -e`/`-E`(ruby 도 같다)는 임의 코드를
    * 실행한다 — `perl -e 'unlink ".harness/events.jsonl"'` 로 저널이 지워지고
@@ -12303,8 +12322,19 @@ function expandBraceDefaults(cmd, env) {
     (_m, name, fallback) => env[name] ?? fallback
   );
 }
+var FOR_LOOP = /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+([^;\n]*?)\s*(?:;|\n)\s*do\b([\s\S]*?)\bdone\b/g;
+function expandStaticForLoops(cmd) {
+  return cmd.replace(FOR_LOOP, (whole, name, listRaw, body) => {
+    if (/\bfor\b/.test(body)) return whole;
+    const words = listRaw.trim().split(/\s+/).filter((w) => w !== "");
+    if (words.length === 0 || words.length > 32) return whole;
+    if (words.some((w) => /[$`*?[\]{}~"']/.test(w))) return whole;
+    const re = new RegExp(`\\$\\{${name}\\}|\\$${name}(?![A-Za-z0-9_])`, "g");
+    return words.map((w) => body.replace(re, w)).join(" ; ");
+  });
+}
 function expandStaticVars(rawCmd, env = {}) {
-  const cmd = expandBraceDefaults(rawCmd, env);
+  const cmd = expandStaticForLoops(expandBraceDefaults(rawCmd, env));
   const vars = staticAssignments(cmd, env);
   const lookup = (name) => {
     const local = vars.get(name);
