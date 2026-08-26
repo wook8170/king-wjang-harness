@@ -37,9 +37,15 @@
   **남는 한계(공시)**: 설계트랙 «소스»의 동적-cd×조립(`cd $(printf sr)c && >> ap$y`=src/app.ts)은 소스가
   고정 basename 목록 없어 통과 — 소프트 경계(D1 부류), 닫으면 대량 과차단.
 - **결정: 사용자 「계속 돌려(16차+)」 선택.** 클린 스윕(코어/정책 새 우회 0) 나올 때까지 독립 검증→봉인 반복.
-- **16차 진행 중**(`scratchpad/sec300-verify6.md`) — **CORE/정책 하드경계 집중**(소스 소프트-잔여 D1·#1d 는
-  공시됨 → 발견 카운트 제외). brace-default dir·글롭 나머지(범위·globstar·extglob)·경로정규화·다표면·degraded.
-  **CLEAN 이면 G001 checkpoint→G002(축5).** 새 발견 시 계속 봉인.
+- **16차 = CRITICAL 1 (SEC-308)**: 미열거 쓰기도구(`xxd`·`openssl`·`csplit`·`split`)가 default 분기에서
+  대상 안 올려 코어 보호가 net(둘 다 `scan.targets===0` 게이트)에만 의존 → 곁가지 대상(`2>/tmp/err` 조차)
+  하나로 net OFF. 저널위조→doctor repair→배포개통 실증. **봉인**: 슬래시 피연산자를 `mutatingOperands` 로
+  올려 coreOnly 판정(net 무관). EFF-173(registry 이미지참조) 회귀도 coreOnly 로 ship-track 규칙 skip 해 방지.
+  커밋 `96f82a6`. 대장 verified **324**. **1389 green.**
+- **★ 봉인 누적(축2, 10라운드/12+ CLASS)**: dequoting 5종·SEC-303/304/305/306/307/308. CORE/정책 하드경계
+  광범위 봉인. 소스 소프트-잔여(D1·#1d) 공시.
+- **17차 진행 중**(`scratchpad/sec300-verify7.md`, CORE/정책 집중) — SEC-308 반증(슬래시없는 코어·플래그값)·
+  brace-default·경로정규화·extglob/globstar·다표면. **CLEAN 이면 G001 checkpoint→G002(축5).**
 - **★ 전략 판단(사용자 결정 대기 가능)**: 순수-훅으로 셸 전체 파싱을 따라잡는 건 긴 꼬리다. 매 라운드가 진짜
   CRITICAL 을 잡아 루프는 유효하나, 「출하 가능(clean sweep)」까지 몇 라운드 더 갈 수 있다. README 「알려진
   한계」가 이미 지목한 **파일시스템 층 강제**가 근본 봉인이라는 대안도 있다(제품 성격 변경 = 사용자 판단).
