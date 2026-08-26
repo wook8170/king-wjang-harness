@@ -1,5 +1,55 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (13) — ULTRAGOAL G001 축2 감사 13라운드째 · SEC-311 open · 「1,2 진행」 결정
+
+**정본.** `main` HEAD `9c33f77` · 미푸시 0 · clean · **1392 tests green · tsc 0** · 대장 verified **326** ·
+repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~311 미반영)** — 안정화 후 재설치 필요.
+
+### 완료 (축2 실효성, 12라운드 봉인 = dequoting 5종 + SEC-303~310)
+셸 dequoting 5종(따옴표·역슬래시·`\`+개행·ANSI-C `$'\x2e'`·물결 `~+`/`~-`) · SEC-303(부분접두+동적) ·
+SEC-304(정상병기 net무력화·dir바로뒤·`./`) · SEC-305(부정글롭 `[!c]`) · SEC-306(동적cd×조립basename) ·
+SEC-307(POSIX 클래스 `[[:alpha:]]`) · SEC-308(미열거도구+곁가지 · 슬래시없는코어·인터프리터코드·flag확장) ·
+SEC-309(globstar `**/`) · SEC-310(sed 인라인 `w`/`W`/`s///w`). **CORE/정책 하드경계 광범위 봉인.**
+각 봉인: 코드 fix + `bypass-corpus.test.ts` 상시 코퍼스 + 대장 verified 행. 커밋 순차 푸시.
+
+### ★ OPEN: SEC-311 (19차 발견 · CRITICAL · 미봉)
+**해석기 «프로그램 파일» 미독**: `sed -f prog.sed`·`awk -f prog.awk`·`perl x.pl`·`ruby x.rb`·`python3 x.py`·
+`node x.js`·`sed --file=` — 프로그램/스크립트가 파일 안에 있어 훅이 본문을 못 읽어 그 안 `w .harness/events.jsonl`
+(sed)·`open(">",core)`(perl 등)이 코어·출하대장 위조·절단. 게다가 sed/awk/perl 프로그램파일형은 read-only
+오분류(활동집계·stop 가드 우회). 끝단: perl→저널 phase-set P7 append→`doctor --repair`→P0→P7 승격(사람 승인 0).
+- **근본원인 위치**: `bashwrite.ts` `sedPrograms()`(~705, `-f FILE`/`--file=` 미처리) · `CONDITIONAL_WRITERS`
+  (~787, sed/awk/perl 이 `-i`/`-e` 로만 keyed) · `hook.ts` `invokedScriptBodies`/`SCRIPT_RUNNERS`(셸+npm run 만
+  본문 읽음) · `opaqueExecOf`(스크립트파일 피연산자 있으면 「호출측이 읽는다」 가정하고 continue — 비셸 해석기는 실제 미독).
+- **처방 방향**(보고 `scratchpad/sec300-verify9.md`): 해석기 프로그램파일이 **루트 안이면 본문 읽어 같은 스캐너로**
+  (SEC-92 를 셸→해석기 확장), 못 읽으면 **fail-closed deny**(셸 처방과 대칭). 코어/정책 안 닿으면 통과(과차단 0).
+  대안(싼): 프로그램파일형 해석기를 opaqueExec 부류로 코어보호 deny(과차단 폭 검증 필요).
+- **짝(막지말것)**: `sed -f fmt.sed README.md`·`perl build-helper.pl`·`awk -f r.awk data.csv >/tmp/out` = ALLOW 유지.
+
+### 사용자 결정: 「1,2 진행」 (둘 다)
+1. **보안 루프 계속**: SEC-311 봉인 → 20차 독립검증 → CLEAN(코어/정책 새 우회 0) 나올 때까지 반복. 그다음 G001 checkpoint→G002(축5).
+2. **멀티에이전트 재설계**(구현단계부터): 메인=Fable 5 오케스트레이터(작업지시·취합), 병렬워커=난이도별 모델로 구현.
+   - **핵심 실측**: 하네스는 에이전트 «디스패치 안 함» — 메인 세션이 스킬대로 wave-executor/wave-verifier 부름.
+     즉 이 변경은 **오케스트레이션 층(P8 스킬·에이전트 정의·디스패치 패턴)**이 본체. 난이도별 모델·구현자≠검증자는
+     이미 정책/패턴에 있음.
+   - **코어 제약**: `state.activeWave` 단수, `wave.ts:204` 이미 활성이면 activate 거부 → 한 `.harness/` 동시 웨이브 불가.
+   - **권장 (A) 워크트리별 웨이브 격리 — 코어 무변경**: 병렬 워커마다 자기 워크트리+자기 `.harness/`(각 활성 웨이브 1).
+     Fable 오케스트레이터가 N 워크트리 디스패치→취합→머지. 쓰기 격리 공짜. (대안 B: 코어를 N-활성웨이브로 확장 — 비권장.)
+   - **미결정**: (A)vs(B) · 난이도→모델 규칙 · 웨이브 독립성(의존그래프 분해) · 머지·충돌.
+
+### 다음 즉시 할 일
+1. **SEC-311 봉인** (해석기 프로그램파일 — 위 처방). fix+코퍼스+대장 verified 327+.
+2. **20차 독립검증** 디스패치(CORE/정책 집중, 소스 소프트-잔여 D1·#1d 제외).
+3. **멀티에이전트 재설계**: (A) 워크트리 격리로 brainstorming/plan → P8 오케스트레이터 스킬·에이전트.
+4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
+
+### 함정·환경 (그대로 유효)
+- 독립검증 라운드 ~15분 → 머신 절전 시 실패(13차 1회). `caffeinate` 권장. 검증자 지시에 `CLAUDE_PROJECT_DIR` 매 명령 유지 필수(자기참조 방지).
+- 대장 편집 시 정규식 리터럴 `|` 금지(마크다운 표 깨짐)→산문. 편집 후 `reanchor-citations.py HEAD` → 「후보 N개/수동」은 손으로.
+- 소스 소프트-잔여(공시): #1d(동적cd×조립 src), D1(MCP 부차필드 소스 디코이) — 발견 카운트 제외.
+- 봉인 패턴: fix → 직접 probe(짝 포함) → `bypass-corpus` 코퍼스 편입 → 대장 verified 행 → reanchor → 전체 green → 커밋·푸시.
+
+---
+
 ## 2026-08-26 (12) — ★ ULTRAGOAL G001(축2): 감사 10차가 **CRITICAL SEC-300** 발견·봉인 · 11차 재검증 중
 
 **정본.** `main` HEAD `e79a9c6` · 미푸시 0 · **1384 green·tsc 0** · 버전 **0.1.2**(4소스+CHANGELOG 정합) ·
