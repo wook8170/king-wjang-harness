@@ -26,10 +26,18 @@
   net-커버리지 틈). **봉인**(`hook.ts:1887`): 미해결 대상의 리터럴 접두가 basename 안으로 들어가 코어 접두와
   겹치면 deny. 실측 events/config/state/ship·design 전건 deny·과차단 0. 커밋 `6df25af`. 대장 verified 319.
 - **★ 봉인 누적**: 셸 dequoting 5종 + SEC-303(net-커버리지). 축2 는 **6라운드 연속**(9·10·11·12·13차) 우회를 냈다.
-- **14차 독립 재검증 진행 중**(`scratchpad/sec300-verify4.md`) — SEC-303 변종·디렉토리우회·글롭실파일·조합.
-  **CLEAN(새 우회 0)이면 G001 checkpoint→G002(축5)** — 우물 바닥 신호. 새 발견 시 계속 봉인.
-- **함정**: 독립 검증 라운드 ~15분 → 머신 절전 시 실패(13차 1회 실패·재시도). `caffeinate` 권장. 검증자 지시에
-  `CLAUDE_PROJECT_DIR` 매 명령 유지 필수(자기 참조 방지).
+- **14차 = CRITICAL 2종 (SEC-304·305)**: SEC-304(정상 병기로 pathLikeMentions net 무력화 + 동적부 dir
+  바로뒤·`./`삽입 — coreByPrefix `>=`+정규화로 봉인) · SEC-305(셸 부정글롭 `[!c]`→정규식 `[^c]` 미변환 —
+  `globToRegExp` 첫글자 `!`→`^`). 9/10 코어·게이트개통 실증. 커밋 `a018b6c`. 대장 verified 321.
+- **★ 봉인 누적(축2 실효성, 7라운드/9+ CLASS)**: SEC-299(MCP 추출, 3차)·SEC-300(역슬래시/따옴표)·줄이음·
+  SEC-301(ANSI-C)·SEC-302(물결)·SEC-303(부분접두+동적)·SEC-304(병기·dir바로뒤)·SEC-305(부정글롭).
+- **15차 진행 중**(`scratchpad/sec300-verify5.md`) — SEC-304/305 반증·동적 dir·글롭 실파일·미해결 net 잔여.
+  **CLEAN 이면 G001 checkpoint→G002(축5).**
+- **★ 전략 판단(사용자 결정 대기 가능)**: 순수-훅으로 셸 전체 파싱을 따라잡는 건 긴 꼬리다. 매 라운드가 진짜
+  CRITICAL 을 잡아 루프는 유효하나, 「출하 가능(clean sweep)」까지 몇 라운드 더 갈 수 있다. README 「알려진
+  한계」가 이미 지목한 **파일시스템 층 강제**가 근본 봉인이라는 대안도 있다(제품 성격 변경 = 사용자 판단).
+- **함정**: 독립 검증 ~15분 → 머신 절전 시 실패(13차 1회). `caffeinate` 권장. 검증자 지시에 `CLAUDE_PROJECT_DIR`
+  매 명령 유지 필수(자기 참조 방지). 대장 편집 시 정규식 리터럴 `|` 금지(마크다운 표 깨짐) → 산문으로.
 
 ### ⚠️ 사고: 자기 참조 self-enforcement (CLAUDE.md 함정 실제 발생)
 - 10차 검증자(또는 프로브)가 `CLAUDE_PROJECT_DIR` 없이 `harness init` 을 돌려 **repo 루트에 `.harness/` 생성**
