@@ -1,6 +1,53 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (33) — 핸드오프: 다음 세션에서 「출하 검증 처음부터 재실행」 (재시작 후)
+## 2026-08-26 (35) — 공개/등록/README 진행 중: 공개 전략 결정 대기(A/B/C)
+
+**미커밋 워킹트리 변경 있음** — 커밋/공개 전에 아래 결정 필요.
+
+### 이번 턴 완료·진행
+- **출하검증 HTML 아티팩트 게시** — https://claude.ai/code/artifact/cf9183e7-93fa-4024-a1f3-bbd3879669bc (round3s SHIP-READY 요약, 파일 `scratchpad/verdict.html`, 같은 경로 재게시로 URL 유지).
+- **README.md(영문) Status 섹션 갱신** — "not-ready"→**"v0.1.2 SHIP-READY"** + 검증 요약(11축·게이트 12/13·적대 스윕·1404 tests) 추가. ⚠️ **아직 doc-claims/전체 테스트 미검증·미커밋**. 방금 넣은 `[verifying-production-readiness](#)` **죽은 앵커(#) 수정 필요**. KO/JA/ZH 3종은 아직 "not-ready"로 남음(불일치, doc-claims 비강제).
+
+### ★ 사용자 결정 대기 (다음 즉시)
+**공개 전략 A/B/C 질문 던진 상태 — 답 받으면 실행.**
+- **A(추천)=있는 그대로 공개**: 감사문서 포함 공개. 설치 tarball엔 export-ignore로 이미 빠짐. 수술 없음, 즉시.
+- **B=감사문서 별도 비공개 레포로 분리** 후 코드만 공개. **연쇄 주의**: `core/test/prod-3i-surfaces.test.ts:77` `[PROD-B6]`가 ".git 존재+감사문서 부재=의도적 빨강"이라 추적해제 시 하드실패 → 가드 수정 필요 + `doc-claims.test.ts`의 4개 README "1404·(58 files)" 숫자 연쇄 갱신 필요.
+- **C=비공개 유지**: 배포 불가.
+- 사용자 우려: "로컬엔 남겨야 다음에 확인"(맞음 — `git rm --cached`는 파일 로컬 보존). 최종적으로 "쉽게 설명해" 요청 → 평이하게 A/B/C 설명 완료, 답 대기.
+
+### 등록 정보(확인됨)
+- harness 리모트 = `github.com/wook8170/king-wjang-harness` (main==origin/main 349f29d, **현재 PRIVATE**).
+- 스킬 `verifying-production-readiness`(`~/.claude/skills/`)=별도 git레포, **리모트 없음**, `.claude-plugin` 없음(아직 플러그인 아님). 배포하려면 플러그인化 or harness `skills/`에 동봉.
+- 공식 디렉터리=`anthropics/claude-plugins-official`, 제출폼 `https://clau.de/plugin-directory-submission`(git-subdir 소스·품질/보안 기준·**name 불변**). 자기 마켓=`/plugin marketplace add wook8170/king-wjang-harness`(공개 시).
+- **doc-claims 강제(README 4종)**: `(58 files)` · 언어간 동일 테스트수 "1404" · `exactly 16` MCP도구 · 토큰수치 일관 · DEFAULT_CONFIG 키 전부 기재 · Support절+`harness doctor`+`hook-errors.log`. **README 숫자 건드리면 4종·테스트 동반 갱신.**
+- 배포 위생: `.gitattributes`가 `progress.md`·`docs/release-readiness`·`docs/appraisal` **export-ignore**(tarball만, GitHub 열람엔 노출). 감사문서 111파일 추적 상태.
+
+### 커밋 전 체크리스트(공개 확정 시)
+1. README 죽은 앵커(#) 수정 · Support절 "private" 문구 갱신(공개 시).
+2. `npm run build && npm run check && npm test`(1404 green·tsc0) 확인 — **공개 전 필수**(빨강 배포 금지).
+3. (B 선택 시) prod-3i 가드 수정 + 4종 README 숫자 재정합 + 재측정.
+
+## 2026-08-26 (34) — 출하검증 재실행 완료(SHIP-READY 유지) + 사용자 다음 관심=플러그인/스킬 공식 마켓 등록·홍보
+
+**정본.** `main` HEAD `349f29d`(핸드오프33 커밋) · 트리 = **비커밋 변경 있음**(이번 세션 산출: `docs/release-readiness/2026-08-21/round3s-reaudit.md` 신규). 미커밋(사용자 요청 시만 커밋).
+
+### 이번 세션 완료 — 출하 검증 라운드 3-S 재실행 (독립 재감정, 신규 컨텍스트)
+- **판정: 출하 가능(SHIP-READY) 유지.** 정식 11축, 게이트 G1~G13 목표를 `gates.md`에서 그대로 재현(완화 없음). **13중 12 measured PASS.** 리포트: `docs/release-readiness/2026-08-21/round3s-reaudit.md`.
+- 실측(이 세션, HEAD 349f29d): BUILD ok·tsc 0·**1404 pass**(유휴 12/12) · G3 맨클론 exit0 · G4 미초기화 16조합 exit0+0바이트 · **G5 적대 스윕**(`scratchpad/adversarial.sh`) 신규표기 ~40 전건 DENY(printf·tee·dd·heredoc·sed-i·ex·ed·truncate·install·cp·mv·eval·xargs·python·perl·ruby·node·awk-inplace·심링크TOCTOU·하드링크·저널위조·base64|sh·MCP배열/중첩) · 과차단 0 · G6 승인 refuse+상태불변 · G8 audit 0 · G10 gitleaks 307커밋 0 · G11/G12/G13 pass.
+- **신규 BLOCKER 0.** MCP `{note,dst:소스}` decoy-first ALLOW 1건은 **문서화된 weak-key 소스 한계**(`core/src/hook.ts:1635-1643` [SEC-299/F2] · `DEST_KEY`에 `dst` 미매칭 → weak → coreOnly). 판별 실측으로 경계 확인: weak키→정책/state DENY, strong키(dest/path/to)→소스 DENY. 코어·정책·state·저널 전부 방어. (README.ko:271 "훅=사고방지, 보안경계 아님".)
+
+### 미해결·확인 대기 (다음 즉시 할 일)
+1. **FLAKE-01 (비차단, 백로그)**: `core/test/cost-3i-residuals.test.ts:108`(config <1ms)·`core/test/med-3j-residuals.test.ts:403`(안전망 <500ms) **절대 wall-clock 단언 → 부하 시 스퓨리어스 red**(유휴 통과). 제품 무영향. 처방: 벤치처럼 BUSY-aware/델타화. 정본 대장 등재 권장.
+2. **G9 재측정 유예**: 이 세션 창이 **사용자 활성 데스크톱**(Edge·OrbStack·Spotlight, load 25+, node기동 197ms)으로 오염 → 깨끗한 델타 재측정 불가(Iron Rule 5). 직전 R3-R 클린(+11~24.5ms<50ms) 근거 유지. **조용한 창에서 `node scripts/bench-hook-latency.mjs` → BUSY 미표기·델타<50ms 확인**이 남은 실측.
+3. **★ 사용자 신규 관심(세션 말미 질문, 미착수)**: king-wjang-harness **플러그인**과 `verifying-production-readiness` **스킬**을 **공식 마켓 등록·홍보**. 내가 답변 완료 — 요지: ① 공개 GitHub push → `/plugin marketplace add <id>/king-wjang-harness` (즉시) ② 공식 디렉터리 `anthropics/claude-plugins-official` 제출폼 **https://clau.de/plugin-directory-submission** (git-subdir 소스·품질/보안 기준·**name 불변**) ③ 스킬은 단독 스토어 없음 → 플러그인 `skills/`에 담아 배포(독립 플러그인 권장). **다음: 사용자 결정 대기**(공개 레포 생성=감사의 "리모트없음" 결정 뒤집기 / 이름 확정 / 스킬 분리 vs 동봉). 요청 시 내가 공개前 준비(marketplace.json git-subdir 채우기·스킬 plugin.json 골격·제출 문구 초안)까지, 실제 push·제출은 사용자.
+
+### 시스템 지식·함정 (이 세션 재확인)
+- **★ 측정 위생 결정적**: 사용자 맥은 상시 활성(Edge·OrbStack·Spotlight·XProtect) → load 20~35 기저. 타이밍 게이트(G1 3회동일·G9 델타)는 **유휴 창 필요**. 내 vitest 3중 동시 실행이 load 158까지 올려 FLAKE-01 재현·G9 오염. **잔존 vitest 워커는 `pkill -f vitest`로 정리**(내 것만).
+- dist 추적됨(`core/dist/cli.js`·`mcp.js`) → G3 맨클론 가능. plugin.json은 `.claude-plugin/`(루트 아님). 스킬/에이전트 현황 **skills 15 · agents 6**(핸드오프33의 11/5에서 증가).
+- 훅 구동: `printf '<json>' | CLAUDE_PROJECT_DIR=$D bin/harness hook pre-tool`, 빈출력=allow. 게이트 원정의 `docs/release-readiness/2026-08-21/gates.md`. 대장 정본 `.../ledger.md`(verified 334·open 0, 헤더는 3-K 시점 "출하불가"로 낡음—현 판정은 00-summary/round3s의 SHIP-READY).
+- codegraph 이 프로젝트 미초기화(explore 쓰려면 `codegraph init` 필요) → grep/실행으로 대체.
+
+
 
 **정본.** `main` HEAD `40d66f8` · **origin/main 동기 · 트리 clean** · **1404 tests green · tsc 0** · 대장 verified 334 · open BLOCKER/HIGH 0 · repo 0.1.2.
 **플러그인 0.1.2 업데이트 완료(user scope) — 단 Claude Code 재시작해야 적용**(현 세션 0.1.1).
