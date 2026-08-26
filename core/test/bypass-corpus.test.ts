@@ -598,4 +598,43 @@ describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/�
     ].filter(c => decide(root, c) === 'deny');
     expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
   }, 30_000);
+
+  it('★ [SEC-313] 무확장자·무슬래시 스크립트명도 프로그램파일이다 (looksLikePath 회피)', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const t of CORE) {
+      // 파일명에 확장자·슬래시가 없어도 첫 피연산자는 프로그램 — 본문을 읽어야 한다.
+      for (const [file, cmd] of [['runme', 'python3 runme'], ['runme', 'perl runme'], ['runme', 'node runme'], ['runme', 'ruby runme']] as const) {
+        fs.writeFileSync(path.join(root, file), `open(">","${t}")`);          // perl/ruby 문법이지만 코어 언급이 핵심
+        if (decide(root, cmd) !== 'deny') missed.push(`${cmd} → ${t}`);
+      }
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 3).join(' || ')}`).toEqual([]);
+    // 짝: 무확장자여도 코어 미언급이면 통과(첫 피연산자 본문을 보므로 과차단 0)
+    fs.writeFileSync(path.join(root, 'greet'), 'print "hi\\n"');
+    expect(decide(root, 'perl greet'), 'SEC-313 과차단').toBe('allow');
+  }, 30_000);
+
+  it('★ [SEC-314] 상대화 chdir 로 쪼갠 코어 경로도 막는다 (mentionsPath 부분문자열 회피)', () => {
+    const root = setup();
+    const owned: Array<[string, string]> = [
+      ['.harness', 'events.jsonl'], ['.harness', 'config.yaml'], ['.harness', 'state.json'],
+      ['.harness/ship', 'defects.yaml'], ['.harness/design', 'ledger.yaml'],
+    ];
+    const missed: string[] = [];
+    for (const [dir, base] of owned) {
+      const bodies = [
+        `chdir("${dir}");open(F,">>","${base}");print F "X";`,          // perl
+        `import os\nos.chdir("${dir}")\nopen("${base}","a").write("X")`, // python
+      ];
+      for (const b of bodies) {
+        fs.writeFileSync(path.join(root, 'x.pl'), b);
+        if (decide(root, 'perl x.pl') !== 'deny') missed.push(`${dir}/${base}: ${b.replace(/\n/g, '␤')}`);
+      }
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+    // 짝: chdir 없이 설계 문서를 «읽는» 정상형은 통과(소유 basename 아님)
+    fs.writeFileSync(path.join(root, 'rd.py'), 'open(".harness/design/plan.md","r").read()');
+    expect(decide(root, 'python3 rd.py'), 'SEC-314 설계문서 읽기 과차단').toBe('allow');
+  }, 30_000);
 });

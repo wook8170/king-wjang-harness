@@ -7999,7 +7999,7 @@ function interpreterProgramFiles(cmd) {
     const args = toks.slice(1);
     if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
     else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {
-      files.push(...args.filter((a) => looksLikePath(a)));
+      files.push(...args.filter((a) => !isFlag(a) && !ENV_ASSIGN_RE.test(a)));
     }
   }
   return files;
@@ -14396,6 +14396,16 @@ function interpreterProgramBodies(root, cmd) {
   }
   return bodies;
 }
+var CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+function interpBodyHit(body) {
+  const lit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => body.includes(pre));
+  if (lit !== void 0) return lit;
+  if (CHDIR_INTO_HARNESS.test(body)) {
+    const owned = [...OWNED_BASENAMES].find((b) => body.includes(b));
+    if (owned !== void 0) return `.harness/\u2026/${owned}`;
+  }
+  return void 0;
+}
 var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
   if (files.length === 0) return null;
@@ -14786,7 +14796,7 @@ function preTool(root, state, config, input, degraded) {
       }
     }
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => body.includes(pre));
+      const hit = interpBodyHit(body);
       if (hit !== void 0) {
         return deny(L(
           `This runs an interpreter program file that writes to \`${hit}\` \u2014 a file only harness commands may change. The program lives in a file (\`sed -f\`, \`perl file.pl\`, \`awk -f\`, \`node file.js\` \u2026), so the harness read it to see what it does, the same as it reads a shell script it is about to run. Use harness commands for that file.`,

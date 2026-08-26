@@ -932,6 +932,28 @@ function interpreterProgramBodies(root: string, cmd: string): string[] {
 }
 
 /**
+ * [SEC-311·314] 해석기 프로그램 본문이 **하네스 소유 경로를 쓰는가** — 매치된 needle 을 돌려준다.
+ *
+ * 1) 리터럴 전체경로(`mentionsPath(CORE_FILES)`)·정책 접두(`POLICY_PREFIXES`) — SEC-311 의 기본.
+ * 2) [SEC-314] **상대화 `chdir`** — `chdir(".harness")`+`open(">>","events.jsonl")` 처럼 디렉토리를
+ *    바꾼 뒤 상대 이름으로 열면 리터럴 전체경로가 본문에 없다(21차 검증, config.yaml·저널 실덮임). `.harness`
+ *    (또는 정책 접두)로 들어가는 chdir 계열 호출 + 소유 basename 언급이면 막는다. **읽기 정상형 과차단
+ *    방지**: chdir 이 하네스 디렉토리로 «들어가는» 형태만 본다(설계 문서 읽기 `.harness/design/*.md` 는
+ *    소유 basename 이 아니라 미발화). 임의 in-language 난독(`".har"+"ness/"`·`chr()`·base64)은 정적 본문으로
+ *    닫히지 않는다 — README 「알려진 한계」에 공시(파일시스템 층 강제로 수렴).
+ */
+const CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+function interpBodyHit(body: string): string | undefined {
+  const lit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find(pre => body.includes(pre));
+  if (lit !== undefined) return lit;
+  if (CHDIR_INTO_HARNESS.test(body)) {
+    const owned = [...OWNED_BASENAMES].find(b => body.includes(b));
+    if (owned !== undefined) return `.harness/…/${owned}`;
+  }
+  return undefined;
+}
+
+/**
  * [SEC-A] **패치를 꺼내 같은 스캐너로 다시.**
  *
  * `git apply <패치>` 는 이 리포 최악의 구멍이었다 — `echo >> .harness/events.jsonl` 은 막히는데
@@ -1732,7 +1754,7 @@ function preTool(
      * 정상형(`awk -f q.awk data.sql`·`perl -ne 'print' f`)은 본문에 코어 경로가 없어 통과한다 — 과차단 0.
      */
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find(pre => body.includes(pre));
+      const hit = interpBodyHit(body);                        // [SEC-314] 리터럴 + 상대화 chdir
       if (hit !== undefined) {
         return deny(L(
           `This runs an interpreter program file that writes to \`${hit}\` — a file only harness commands `

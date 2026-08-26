@@ -840,7 +840,11 @@ export function interpreterProgramFiles(cmd: string): string[] {
     const args = toks.slice(1);
     if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
     else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {
-      files.push(...args.filter(a => looksLikePath(a)));
+      // [SEC-313] **인라인이 아니면 피연산자가 곧 프로그램 파일이다 — 파일명 모양을 다시 따지지 않는다.**
+      // `looksLikePath` 로 거르면 `python3 pyscript`(무확장자)가 통째로 버려져 미독→통과했다(21차 검증,
+      // config.yaml 실덮임). `sed -f prog`(모양 무관 추출)와의 비대칭이었다. 비플래그·비-env 피연산자를
+      // 전부 올린다 — 뒤따르는 데이터·서브커맨드(`deno run`)는 없는 파일이라 읽기에서 걸러진다(과독 무해).
+      files.push(...args.filter(a => !isFlag(a) && !ENV_ASSIGN_RE.test(a)));
     }
   }
   return files;
