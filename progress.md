@@ -1,9 +1,9 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (32) — 멀티에이전트 P8 오케스트레이션 구현계획 실행 완료(subagent-driven) · 푸시 대기
+## 2026-08-26 (32) — 멀티에이전트 P8 오케스트레이션 구현 완료(subagent-driven·최종리뷰 반영) · 푸시 대기
 
-**정본.** `main` HEAD `968335d`(+이 핸드오프 커밋) · **미푸시 로컬 커밋 4개**(origin/main 미반영) · **1404 tests green · tsc 0** · repo 0.1.2.
-core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백).
+**정본.** `main` HEAD `665e823`(+이 핸드오프 커밋) · **미푸시 로컬 커밋 6개**(`0a6eb68..665e823`, origin/main 미반영) · **1404 tests green · tsc 0** · repo 0.1.2.
+core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백). **최종 독립 리뷰 반영 완료** — CHANGES_NEEDED(사유=README 수치)+2 minor 해소.
 
 이 세션(웨이브32): **구현계획 7개 태스크 전부 실행 완료.** 코드 태스크는 서브에이전트, prose 산출물은 인라인(계획에 확정 기술된 내용 전사), 끝에 독립 리뷰.
 
@@ -14,8 +14,8 @@ core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백).
 - 검증: build ok · tsc0 · **npm test 1404 pass** · core/src diff 공백 · 스펙 커버리지 grep 전부 · cross-ref 해소.
 
 ### 🔄 다음 즉시 할 일
-1. **푸시** — 로컬 4커밋(`0a6eb68..968335d`)이 origin/main 미반영. 사용자 승인 시 `git push origin main`(이전 관례=main 직접 푸시).
-2. **최종 리뷰 회수 확인**: 최종 독립 리뷰(Opus, 신규컨텍스트, `git diff 338f0d9..HEAD` 대상) 실행됐으나 **포그라운드 에이전트 최종 텍스트가 미반환**(환경 특성). 재개(SendMessage af43db27e62068729) 회신 대기 중. 내 직접 검증(객관기준 전부 pass)로 갈음 가능.
+1. **푸시** — 로컬 6커밋(`0a6eb68..665e823`)이 origin/main 미반영. 사용자 승인 시 `git push origin main`(이전 관례=main 직접 푸시). = subagent-driven 의 finishing 단계(이 리포는 main 기반이라 finishing=push).
+2. **최종 리뷰 결과**: FINAL_ASSESSMENT CHANGES_NEEDED(사유=README 수치뿐, core/구조/스펙 전부 pass) → `665e823` 로 해소. 보고 `scratchpad/g-p8-review.md`. 리뷰어 확인: brief-override 안전지시가 실 코어출력(loop.ts:626-630 이 turn-log 줄 방출)과 정합.
 3. **미해결 2건(실행과 독립·설계 결정)**: ① 하네스 전역 `.harness/` 스탠스(§9) ② dogfood 대상(§8). 아직 열림.
 
 ### 시스템 지식 · 함정 (웨이브32 신규 + 유효)
