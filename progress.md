@@ -2,7 +2,7 @@
 
 ## 2026-08-26 (30) — ★★ ULTRAGOAL 7/7 완주 · G007 최종게이트 통과 · 최종 판정 «출하 가능»(SHIP-READY)
 
-**정본.** `main` HEAD `bfcd8d1` + **미커밋 워킹트리 변경 2건**(아직 커밋 안 함 — 사용자 지시 대기) · **1400 tests green · tsc 0** ·
+**정본.** `main` HEAD `679e5bd` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
 대장 verified 334 · open BLOCKER/HIGH 0 · repo 버전 0.1.2. ⚠️ 로컬 플러그인 0.1.1 stale — 안정화 후 재설치.
 
 이 세션: **(가) G007 최종 출하 게이트 완주.** ai-slop-cleaner + verification + code-review 세 게이트 전부 클린 → ULTRAGOAL **7/7** → 감정서 «출하 가능».
@@ -15,9 +15,9 @@
 - **감정서 전환**: `docs/release-readiness/2026-08-21/00-summary.md` 상단 현재상태 블록에 **«최종 판정: 출하 가능 (SHIP-READY) — 7/7»** 명시(3-R 이력·하단 「(이전) 출하 불가」 라운드기록은 그대로 보존). reanchor-citations.py HEAD → 「옮긴 것 없음」(밀린 인용 없음).
 
 ### 🔄 다음 즉시 할 일 — 사용자 판단 대기
-1. **커밋/푸시** — 워킹트리 변경 2건(`core/src/profile.ts` −4, `00-summary.md`)이 **미커밋**. 사용자가 지시하면 브랜치/커밋/푸시(커밋·푸시는 사용자 요청 시에만).
-2. **결정2 잔여**: 멀티에이전트 설계 v2 리뷰 → `superpowers:writing-plans` 구현계획 (원하면).
-3. **로컬 플러그인 0.1.2 재설치**(현재 0.1.1 stale) — 안정화 후.
+- ~~커밋/푸시~~ **완료** — `679e5bd` (profile.ts −4 · 00-summary 출하가능 · progress 웨이브30) origin/main 푸시.
+1. **결정2 잔여**: 멀티에이전트 설계 v2 리뷰 → `superpowers:writing-plans` 구현계획 (원하면).
+2. **로컬 플러그인 0.1.2 재설치**(현재 0.1.1 stale) — 안정화 후.
 
 ### 미해결 · 확인 대기
 - **최종 출하 판정은 확정**(7/7·G007 통과). 00-summary 하단의 역사적 「출하 불가」 블록들은 날짜박힌 라운드 회고라 보존 — 상단 현재판정이 정본.
