@@ -14396,43 +14396,19 @@ function interpreterProgramBodies(root, cmd) {
   }
   return bodies;
 }
-var CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
-var CHDIR_INTO_HARNESS_I = new RegExp(CHDIR_INTO_HARNESS.source, "i");
-function collapseSlashPaths(s) {
-  let n = s.replace(/\/{2,}/g, "/");
-  n = n.replace(/\/\.(?=\/)/g, "");
-  let prev = "";
-  while (n !== prev) {
-    prev = n;
-    n = n.replace(/\/(?!\.\.(?:\/|$))[^/]+\/\.\.(?=\/|$)/, "");
+var CHDIR_HARNESS_ARG = /(?:chdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|(?:^|[\s;&|(])cd)\s*[(\s]\s*["']?(\.harness[^\s"'`)]*)/i;
+function harnessCandidates(body) {
+  const out = /* @__PURE__ */ new Set();
+  for (const m of body.matchAll(/\.harness[^\s"'`)\\;|&<>,]*/gi)) out.add(m[0]);
+  const cm = CHDIR_HARNESS_ARG.exec(body);
+  if (cm) {
+    const dir = cm[1].replace(/\/+$/, "");
+    for (const b of OWNED_BASENAMES) {
+      const bm = new RegExp(b.replace(/[.]/g, "\\."), "i").exec(body);
+      if (bm) out.add(`${dir}/${bm[0]}`);
+    }
   }
-  return n;
-}
-var ciFSCache = /* @__PURE__ */ new Map();
-function isCaseInsensitiveFS(root) {
-  const cached = ciFSCache.get(root);
-  if (cached !== void 0) return cached;
-  let ci = false;
-  try {
-    const lower = fs20.statSync(path17.join(root, ".harness"));
-    const flipped = fs20.statSync(path17.join(root, ".Harness"));
-    ci = lower.ino === flipped.ino;
-  } catch {
-    ci = false;
-  }
-  ciFSCache.set(root, ci);
-  return ci;
-}
-function interpBodyHit(body, ci) {
-  const norm0 = collapseSlashPaths(body);
-  const hay = ci ? norm0.toLowerCase() : norm0;
-  const lit = mentionsPath(hay, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => hay.includes(pre));
-  if (lit !== void 0) return lit;
-  if ((ci ? CHDIR_INTO_HARNESS_I : CHDIR_INTO_HARNESS).test(norm0)) {
-    const owned = [...OWNED_BASENAMES].find((b) => hay.includes(b));
-    if (owned !== void 0) return `.harness/\u2026/${owned}`;
-  }
-  return void 0;
+  return [...out];
 }
 var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
@@ -14823,14 +14799,14 @@ function preTool(root, state, config, input, degraded) {
         ), degraded, lang);
       }
     }
-    const ciFS = isCaseInsensitiveFS(root);
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = interpBodyHit(body, ciFS);
-      if (hit !== void 0) {
-        return deny(L(
-          `This runs an interpreter program file that writes to \`${hit}\` \u2014 a file only harness commands may change. The program lives in a file (\`sed -f\`, \`perl file.pl\`, \`awk -f\`, \`node file.js\` \u2026), so the harness read it to see what it does, the same as it reads a shell script it is about to run. Use harness commands for that file.`,
-          `\uD574\uC11D\uAE30 \uD504\uB85C\uADF8\uB7A8 \uD30C\uC77C\uC774 \`${hit}\` \uC744(\uB97C) \uC4F4\uB2E4 \u2014 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uB294 \uD30C\uC77C\uC774\uB2E4. \uD504\uB85C\uADF8\uB7A8\uC774 \uD30C\uC77C \uC548\uC5D0 \uC788\uC5B4(\`sed -f\`\xB7\`perl file.pl\`\xB7\`awk -f\`\xB7\`node file.js\` \u2026) \uD558\uB124\uC2A4\uAC00 \uBB34\uC5C7\uC744 \uD558\uB294\uC9C0 \uADF8 \uBCF8\uBB38\uC744 \uC77D\uC5C8\uB2E4(\uACE7 \uC2E4\uD589\uD560 \uC178 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC77D\uB294 \uAC83\uACFC \uAC19\uB2E4). \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
-        ), degraded, lang);
+      for (const t of harnessCandidates(body)) {
+        if (judgeWritePath(root, state, config, t, degraded, true, getProfile, true)) {
+          return deny(L(
+            `This runs an interpreter program file that writes to \`${t}\` \u2014 a file only harness commands may change. The program lives in a file (\`sed -f\`, \`perl file.pl\`, \`awk -f\`, \`node file.js\` \u2026), so the harness read it to see what it does, the same as it reads a shell script it is about to run. Use harness commands for that file.`,
+            `\uD574\uC11D\uAE30 \uD504\uB85C\uADF8\uB7A8 \uD30C\uC77C\uC774 \`${t}\` \uC744(\uB97C) \uC4F4\uB2E4 \u2014 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uB294 \uD30C\uC77C\uC774\uB2E4. \uD504\uB85C\uADF8\uB7A8\uC774 \uD30C\uC77C \uC548\uC5D0 \uC788\uC5B4(\`sed -f\`\xB7\`perl file.pl\`\xB7\`awk -f\`\xB7\`node file.js\` \u2026) \uD558\uB124\uC2A4\uAC00 \uBB34\uC5C7\uC744 \uD558\uB294\uC9C0 \uADF8 \uBCF8\uBB38\uC744 \uC77D\uC5C8\uB2E4(\uACE7 \uC2E4\uD589\uD560 \uC178 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC77D\uB294 \uAC83\uACFC \uAC19\uB2E4). \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
+          ), degraded, lang);
+        }
       }
     }
     if (scripts.tooDeep.length > 0) {

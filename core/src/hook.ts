@@ -932,62 +932,35 @@ function interpreterProgramBodies(root: string, cmd: string): string[] {
 }
 
 /**
- * [SEC-311·314] 해석기 프로그램 본문이 **하네스 소유 경로를 쓰는가** — 매치된 needle 을 돌려준다.
+ * [SEC-311·314·315·316] 해석기 프로그램 본문이 겨누는 **하네스 소유 경로 후보**를 뽑는다.
  *
- * 1) 리터럴 전체경로(`mentionsPath(CORE_FILES)`)·정책 접두(`POLICY_PREFIXES`) — SEC-311 의 기본.
- * 2) [SEC-314] **상대화 `chdir`** — `chdir(".harness")`+`open(">>","events.jsonl")` 처럼 디렉토리를
- *    바꾼 뒤 상대 이름으로 열면 리터럴 전체경로가 본문에 없다(21차 검증, config.yaml·저널 실덮임). `.harness`
- *    (또는 정책 접두)로 들어가는 chdir 계열 호출 + 소유 basename 언급이면 막는다. **읽기 정상형 과차단
- *    방지**: chdir 이 하네스 디렉토리로 «들어가는» 형태만 본다(설계 문서 읽기 `.harness/design/*.md` 는
- *    소유 basename 이 아니라 미발화). 임의 in-language 난독(`".har"+"ness/"`·`chr()`·base64)은 정적 본문으로
- *    닫히지 않는다 — README 「알려진 한계」에 공시(파일시스템 층 강제로 수렴).
- * 3) [SEC-315] **경로 정규화** — 셸 스캐너·Write·인라인 `-c` 는 `.harness//events.jsonl`(이중슬래시)·`/./`·
- *    `/seg/../` 를 전부 접어 판정하는데, 이 본문검사만 순수 부분문자열이라 `//` 하나로 빠져나갔다(22차 검증,
- *    저널·정책 실덮임). 매칭 전에 본문의 슬래시 경로를 접는다 — 리터럴·정책·chdir·basename 판정 모두 정규화본에.
+ * SEC-314(chdir)·315(슬래시 `//`)·316(케이스무시 FS) — 세 라운드가 연속으로, 이 검사의 «즉석
+ * substring 대조»가 경로 정규화를 하나씩 빠뜨려 뚫렸다(`.harness//events.jsonl`·`.HARNESS/events.jsonl`).
+ * 그래서 substring 을 버리고 **후보 경로를 정본 `judgeWritePath` 에 넘긴다** — 거기 realpath 정규화가
+ * 슬래시·대소문자·심링크·`..` 를 «한 곳에서» 접는다(Write·셸 대상과 완전히 같은 잣대). 규칙이 두 벌이면
+ * 느슨한 쪽이 정본이 된다 — 정규화를 여기서 또 손으로 재현하지 않는다.
+ *
+ *  1) 본문의 `.harness`-루트 경로 토큰(`open(">>",".HARNESS//events.jsonl")` → `.HARNESS//events.jsonl`).
+ *     케이스·슬래시·`..` 는 judgeWritePath 가 접으므로 여기선 원문 그대로 둔다.
+ *  2) [SEC-314] 상대화 chdir — `chdir(".harness")` 로 들어간 뒤 상대 소유 이름을 여는 형태는 리터럴
+ *     전체경로가 본문에 없다. chdir 목적지(`.harness…`)와 본문에 등장한 소유 basename 을 결합해 후보로.
+ *
+ * 임의 in-language 난독(`".har"+"ness/"` 조립·`chr()`·base64)은 정적 본문으로 못 뽑는다 —
+ * README 「알려진 한계」 공시(완전한 답=파일시스템 층 강제).
  */
-const CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
-const CHDIR_INTO_HARNESS_I = new RegExp(CHDIR_INTO_HARNESS.source, 'i');   // [SEC-316] 케이스무시 FS 용
-/** [SEC-315] 본문 텍스트의 슬래시 경로를 접는다: `//`→`/` · `/./`→`/` · `/seg/../`→`/`(반복). */
-function collapseSlashPaths(s: string): string {
-  let n = s.replace(/\/{2,}/g, '/');       // `//`→`/`
-  n = n.replace(/\/\.(?=\/)/g, '');        // `/./`→`/`
-  let prev = '';
-  while (n !== prev) { prev = n; n = n.replace(/\/(?!\.\.(?:\/|$))[^/]+\/\.\.(?=\/|$)/, ''); }   // `/seg/..`→``
-  return n;
-}
-
-/**
- * [SEC-316] **파일시스템이 대소문자 무시인가**(macOS APFS·Windows 기본). 케이스변형 리터럴 경로
- * (`.HARNESS/events.jsonl`)는 케이스무시 FS 에서 진짜 코어 파일에 착지하는데, `interpBodyHit` 의
- * 케이스민감 substring 대조가 이를 놓쳤다(23차 검증, 저널·정책 실덮임 → P10 approved 개통). Write·셸
- * 표면은 `judgeWritePath` 의 realpath 정규화가 케이스를 접어 살아남지만 본문검사만 realpath 폴백이 없다.
- * `.harness` 를 케이스변형(`​.Harness`)으로 stat 해 같은 inode 면 케이스무시. 훅 1프로세스당 1회 캐시.
- * **케이스민감 FS(Linux)에서는 `.HARNESS` 가 진짜 다른 파일**이므로 접지 않는다(과차단 방지).
- */
-const ciFSCache = new Map<string, boolean>();
-function isCaseInsensitiveFS(root: string): boolean {
-  const cached = ciFSCache.get(root);
-  if (cached !== undefined) return cached;
-  let ci = false;
-  try {
-    const lower = fs.statSync(path.join(root, '.harness'));
-    const flipped = fs.statSync(path.join(root, '.Harness'));
-    ci = lower.ino === flipped.ino;
-  } catch { ci = false; }
-  ciFSCache.set(root, ci);
-  return ci;
-}
-
-function interpBodyHit(body: string, ci: boolean): string | undefined {
-  const norm0 = collapseSlashPaths(body);                   // [SEC-315] 슬래시 정규화
-  const hay = ci ? norm0.toLowerCase() : norm0;             // [SEC-316] 케이스무시 FS 면 접는다(needle 은 전부 소문자)
-  const lit = mentionsPath(hay, CORE_FILES) ?? POLICY_PREFIXES.find(pre => hay.includes(pre));
-  if (lit !== undefined) return lit;
-  if ((ci ? CHDIR_INTO_HARNESS_I : CHDIR_INTO_HARNESS).test(norm0)) {
-    const owned = [...OWNED_BASENAMES].find(b => hay.includes(b));
-    if (owned !== undefined) return `.harness/…/${owned}`;
+const CHDIR_HARNESS_ARG = /(?:chdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|(?:^|[\s;&|(])cd)\s*[(\s]\s*["']?(\.harness[^\s"'`)]*)/i;
+function harnessCandidates(body: string): string[] {
+  const out = new Set<string>();
+  for (const m of body.matchAll(/\.harness[^\s"'`)\\;|&<>,]*/gi)) out.add(m[0]);
+  const cm = CHDIR_HARNESS_ARG.exec(body);
+  if (cm) {
+    const dir = cm[1].replace(/\/+$/, '');
+    for (const b of OWNED_BASENAMES) {
+      const bm = new RegExp(b.replace(/[.]/g, '\\.'), 'i').exec(body);   // 소유 basename(케이스 무관)
+      if (bm) out.add(`${dir}/${bm[0]}`);
+    }
   }
-  return undefined;
+  return [...out];
 }
 
 /**
@@ -1790,19 +1763,20 @@ function preTool(
      * 코어 보호가 페이즈 무관이므로(SEC-A/SEC-100 과 같은 논리). 못 읽으면(캡 초과) fail-closed.
      * 정상형(`awk -f q.awk data.sql`·`perl -ne 'print' f`)은 본문에 코어 경로가 없어 통과한다 — 과차단 0.
      */
-    const ciFS = isCaseInsensitiveFS(root);                   // [SEC-316] 케이스무시 FS 1회 판정
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = interpBodyHit(body, ciFS);                  // [SEC-314] 리터럴 + 상대화 chdir · [SEC-316] 케이스
-      if (hit !== undefined) {
-        return deny(L(
-          `This runs an interpreter program file that writes to \`${hit}\` — a file only harness commands `
-          + 'may change. The program lives in a file (`sed -f`, `perl file.pl`, `awk -f`, `node file.js` …), '
-          + 'so the harness read it to see what it does, the same as it reads a shell script it is about to run. '
-          + 'Use harness commands for that file.',
-          `해석기 프로그램 파일이 \`${hit}\` 을(를) 쓴다 — harness 명령으로만 바꿀 수 있는 파일이다. `
-          + '프로그램이 파일 안에 있어(`sed -f`·`perl file.pl`·`awk -f`·`node file.js` …) 하네스가 무엇을 '
-          + '하는지 그 본문을 읽었다(곧 실행할 셸 스크립트를 읽는 것과 같다). 그 파일은 harness 명령으로 바꿔라.',
-        ), degraded, lang);
+      for (const t of harnessCandidates(body)) {
+        // [SEC-316] 정본 판정 — realpath 가 슬래시·대소문자·심링크·`..` 를 접는다. coreOnly=페이즈무관 코어/정책만.
+        if (judgeWritePath(root, state, config, t, degraded, true, getProfile, true)) {
+          return deny(L(
+            `This runs an interpreter program file that writes to \`${t}\` — a file only harness commands `
+            + 'may change. The program lives in a file (`sed -f`, `perl file.pl`, `awk -f`, `node file.js` …), '
+            + 'so the harness read it to see what it does, the same as it reads a shell script it is about to run. '
+            + 'Use harness commands for that file.',
+            `해석기 프로그램 파일이 \`${t}\` 을(를) 쓴다 — harness 명령으로만 바꿀 수 있는 파일이다. `
+            + '프로그램이 파일 안에 있어(`sed -f`·`perl file.pl`·`awk -f`·`node file.js` …) 하네스가 무엇을 '
+            + '하는지 그 본문을 읽었다(곧 실행할 셸 스크립트를 읽는 것과 같다). 그 파일은 harness 명령으로 바꿔라.',
+          ), degraded, lang);
+        }
       }
     }
 
