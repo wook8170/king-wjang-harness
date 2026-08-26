@@ -1875,6 +1875,28 @@ function preTool(
           const byName = judgeWritePath(root, state, config, base, degraded, true, getProfile);
           if (byName) return byName;
         }
+        /**
+         * [SEC-303] **허용 디렉토리 «안»의 코어 파일은, 이름을 «부분 리터럴 + 동적 완성»으로
+         * 조립하면 디렉토리-단위 방어로 못 막힌다.** `.harness/ev${x}` 의 리터럴 접두 `.harness/ev`
+         * 는 코어 `.harness/events.jsonl` 의 **접두**이고, 동적 부분이 그 이름을 완성할 수 있다 —
+         * 그런데 `.harness/` 는 산출물 쓰기 허용이라 아래 `dir + UNKNOWN` 판정은 통과시킨다. 그래서
+         * **리터럴 접두가 basename 안으로 들어가 코어 파일 접두와 겹치면** 막는다. (동적부가 dir
+         * 바로 뒤면 `pathLikeMentions` 가 맨몸 dir 을 뽑아 이미 막으므로 `prefix.length > dir.length`
+         * 일 때만 — 리터럴 한 글자를 끼워 그 catch 를 피한 바로 그 경우다. 감정확인 13차.)
+         */
+        const coreByPrefix = CORE_FILES.find(cf =>
+          prefix.length > dir.length && cf.startsWith(prefix) && cf.length > prefix.length
+          && !cf.slice(prefix.length).includes('/'));
+        if (coreByPrefix) {
+          return deny(L(
+            `This builds the file name at run time (\`${raw}\`), and its literal prefix \`${prefix}\` matches `
+            + `the start of \`${coreByPrefix}\` — a file only harness commands may change. The dynamic part `
+            + 'could complete that name. Write the path out literally, or use harness commands.',
+            `파일 이름을 실행 시점에 조립하는데(\`${raw}\`), 리터럴 접두 \`${prefix}\` 가 \`${coreByPrefix}\` 의 `
+            + '시작과 겹친다 — 그 파일은 harness 명령으로만 바꿀 수 있고, 동적 부분이 그 이름을 완성할 수 있다. '
+            + '경로를 리터럴로 적거나 harness 명령을 쓰라.',
+          ), degraded, lang);
+        }
         if (dir === '') continue;                       // 정적 부분이 없다 — 말할 수 있는 게 없다
         /**
          * [QUAL-229] 예전에는 여기에 「보호 파일이 사는 디렉토리면 무조건 거부」 절이 하나 더

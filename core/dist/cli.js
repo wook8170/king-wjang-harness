@@ -14646,6 +14646,13 @@ function preTool(root, state, config, input, degraded) {
           const byName = judgeWritePath(root, state, config, base, degraded, true, getProfile);
           if (byName) return byName;
         }
+        const coreByPrefix = CORE_FILES.find((cf) => prefix.length > dir.length && cf.startsWith(prefix) && cf.length > prefix.length && !cf.slice(prefix.length).includes("/"));
+        if (coreByPrefix) {
+          return deny(L(
+            `This builds the file name at run time (\`${raw2}\`), and its literal prefix \`${prefix}\` matches the start of \`${coreByPrefix}\` \u2014 a file only harness commands may change. The dynamic part could complete that name. Write the path out literally, or use harness commands.`,
+            `\uD30C\uC77C \uC774\uB984\uC744 \uC2E4\uD589 \uC2DC\uC810\uC5D0 \uC870\uB9BD\uD558\uB294\uB370(\`${raw2}\`), \uB9AC\uD130\uB7F4 \uC811\uB450 \`${prefix}\` \uAC00 \`${coreByPrefix}\` \uC758 \uC2DC\uC791\uACFC \uACB9\uCE5C\uB2E4 \u2014 \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uACE0, \uB3D9\uC801 \uBD80\uBD84\uC774 \uADF8 \uC774\uB984\uC744 \uC644\uC131\uD560 \uC218 \uC788\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+          ), degraded, lang);
+        }
         if (dir === "") continue;
         const verdict = judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
         if (verdict) {

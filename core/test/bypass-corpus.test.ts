@@ -115,6 +115,9 @@ const notations = (t: string): string[] => {
     `echo x > ~+/${t}`,                                             // ~+ = $PWD → 프로젝트 안
     `echo x | tee ~+/${t}`,
     `dd of=~+/${t}`,
+    // [SEC-303/13차] 부분 리터럴 접두 + 동적 완성 — 허용 디렉토리 «안» 코어 파일명을 조립.
+    `x=X${base.slice(1)}; echo z >> ${dir}/${base.charAt(0)}\${x#X}`,   // 파라미터 확장
+    `y=$(printf ${base.slice(1)}); echo z >> ${dir}/${base.charAt(0)}$y`, // 명령치환
   ];
 };
 
