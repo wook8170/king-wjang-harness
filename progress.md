@@ -11,12 +11,26 @@
 - **출하검증 HTML 아티팩트**: https://claude.ai/code/artifact/cf9183e7-93fa-4024-a1f3-bbd3879669bc (round3s, 파일 `scratchpad/verdict.html`).
 - 이제 남들이 설치 가능: `/plugin marketplace add wook8170/king-wjang-harness` → `/plugin install king-wjang-harness@king-wjang-harness`.
 
+### 완료 (이 세션 추가)
+- **설치안내 currency push** — `5104e2a` (README `<this-repo>`→`wook8170/king-wjang-harness`).
+- **★ 스킬 독립 플러그인化·공개 완료** (사용자 결정: (1) standalone, 글로벌 영문화는 향후).
+  - 신규 공개 레포 **https://github.com/wook8170/verifying-production-readiness** (PUBLIC, HEAD `c4590d1`, 24파일).
+  - 위치 `/Volumes/WorkSpace/0200_Dev/verifying-production-readiness/` — 구조: `.claude-plugin/{plugin.json,marketplace.json}` + `skills/verifying-production-readiness/{SKILL.md·axes·report-template·measurement-hygiene·media-adapters·bin/vpr·test·docs}` + 영문 루트 README + LICENSE.
+  - 설치: `/plugin marketplace add wook8170/verifying-production-readiness` → `/plugin install verifying-production-readiness@verifying-production-readiness`.
+  - **동봉(2)은 하드 블로커로 기각**: harness `i18n-en-default.test.ts [I18N-72]`가 `skills/`·`agents/`·`.claude-plugin/` 전체를 한글 스캔→실패시킴. 스킬은 한국어라 동봉 시 빨강. 별도 레포는 그 스캔 밖이라 한국어 그대로 배포 가능.
+
 ### 다음 즉시 할 일 (사용자 요청 잔여)
-1. **설치안내 currency 커밋 push**(진행 중 — README `<this-repo>`→실값).
-2. **공식 디렉터리 제출**(사용자가 폼 작성): `https://clau.de/plugin-directory-submission`. 내가 **제출 문구·git-subdir 엔트리 초안** 제공 가능. git-subdir 소스 예: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:<HEAD>}`. **name 불변** 유의.
-3. **스킬 `verifying-production-readiness` 배포 형태 결정 미정**(standalone 플러그인 vs harness 동봉). 스킬레포(`~/.claude/skills/verifying-production-readiness`)는 **리모트 없음·`.claude-plugin` 없음** → 플러그인化 필요.
-4. (선택) KO/JA/ZH 3종 README도 "not-ready"→SHIP-READY 미러링(현재 영문만 갱신, doc-claims 비강제라 안 깨지나 불일치).
-5. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9 유휴 재측정.
+1. **공식 디렉터리 제출**(사용자가 폼 작성): `https://clau.de/plugin-directory-submission`. **두 플러그인 각각** 제출 가능.
+   - harness git-subdir: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:5104e2a}`.
+   - skill git-subdir: `{source:git-subdir, url:https://github.com/wook8170/verifying-production-readiness.git, path:., ref:main, sha:c4590d1}`. **name 불변** 유의.
+2. (선택) harness README(4종)의 "verifying-production-readiness ... not bundled — installed separately" 줄에 **신규 플러그인 설치법 링크** 추가하면 발견성↑(현재는 사실이라 안 틀림).
+3. (선택) KO/JA/ZH 3종 README "not-ready"→SHIP-READY 미러링(영문만 갱신됨, doc-claims 비강제).
+4. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9 유휴 재측정.
+
+### 함정(스킬 플러그인 관련)
+- **이중 관리**: 스킬 원본은 `~/.claude/skills/verifying-production-readiness/`(사용자 로컬 작업본, 계속 사용). 배포본은 `/Volumes/WorkSpace/0200_Dev/verifying-production-readiness/`. **스킬 수정 시 로컬→배포레포 수동 동기 필요**(cp).
+- 사용자는 자기 플러그인 install 불필요(로컬본 이미 있음 — install하면 이름 섀도 가능). 플러그인은 **남에게 배포용**.
+- 플러그인 skill 노출 규칙: `skills/<이름>/SKILL.md` 경로여야 함(루트 SKILL.md는 미노출) — 그래서 콘텐츠를 `skills/verifying-production-readiness/`로 넣음.
 
 ### 함정(이번 확인)
 - **공개 직후 push 403 "repository is disabled"는 전파 지연** — 수초 후 재시도로 해소(gh api는 그 시점에도 disabled:false). 재시도 1회로 성공.
