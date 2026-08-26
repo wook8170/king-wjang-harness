@@ -1352,7 +1352,10 @@ function judgeWritePath(
   // **없던 파일을 새로 만드는 것**만 막는다 — 출하 트랙의 본업은 「결함 대장 항목에 한한 수정」
   // 이므로 기존 파일 편집은 통과해야 한다. 존재 여부로 신규를 판정하는 것은 근사지만,
   // 이 구간에서 새 파일이 생긴다는 것 자체가 「대장에 없는 일을 하고 있다」는 신호다.
-  if ((SHIP_PHASES as readonly string[]).includes(state.phase)) {
+  // [SEC-308] coreOnly(코어·정책만 보는 부차 대상)는 출하 트랙 「신규 파일」 규칙을 건너뛴다 —
+  // 그건 실제 쓰기 대상에 거는 트랙 규칙이고, 부차 피연산자(이미지 참조 `registry.io/app:v1` 등)에
+  // 걸면 EFF-173 과차단이 되살아난다. 코어/정책은 이미 위에서 판정됐다.
+  if (!coreOnly && (SHIP_PHASES as readonly string[]).includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
     const isNew = inRoot && target !== '' && !fs.existsSync(path.join(root, target));
@@ -1732,6 +1735,16 @@ function preTool(
       CORE_FILES.some(f => t.includes(f)) || POLICY_PREFIXES.some(pre => t.includes(pre));
     for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
+      if (verdict) return verdict;
+    }
+    /**
+     * [SEC-308] **미열거 쓰기도구의 슬래시 피연산자는 net 과 무관하게 코어/정책으로 판정한다.**
+     * `xxd`·`openssl` 등은 대상을 안 올려 코어 보호가 `scan.targets===0` 게이트 net(아래)에만
+     * 의존했는데, 곁가지 대상 하나로 그 net 이 꺼졌다(감정확인 16차 — 저널 위조·정책 변조 실증).
+     * 여기서 **coreOnly** 로 보므로 입력파일·`/tmp` 목적지는 통과하고 코어/정책만 막힌다.
+     */
+    for (const op of scan.mutatingOperands) {
+      const verdict = judgeWritePath(root, state, config, op, degraded, true, getProfile, true);
       if (verdict) return verdict;
     }
     // 안전망: 대상 추출에 실패해도(`python -c "open('.harness/events.jsonl','a')"`) 코어 파일

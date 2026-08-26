@@ -8111,6 +8111,7 @@ function scanBashWrites(rawCmd, env = {}) {
   const patchFiles = [];
   let opaqueExec = opaqueExecOf(cmd);
   const unresolvedTargets = [];
+  const mutatingOperands = [];
   const segs = segmentsWithIndex(cmd);
   const substMarks = /* @__PURE__ */ new Set();
   for (const seg of segs) {
@@ -8389,7 +8390,14 @@ function scanBashWrites(rawCmd, env = {}) {
           targets.push(...paths);
           break;
         }
-        if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) mutating = true;
+        if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) {
+          mutating = true;
+          for (const a of operands) {
+            if (!a.includes("/")) continue;
+            const r = resolveIn(seg.cwd, a);
+            mutatingOperands.push(r ?? a);
+          }
+        }
         break;
       }
     }
@@ -8423,6 +8431,7 @@ function scanBashWrites(rawCmd, env = {}) {
     opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
+    mutatingOperands: [...new Set(mutatingOperands.filter(Boolean))],
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
     blindTargets: [...new Set(unresolvedTargets.filter((t) => /^[$`]/.test(t)))]
   };
@@ -14457,7 +14466,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
-  if (SHIP_PHASES.includes(state.phase)) {
+  if (!coreOnly && SHIP_PHASES.includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
     const isNew = inRoot && target !== "" && !fs20.existsSync(path17.join(root, target));
@@ -14607,6 +14616,10 @@ function preTool(root, state, config, input, degraded) {
     const core = (t) => CORE_FILES.some((f2) => t.includes(f2)) || POLICY_PREFIXES.some((pre) => t.includes(pre));
     for (const target of [...scan.targets].sort((a, b) => Number(core(b)) - Number(core(a)))) {
       const verdict = judgeWritePath(root, state, config, target, degraded, true, getProfile);
+      if (verdict) return verdict;
+    }
+    for (const op of scan.mutatingOperands) {
+      const verdict = judgeWritePath(root, state, config, op, degraded, true, getProfile, true);
       if (verdict) return verdict;
     }
     if (scan.opaqueExec) {

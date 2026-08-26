@@ -492,6 +492,13 @@ export interface BashWriteScan {
    */
   unresolvedTargets: string[];
   /**
+   * [SEC-308] **미열거 쓰기도구의 슬래시 있는 피연산자.** `xxd`·`openssl`·`csplit`·`split` 처럼
+   * 열거 밖 도구는 `mutating` 만 세우고 대상을 안 올린다 — 그 코어/정책 보호가 `scan.targets===0`
+   * 게이트 net 에 의존했고, 곁가지 대상 하나로 net 이 꺼졌다. 호출측이 이 목록을 **코어/정책만**
+   * 판정해 net 과 무관하게 막는다.
+   */
+  mutatingOperands: string[];
+  /**
    * [SEC-216] **정적 성분이 하나도 없는 쓰기 대상.** `p=$(…); echo >> $p` 처럼 경로 전체가
    * 실행 시점에 계산되면 리터럴 이름도([SEC-207]) 디렉토리 접두도([SEC-213]) 남지 않는다 —
    * 「볼 수 없는 쓰기」다. `opaqueExec`(볼 수 없는 실행)와 같은 태도로 다룬다.
@@ -1043,6 +1050,14 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   let opaqueExec = opaqueExecOf(cmd);
 
   const unresolvedTargets: string[] = [];
+  /**
+   * [SEC-308] 미열거 쓰기도구(`xxd`·`openssl`·`csplit`·`split` …)의 **슬래시 있는 피연산자**.
+   * 이 도구들은 `mutating` 만 세우고 대상을 안 올려, 코어/정책 보호가 `scan.targets===0` 게이트
+   * net 에만 의존했다 — 곁가지 대상(`2>/tmp/err` 조차) 하나로 net 이 꺼졌다(감정확인 16차).
+   * 호출측이 이 목록을 **코어/정책만**(coreOnly) 판정해 net 과 무관하게 막는다. 입력파일까지
+   * 들어오지만 코어/정책이 아니면 통과라 과차단이 거의 없다(`cat`·`cp` 는 여기 안 옴 — 읽기/열거).
+   */
+  const mutatingOperands: string[] = [];
   const segs = segmentsWithIndex(cmd);
 
   // 리다이렉트는 세그먼트 분해 전에 원문에서 훑는다 — `>` 자체는 분해 기준이 아니고,
@@ -1483,7 +1498,16 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
           targets.push(...paths);
           break;
         }
-        if (name && !READ_ONLY_HEADS.includes(name) && cond === undefined) mutating = true;
+        if (name && !READ_ONLY_HEADS.includes(name) && cond === undefined) {
+          mutating = true;
+          // [SEC-308] 슬래시 있는 피연산자를 세그먼트 cwd 로 풀어 따로 올린다 — 호출측이 코어/정책만
+          // 판정한다(net 게이팅 무관). `node build.js`(슬래시 없음)는 안 걸리고, 코어/정책이 아니면 통과.
+          for (const a of operands) {
+            if (!a.includes('/')) continue;
+            const r = resolveIn(seg.cwd, a);
+            mutatingOperands.push(r ?? a);
+          }
+        }
         break;
       }
     }
@@ -1530,6 +1554,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
     mutating, patchesWorkingTree, appliesPatch, opaqueExec,
     patchFiles: [...new Set(patchFiles.filter(Boolean))],
     unresolvedTargets: [...new Set(unresolvedTargets.filter(Boolean))],
+    mutatingOperands: [...new Set(mutatingOperands.filter(Boolean))],
     // [SEC-216] 정적 성분이 **하나도** 없는 쓰기 대상 — 어디에 쓰는지 볼 수 없다.
     blindTargets: [...new Set(unresolvedTargets.filter(t => /^[$`]/.test(t)))],
   };

@@ -464,4 +464,30 @@ describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 �
     ].filter(c => decide(root, c) === 'deny');
     expect(over, over.join(' || ')).toEqual([]);
   });
+
+  it('★ SEC-308 미열거 쓰기도구 + 곁가지 대상(net 무력화) — 코어·정책은 막힌다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS.filter(t => t.b.endsWith('.yaml') || t.b.endsWith('.json') || t.b.endsWith('.jsonl'))) {
+      const t = `${d}/${b}`;
+      const cases = [
+        `echo x > /tmp/decoy && xxd -r -p /tmp/in.hex ${t}`,   // 곁가지 병기
+        `xxd -r -p /tmp/in.hex ${t} 2>/tmp/err`,               // stderr 리다이렉트만으로 net OFF
+        `: > /tmp/decoy && split -l1 /tmp/in ${t}`,
+        `cp /tmp/a /tmp/b && csplit -f /tmp/z /tmp/in ${t}`,
+      ];
+      for (const c of cases) if (decide(root, c) !== 'deny') missed.push(c);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+  }, 30_000);
+
+  it('★ SEC-308 짝 — 읽기·정상 /tmp·node build.js 는 통과(읽기 과차단 0)', () => {
+    const root = setup();
+    const over = [
+      'cat .harness/events.jsonl', 'echo x > /tmp/decoy && cat .harness/events.jsonl',
+      'cp .harness/events.jsonl /tmp/backup.jsonl', 'echo x > /tmp/decoy && grep foo .harness/events.jsonl',
+      'echo x > /tmp/decoy && xxd -r -p /tmp/in.hex /tmp/out.bin', 'node build.js',
+    ].filter(c => decide(root, c) === 'deny');
+    expect(over, over.join(' || ')).toEqual([]);
+  });
 });
