@@ -8392,10 +8392,21 @@ function scanBashWrites(rawCmd, env = {}) {
         }
         if (name && !READ_ONLY_HEADS.includes(name) && cond === void 0) {
           mutating = true;
-          for (const a of operands) {
-            if (!a.includes("/")) continue;
-            const r = resolveIn(seg.cwd, a);
-            mutatingOperands.push(r ?? a);
+          const nav = name === "cd" || name === "pushd" || name === "popd";
+          if (!nav) {
+            const cand = [...operands];
+            for (let i = 0; i < args.length; i++) {
+              const a = args[i];
+              const eq = /^--?[A-Za-z][\w-]*=(.+)$/.exec(a);
+              if (eq) cand.push(eq[1]);
+              else if (/^-[A-Za-z]/.test(a) && a.length > 2) cand.push(a.slice(2));
+              if (["-c", "-e", "-E"].includes(a) && i + 1 < args.length) cand.push(...pathLikeMentions(args[i + 1]));
+            }
+            for (const a of cand) {
+              if (a === "" || isFlag(a)) continue;
+              const r = resolveIn(seg.cwd, a);
+              mutatingOperands.push(r ?? a);
+            }
           }
         }
         break;
@@ -14264,6 +14275,16 @@ function globToRegExp2(pattern) {
   let out = "";
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
+    if (c === "*" && pattern[i + 1] === "*") {
+      if (pattern[i + 2] === "/") {
+        out += "(?:[^/]+/)*";
+        i += 2;
+      } else {
+        out += ".*";
+        i += 1;
+      }
+      continue;
+    }
     if (c === "*") {
       out += "[^/]*";
       continue;

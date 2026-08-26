@@ -1500,12 +1500,32 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
         }
         if (name && !READ_ONLY_HEADS.includes(name) && cond === undefined) {
           mutating = true;
-          // [SEC-308] 슬래시 있는 피연산자를 세그먼트 cwd 로 풀어 따로 올린다 — 호출측이 코어/정책만
-          // 판정한다(net 게이팅 무관). `node build.js`(슬래시 없음)는 안 걸리고, 코어/정책이 아니면 통과.
-          for (const a of operands) {
-            if (!a.includes('/')) continue;
-            const r = resolveIn(seg.cwd, a);
-            mutatingOperands.push(r ?? a);
+          // [SEC-308/17차] 네비게이션 빌트인(`cd`·`pushd`·`popd`)은 파일을 쓰지 않는다 — 그 인자
+          // (`cd .harness`)를 쓰기 대상으로 수집하면 보호 디렉토리 자체가 과차단된다. mutating 은
+          // 기존대로 두되(다음 세그먼트 cwd 추적은 별도) 피연산자 수집만 건너뛴다.
+          const nav = name === 'cd' || name === 'pushd' || name === 'popd';
+          /**
+           * [SEC-308/17차] 호출측이 **coreOnly** 로만 보므로 「경로일 수 있는 것」을 넓게 올려도
+           * 코어/정책만 막힌다(비-코어는 통과 → `node build.js` 무해). 그래서 세 형태를 다 담는다:
+           * ① **위치 피연산자 전부**(슬래시 없어도 — `cd .harness && … events.jsonl` 은 cwd 로 풀면 코어).
+           * ② **플래그에 붙은 값**(`-o.harness/x`·`--out=.harness/x`) — 예전엔 flag 라 걸러졌다.
+           * ③ **인라인 코드**(`-c`/`-e`) 안의 경로 언급(`python3 -c "open('.harness/events.jsonl')"`).
+           * 슬래시-없는-코어(cd basename)·인터프리터코드·flag-attached 세 우회를 함께 닫는다.
+           */
+          if (!nav) {
+            const cand: string[] = [...operands];
+            for (let i = 0; i < args.length; i++) {
+              const a = args[i];
+              const eq = /^--?[A-Za-z][\w-]*=(.+)$/.exec(a);
+              if (eq) cand.push(eq[1]);
+              else if (/^-[A-Za-z]/.test(a) && a.length > 2) cand.push(a.slice(2));
+              if (['-c', '-e', '-E'].includes(a) && i + 1 < args.length) cand.push(...pathLikeMentions(args[i + 1]));
+            }
+            for (const a of cand) {
+              if (a === '' || isFlag(a)) continue;
+              const r = resolveIn(seg.cwd, a);
+              mutatingOperands.push(r ?? a);
+            }
           }
         }
         break;

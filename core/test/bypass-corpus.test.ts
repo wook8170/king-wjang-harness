@@ -487,7 +487,35 @@ describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 �
       'cat .harness/events.jsonl', 'echo x > /tmp/decoy && cat .harness/events.jsonl',
       'cp .harness/events.jsonl /tmp/backup.jsonl', 'echo x > /tmp/decoy && grep foo .harness/events.jsonl',
       'echo x > /tmp/decoy && xxd -r -p /tmp/in.hex /tmp/out.bin', 'node build.js',
+      'cd .harness && xxd -r -p in.hex out.bin 2>/tmp/e', 'cd docs && echo x > note.md',
     ].filter(c => decide(root, c) === 'deny');
     expect(over, over.join(' || ')).toEqual([]);
   });
+
+  it('★ SEC-308(17차) 슬래시없는 코어전달 — cd-basename·인터프리터코드·flag-attached 도 막힌다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS.filter(t => !t.b.includes('-'))) {  // last-turn 등 하이픈 제외(basename)
+      const t = `${d}/${b}`;
+      const cases = [
+        `cd ${d} && xxd -r -p in.hex ${b} 2>/tmp/err`,                 // cd-basename
+        `python3 -c "open('${t}','w').write('X')" 2>/tmp/e`,           // 인터프리터 코드
+        `someenc --output=${t} 2>/tmp/e`, `someenc -o${t} 2>/tmp/e`,   // flag-attached
+      ];
+      for (const c of cases) if (decide(root, c) !== 'deny') missed.push(c);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+  }, 30_000);
+
+  it('★ SEC-309 globstar `**/` 0-디렉토리 — 코어에 매치되면 막는다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS) {
+      const c = `shopt -s globstar; printf x >> ${d}/**/${b}`;
+      if (decide(root, c) !== 'deny') missed.push(c);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+    // 짝: docs 의 globstar·정상 글롭은 통과
+    expect(decide(root, 'printf x >> docs/**/note.md'), 'docs globstar 과차단').toBe('allow');
+  }, 30_000);
 });

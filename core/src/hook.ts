@@ -979,6 +979,13 @@ function globToRegExp(pattern: string): RegExp {
   let out = '';
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
+    // [SEC-308/17차] globstar `**` — 셸 `shopt -s globstar` 에서 `**/` 는 **0개 이상 디렉토리**를
+    // 매치한다(0개 포함). 예전엔 `*` 두 개(`[^/]*[^/]*`)로 봐 중간 `/` 를 강제해서, `.harness/**/events.jsonl`
+    // (=`.harness/events.jsonl`)이 protectedByGlob 을 비껴갔다. `**/`→0+ 세그먼트, `**`→슬래시 넘김.
+    if (c === '*' && pattern[i + 1] === '*') {
+      if (pattern[i + 2] === '/') { out += '(?:[^/]+/)*'; i += 2; } else { out += '.*'; i += 1; }
+      continue;
+    }
     if (c === '*') { out += '[^/]*'; continue; }
     if (c === '?') { out += '[^/]'; continue; }
     if (c === '[') {
