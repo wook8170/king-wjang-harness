@@ -637,4 +637,28 @@ describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/�
     fs.writeFileSync(path.join(root, 'rd.py'), 'open(".harness/design/plan.md","r").read()');
     expect(decide(root, 'python3 rd.py'), 'SEC-314 설계문서 읽기 과차단').toBe('allow');
   }, 30_000);
+
+  it('★ [SEC-315] 본문 경로 정규화 — `//`·`/./`·`/seg/../` 로 쪼갠 코어도 막는다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const t of ['.harness/events.jsonl', '.harness/config.yaml', '.harness/profile/x.yaml']) {
+      const variants = [
+        t.replace('/', '//'),                       // 첫 슬래시 이중화
+        t.replace('/', '/./'),                       // /./ 삽입
+        t.replace('/', '/x/../'),                    // /seg/../ 삽입
+      ];
+      for (const v of variants) {
+        fs.writeFileSync(path.join(root, 'x.pl'), `open(F,">>","${v}");print F "X";`);
+        if (decide(root, 'perl x.pl') !== 'deny') missed.push(`${v}`);
+      }
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 3).join(' || ')}`).toEqual([]);
+    // 짝: 비-코어 이중슬래시·설계문서 읽기는 통과(정규화가 과차단을 만들지 않는다)
+    const over: string[] = [];
+    fs.writeFileSync(path.join(root, 'ok.pl'), 'open(">","src//app.js")');
+    if (decide(root, 'perl ok.pl') === 'deny') over.push('src//app.js');
+    fs.writeFileSync(path.join(root, 'rd2.pl'), 'open("<",".harness//design//00-concept.md")');
+    if (decide(root, 'perl rd2.pl') === 'deny') over.push('.harness//design read');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
 });

@@ -941,13 +941,25 @@ function interpreterProgramBodies(root: string, cmd: string): string[] {
  *    방지**: chdir 이 하네스 디렉토리로 «들어가는» 형태만 본다(설계 문서 읽기 `.harness/design/*.md` 는
  *    소유 basename 이 아니라 미발화). 임의 in-language 난독(`".har"+"ness/"`·`chr()`·base64)은 정적 본문으로
  *    닫히지 않는다 — README 「알려진 한계」에 공시(파일시스템 층 강제로 수렴).
+ * 3) [SEC-315] **경로 정규화** — 셸 스캐너·Write·인라인 `-c` 는 `.harness//events.jsonl`(이중슬래시)·`/./`·
+ *    `/seg/../` 를 전부 접어 판정하는데, 이 본문검사만 순수 부분문자열이라 `//` 하나로 빠져나갔다(22차 검증,
+ *    저널·정책 실덮임). 매칭 전에 본문의 슬래시 경로를 접는다 — 리터럴·정책·chdir·basename 판정 모두 정규화본에.
  */
 const CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+/** [SEC-315] 본문 텍스트의 슬래시 경로를 접는다: `//`→`/` · `/./`→`/` · `/seg/../`→`/`(반복). */
+function collapseSlashPaths(s: string): string {
+  let n = s.replace(/\/{2,}/g, '/');       // `//`→`/`
+  n = n.replace(/\/\.(?=\/)/g, '');        // `/./`→`/`
+  let prev = '';
+  while (n !== prev) { prev = n; n = n.replace(/\/(?!\.\.(?:\/|$))[^/]+\/\.\.(?=\/|$)/, ''); }   // `/seg/..`→``
+  return n;
+}
 function interpBodyHit(body: string): string | undefined {
-  const lit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find(pre => body.includes(pre));
+  const norm = collapseSlashPaths(body);                   // [SEC-315] 정규화본에 대해 판정한다
+  const lit = mentionsPath(norm, CORE_FILES) ?? POLICY_PREFIXES.find(pre => norm.includes(pre));
   if (lit !== undefined) return lit;
-  if (CHDIR_INTO_HARNESS.test(body)) {
-    const owned = [...OWNED_BASENAMES].find(b => body.includes(b));
+  if (CHDIR_INTO_HARNESS.test(norm)) {
+    const owned = [...OWNED_BASENAMES].find(b => norm.includes(b));
     if (owned !== undefined) return `.harness/…/${owned}`;
   }
   return undefined;

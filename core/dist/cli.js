@@ -14397,11 +14397,22 @@ function interpreterProgramBodies(root, cmd) {
   return bodies;
 }
 var CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+function collapseSlashPaths(s) {
+  let n = s.replace(/\/{2,}/g, "/");
+  n = n.replace(/\/\.(?=\/)/g, "");
+  let prev = "";
+  while (n !== prev) {
+    prev = n;
+    n = n.replace(/\/(?!\.\.(?:\/|$))[^/]+\/\.\.(?=\/|$)/, "");
+  }
+  return n;
+}
 function interpBodyHit(body) {
-  const lit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => body.includes(pre));
+  const norm = collapseSlashPaths(body);
+  const lit = mentionsPath(norm, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => norm.includes(pre));
   if (lit !== void 0) return lit;
-  if (CHDIR_INTO_HARNESS.test(body)) {
-    const owned = [...OWNED_BASENAMES].find((b) => body.includes(b));
+  if (CHDIR_INTO_HARNESS.test(norm)) {
+    const owned = [...OWNED_BASENAMES].find((b) => norm.includes(b));
     if (owned !== void 0) return `.harness/\u2026/${owned}`;
   }
   return void 0;
