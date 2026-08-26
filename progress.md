@@ -1,9 +1,16 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (20) — SEC-311~317 봉인(7R) · 25차 검증 in-flight(경로해석 엣지) · 멀티에이전트 설계문서 리뷰 대기
+## 2026-08-26 (21) — SEC-311~318 봉인(8R) · 26차 검증 in-flight · 멀티에이전트 설계문서 리뷰 대기
 
-**정본.** `main` HEAD `083d328` · **푸시 완료(origin/main 동기)** · clean · **1399 tests green · tsc 0** ·
-대장 verified **333** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~317 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `37c9bc6` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+
+### ★ SEC-318 (25차, 이번 봉인) — SEC-317 의 cwd 표면 쌍둥이
+`cd <심링크> && > ../<코어>`: SEC-317 은 직접 대상경로(`realRelPath`)만 물리해석하게 고쳤으나, 셸 `cd wv`(wv→`.harness/waves`)
+로 cwd 옮긴 뒤 `../events.jsonl` 은 `resolveIn` 의 `normalizePath` 가 렉시컬로 `wv/..` 상쇄→`events.jsonl`(루트)로 심링크를
+지운 채 판정→allow, 커널은 물리적으로 `.harness/events.jsonl` 에 씀. 14벡터(redirect·tee·sed-i·cp·env-C·pushd·중첩)·끝단
+doctor→P7. **봉인**(`37c9bc6`): `normalizePath`→`foldPath`(`.`·중복슬래시만 접고 `..` 보존, bashwrite.ts:184) → realRelPath 물리해석.
+회귀 0(실디렉토리 cd·다중 cd·SEC-170)·과차단 0. ★ SEC-317+318 이 심링크+`..` 물리-vs-렉시컬 클래스를 두 표면에서 닫음.
 
 ### ★ 이번 세션 보안 = SEC-311~317 (7연속 봉인)
 - **SEC-311~316**(해석기 프로그램파일 클래스, 19~23차): 미독→열거→무확장자→chdir→슬래시→케이스. 6R 후 **근본 통합**
@@ -50,13 +57,13 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중: 25차 독립검증 (백그라운드, Fable 5) — 경로해석 엣지케이스 집중
-`083d328` 기준. SEC-317 이 «경로 해석기(realpath) 버그」로 전 표면 관통 → 이 부류를 더 판다: 중첩/사슬 심링크+`..`,
-`.harness` 다른 하위디렉토리 별칭, `realOrSelf` 조상재귀 경계(순환·끊긴링크), 하드링크, root 심링크 + 비해석기 표면.
-**SEC-317 리팩터 회귀(과차단) 확인 지시 포함.** 보고 → `scratchpad/sec300-verify15.md`. **결과 처리**:
+### 🔄 진행 중: 26차 독립검증 (백그라운드, Fable 5) — 심링크+`..` 클래스 완전봉인 확인
+`37c9bc6` 기준. SEC-317+318 이 심링크+`..` 를 직접대상·cwd 두 표면에서 닫음 → 이 클래스가 **다른 렉시컬 경로결합 지점**
+(`$PWD`/`~+`·envChdirOf·중간세그먼트 심링크·string net coreByPrefix/basename)에 아직 남았나 + **foldPath 회귀(과차단) 확인**.
+보고 → `scratchpad/sec300-verify16.md`. **결과 처리**:
 - **CLEAN** → 보안루프 수렴 확정 → 사용자와 G001 축2 checkpoint.
 - **NEW-FINDINGS** → 봉인 패턴 반복. 공시 4종 제외.
-**참고: 이번 세션 7연속 발견(SEC-311~317) 전부 실질 CRITICAL — 루프 수렴 미도달. 25차가 첫 CLEAN 후보.**
+**참고: 이번 세션 8연속 발견(SEC-311~318) 전부 실질 CRITICAL. 26차가 CLEAN 후보(SEC-317/318 이 같은 클래스 두 표면).**
 
 ### 🔄 진행 중: 멀티에이전트 재설계 — ★ 설계 문서 작성·발행, 사용자 리뷰 대기
 **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 · **A안(워크트리 격리, 워커 무가드, 정본 `.harness/`
@@ -78,7 +85,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **25차 검증 결과 수신** → `scratchpad/sec300-verify15.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
+1. **26차 검증 결과 수신** → `scratchpad/sec300-verify16.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
