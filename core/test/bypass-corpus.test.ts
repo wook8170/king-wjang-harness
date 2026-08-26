@@ -418,3 +418,50 @@ describe('심링크 — 「허용된 이름」이 소스로 빠져나가지 못�
     expect(blocked, '과차단: 소스가 아닌 자리가 막혔다').toEqual([]);
   });
 });
+
+/**
+ * [SEC-306·307] **동적 cd × 조립 basename · POSIX 문자클래스 글롭** — 감정확인 15차.
+ * 코어·정책 파일은 착지 디렉토리를 몰라도(동적 cd) 이름 접두로, 글롭 문법(`[[:alpha:]]`)으로도
+ * 못 뚫린다. 설계트랙 «소스»의 동적-cd 잔여(#1d)는 소프트 경계라 여기 없다(대장 SEC-306 공시).
+ */
+describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 뚫는다', () => {
+  const CORE_TARGETS = [
+    { d: '.harness', b: 'config.yaml' }, { d: '.harness', b: 'state.json' },
+    { d: '.harness', b: 'events.jsonl' }, { d: '.harness/design', b: 'ledger.yaml' },
+    { d: '.harness/ship', b: 'deployments.yaml' }, { d: '.harness/.runtime', b: 'last-turn' },
+  ];
+  it('★ SEC-306 동적 cd × 조립 basename — 착지 dir 을 몰라도 코어 이름 접두를 막는다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS) {
+      const cases = [
+        `x=$(printf ${b.slice(1)}); cd $(printf ${d}) && printf F >> ${b.charAt(0)}$x`,
+        `cd $(printf ${d}) && printf F >> ${b.slice(0, -1)}$(printf ${b.slice(-1)})`,
+      ];
+      for (const c of cases) if (decide(root, c) !== 'deny') missed.push(c);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+  }, 30_000);
+
+  it('★ SEC-307 POSIX 문자클래스 글롭 — 실코어파일 매치를 막는다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS) {
+      for (const cls of ['[[:alpha:]]', '[[:lower:]]', '[[:alnum:]]', '[z[:alpha:]]']) {
+        const c = `printf x >> ${d}/${b.slice(0, -1)}${cls}`;
+        if (decide(root, c) !== 'deny') missed.push(c);
+      }
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+  }, 30_000);
+
+  it('★ 과차단 0 — 동적 cd 리터럴 이름·정상 글롭·mktemp 는 통과', () => {
+    const root = setup();
+    const over = [
+      'cd $x && printf y > output.log', 't=$(mktemp); printf x >> $t',
+      'printf x >> .harness/waves/w[0-9].md', 'printf x > docs/ev${v}.md',
+      'printf x >> report-[ab].txt',
+    ].filter(c => decide(root, c) === 'deny');
+    expect(over, over.join(' || ')).toEqual([]);
+  });
+});

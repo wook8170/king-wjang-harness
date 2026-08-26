@@ -14235,7 +14235,23 @@ function readPatchTargets(root, files) {
   return [...new Set(out)];
 }
 var GLOB_META = /[*?[]/;
+var POSIX_CLASS = {
+  alpha: "A-Za-z",
+  digit: "0-9",
+  alnum: "A-Za-z0-9",
+  lower: "a-z",
+  upper: "A-Z",
+  space: "\\s",
+  blank: " \\t",
+  punct: "!-/:-@\\[-`{-~",
+  xdigit: "0-9A-Fa-f",
+  cntrl: "\\x00-\\x1f\\x7f",
+  graph: "\\x21-\\x7e",
+  print: "\\x20-\\x7e",
+  word: "\\w"
+};
 function globToRegExp2(pattern) {
+  pattern = pattern.replace(/\[:(\w+):\]/g, (m, cls) => POSIX_CLASS[cls] ?? "\\S\\s").replace(/\[=([^=]*)=\]|\[\.([^.]*)\.\]/g, "$1$2");
   let out = "";
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
@@ -14669,7 +14685,16 @@ function preTool(root, state, config, input, degraded) {
             `\uD30C\uC77C \uC774\uB984\uC744 \uC2E4\uD589 \uC2DC\uC810\uC5D0 \uC870\uB9BD\uD558\uB294\uB370(\`${raw2}\`), \uB9AC\uD130\uB7F4 \uC811\uB450 \`${prefix}\` \uAC00 \`${coreByPrefix}\` \uC758 \uC2DC\uC791\uACFC \uACB9\uCE5C\uB2E4 \u2014 \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uACE0, \uB3D9\uC801 \uBD80\uBD84\uC774 \uADF8 \uC774\uB984\uC744 \uC644\uC131\uD560 \uC218 \uC788\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
           ), degraded, lang);
         }
-        if (dir === "") continue;
+        if (dir === "") {
+          const bprefix = base.split(/[$`{*?]/)[0];
+          if (bprefix !== "" && [...OWNED_BASENAMES].some((n) => n.startsWith(bprefix) && n.length > bprefix.length)) {
+            return deny(L(
+              `This assembles a file name at run time (\`${base}\`) whose literal start matches a harness-owned file, after a \`cd\` this hook cannot resolve \u2014 where it lands is unknown. Write the path out literally, or use harness commands.`,
+              `\`cd\` \uB300\uC0C1\uC744 \uC5EC\uAE30\uC11C \uC77D\uC744 \uC218 \uC5C6\uB294\uB370 \uD30C\uC77C \uC774\uB984\uC744 \uC870\uB9BD\uD55C\uB2E4(\`${base}\`) \u2014 \uADF8 \uB9AC\uD130\uB7F4 \uC2DC\uC791\uC774 \uD558\uB124\uC2A4 \uC18C\uC720 \uD30C\uC77C\uACFC \uACB9\uCE58\uACE0 \uC5B4\uB514\uC5D0 \uB5A8\uC5B4\uC9C0\uB294\uC9C0 \uC54C \uC218 \uC5C6\uB2E4. \uACBD\uB85C\uB97C \uB9AC\uD130\uB7F4\uB85C \uC801\uAC70\uB098 harness \uBA85\uB839\uC744 \uC4F0\uB77C.`
+            ), degraded, lang);
+          }
+          continue;
+        }
         const verdict = judgeWritePath(root, state, config, dir + UNKNOWN, degraded, true, getProfile);
         if (verdict) {
           return deny(L(

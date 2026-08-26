@@ -958,7 +958,24 @@ function readPatchTargets(root: string, files: string[]): string[] | null {
 const GLOB_META = /[*?[]/;
 
 /** 셸 글롭 → 정규식. `*`·`?` 는 셸과 같이 `/` 를 넘지 않는다. */
+/**
+ * [SEC-307] **POSIX 문자클래스 `[[:alpha:]]` 를 정규식으로 번역한다.** 안 하면 아래 `[` 처리의
+ * `indexOf(']')` 가 `[:alpha:` 뒤의 첫 `]` 를 클래스 끝으로 오인해 클래스가 조기 종료되고, 뒤의
+ * `]` 가 리터럴로 남아 「경로에 `]` 존재」를 요구 → 실코어파일에 결코 매치 못 해 글롭 net 이
+ * 미발화했다(SEC-305 `[!c]` 와 같은 「글롭 문법 미구현」 부류, 감정확인 15차). 안쪽 `[:name:]`
+ * 토큰을 대응 문자범위로 먼저 바꾸면 바깥 `[…]` 는 정상 클래스가 된다(`[l[:space:]]`→`[l\s]`).
+ */
+const POSIX_CLASS: Record<string, string> = {
+  alpha: 'A-Za-z', digit: '0-9', alnum: 'A-Za-z0-9', lower: 'a-z', upper: 'A-Z',
+  space: '\\s', blank: ' \\t', punct: '!-/:-@\\[-`{-~', xdigit: '0-9A-Fa-f',
+  cntrl: '\\x00-\\x1f\\x7f', graph: '\\x21-\\x7e', print: '\\x20-\\x7e', word: '\\w',
+};
+
 function globToRegExp(pattern: string): RegExp {
+  // [SEC-307] 알려진 POSIX 클래스는 범위로, 모르는 `[:x:]` 는 「한 글자 와일드」로(과탐=안전) 바꾼다.
+  pattern = pattern
+    .replace(/\[:(\w+):\]/g, (m, cls: string) => POSIX_CLASS[cls] ?? '\\S\\s')
+    .replace(/\[=([^=]*)=\]|\[\.([^.]*)\.\]/g, '$1$2');
   let out = '';
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
@@ -1917,7 +1934,27 @@ function preTool(
             + '경로를 리터럴로 적거나 harness 명령을 쓰라.',
           ), degraded, lang);
         }
-        if (dir === '') continue;                       // 정적 부분이 없다 — 말할 수 있는 게 없다
+        if (dir === '') {
+          /**
+           * [SEC-306] **동적 `cd` 로 대상 디렉토리를 잃으면 basename 만 남는다** (`cd $(printf .h)arness
+           * && >> ev$x`). 대상 문자열에 `.harness/` 성분이 없어 coreByPrefix(전체경로 접두)가 미발화하고,
+           * byName 은 basename 이 완전 리터럴일 때만, targetLost 는 소유이름이 리터럴로 있을 때만 발화 —
+           * 「동적 cd」와 「조립 basename」을 동시에 쓰면 그 교집합이 열렸다(감정확인 15차). 착지 dir 을
+           * 모르므로, basename 의 **정적 접두**가 소유 파일 이름의 접두면(동적부가 그 이름을 완성할 수
+           * 있으면) 보수적으로 막는다. dir 이 알려진 경우엔 이 절을 타지 않아(위 dir!=='') 과차단이 없다.
+           */
+          const bprefix = base.split(/[$`{*?]/)[0];
+          if (bprefix !== '' && [...OWNED_BASENAMES].some(n => n.startsWith(bprefix) && n.length > bprefix.length)) {
+            return deny(L(
+              `This assembles a file name at run time (\`${base}\`) whose literal start matches a harness-owned `
+              + 'file, after a `cd` this hook cannot resolve — where it lands is unknown. Write the path out '
+              + 'literally, or use harness commands.',
+              `\`cd\` 대상을 여기서 읽을 수 없는데 파일 이름을 조립한다(\`${base}\`) — 그 리터럴 시작이 하네스 `
+              + '소유 파일과 겹치고 어디에 떨어지는지 알 수 없다. 경로를 리터럴로 적거나 harness 명령을 쓰라.',
+            ), degraded, lang);
+          }
+          continue;                                     // 정적 부분이 없다 — 더 말할 수 있는 게 없다
+        }
         /**
          * [QUAL-229] 예전에는 여기에 「보호 파일이 사는 디렉토리면 무조건 거부」 절이 하나 더
          * 있었다. 감정자가 그 절의 뮤테이션이 **생존**함을 실증했고, 구현자가 **그 절만 발화하는
