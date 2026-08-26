@@ -1,5 +1,29 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (33) — 핸드오프: 다음 세션에서 「출하 검증 처음부터 재실행」 (재시작 후)
+
+**정본.** `main` HEAD `40d66f8` · **origin/main 동기 · 트리 clean** · **1404 tests green · tsc 0** · 대장 verified 334 · open BLOCKER/HIGH 0 · repo 0.1.2.
+**플러그인 0.1.2 업데이트 완료(user scope) — 단 Claude Code 재시작해야 적용**(현 세션 0.1.1).
+
+**★ 사용자 다음 지시(이번 세션 미착수, 인터럽트됨): 「출하 검증 처음부터 한번 더 돌려」.**
+→ 다음 세션(재시작+`/clear` 후)에서 **출하/릴리스 검증을 신규로 처음부터 재실행**한다.
+
+### 다음 즉시 할 일 (우선순위)
+1. **Claude Code 재시작** → 플러그인 0.1.2 적용 → `/clear`.
+2. **출하 검증 처음부터 재실행** — 신규 독립 감정(구현자≠감정자, OPS-74). 방법 후보:
+   - `verifying-production-readiness` 스킬 구동(설치됨) 또는 `king-wjang-harness:readiness-auditor` 에이전트(신규 컨텍스트, **실제 제품 구동** 후 go/no-go).
+   - 또는 `docs/release-readiness/2026-08-21/` 11축 감사(00-summary + 01~09)를 처음부터 재감정, 혹은 G006식 7축 독립 재감정.
+   - **기준선 대조**: 현재 판정 = SHIP-READY(G007 7/7, 00-summary 상단 「출하 가능」). 재검증이 이 판정을 유지/뒤집는지 확인.
+   - **실측 필수**(말로 대체 금지): mktemp 샌드박스 `harness init` → 훅 stdin 구동(`printf '<json>' | CLAUDE_PROJECT_DIR=$D bin/harness hook <event>`, 빈출력=allow) · `npm run build`·`npm run check`(tsc0)·`npm test`(1404).
+3. **(후속) dogfood 실행** — 별도 샌드박스 phase-p8-orchestrate end-to-end(§8 인위적 라운드). 우선순위는 사용자 지시상 출하 검증 다음.
+
+### 시스템 지식 · 함정 (재실행에 특히 유효)
+- **독립 감정 = 신규 컨텍스트 Fable5(소진 시 Opus 4.8)**, `caffeinate -dimsu &` 필수(15분 장시간 → 절전·워치독 취약). 검증자 지시에 `CLAUDE_PROJECT_DIR="$D"` **매 명령** 유지(자기참조 방지).
+- **★ 포그라운드 서브에이전트 최종 리포트 미반환**(이 세션 특성): 결과는 **파일로 보고**받아 grep(`scratchpad/*.md`) 하거나 실측(git/test)로 검증. 반환 텍스트에 성공판정 의존 금지.
+- **★ /Volumes grep 간헐 미스** → deadness·사용처·문자열 검색은 tsc/test/실행으로 교차확인.
+- **★ doc-claims 커플링**: 테스트 파일 추가 시 4개 README `(N files)` 표기 갱신 필수(현재 58). 테스트 수(1404)는 언어 간 일치만 강제.
+- 대장 편집 후 `docs/release-readiness/2026-08-21/round3i/reanchor-citations.py HEAD`. 정규식 리터럴 `|` 금지(표 깨짐)→산문.
+
 ## 2026-08-26 (32) — 멀티에이전트 P8 오케스트레이션 구현 완료(subagent-driven·최종리뷰 반영) · 푸시 대기
 
 **정본.** `main` HEAD `665e823`(+이 핸드오프 커밋) · **미푸시 로컬 커밋 6개**(`0a6eb68..665e823`, origin/main 미반영) · **1404 tests green · tsc 0** · repo 0.1.2.
