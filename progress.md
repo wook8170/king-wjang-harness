@@ -1,15 +1,19 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (19) — SEC-311~316 봉인+근본통합 · 24차 검증 in-flight(수렴 확인) · 멀티에이전트 설계문서 리뷰 대기
+## 2026-08-26 (20) — SEC-311~317 봉인(7R) · 25차 검증 in-flight(경로해석 엣지) · 멀티에이전트 설계문서 리뷰 대기
 
-**정본.** `main` HEAD `77e00a9` · **푸시 완료(origin/main 동기)** · clean · **1398 tests green · tsc 0** ·
-대장 verified **332** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~316 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `083d328` · **푸시 완료(origin/main 동기)** · clean · **1399 tests green · tsc 0** ·
+대장 verified **333** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~317 미반영)** — 안정화 후 재설치.
 
-### ★ 근본 통합 완료 (사용자 결정: 「근본 수정 먼저」)
-SEC-314/315/316 이 전부 `interpBodyHit` 즉석 substring 이 정규화(chdir·슬래시·케이스)를 하나씩 빠뜨린 것 →
-**근본 리팩터**(`77e00a9`): `interpBodyHit`/`collapseSlashPaths`/`isCaseInsensitiveFS` 폐기, `harnessCandidates`(hook.ts:952)
-가 본문의 `.harness`-루트 토큰 + chdir 결합 후보를 뽑아 **정본 `judgeWritePath`(realpath=슬래시·대소문자·심링크·`..` 일괄,
-coreOnly)로 판정**. 정규화를 두 곳에서 재현하지 않음. 실측 SEC-311~316 + 결합벡터 전건 deny·과차단 0·회귀 0·1398 green.
+### ★ 이번 세션 보안 = SEC-311~317 (7연속 봉인)
+- **SEC-311~316**(해석기 프로그램파일 클래스, 19~23차): 미독→열거→무확장자→chdir→슬래시→케이스. 6R 후 **근본 통합**
+  (`77e00a9`): 즉석 substring 폐기, `harnessCandidates`(hook.ts:952)가 `.harness` 토큰+chdir 후보를 정본 `judgeWritePath`
+  (realpath 일괄)로 판정 → 정규화 whack-a-mole 종료.
+- **★ SEC-317**(24차, 전 표면 관통 — 정규화 아님): `realRelPath` 가 `path.resolve` 로 `..` 를 렉시컬 선접혀,
+  심링크(`wv`→`.harness/waves` 하위디렉토리, 별칭생성 정상)+`..` 상승이 realpath 를 앞질러 Write·셸·해석기·doctor
+  **전 표면**에서 코어 위조(끝단: 저널→doctor --repair→P0~P6 approved→phase P7). **봉인**(`083d328`): `realRelPath` 를
+  raw 결합(`path.resolve`/`join` 금지)→realOrSelf 가 심링크를 `..` 전에 물리적으로 풀게 함(hook.ts:738) + `harnessCandidates`
+  가 `..` 상승 토큰도 추출. 실측 3코어×3표면 deny·회귀 0·과차단 0(별칭생성·waves쓰기·실디렉토리 `..` 통과).
 
 ### ✅ 완료 (축2 실효성, 19라운드 봉인 = dequoting 5종 + SEC-303~316)
 dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
@@ -46,11 +50,13 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중: 24차 독립검증 (백그라운드, Fable 5) — 통합 수렴 확인
-`77e00a9` 기준. 임무: 근본 통합이 **놓치는 정규화/경로 변형이 아직 있나**(심링크 별칭·토큰경계·pushd·백슬래시·`~`)
-+ 비-해석기 CORE/정책. CLEAN=수렴 확정 근거. 보고 → `scratchpad/sec300-verify14.md`. **결과 처리**:
-- **CLEAN** → 보안루프 수렴 확정 → 사용자와 G001 축2 checkpoint 판단.
-- **NEW-FINDINGS** → 봉인 패턴. 단 정규화 변형이면 통합이 왜 놓쳤는지 근본에서 재확인, 공시 4종은 제외.
+### 🔄 진행 중: 25차 독립검증 (백그라운드, Fable 5) — 경로해석 엣지케이스 집중
+`083d328` 기준. SEC-317 이 «경로 해석기(realpath) 버그」로 전 표면 관통 → 이 부류를 더 판다: 중첩/사슬 심링크+`..`,
+`.harness` 다른 하위디렉토리 별칭, `realOrSelf` 조상재귀 경계(순환·끊긴링크), 하드링크, root 심링크 + 비해석기 표면.
+**SEC-317 리팩터 회귀(과차단) 확인 지시 포함.** 보고 → `scratchpad/sec300-verify15.md`. **결과 처리**:
+- **CLEAN** → 보안루프 수렴 확정 → 사용자와 G001 축2 checkpoint.
+- **NEW-FINDINGS** → 봉인 패턴 반복. 공시 4종 제외.
+**참고: 이번 세션 7연속 발견(SEC-311~317) 전부 실질 CRITICAL — 루프 수렴 미도달. 25차가 첫 CLEAN 후보.**
 
 ### 🔄 진행 중: 멀티에이전트 재설계 — ★ 설계 문서 작성·발행, 사용자 리뷰 대기
 **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 · **A안(워크트리 격리, 워커 무가드, 정본 `.harness/`
@@ -72,7 +78,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **24차 검증 결과 수신** → `scratchpad/sec300-verify14.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
+1. **25차 검증 결과 수신** → `scratchpad/sec300-verify15.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
