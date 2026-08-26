@@ -946,6 +946,7 @@ function interpreterProgramBodies(root: string, cmd: string): string[] {
  *    저널·정책 실덮임). 매칭 전에 본문의 슬래시 경로를 접는다 — 리터럴·정책·chdir·basename 판정 모두 정규화본에.
  */
 const CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+const CHDIR_INTO_HARNESS_I = new RegExp(CHDIR_INTO_HARNESS.source, 'i');   // [SEC-316] 케이스무시 FS 용
 /** [SEC-315] 본문 텍스트의 슬래시 경로를 접는다: `//`→`/` · `/./`→`/` · `/seg/../`→`/`(반복). */
 function collapseSlashPaths(s: string): string {
   let n = s.replace(/\/{2,}/g, '/');       // `//`→`/`
@@ -954,12 +955,36 @@ function collapseSlashPaths(s: string): string {
   while (n !== prev) { prev = n; n = n.replace(/\/(?!\.\.(?:\/|$))[^/]+\/\.\.(?=\/|$)/, ''); }   // `/seg/..`→``
   return n;
 }
-function interpBodyHit(body: string): string | undefined {
-  const norm = collapseSlashPaths(body);                   // [SEC-315] 정규화본에 대해 판정한다
-  const lit = mentionsPath(norm, CORE_FILES) ?? POLICY_PREFIXES.find(pre => norm.includes(pre));
+
+/**
+ * [SEC-316] **파일시스템이 대소문자 무시인가**(macOS APFS·Windows 기본). 케이스변형 리터럴 경로
+ * (`.HARNESS/events.jsonl`)는 케이스무시 FS 에서 진짜 코어 파일에 착지하는데, `interpBodyHit` 의
+ * 케이스민감 substring 대조가 이를 놓쳤다(23차 검증, 저널·정책 실덮임 → P10 approved 개통). Write·셸
+ * 표면은 `judgeWritePath` 의 realpath 정규화가 케이스를 접어 살아남지만 본문검사만 realpath 폴백이 없다.
+ * `.harness` 를 케이스변형(`​.Harness`)으로 stat 해 같은 inode 면 케이스무시. 훅 1프로세스당 1회 캐시.
+ * **케이스민감 FS(Linux)에서는 `.HARNESS` 가 진짜 다른 파일**이므로 접지 않는다(과차단 방지).
+ */
+const ciFSCache = new Map<string, boolean>();
+function isCaseInsensitiveFS(root: string): boolean {
+  const cached = ciFSCache.get(root);
+  if (cached !== undefined) return cached;
+  let ci = false;
+  try {
+    const lower = fs.statSync(path.join(root, '.harness'));
+    const flipped = fs.statSync(path.join(root, '.Harness'));
+    ci = lower.ino === flipped.ino;
+  } catch { ci = false; }
+  ciFSCache.set(root, ci);
+  return ci;
+}
+
+function interpBodyHit(body: string, ci: boolean): string | undefined {
+  const norm0 = collapseSlashPaths(body);                   // [SEC-315] 슬래시 정규화
+  const hay = ci ? norm0.toLowerCase() : norm0;             // [SEC-316] 케이스무시 FS 면 접는다(needle 은 전부 소문자)
+  const lit = mentionsPath(hay, CORE_FILES) ?? POLICY_PREFIXES.find(pre => hay.includes(pre));
   if (lit !== undefined) return lit;
-  if (CHDIR_INTO_HARNESS.test(norm)) {
-    const owned = [...OWNED_BASENAMES].find(b => norm.includes(b));
+  if ((ci ? CHDIR_INTO_HARNESS_I : CHDIR_INTO_HARNESS).test(norm0)) {
+    const owned = [...OWNED_BASENAMES].find(b => hay.includes(b));
     if (owned !== undefined) return `.harness/…/${owned}`;
   }
   return undefined;
@@ -1765,8 +1790,9 @@ function preTool(
      * 코어 보호가 페이즈 무관이므로(SEC-A/SEC-100 과 같은 논리). 못 읽으면(캡 초과) fail-closed.
      * 정상형(`awk -f q.awk data.sql`·`perl -ne 'print' f`)은 본문에 코어 경로가 없어 통과한다 — 과차단 0.
      */
+    const ciFS = isCaseInsensitiveFS(root);                   // [SEC-316] 케이스무시 FS 1회 판정
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = interpBodyHit(body);                        // [SEC-314] 리터럴 + 상대화 chdir
+      const hit = interpBodyHit(body, ciFS);                  // [SEC-314] 리터럴 + 상대화 chdir · [SEC-316] 케이스
       if (hit !== undefined) {
         return deny(L(
           `This runs an interpreter program file that writes to \`${hit}\` — a file only harness commands `

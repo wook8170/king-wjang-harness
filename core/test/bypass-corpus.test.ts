@@ -661,4 +661,31 @@ describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/�
     if (decide(root, 'perl rd2.pl') === 'deny') over.push('.harness//design read');
     expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
   }, 30_000);
+
+  // [SEC-316] 케이스무시 FS(macOS/Windows)에서만 유효 — 케이스민감(Linux CI)에선 `.HARNESS` 가 진짜 다른 파일.
+  const CI_FS = (() => {
+    const r = setup();
+    try { return fs.statSync(path.join(r, '.harness')).ino === fs.statSync(path.join(r, '.Harness')).ino; }
+    catch { return false; }
+  })();
+  it.runIf(CI_FS)('★ [SEC-316] 케이스변형 리터럴 경로도 막는다 (대소문자무시 FS)', () => {
+    const root = setup();
+    const missed: string[] = [];
+    const cases: Array<[string, string]> = [
+      ['f.pl', 'open(F,">>",".HARNESS/events.jsonl");'],
+      ['f.py', 'open(".HARNESS/config.yaml","w")'],
+      ['f.pl', 'open(F,">>",".Harness/Events.JSONL");'],
+      ['f.rb', 'Dir.chdir(".HARNESS"){open("events.jsonl","a")}'],
+    ];
+    for (const [file, body] of cases) {
+      fs.writeFileSync(path.join(root, file), body);
+      if (decide(root, `${file.endsWith('.rb') ? 'ruby' : file.endsWith('.py') ? 'python3' : 'perl'} ${file}`) !== 'deny') missed.push(body);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+    // 짝: 프로젝트 루트 config.yaml(케이스무시여도 .harness/ 아님)·설계문서 읽기는 통과
+    const over: string[] = [];
+    fs.writeFileSync(path.join(root, 'p.py'), 'open("config.yaml","w")');
+    if (decide(root, 'python3 p.py') === 'deny') over.push('project config.yaml');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
 });

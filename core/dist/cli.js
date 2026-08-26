@@ -14397,6 +14397,7 @@ function interpreterProgramBodies(root, cmd) {
   return bodies;
 }
 var CHDIR_INTO_HARNESS = /(?:\bchdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|\bcd)\s*[(\s]\s*["']?\.harness\b/;
+var CHDIR_INTO_HARNESS_I = new RegExp(CHDIR_INTO_HARNESS.source, "i");
 function collapseSlashPaths(s) {
   let n = s.replace(/\/{2,}/g, "/");
   n = n.replace(/\/\.(?=\/)/g, "");
@@ -14407,12 +14408,28 @@ function collapseSlashPaths(s) {
   }
   return n;
 }
-function interpBodyHit(body) {
-  const norm = collapseSlashPaths(body);
-  const lit = mentionsPath(norm, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => norm.includes(pre));
+var ciFSCache = /* @__PURE__ */ new Map();
+function isCaseInsensitiveFS(root) {
+  const cached = ciFSCache.get(root);
+  if (cached !== void 0) return cached;
+  let ci = false;
+  try {
+    const lower = fs20.statSync(path17.join(root, ".harness"));
+    const flipped = fs20.statSync(path17.join(root, ".Harness"));
+    ci = lower.ino === flipped.ino;
+  } catch {
+    ci = false;
+  }
+  ciFSCache.set(root, ci);
+  return ci;
+}
+function interpBodyHit(body, ci) {
+  const norm0 = collapseSlashPaths(body);
+  const hay = ci ? norm0.toLowerCase() : norm0;
+  const lit = mentionsPath(hay, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => hay.includes(pre));
   if (lit !== void 0) return lit;
-  if (CHDIR_INTO_HARNESS.test(norm)) {
-    const owned = [...OWNED_BASENAMES].find((b) => norm.includes(b));
+  if ((ci ? CHDIR_INTO_HARNESS_I : CHDIR_INTO_HARNESS).test(norm0)) {
+    const owned = [...OWNED_BASENAMES].find((b) => hay.includes(b));
     if (owned !== void 0) return `.harness/\u2026/${owned}`;
   }
   return void 0;
@@ -14806,8 +14823,9 @@ function preTool(root, state, config, input, degraded) {
         ), degraded, lang);
       }
     }
+    const ciFS = isCaseInsensitiveFS(root);
     for (const body of interpreterProgramBodies(root, cmd)) {
-      const hit = interpBodyHit(body);
+      const hit = interpBodyHit(body, ciFS);
       if (hit !== void 0) {
         return deny(L(
           `This runs an interpreter program file that writes to \`${hit}\` \u2014 a file only harness commands may change. The program lives in a file (\`sed -f\`, \`perl file.pl\`, \`awk -f\`, \`node file.js\` \u2026), so the harness read it to see what it does, the same as it reads a shell script it is about to run. Use harness commands for that file.`,
