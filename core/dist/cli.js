@@ -14253,7 +14253,9 @@ function globToRegExp2(pattern) {
         out += "\\[";
         continue;
       }
-      out += pattern.slice(i, close + 1);
+      let cls = pattern.slice(i + 1, close);
+      if (cls.startsWith("!")) cls = "^" + cls.slice(1);
+      out += `[${cls}]`;
       i = close;
       continue;
     }
@@ -14646,7 +14648,21 @@ function preTool(root, state, config, input, degraded) {
           const byName = judgeWritePath(root, state, config, base, degraded, true, getProfile);
           if (byName) return byName;
         }
-        const coreByPrefix = CORE_FILES.find((cf) => prefix.length > dir.length && cf.startsWith(prefix) && cf.length > prefix.length && !cf.slice(prefix.length).includes("/"));
+        const norm = (s) => {
+          const o = [];
+          for (const seg of s.split("/")) {
+            if (seg === "." || seg === "") continue;
+            if (seg === "..") {
+              o.pop();
+              continue;
+            }
+            o.push(seg);
+          }
+          return o.join("/") + (s.endsWith("/") ? "/" : "");
+        };
+        const nprefix = norm(prefix);
+        const ndir = nprefix.includes("/") ? nprefix.slice(0, nprefix.lastIndexOf("/") + 1) : "";
+        const coreByPrefix = CORE_FILES.find((cf) => nprefix.length >= ndir.length && cf.startsWith(nprefix) && cf.length > nprefix.length && !cf.slice(nprefix.length).includes("/"));
         if (coreByPrefix) {
           return deny(L(
             `This builds the file name at run time (\`${raw2}\`), and its literal prefix \`${prefix}\` matches the start of \`${coreByPrefix}\` \u2014 a file only harness commands may change. The dynamic part could complete that name. Write the path out literally, or use harness commands.`,

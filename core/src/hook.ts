@@ -967,7 +967,12 @@ function globToRegExp(pattern: string): RegExp {
     if (c === '[') {
       const close = pattern.indexOf(']', i + 1);
       if (close === -1) { out += '\\['; continue; }          // 닫히지 않은 `[` 는 리터럴이다
-      out += pattern.slice(i, close + 1);
+      // [SEC-305] **셸 부정 글롭 `[!..]` 은 정규식 부정 `[^..]` 다.** 그대로 복사하면 `!` 가
+      // 정규식에서 「`!` 또는 그 글자」로 읽혀 의미가 뒤집힌다 — `.harness/config.yam[!q]` 이
+      // 실파일 `config.yaml`(`l`)에 매치되는데 훅 정규식은 `l` 을 안 봐서 글롭 net 이 미발화했다.
+      let cls = pattern.slice(i + 1, close);
+      if (cls.startsWith('!')) cls = '^' + cls.slice(1);
+      out += `[${cls}]`;
       i = close;
       continue;
     }
@@ -1884,9 +1889,24 @@ function preTool(
          * 바로 뒤면 `pathLikeMentions` 가 맨몸 dir 을 뽑아 이미 막으므로 `prefix.length > dir.length`
          * 일 때만 — 리터럴 한 글자를 끼워 그 catch 를 피한 바로 그 경우다. 감정확인 13차.)
          */
+        /**
+         * [SEC-304] 정적 접두를 **정규화**(`./`·`//`·`../` 접기)한 뒤 본다 — `.harness/./e${x}` 처럼
+         * `./` 를 끼우면 접두 문자열이 달라져 대조가 빗나갔다(13차 봉인의 형제 우회, 14차 발견).
+         * 그리고 동적부가 **디렉토리 바로 뒤**(`prefix===dir`, `.harness/${x}vents.jsonl`)여도 그 dir 이
+         * 코어 파일을 담고 있으면 동적 basename 이 코어를 완성할 수 있다 → `>=` 로 그 경우도 잡는다
+         * (예전엔 `> dir` 이라 dir 바로뒤를 못 봤고, 그 자리는 정상 병기 한 줄로 pathLikeMentions net
+         * 이 꺼져 무방비였다 — 14차 #1). 정상 산출물(`.harness/report-${x}.md`)은 접두가 코어와 안 겹쳐 통과.
+         */
+        const norm = (s: string): string => {
+          const o: string[] = [];
+          for (const seg of s.split('/')) { if (seg === '.' || seg === '') continue; if (seg === '..') { o.pop(); continue; } o.push(seg); }
+          return o.join('/') + (s.endsWith('/') ? '/' : '');
+        };
+        const nprefix = norm(prefix);
+        const ndir = nprefix.includes('/') ? nprefix.slice(0, nprefix.lastIndexOf('/') + 1) : '';
         const coreByPrefix = CORE_FILES.find(cf =>
-          prefix.length > dir.length && cf.startsWith(prefix) && cf.length > prefix.length
-          && !cf.slice(prefix.length).includes('/'));
+          nprefix.length >= ndir.length && cf.startsWith(nprefix) && cf.length > nprefix.length
+          && !cf.slice(nprefix.length).includes('/'));
         if (coreByPrefix) {
           return deny(L(
             `This builds the file name at run time (\`${raw}\`), and its literal prefix \`${prefix}\` matches `

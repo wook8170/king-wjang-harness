@@ -118,6 +118,12 @@ const notations = (t: string): string[] => {
     // [SEC-303/13차] 부분 리터럴 접두 + 동적 완성 — 허용 디렉토리 «안» 코어 파일명을 조립.
     `x=X${base.slice(1)}; echo z >> ${dir}/${base.charAt(0)}\${x#X}`,   // 파라미터 확장
     `y=$(printf ${base.slice(1)}); echo z >> ${dir}/${base.charAt(0)}$y`, // 명령치환
+    // [SEC-304/14차] 정상 병기로 net 무력화 + 동적부 dir 바로뒤(prefix==dir) · `./` 삽입 형제.
+    `echo ok > /tmp/z_ok.txt; x=X${base.charAt(0)}; echo z >> ${dir}/\${x#X}${base.slice(1)}`,
+    `x=X${base.charAt(1)}; echo z >> ${dir}/./${base.charAt(0)}\${x#X}${base.slice(2)}`,
+    // [SEC-305/14차] 셸 부정 글롭 `[!Q]` — 실코어파일에 매치되는데 리터럴/코어 아니라던 net.
+    `echo z >> ${dir}/${base.slice(0, -1)}[!Q]`,
+    `echo z | tee -a ${dir}/${base.slice(0, -1)}[!Q]`,
   ];
 };
 
