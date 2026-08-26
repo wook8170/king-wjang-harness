@@ -507,6 +507,26 @@ describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 �
     expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
   }, 30_000);
 
+  it('★ SEC-310 sed 인라인 쓰기 `w`/`W`/`s///w` — `-i` 없이도 코어를 막는다', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const { d, b } of CORE_TARGETS) {
+      const t = `${d}/${b}`;
+      const cases = [
+        `sed -n 'w ${t}' /dev/null`, `sed -e 'w ${t}' /dev/null`,
+        `sed 's/.*/X/w ${t}' /tmp/x`, `sed -n 'W ${t}' /dev/null`, `sed '1w ${t}' /dev/null`,
+      ];
+      for (const c of cases) if (decide(root, c) !== 'deny') missed.push(c);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 2).join(' || ')}`).toEqual([]);
+    // 짝: 조회·무해 대상·코어를 «언급만» 하는 치환(w 없음)은 통과
+    const over = [
+      "sed -n '1,5p' README.md", "sed -n 'w /tmp/out.txt' /dev/null",
+      "sed -n 'w docs/out.txt' /dev/null", "sed 's|.harness/events.jsonl|X|' file.txt",
+    ].filter(c => decide(root, c) === 'deny');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
+
   it('★ SEC-309 globstar `**/` 0-디렉토리 — 코어에 매치되면 막는다', () => {
     const root = setup();
     const missed: string[] = [];

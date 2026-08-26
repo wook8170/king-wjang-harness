@@ -7864,6 +7864,52 @@ function scriptFiles(name, args) {
   const files = programTaken ? operands : operands.slice(1);
   return files.filter(looksLikePath);
 }
+function sedPrograms(args) {
+  const progs = [];
+  let programTaken = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (/^-[A-Za-z]*e$/.test(a) && i + 1 < args.length) {
+      progs.push(args[i + 1]);
+      programTaken = true;
+      i++;
+      continue;
+    }
+    if (a === "--expression" && i + 1 < args.length) {
+      progs.push(args[i + 1]);
+      programTaken = true;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--expression=")) {
+      progs.push(a.slice("--expression=".length));
+      programTaken = true;
+      continue;
+    }
+    if (isFlag(a)) continue;
+    if (!programTaken) {
+      progs.push(a);
+      programTaken = true;
+    }
+  }
+  return progs;
+}
+function sedWriteTargets(args) {
+  const out = [];
+  for (const p of sedPrograms(args)) {
+    for (const raw of p.split(/[;\n}]/)) {
+      const stmt = raw.trim();
+      const w = /^(?:[0-9$,~+!]+|\/(?:\\.|[^/])*\/[IMm]*)?\s*[wW]\s+(\S.*)$/.exec(stmt);
+      if (w) {
+        out.push(w[1].trim());
+        continue;
+      }
+      const sw = /^(?:[0-9$,~+!]+|\/(?:\\.|[^/])*\/[IMm]*)?\s*s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[a-zA-Z0-9]*w\s+(\S.*)$/.exec(stmt);
+      if (sw) out.push(sw[2].trim());
+    }
+  }
+  return out;
+}
 var READ_ONLY_HEADS = [
   "ls",
   "pwd",
@@ -8180,6 +8226,13 @@ function scanBashWrites(rawCmd, env = {}) {
           targets.push(...scriptFiles(name, args));
           const inline = args.filter((a, i) => ["-e", "-E"].includes(args[i - 1] ?? ""));
           for (const code of inline) targets.push(...pathLikeMentions(code));
+        }
+        if (name === "sed") {
+          const wt = sedWriteTargets(args);
+          if (wt.length > 0) {
+            mutating = true;
+            targets.push(...wt);
+          }
         }
         break;
       case "cp":

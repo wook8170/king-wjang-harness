@@ -697,6 +697,41 @@ function scriptFiles(name: string, args: string[]): string[] {
 }
 
 /**
+ * [SEC-310] **sed 는 `-i` 없이도 프로그램 «안»에서 파일에 쓴다** — `w file`·`W file`·`s///…w file`.
+ * `CONDITIONAL_WRITERS.sed` 가 `-i` 만 보던 탓에 `sed 'w .harness/events.jsonl' /dev/null` 이
+ * 저널을 절단·위조하는데 조회로 분류돼 통과했다(감정확인 18차, 끝단 실증). 프로그램 문자열에서
+ * `w`/`W` 명령의 **대상 파일만** 뽑는다(입력 피연산자는 읽기이므로 올리지 않는다 — `/dev/null` 과차단 방지).
+ */
+function sedPrograms(args: string[]): string[] {
+  const progs: string[] = [];
+  let programTaken = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (/^-[A-Za-z]*e$/.test(a) && i + 1 < args.length) { progs.push(args[i + 1]); programTaken = true; i++; continue; }
+    if (a === '--expression' && i + 1 < args.length) { progs.push(args[i + 1]); programTaken = true; i++; continue; }
+    if (a.startsWith('--expression=')) { progs.push(a.slice('--expression='.length)); programTaken = true; continue; }
+    if (isFlag(a)) continue;
+    if (!programTaken) { progs.push(a); programTaken = true; }     // 첫 비플래그 = 프로그램
+  }
+  return progs;
+}
+
+function sedWriteTargets(args: string[]): string[] {
+  const out: string[] = [];
+  for (const p of sedPrograms(args)) {
+    // 명령을 `;`·개행·`}` 로 나눈다. `[addr]w file` 또는 `s/…/…/…w file` 의 파일명은 줄 끝까지다.
+    for (const raw of p.split(/[;\n}]/)) {
+      const stmt = raw.trim();
+      const w = /^(?:[0-9$,~+!]+|\/(?:\\.|[^/])*\/[IMm]*)?\s*[wW]\s+(\S.*)$/.exec(stmt);
+      if (w) { out.push(w[1].trim()); continue; }
+      const sw = /^(?:[0-9$,~+!]+|\/(?:\\.|[^/])*\/[IMm]*)?\s*s(.)(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[a-zA-Z0-9]*w\s+(\S.*)$/.exec(stmt);
+      if (sw) out.push(sw[2].trim());
+    }
+  }
+  return out;
+}
+
+/**
  * [COST-111·SEC-B1] **순수 조회로 인정하는 명령** — 화이트리스트다(블랙리스트가 아니다).
  *
  * 이 목록은 두 곳에서 쓰인다: 활동 집계(정산 강제)와 **쓰기 대상 추출의 기본값**.
@@ -1179,6 +1214,11 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
           targets.push(...scriptFiles(name, args));
           const inline = args.filter((a, i) => ['-e', '-E'].includes(args[i - 1] ?? ''));
           for (const code of inline) targets.push(...pathLikeMentions(code));
+        }
+        // [SEC-310] sed 는 `-i` 없이 프로그램 안 `w`/`W`/`s///w` 로 파일에 쓴다 — 그 대상만 올린다.
+        if (name === 'sed') {
+          const wt = sedWriteTargets(args);
+          if (wt.length > 0) { mutating = true; targets.push(...wt); }
         }
         break;
       case 'cp':
