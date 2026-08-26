@@ -1,9 +1,18 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (24) — ULTRAGOAL 3/7 complete (축2·축5·축1) · G004+ 판단 대기 · 멀티에이전트 설계 리뷰 대기
+## 2026-08-26 (25) — ULTRAGOAL 5/7 complete (축2·축5·축1·축6·축7) · G006(독립 재감정) 지점 · 멀티에이전트 설계 리뷰 대기
 
-**정본.** `main` HEAD `5949094` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+**정본.** `main` HEAD `fbbec3c` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
 대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+
+### ★ ULTRAGOAL 5/7 complete (`omc ultragoal status`)
+- **G001 축2 실효성** ✅ (26차 CLEAN) · **G002 축5 가성비** ✅ (wall<150ms·in-proc<50ms) · **G003 축1 유용성** ✅ (MISSING 0·
+  3대 실패모드 E2E·옛 BLOCKER/MEDIUM 해소) — (23)(24) 참조.
+- **G004 축6 사용성** ✅ — `--help` exit0·명령군 **20개**(목표「13」낡음) 전부 나열·하위명령 안내 14/14·**침묵성공 0**(성공 6종 피드백)·첫실행 온보딩(init+session-start).
+- **G005 축7 상품성** ✅ — LICENSE(MIT)·README 4언어(md/ja/zh/ko)·영문기본+lang:ko(config·env 전환 확인)·광고 정확성(4언어 🔜/예정 0·'198 tests' 0, PROD-A/B·USE-81 정리).
+- **G006 reappraise** [pending] ← **다음. 7축 전부 3-R>=4.8 신규컨텍스트 독립 재감정 + 대장 open BLOCKER/HIGH 0.** 축3·4 는 원래 4.8,
+  축1·2·5·6·7 은 이번에 4.8 측정 — G006 이 이 측정들을 «독립 적대 검증」으로 확정(brief 요구: 구현자≠감정자). 미달 축은 보완→재감정 루프.
+- **G007 finalshipgate** [pending] — ai-slop-cleaner + verification + $code-review 최종 게이트(전부 clean 이어야 complete).
 
 ### ★ ULTRAGOAL 3/7 complete (`omc ultragoal status`)
 - **G001 축2 실효성** ✅ · **G002 축5 가성비** ✅ (위 (23) 참조)
@@ -114,7 +123,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **다음 방향 결정**(가 G004+G005 계속 / 나 설계리뷰 / 다 G006 재감정 / 라 여기서 멈춤) — 사용자 판단.
+1. **다음 방향 결정**(가 G006 독립재감정 진행 / 나 설계리뷰 / 다 여기서 멈춤) — 사용자 판단.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
