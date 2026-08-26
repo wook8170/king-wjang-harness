@@ -522,11 +522,17 @@ export const SHELLS_TAKING_C = [
   'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'ash', 'busybox',
 ] as const;
 
-/** 프로그램 텍스트를 받아 실행하는 해석기. 셸만이 아니다 — `python3` 도 stdin 을 읽는다. */
+/**
+ * 프로그램 텍스트를 받아 실행하는 해석기. 셸만이 아니다 — `python3` 도 stdin 을 읽는다.
+ * [SEC-312] **이 집합이 SEC-311 「해석기 프로그램파일 미독」 봉인의 정본이다.** `opaqueExecOf`(파이프
+ * 프로그램 판정)와 `interpreterProgramFiles`(프로그램파일 본문 읽기)가 **둘 다 여기서 파생**해야 한다 —
+ * 20차 검증이 실증했듯, 여기(`deno`·`bun`)는 「호출측이 읽는다」고 통과시키는데 읽는 쪽이 이 목록보다
+ * 좁으면 그 갭으로 위조가 통과한다. 흔한 비셸 해석기를 함께 담는다(tclsh·lua·Rscript). 여기에 없는
+ * exotic 해석기(julia·groovy·raku…)는 순수-훅 열거의 한계로 남는다(README 「알려진 한계」·아래 잔여). */
 const INTERPRETERS = new Set([
   ...SHELLS_TAKING_C,
   'node', 'nodejs', 'deno', 'bun', 'python', 'python2', 'python3',
-  'perl', 'ruby', 'php', 'osascript',
+  'perl', 'ruby', 'php', 'osascript', 'tclsh', 'lua', 'Rscript',
 ]);
 
 /** 해석기가 **리터럴 프로그램**을 인자로 받는 플래그(`sh -c`·`node -e`·`perl -E`). */
@@ -755,7 +761,23 @@ function sedWriteTargets(args: string[]): string[] {
  * 과독은 무해하다(데이터 파일이 코어를 언급할 일은 없다) — 놓치는 것만 구멍이므로 넉넉히 뽑는다.
  */
 const SED_LIKE = new Set(['sed', 'awk', 'gawk']);
-const SCRIPT_INTERP = new Set(['perl', 'ruby', 'php', 'python', 'python2', 'python3', 'node', 'nodejs']);
+/**
+ * [SEC-312] **비셸 해석기 집합은 정본(`INTERPRETERS`)에서 파생한다 — 손으로 다시 적지 않는다.**
+ * 예전에 이 목록을 손으로 적었더니 `INTERPRETERS` 보다 좁아(`deno`·`bun`·`osascript` 누락) SEC-311
+ * 봉인이 그 이름들로 다시 열렸다(20차 검증 실증). `opaqueExecOf` 가 「호출측이 읽는다」고 통과시키는
+ * 집합과 **읽는 쪽이 반드시 같아야** 갭이 없다. 규칙이 두 벌이면 느슨한 쪽이 정본이 된다.
+ */
+const SCRIPT_INTERP = new Set([...INTERPRETERS].filter(n => !(SHELLS_TAKING_C as readonly string[]).includes(n)));
+
+/**
+ * [SEC-312] 버전 접미가 붙은 해석기 이름을 정본 이름으로 되돌린다 — `perl5.36`→`perl`·`python3.12`→`python3`
+ * (뒤 `.NN` 을 한 번 벗겨 재확인). 접미 없는 이름은 그대로. 20차 검증이 `perl5.36 forge.pl` 로 뚫었다.
+ */
+const canonicalInterp = (name: string): string => {
+  if (SED_LIKE.has(name) || SCRIPT_INTERP.has(name)) return name;
+  const base = name.replace(/\d[\d.]*$/, '');
+  return SED_LIKE.has(base) || SCRIPT_INTERP.has(base) ? base : name;
+};
 
 /** `-abc` 꼴 짧은 플래그 묶음에서 `hit` 글자가 `stop` 글자보다 먼저 나오는가(`--long`·비플래그는 무관). */
 function shortFlagHas(tok: string, hit: string, stop: string): boolean {
@@ -777,8 +799,12 @@ function hasInlineProgram(name: string, args: readonly string[]): boolean {
     case 'php': return args.some(a => shortFlagHas(a, 'rR', ''));
     case 'python': case 'python2': case 'python3':
       return args.some(a => a === '--command' || shortFlagHas(a, 'cm', 'WXQ'));
-    case 'node': case 'nodejs':
+    // node/bun: `-e`/`-p`/`--eval`/`--print`. bun 은 node 호환 인라인을 받는다.
+    case 'node': case 'nodejs': case 'bun':
       return args.some(a => a === '--eval' || a === '--print' || shortFlagHas(a, 'ep', ''));
+    case 'osascript': return args.some(a => shortFlagHas(a, 'e', ''));
+    // deno 는 인라인이 `deno eval` 서브커맨드(플래그 아님)이고, tclsh/lua/Rscript 는 파일형이 기본이라
+    // 인라인 플래그가 없다 — 파일 피연산자를 그대로 읽는 게 안전한 쪽이다(과독 무해).
     default: return false;
   }
 }
@@ -810,7 +836,7 @@ export function interpreterProgramFiles(cmd: string): string[] {
   const files: string[] = [];
   for (const line of commandLines(cmd)) {
     const toks = line.split(/\s+/);
-    const name = toks[0] ?? '';
+    const name = canonicalInterp(toks[0] ?? '');            // [SEC-312] 버전접미 정규화
     const args = toks.slice(1);
     if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
     else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {

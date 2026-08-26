@@ -540,12 +540,13 @@ describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 �
   }, 30_000);
 });
 
-describe('[SEC-311] 해석기 «프로그램 파일» — 그 안 코어/정책 쓰기를 막는다(셸 본문의 자매)', () => {
+describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/정책 쓰기를 막는다(셸 본문의 자매)', () => {
   const CORE = [
     '.harness/config.yaml', '.harness/state.json', '.harness/events.jsonl',
     '.harness/design/ledger.yaml', '.harness/ship/defects.yaml', '.harness/profile/x.yaml',
   ];
   // 프로그램이 «파일 안»에 있어 명령문 텍스트에 코어 경로가 없다 — 훅이 본문을 읽어야 잡힌다.
+  // [SEC-312] 해석기 집합은 정본 INTERPRETERS 파생이라 bun·deno·tclsh·lua·Rscript·버전접미도 잡혀야 한다.
   const progFor = (t: string): Array<{ file: string; body: string; cmd: string }> => [
     { file: 'p.sed', body: `s/.*/X/\nw ${t}\n`, cmd: 'sed -f p.sed /dev/null' },
     { file: 'p.sed', body: `w ${t}\n`, cmd: 'sed --file=p.sed /dev/null' },
@@ -554,8 +555,18 @@ describe('[SEC-311] 해석기 «프로그램 파일» — 그 안 코어/정책 
     { file: 'x.rb', body: `File.write("${t}","X")`, cmd: 'ruby x.rb' },
     { file: 'x.py', body: `open("${t}","w").write("X")`, cmd: 'python3 x.py' },
     { file: 'x.js', body: `require('fs').writeFileSync("${t}","X")`, cmd: 'node x.js' },
+    // [SEC-312] 정본에 있으나 예전 열거에서 빠졌던 해석기 + 서브커맨드 + 버전접미
+    { file: 'x.js', body: `require('fs').writeFileSync("${t}","X")`, cmd: 'bun x.js' },
+    { file: 'x.js', body: `require('fs').writeFileSync("${t}","X")`, cmd: 'bun run x.js' },
+    { file: 'x.ts', body: `Deno.writeTextFileSync("${t}","X")`, cmd: 'deno run x.ts' },
+    { file: 'x.ts', body: `Deno.writeTextFileSync("${t}","X")`, cmd: 'deno run --allow-write=. x.ts' },
+    { file: 'x.tcl', body: `set f [open ${t} a]`, cmd: 'tclsh x.tcl' },
+    { file: 'x.lua', body: `io.open("${t}","a")`, cmd: 'lua x.lua' },
+    { file: 'x.R', body: `cat("X",file="${t}")`, cmd: 'Rscript x.R' },
+    { file: 'x.pl', body: `open(F,">","${t}");print F "X";`, cmd: 'perl5.36 x.pl' },
+    { file: 'x.py', body: `open("${t}","w").write("X")`, cmd: 'python3.12 x.py' },
   ];
-  it('★ 선존 프로그램 파일이 코어·정책을 쓰면 막는다 (sed·awk·perl·ruby·python·node)', () => {
+  it('★ 선존 프로그램 파일이 코어·정책을 쓰면 막는다 (sed·awk·perl·ruby·python·node·bun·deno·tclsh·lua·Rscript·버전접미)', () => {
     const root = setup();
     const missed: string[] = [];
     for (const t of CORE) {
@@ -583,6 +594,7 @@ describe('[SEC-311] 해석기 «프로그램 파일» — 그 안 코어/정책 
       "sed -n '1,5p' .harness/config.yaml",          // 코어를 «읽는» 것은 통과
       'awk -f nonexistent.awk src/app.ts',           // 없는 프로그램파일 → 통과
       "perl -ne 'print if /x/' src/app.ts",          // 인라인 필터(파일 아님)
+      'bun run build', 'bun build.js', 'deno run build.js', 'tclsh hi.tcl',  // [SEC-312] 코어 무접촉 정상형
     ].filter(c => decide(root, c) === 'deny');
     expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
   }, 30_000);

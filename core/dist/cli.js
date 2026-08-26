@@ -7744,7 +7744,10 @@ var INTERPRETERS = /* @__PURE__ */ new Set([
   "perl",
   "ruby",
   "php",
-  "osascript"
+  "osascript",
+  "tclsh",
+  "lua",
+  "Rscript"
 ]);
 var PROGRAM_FLAG = /^-(?:[A-Za-z]*c|e|E|-eval|-command)$/;
 var startsWithSubstitution = (a) => a.startsWith("$(") || a.startsWith("`");
@@ -7912,7 +7915,12 @@ function sedWriteTargets(args) {
   return out;
 }
 var SED_LIKE = /* @__PURE__ */ new Set(["sed", "awk", "gawk"]);
-var SCRIPT_INTERP = /* @__PURE__ */ new Set(["perl", "ruby", "php", "python", "python2", "python3", "node", "nodejs"]);
+var SCRIPT_INTERP = new Set([...INTERPRETERS].filter((n) => !SHELLS_TAKING_C.includes(n)));
+var canonicalInterp = (name) => {
+  if (SED_LIKE.has(name) || SCRIPT_INTERP.has(name)) return name;
+  const base = name.replace(/\d[\d.]*$/, "");
+  return SED_LIKE.has(base) || SCRIPT_INTERP.has(base) ? base : name;
+};
 function shortFlagHas(tok, hit, stop) {
   if (!SHORT_FLAG_RE.test(tok) || tok.startsWith("--")) return false;
   for (const c of tok.slice(1)) {
@@ -7935,9 +7943,15 @@ function hasInlineProgram(name, args) {
     case "python2":
     case "python3":
       return args.some((a) => a === "--command" || shortFlagHas(a, "cm", "WXQ"));
+    // node/bun: `-e`/`-p`/`--eval`/`--print`. bun 은 node 호환 인라인을 받는다.
     case "node":
     case "nodejs":
+    case "bun":
       return args.some((a) => a === "--eval" || a === "--print" || shortFlagHas(a, "ep", ""));
+    case "osascript":
+      return args.some((a) => shortFlagHas(a, "e", ""));
+    // deno 는 인라인이 `deno eval` 서브커맨드(플래그 아님)이고, tclsh/lua/Rscript 는 파일형이 기본이라
+    // 인라인 플래그가 없다 — 파일 피연산자를 그대로 읽는 게 안전한 쪽이다(과독 무해).
     default:
       return false;
   }
@@ -7981,7 +7995,7 @@ function interpreterProgramFiles(cmd) {
   const files = [];
   for (const line of commandLines(cmd)) {
     const toks = line.split(/\s+/);
-    const name = toks[0] ?? "";
+    const name = canonicalInterp(toks[0] ?? "");
     const args = toks.slice(1);
     if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
     else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {
