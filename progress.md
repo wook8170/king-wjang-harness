@@ -21,8 +21,15 @@
   실측 deny·과차단 0·상시 코퍼스·대장 verified 318. 커밋 `164b195`.
 - **★ 셸 dequoting 5종 다 잡음**: 따옴표·역슬래시·줄이음·ANSI-C·물결. 남은 부류: `${var}` 확장·글롭
   실파일매치·중괄호·명령/프로세스치환·산술. 12차가 그중 다수 「DENY 유지」 확인(blindTargets/글롭 dir-check).
-- **13차 독립 재검증 진행 중**(`scratchpad/sec300-verify3.md`) — 남은 부류 전수. **CLEAN(새 우회 0) 나오면
-  G001(축2) checkpoint → G002(축5).** 새 발견 시 계속 봉인. (축2 는 5라운드 연속 우회를 냈으니 신중히.)
+- **13차 = NEW-FINDING CRITICAL 1종 (SEC-303)** — 「부분 리터럴 접두 + 동적 완성」: `.harness/ev${x#X}`·
+  `.harness/ev$(printf …)` 로 허용 디렉토리 «안» 코어 파일명 조립 → 이름기반 net 전부 빗나감(토큰변형 아닌
+  net-커버리지 틈). **봉인**(`hook.ts:1887`): 미해결 대상의 리터럴 접두가 basename 안으로 들어가 코어 접두와
+  겹치면 deny. 실측 events/config/state/ship·design 전건 deny·과차단 0. 커밋 `6df25af`. 대장 verified 319.
+- **★ 봉인 누적**: 셸 dequoting 5종 + SEC-303(net-커버리지). 축2 는 **6라운드 연속**(9·10·11·12·13차) 우회를 냈다.
+- **14차 독립 재검증 진행 중**(`scratchpad/sec300-verify4.md`) — SEC-303 변종·디렉토리우회·글롭실파일·조합.
+  **CLEAN(새 우회 0)이면 G001 checkpoint→G002(축5)** — 우물 바닥 신호. 새 발견 시 계속 봉인.
+- **함정**: 독립 검증 라운드 ~15분 → 머신 절전 시 실패(13차 1회 실패·재시도). `caffeinate` 권장. 검증자 지시에
+  `CLAUDE_PROJECT_DIR` 매 명령 유지 필수(자기 참조 방지).
 
 ### ⚠️ 사고: 자기 참조 self-enforcement (CLAUDE.md 함정 실제 발생)
 - 10차 검증자(또는 프로브)가 `CLAUDE_PROJECT_DIR` 없이 `harness init` 을 돌려 **repo 루트에 `.harness/` 생성**
