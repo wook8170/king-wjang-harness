@@ -13,10 +13,18 @@ core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백). **�
 - `968335d` **README ×4 파일수 57→58** — 아래 함정 참조.
 - 검증: build ok · tsc0 · **npm test 1404 pass** · core/src diff 공백 · 스펙 커버리지 grep 전부 · cross-ref 해소.
 
+### ✅ 마무리·후속 (사용자 지시 「1,2,3 순서대로」)
+1. **푸시 완료** — `0a6eb68..53545d0` origin/main 동기(그 뒤 `d0520ca`+이 핸드오프 미푸시).
+2. **열린 설계 결정 확정**(설계 spec §8·§9 기록, `d0520ca`): **① `.harness/` 스탠스 = A**(커밋된 `.harness/` 하네스 기본 유지, gitignore 는 병렬 모드 전용 §6.0 게이트, 코어 주석·가드 불변). **② dogfood = 인위적 라운드 구성**(별도 샌드박스 harness-init+.harness gitignore 에 독립 개선 2~3건 병렬 라운드 — **실행은 후속**).
+3. **하우스키핑**: 워크트리 4개(`wf_28bae004-b27-*`) 제거 + 병합된 브랜치 4개 삭제(고유커밋 0, 손실 없음) → `.claude/worktrees/` 비움. **플러그인 0.1.2 재설치 = 사용자 인터랙티브 조작 필요**(비대화형 세션서 `/plugin` 불가): 소스 `plugin.json`=0.1.2 준비됨, 설치본 `cache/.../0.1.1` stale → 인터랙티브 `claude` 에서 `/plugin` 로 로컬 마켓플레이스 업데이트/재설치.
+
 ### 🔄 다음 즉시 할 일
-1. **푸시** — 로컬 6커밋(`0a6eb68..665e823`)이 origin/main 미반영. 사용자 승인 시 `git push origin main`(이전 관례=main 직접 푸시). = subagent-driven 의 finishing 단계(이 리포는 main 기반이라 finishing=push).
-2. **최종 리뷰 결과**: FINAL_ASSESSMENT CHANGES_NEEDED(사유=README 수치뿐, core/구조/스펙 전부 pass) → `665e823` 로 해소. 보고 `scratchpad/g-p8-review.md`. 리뷰어 확인: brief-override 안전지시가 실 코어출력(loop.ts:626-630 이 turn-log 줄 방출)과 정합.
-3. **미해결 2건(실행과 독립·설계 결정)**: ① 하네스 전역 `.harness/` 스탠스(§9) ② dogfood 대상(§8). 아직 열림.
+1. **dogfood 실행**(후속) — 별도 샌드박스에서 phase-p8-orchestrate 실구동(§8 인위적 라운드). 병렬 워커·워크트리·머지·정산 end-to-end.
+2. **플러그인 0.1.2 재설치**(사용자) — 위 3 참조.
+3. **미푸시 커밋 푸시**(`d0520ca`+핸드오프).
+
+### 최종 리뷰(참고)
+FINAL_ASSESSMENT CHANGES_NEEDED(사유=README 수치뿐, core/구조/스펙 전부 pass) → `665e823` 해소. 보고 `scratchpad/g-p8-review.md`. 리뷰어 확인: brief-override 안전지시가 실 코어출력(loop.ts:626-630 turn-log 줄 방출)과 정합.
 
 ### 시스템 지식 · 함정 (웨이브32 신규 + 유효)
 - **★ doc-claims 커플링**: `core/test/doc-claims.test.ts`(line 105)가 **4개 README의 `(N files)` 표기 = core/test 실제 `*.test.ts` 수** 를 강제. **테스트 파일 추가 시 README 4언어 파일수 갱신 필수**(이번 57→58). 테스트 수(1400)는 언어 간 일치만 요구(실측 불묶음), 배포/리포전용 수(1360·17)는 독립 측정치.
