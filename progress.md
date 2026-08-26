@@ -1,9 +1,15 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (18) — SEC-311~316 봉인(19라운드째) · 보안루프 수렴 판단 대기 · 멀티에이전트 A안 설계 승인 대기
+## 2026-08-26 (19) — SEC-311~316 봉인+근본통합 · 24차 검증 in-flight(수렴 확인) · 멀티에이전트 A안 설계 심화 중
 
-**정본.** `main` HEAD `534ba6c` · **푸시 완료(origin/main 동기)** · clean · **1398 tests green · tsc 0** ·
+**정본.** `main` HEAD `77e00a9` · **푸시 완료(origin/main 동기)** · clean · **1398 tests green · tsc 0** ·
 대장 verified **332** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~316 미반영)** — 안정화 후 재설치.
+
+### ★ 근본 통합 완료 (사용자 결정: 「근본 수정 먼저」)
+SEC-314/315/316 이 전부 `interpBodyHit` 즉석 substring 이 정규화(chdir·슬래시·케이스)를 하나씩 빠뜨린 것 →
+**근본 리팩터**(`77e00a9`): `interpBodyHit`/`collapseSlashPaths`/`isCaseInsensitiveFS` 폐기, `harnessCandidates`(hook.ts:952)
+가 본문의 `.harness`-루트 토큰 + chdir 결합 후보를 뽑아 **정본 `judgeWritePath`(realpath=슬래시·대소문자·심링크·`..` 일괄,
+coreOnly)로 판정**. 정규화를 두 곳에서 재현하지 않음. 실측 SEC-311~316 + 결합벡터 전건 deny·과차단 0·회귀 0·1398 green.
 
 ### ✅ 완료 (축2 실효성, 19라운드 봉인 = dequoting 5종 + SEC-303~316)
 dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
@@ -40,18 +46,17 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### ⏸️ 보안루프 일시정지 — 사용자 판단 대기 (24차 미디스패치)
-6연속 봉인 후 **수렴 판단을 사용자에게 넘김**. 두 갈림:
-- **(가) 근본 수정 먼저**: `interpBodyHit` 을 `judgeWritePath` 정규화로 재작성(위 근본 수정 후보) → 정규화 whack-a-mole 종료 → 그 후 24차.
-- **(나) 계속 per-variant**: 24차 바로 디스패치, 새 정규화 변형 나오면 또 패치.
-- **(다) 보안루프 checkpoint**: 여기서 「닫힘 클래스 봉인 + 공시 잔여 명시」로 G001 축2 매듭, item 2(멀티에이전트)로 이동.
-(23차까지 결과: 19~23차=SEC-311~316 발견·봉인. 보고 `scratchpad/sec300-verify13.md`.)
+### 🔄 진행 중: 24차 독립검증 (백그라운드, Fable 5) — 통합 수렴 확인
+`77e00a9` 기준. 임무: 근본 통합이 **놓치는 정규화/경로 변형이 아직 있나**(심링크 별칭·토큰경계·pushd·백슬래시·`~`)
++ 비-해석기 CORE/정책. CLEAN=수렴 확정 근거. 보고 → `scratchpad/sec300-verify14.md`. **결과 처리**:
+- **CLEAN** → 보안루프 수렴 확정 → 사용자와 G001 축2 checkpoint 판단.
+- **NEW-FINDINGS** → 봉인 패턴. 단 정규화 변형이면 통합이 왜 놓쳤는지 근본에서 재확인, 공시 4종은 제외.
 
 ### 🔄 진행 중: 멀티에이전트 재설계 brainstorming (사용자 결정 2 — A안 확정, 설계 승인 대기)
 brainstorming 스킬 진행 중. **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 셋 다 · **A안(워크트리
 격리) 확정**(사용자 선택 — 워커는 워크트리 FS 격리만, 정본 `.harness/` 는 오케스트레이터만 씀). **핵심사실**: `.harness/`
 git 미추적→워크트리별 독립·병합충돌 0. 현재 P8=순차(`activeWave` 단수, `wave.ts:204`).
-**제시한 설계(승인 대기)**: Fable 오케스트레이터가 승인설계(F-x/M-x)→의존그래프 라운드분할(파일스코프=P2 모듈경계 파생)→라운드마다
+**제시한 설계(사용자: 「일부 더 파고들기」 — 심화 중)**: Fable 오케스트레이터가 승인설계(F-x/M-x)→의존그래프 라운드분할(파일스코프=P2 모듈경계 파생)→라운드마다
 워크트리+브랜치 병렬 wave-executor(난이도별 모델)→신규컨텍스트 wave-verifier→pass시 머지+정본 `.harness/` 순차기록. **코어
 무변경**(전부 스킬+에이전트+프로세스). 결과물: 신규스킬 `phase-p8-orchestrate`(기존 p8-implement 위에서 조율)+wave-executor
 파라미터(워크트리경로·스코프·모델)+난이도루브릭+dogfood. 미세결정: 머지타깃=통합브랜치 권장. **다음: 설계 확정 승인받으면
@@ -67,7 +72,7 @@ design doc(`docs/superpowers/specs/`) → writing-plans.** 참고: `.claude/work
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **보안루프 갈림 결정**(가 근본수정 / 나 24차계속 / 다 checkpoint) — 사용자 판단 후 진행.
+1. **24차 검증 결과 수신** → `scratchpad/sec300-verify14.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트 재설계**: 제시한 A안 설계 확정 승인받아 → design doc(`docs/superpowers/specs/YYYY-MM-DD-multiagent-p8-design.md`) → writing-plans.
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
