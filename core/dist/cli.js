@@ -14288,7 +14288,8 @@ function relPath(root, p) {
   return path17.relative(root, path17.resolve(root, p));
 }
 function realRelPath(root, p) {
-  return path17.relative(realOrSelf(root), realOrSelf(path17.resolve(root, p)));
+  const abs = path17.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
+  return path17.relative(realOrSelf(root), realOrSelf(abs));
 }
 function isOutsideRoot(rel) {
   return rel === ".." || rel.startsWith(`..${path17.sep}`) || path17.isAbsolute(rel);
@@ -14400,6 +14401,7 @@ var CHDIR_HARNESS_ARG = /(?:chdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|(?:^
 function harnessCandidates(body) {
   const out = /* @__PURE__ */ new Set();
   for (const m of body.matchAll(/\.harness[^\s"'`)\\;|&<>,]*/gi)) out.add(m[0]);
+  for (const m of body.matchAll(/[^\s"'`)(,;|&<>]*\/\.\.\/[^\s"'`)(,;|&<>]*/g)) out.add(m[0]);
   const cm = CHDIR_HARNESS_ARG.exec(body);
   if (cm) {
     const dir = cm[1].replace(/\/+$/, "");

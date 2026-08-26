@@ -726,9 +726,18 @@ function relPath(root: string, p: string): string {
  * 쓴다 — CORE_FILES·설계 allowlist·구축 트랙 `.harness/design/` 보호는 전부 rel·realRel
  * 어느 한쪽만 걸려도 매치로 본다. 이 함수는 "정규화된 값"만 내놓을 뿐, 그 매치를 deny 에
  * 쓸지 allow 에 쓸지는 호출측(preTool)이 정한다.
+ *
+ * [SEC-317] **`..` 를 렉시컬로 선접히지 않는다.** 예전엔 `path.resolve(root, p)` 가 `wv/../events.jsonl`
+ * 의 `wv/..` 를 **realpath 가 심링크 `wv`(→`.harness/waves`)를 보기 전에** 문자열로 상쇄해 `events.jsonl`
+ * 을 냈다 — OS 는 `wv` 를 물리적으로 풀고 `..` 로 `.harness` 에 올라가 `.harness/events.jsonl` 에 실제로
+ * 쓰는데(끝단 실증: 저널 위조→doctor --repair→게이트 개통). 그래서 `path.resolve`(·`path.join` 도 정규화로
+ * 선접힌다) 대신 **raw 결합**으로 넘겨, `realOrSelf`(realpathSync.native + 조상 재귀)가 심링크를 `..` «전에»
+ * 물리적으로 풀게 한다. 실디렉토리 `..`(물리=렉시컬)와 정상 쓰기는 불변(24차 검증 프로토타입 확인).
+ * `relPath`(리터럴 공간)는 렉시컬이 의도이므로 그대로 둔다 — union 매치는 realRel 만 고쳐도 성립한다.
  */
 function realRelPath(root: string, p: string): string {
-  return path.relative(realOrSelf(root), realOrSelf(path.resolve(root, p)));
+  const abs = path.isAbsolute(p) ? p : `${root.replace(/[/]+$/, '')}/${p}`;   // path.resolve/join 금지(선접힘)
+  return path.relative(realOrSelf(root), realOrSelf(abs));
 }
 
 function isOutsideRoot(rel: string): boolean {
@@ -952,6 +961,10 @@ const CHDIR_HARNESS_ARG = /(?:chdir|process\.chdir|os\.chdir|Dir\.chdir|setwd|(?
 function harnessCandidates(body: string): string[] {
   const out = new Set<string>();
   for (const m of body.matchAll(/\.harness[^\s"'`)\\;|&<>,]*/gi)) out.add(m[0]);
+  // [SEC-317] `..` 로 올라가는 상대경로도 후보다 — `wv/../events.jsonl`(`wv`→`.harness/waves` 심링크)은
+  // `.harness` 문자열이 없어 위 추출이 놓친다. judgeWritePath 가 realpath 로 심링크를 풀어 코어면 막고,
+  // 실디렉토리·비코어면 통과시킨다(과추출은 무해 — 코어/정책만 deny).
+  for (const m of body.matchAll(/[^\s"'`)(,;|&<>]*\/\.\.\/[^\s"'`)(,;|&<>]*/g)) out.add(m[0]);
   const cm = CHDIR_HARNESS_ARG.exec(body);
   if (cm) {
     const dir = cm[1].replace(/\/+$/, '');

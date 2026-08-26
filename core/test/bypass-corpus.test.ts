@@ -688,4 +688,28 @@ describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/�
     if (decide(root, 'python3 p.py') === 'deny') over.push('project config.yaml');
     expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
   }, 30_000);
+
+  it('★ [SEC-317] 심링크→`.harness`하위 + `..` 상승 — 전 표면(셸·Write·해석기) 코어/정책 막는다', () => {
+    const root = setup();
+    // `.harness/waves` 는 쓰기허용 하위 디렉토리 — 그 별칭 생성은 정상. 그 뒤 `..` 로 코어에 오른다.
+    fs.symlinkSync('.harness/waves', path.join(root, 'wv'));
+    const missed: string[] = [];
+    for (const core of ['events.jsonl', 'state.json', 'config.yaml']) {
+      // 셸 리다이렉트
+      if (decide(root, `echo x >> wv/../${core}`) !== 'deny') missed.push(`셸 wv/../${core}`);
+      // Write 도구
+      if (decideWrite(root, `wv/../${core}`) !== 'deny') missed.push(`Write wv/../${core}`);
+      // 해석기 본문(`.harness` 문자열 0개)
+      fs.writeFileSync(path.join(root, 'f.pl'), `open(F,">>","wv/../${core}");`);
+      if (decide(root, 'perl f.pl') !== 'deny') missed.push(`perl wv/../${core}`);
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 3).join(' || ')}`).toEqual([]);
+    // 짝: 별칭 통한 waves 정상쓰기·실디렉토리 `..`·일반 쓰기는 통과(과차단 0)
+    fs.mkdirSync(path.join(root, 'sub'));
+    const over = [
+      'echo x >> wv/data.txt', 'echo x >> sub/../notes.md', 'echo x >> notes.md',
+    ].filter(c => decide(root, c) === 'deny');
+    if (decideWrite(root, 'wv/report.md') === 'deny') over.push('Write wv/report.md');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
 });
