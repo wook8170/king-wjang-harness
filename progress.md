@@ -1,9 +1,17 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (23) — ULTRAGOAL 2/7 complete (G001 축2 + G002 축5) · G003+ 진행 판단 대기 · 멀티에이전트 설계 리뷰 대기
+## 2026-08-26 (24) — ULTRAGOAL 3/7 complete (축2·축5·축1) · G004+ 판단 대기 · 멀티에이전트 설계 리뷰 대기
 
-**정본.** `main` HEAD `02de8bf` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+**정본.** `main` HEAD `5949094` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
 대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+
+### ★ ULTRAGOAL 3/7 complete (`omc ultragoal status`)
+- **G001 축2 실효성** ✅ · **G002 축5 가성비** ✅ (위 (23) 참조)
+- **G003 축1 유용성** ✅ complete — 재측정: MISSING 0(문서 49조합·최상위 미실재 0·guidance-commands-exist green) · 3대
+  실패모드 E2E bidirectional(설계무시 deny/allow·미정산종료 block/allow·세션단절 상태영속). ★ 옛 감정(round3l 3.0)의
+  감점요인 해소 확인: [BLOCKER] 일곱번째 표기(basename 조립) 이제 전부 DENY(SEC-303/213/306, 26차 CLEAN) · [MEDIUM] 조회
+  과차단(sed -n·cp 백업) 이제 전부 ALLOW → 4.8 충족. (독립 재감정은 G006.)
+- **G004 축6 사용성 / G005 축7 상품성** [pending] · **G006 reappraise**(7축 3-R 독립재감정) · **G007 finalshipgate** [pending]
 
 ### ★ ULTRAGOAL 진행 (`.omc/ultragoal`, `omc ultragoal status`) — 2/7 complete
 - **G001 축2 실효성** ✅ complete — 보안 루프 26차 CLEAN(SEC-300~318 봉인·bypass-corpus 상시화·과차단 0).
@@ -106,7 +114,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **다음 방향 결정**(가 G003 축1 / 나 설계리뷰 / 다 G006 재감정 / 라 popd) — 사용자 판단.
+1. **다음 방향 결정**(가 G004+G005 계속 / 나 설계리뷰 / 다 G006 재감정 / 라 여기서 멈춤) — 사용자 판단.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
