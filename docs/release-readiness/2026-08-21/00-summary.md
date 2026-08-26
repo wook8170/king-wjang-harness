@@ -170,7 +170,7 @@
 > [COST-261](stdin 상한이 타임아웃보다 커서 그 사이가 fail-open) ·
 > [COST-262](벤치가 명령 파싱 경로를 안 봐서 2차 회귀가 CI 에 안 걸리던 것 — **게이트 신설**).
 > 선제 조사로 [SEC-259](위치 가정 잔여 3도구)도 함께 닫았다. **open 0**.
-> 대장: **verified 326 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
+> 대장: **verified 327 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
 
 ---
 
@@ -180,7 +180,7 @@
 > 🔴 **라운드 3 중반의 「출하 가능」 판정 철회는 그대로 유지된다.**
 >
 > **라운드 3-I 는 「막고 있는 것이 결함이 아니다」던 라운드 3-H 의 문장을 취소시켰다.**
-> 대장 집계: **verified** 326 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
+> 대장 집계: **verified** 327 · **open** 0 (MED 0 · LOW 0) · deferred 5 ·
 > open BLOCKER 0 · open HIGH 0 · 1041 tests green · tsc 0.
 >
 > 7축 독립 재감정(HEAD `45bde0c` 한 커밋에 고정)에서 **여섯 축이 오르거나 유지됐는데

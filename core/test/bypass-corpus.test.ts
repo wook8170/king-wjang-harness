@@ -539,3 +539,51 @@ describe('[SEC-306·307] 동적 경로/POSIX 글롭 — 코어·정책은 못 �
     expect(decide(root, 'printf x >> docs/**/note.md'), 'docs globstar 과차단').toBe('allow');
   }, 30_000);
 });
+
+describe('[SEC-311] 해석기 «프로그램 파일» — 그 안 코어/정책 쓰기를 막는다(셸 본문의 자매)', () => {
+  const CORE = [
+    '.harness/config.yaml', '.harness/state.json', '.harness/events.jsonl',
+    '.harness/design/ledger.yaml', '.harness/ship/defects.yaml', '.harness/profile/x.yaml',
+  ];
+  // 프로그램이 «파일 안»에 있어 명령문 텍스트에 코어 경로가 없다 — 훅이 본문을 읽어야 잡힌다.
+  const progFor = (t: string): Array<{ file: string; body: string; cmd: string }> => [
+    { file: 'p.sed', body: `s/.*/X/\nw ${t}\n`, cmd: 'sed -f p.sed /dev/null' },
+    { file: 'p.sed', body: `w ${t}\n`, cmd: 'sed --file=p.sed /dev/null' },
+    { file: 'p.awk', body: `BEGIN{print "F" > "${t}"}`, cmd: 'awk -f p.awk /dev/null' },
+    { file: 'x.pl', body: `open(F,">","${t}");print F "X";`, cmd: 'perl x.pl' },
+    { file: 'x.rb', body: `File.write("${t}","X")`, cmd: 'ruby x.rb' },
+    { file: 'x.py', body: `open("${t}","w").write("X")`, cmd: 'python3 x.py' },
+    { file: 'x.js', body: `require('fs').writeFileSync("${t}","X")`, cmd: 'node x.js' },
+  ];
+  it('★ 선존 프로그램 파일이 코어·정책을 쓰면 막는다 (sed·awk·perl·ruby·python·node)', () => {
+    const root = setup();
+    const missed: string[] = [];
+    for (const t of CORE) {
+      for (const { file, body, cmd } of progFor(t)) {
+        fs.writeFileSync(path.join(root, file), body);
+        if (decide(root, cmd) !== 'deny') missed.push(`${cmd}  (${file}: ${body.replace(/\n/g, '␤')})`);
+        // 셸이 감싸도(본문은 commandLines 가 편다) 같은 판정이어야 한다
+        if (decide(root, `bash -c "${cmd}"`) !== 'deny') missed.push(`bash -c ${cmd}`);
+      }
+    }
+    expect(missed, `${missed.length}건: ${missed.slice(0, 3).join(' || ')}`).toEqual([]);
+  }, 30_000);
+
+  it('★ 과차단 0 — 코어를 안 건드리는 정상 프로그램·읽기·대용량은 통과', () => {
+    const root = setup();
+    fs.writeFileSync(path.join(root, 'fmt.sed'), 's/a/b/\n');
+    fs.writeFileSync(path.join(root, 'q.awk'), '/x/{print}\n');
+    fs.writeFileSync(path.join(root, 'hi.pl'), 'print "hi\\n";\n');
+    fs.writeFileSync(path.join(root, 'build.js'), "require('fs').writeFileSync('build/out.txt','ok')\n");
+    // 대용량(>64KB) 은 fail-open — 정상 번들·CLI 실행을 막지 않는다(공시 잔여: 대형 위조기는 통과)
+    fs.writeFileSync(path.join(root, 'big.js'), `${'// filler\n'.repeat(9000)}console.log(1)\n`);
+    const over = [
+      'sed -f fmt.sed src/app.ts', 'awk -f q.awk src/app.ts', 'perl hi.pl',
+      'node build.js', 'node big.js',
+      "sed -n '1,5p' .harness/config.yaml",          // 코어를 «읽는» 것은 통과
+      'awk -f nonexistent.awk src/app.ts',           // 없는 프로그램파일 → 통과
+      "perl -ne 'print if /x/' src/app.ts",          // 인라인 필터(파일 아님)
+    ].filter(c => decide(root, c) === 'deny');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
+});

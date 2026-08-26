@@ -137,6 +137,9 @@ export const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 const isFlag = (t: string): boolean => t.startsWith('-');
 
+/** `-x` 꼴 짧은 플래그의 시작(정본 한 벌 — `-`+글자, `--long` 은 별도로 걸러 쓴다). */
+const SHORT_FLAG_RE = /^-[A-Za-z]/;
+
 /** 경로처럼 보이는 토큰만 후보로 본다 — `sed` 의 스크립트 인자를 파일로 오인하지 않게. */
 export const looksLikePath = (t: string): boolean =>
   t !== '' && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes('/') || /\.[A-Za-z0-9]+$/.test(t));
@@ -732,6 +735,92 @@ function sedWriteTargets(args: string[]): string[] {
 }
 
 /**
+ * [SEC-311] **해석기가 «프로그램을 파일로» 받는 형태의 그 프로그램 파일들.**
+ *
+ * SEC-92/SEC-219 는 「에이전트가 쓴 스크립트를 실행하면 훅이 그 안을 못 본다」를 **셸에 대해서만**
+ * 닫았다(`invokedScriptBodies` 는 셸·`npm run` 본문만 읽는다). 그러나 **비-셸 해석기가 프로그램을
+ * «파일»로 받는 형태**(`sed -f prog.sed`·`awk -f prog.awk`·`perl x.pl`·`ruby x.rb`·`python3 x.py`·
+ * `node x.js`)는 그 파일 본문을 아무도 읽지 않았다 — 코어 경로가 명령문 텍스트에 없으니 모든 net 이
+ * 침묵했고, 그 안 `w .harness/events.jsonl`(sed)·`open(">",core)`(perl)로 저널·출하대장이 위조됐다
+ * (감정확인 19차, 끝단 실증). 여기서 그 파일 경로들을 뽑아 호출측이 **셸 본문과 같은 태도**로 읽는다:
+ * 루트 안이면 본문을 같은 코어/정책 잣대로 보고, 못 읽으면(캡 초과) fail-closed 로 사실을 고지한다.
+ *
+ * **프로그램 파일만** 뽑는다(입력·데이터 피연산자가 아니라):
+ *  - `sed`/`awk`/`gawk`: `-f FILE`·`--file=FILE`(짧은 조합 `-nf`·붙임 `-fFILE` 포함)가 데려가는 파일.
+ *    입력 피연산자(`sed -f p.sed .harness/config.yaml` 의 config)는 **읽기**라 올리지 않는다.
+ *  - `perl`/`ruby`/`php`/`python*`/`node`/`nodejs`: **인라인 코드**(`-e`/`-c`/…)가 없을 때에 한해,
+ *    경로처럼 생긴 비플래그 피연산자(스크립트 파일과 그 데이터). 인라인이면 피연산자는 데이터이고
+ *    그 경우의 코드 판정은 `CONDITIONAL_WRITERS`+`pathLikeMentions` 가 이미 한다.
+ *
+ * 과독은 무해하다(데이터 파일이 코어를 언급할 일은 없다) — 놓치는 것만 구멍이므로 넉넉히 뽑는다.
+ */
+const SED_LIKE = new Set(['sed', 'awk', 'gawk']);
+const SCRIPT_INTERP = new Set(['perl', 'ruby', 'php', 'python', 'python2', 'python3', 'node', 'nodejs']);
+
+/** `-abc` 꼴 짧은 플래그 묶음에서 `hit` 글자가 `stop` 글자보다 먼저 나오는가(`--long`·비플래그는 무관). */
+function shortFlagHas(tok: string, hit: string, stop: string): boolean {
+  if (!SHORT_FLAG_RE.test(tok) || tok.startsWith('--')) return false;
+  for (const c of tok.slice(1)) {
+    if (hit.includes(c)) return true;
+    if (stop.includes(c)) return false;               // 이 플래그가 나머지를 인자로 삼킨다
+  }
+  return false;
+}
+
+/** 이 해석기 호출이 **인라인 코드**(파일이 아니라)로 프로그램을 받는가 — 그러면 피연산자는 데이터다. */
+function hasInlineProgram(name: string, args: readonly string[]): boolean {
+  switch (name) {
+    // perl `-e`/`-E`; `-M…`·`-I…`·`-F…` 등은 나머지를 인자로 삼키므로 그 안의 e 는 코드가 아니다.
+    case 'perl': return args.some(a => shortFlagHas(a, 'eE', 'MmIFDCx0'));
+    // ruby `-e`(만); `-E`(인코딩)·`-I`·`-r`·`-C`·`-K` 는 인자를 삼킨다.
+    case 'ruby': return args.some(a => shortFlagHas(a, 'e', 'IrCEK'));
+    case 'php': return args.some(a => shortFlagHas(a, 'rR', ''));
+    case 'python': case 'python2': case 'python3':
+      return args.some(a => a === '--command' || shortFlagHas(a, 'cm', 'WXQ'));
+    case 'node': case 'nodejs':
+      return args.some(a => a === '--eval' || a === '--print' || shortFlagHas(a, 'ep', ''));
+    default: return false;
+  }
+}
+
+/** `sed`/`awk` 의 `-f FILE`·`--file=FILE`(조합·붙임 포함)가 데려가는 프로그램 파일들. */
+function programFileFlagArgs(args: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-f' || a === '--file') { if (i + 1 < args.length) { out.push(args[i + 1]); i++; } continue; }
+    if (a.startsWith('--file=')) { out.push(a.slice('--file='.length)); continue; }
+    if (!a.startsWith('-') || a.startsWith('--')) continue;
+    for (let k = 1; k < a.length; k++) {
+      const c = a[k];
+      if (c === 'f') {                                 // `-f`·`-nf`(다음 토큰) 또는 `-fFILE`·`-nfFILE`(붙임)
+        const rest = a.slice(k + 1);
+        if (rest.length > 0) out.push(rest);
+        else if (i + 1 < args.length) { out.push(args[i + 1]); i++; }
+        break;
+      }
+      // 나머지를 인자로 삼키는 플래그(`-e`프로그램·`-i`접미·`-F`구분자·`-v`대입)에서 멈춘다.
+      if ('eiFv'.includes(c)) { if (c === 'e' && k === a.length - 1) i++; break; }
+    }
+  }
+  return out;
+}
+
+export function interpreterProgramFiles(cmd: string): string[] {
+  const files: string[] = [];
+  for (const line of commandLines(cmd)) {
+    const toks = line.split(/\s+/);
+    const name = toks[0] ?? '';
+    const args = toks.slice(1);
+    if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
+    else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {
+      files.push(...args.filter(a => looksLikePath(a)));
+    }
+  }
+  return files;
+}
+
+/**
  * [COST-111·SEC-B1] **순수 조회로 인정하는 명령** — 화이트리스트다(블랙리스트가 아니다).
  *
  * 이 목록은 두 곳에서 쓰인다: 활동 집계(정산 강제)와 **쓰기 대상 추출의 기본값**.
@@ -821,6 +910,10 @@ export function isReadOnlyCommand(cmd: string): boolean {
   if (cmd.trim() === '') return false;
   const scan = scanBashWrites(cmd);
   if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  // [SEC-311] 해석기가 프로그램을 «파일»로 받으면 그 파일이 무엇을 쓰는지 여기선 알 수 없다 —
+  // `sed -f prog.sed`·`perl x.pl` 이 조회로 분류돼 활동 집계에서 빠지면 stop 가드 정산 강제가
+  // 조용히 풀렸다(감정확인 19차). 프로그램 파일을 실행하는 형태는 조회로 인정하지 않는다.
+  if (interpreterProgramFiles(cmd).length > 0) return false;
   const lines = commandLines(cmd);
   if (lines.length === 0) return false;
   return lines.every(l => {
@@ -1558,7 +1651,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
               const a = args[i];
               const eq = /^--?[A-Za-z][\w-]*=(.+)$/.exec(a);
               if (eq) cand.push(eq[1]);
-              else if (/^-[A-Za-z]/.test(a) && a.length > 2) cand.push(a.slice(2));
+              else if (SHORT_FLAG_RE.test(a) && a.length > 2) cand.push(a.slice(2));
               if (['-c', '-e', '-E'].includes(a) && i + 1 < args.length) cand.push(...pathLikeMentions(args[i + 1]));
             }
             for (const a of cand) {

@@ -7501,6 +7501,7 @@ var ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 var DASH_C_RE = /^-[a-z]*c$/;
 var URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 var isFlag = (t) => t.startsWith("-");
+var SHORT_FLAG_RE = /^-[A-Za-z]/;
 var looksLikePath = (t) => t !== "" && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes("/") || /\.[A-Za-z0-9]+$/.test(t));
 var DYNAMIC_CD = /[$`*?~]/;
 function normalizePath(p) {
@@ -7910,6 +7911,85 @@ function sedWriteTargets(args) {
   }
   return out;
 }
+var SED_LIKE = /* @__PURE__ */ new Set(["sed", "awk", "gawk"]);
+var SCRIPT_INTERP = /* @__PURE__ */ new Set(["perl", "ruby", "php", "python", "python2", "python3", "node", "nodejs"]);
+function shortFlagHas(tok, hit, stop) {
+  if (!SHORT_FLAG_RE.test(tok) || tok.startsWith("--")) return false;
+  for (const c of tok.slice(1)) {
+    if (hit.includes(c)) return true;
+    if (stop.includes(c)) return false;
+  }
+  return false;
+}
+function hasInlineProgram(name, args) {
+  switch (name) {
+    // perl `-e`/`-E`; `-M…`·`-I…`·`-F…` 등은 나머지를 인자로 삼키므로 그 안의 e 는 코드가 아니다.
+    case "perl":
+      return args.some((a) => shortFlagHas(a, "eE", "MmIFDCx0"));
+    // ruby `-e`(만); `-E`(인코딩)·`-I`·`-r`·`-C`·`-K` 는 인자를 삼킨다.
+    case "ruby":
+      return args.some((a) => shortFlagHas(a, "e", "IrCEK"));
+    case "php":
+      return args.some((a) => shortFlagHas(a, "rR", ""));
+    case "python":
+    case "python2":
+    case "python3":
+      return args.some((a) => a === "--command" || shortFlagHas(a, "cm", "WXQ"));
+    case "node":
+    case "nodejs":
+      return args.some((a) => a === "--eval" || a === "--print" || shortFlagHas(a, "ep", ""));
+    default:
+      return false;
+  }
+}
+function programFileFlagArgs(args) {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "-f" || a === "--file") {
+      if (i + 1 < args.length) {
+        out.push(args[i + 1]);
+        i++;
+      }
+      continue;
+    }
+    if (a.startsWith("--file=")) {
+      out.push(a.slice("--file=".length));
+      continue;
+    }
+    if (!a.startsWith("-") || a.startsWith("--")) continue;
+    for (let k = 1; k < a.length; k++) {
+      const c = a[k];
+      if (c === "f") {
+        const rest = a.slice(k + 1);
+        if (rest.length > 0) out.push(rest);
+        else if (i + 1 < args.length) {
+          out.push(args[i + 1]);
+          i++;
+        }
+        break;
+      }
+      if ("eiFv".includes(c)) {
+        if (c === "e" && k === a.length - 1) i++;
+        break;
+      }
+    }
+  }
+  return out;
+}
+function interpreterProgramFiles(cmd) {
+  const files = [];
+  for (const line of commandLines(cmd)) {
+    const toks = line.split(/\s+/);
+    const name = toks[0] ?? "";
+    const args = toks.slice(1);
+    if (SED_LIKE.has(name)) files.push(...programFileFlagArgs(args));
+    else if (SCRIPT_INTERP.has(name) && !hasInlineProgram(name, args)) {
+      files.push(...args.filter((a) => looksLikePath(a)));
+    }
+  }
+  return files;
+}
 var READ_ONLY_HEADS = [
   "ls",
   "pwd",
@@ -8032,6 +8112,7 @@ function isReadOnlyCommand(cmd) {
   if (cmd.trim() === "") return false;
   const scan = scanBashWrites(cmd);
   if (scan.mutating || scan.opaqueExec || scan.patchesWorkingTree) return false;
+  if (interpreterProgramFiles(cmd).length > 0) return false;
   const lines = commandLines(cmd);
   if (lines.length === 0) return false;
   return lines.every((l) => {
@@ -8452,7 +8533,7 @@ function scanBashWrites(rawCmd, env = {}) {
               const a = args[i];
               const eq = /^--?[A-Za-z][\w-]*=(.+)$/.exec(a);
               if (eq) cand.push(eq[1]);
-              else if (/^-[A-Za-z]/.test(a) && a.length > 2) cand.push(a.slice(2));
+              else if (SHORT_FLAG_RE.test(a) && a.length > 2) cand.push(a.slice(2));
               if (["-c", "-e", "-E"].includes(a) && i + 1 < args.length) cand.push(...pathLikeMentions(args[i + 1]));
             }
             for (const a of cand) {
@@ -14284,6 +14365,23 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   }
   return { bodies: out, unread, tooDeep, outside };
 }
+function interpreterProgramBodies(root, cmd) {
+  const bodies = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const candidate of interpreterProgramFiles(cmd)) {
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    try {
+      const abs = path17.resolve(root, candidate);
+      const st = fs20.statSync(abs);
+      if (!st.isFile()) continue;
+      if (st.size > SCRIPT_MAX_BYTES) continue;
+      bodies.push(fs20.readFileSync(abs, "utf8"));
+    } catch {
+    }
+  }
+  return bodies;
+}
 var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
   if (files.length === 0) return null;
@@ -14670,6 +14768,15 @@ function preTool(root, state, config, input, degraded) {
         return deny(L(
           `This runs a script from outside the project that writes \`${namedHit}\` \u2014 a harness-owned file. Scripts outside the project are otherwise none of the harness's business, but this one reaches into it. Use harness commands for that file.`,
           `\uD504\uB85C\uC81D\uD2B8 \uBC16 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC2E4\uD589\uD558\uB294\uB370, \uADF8 \uC548\uC5D0\uC11C \`${namedHit}\` \uC744(\uB97C) \uC4F4\uB2E4 \u2014 \uD558\uB124\uC2A4 \uC18C\uC720 \uD30C\uC77C\uC774\uB2E4. \uD504\uB85C\uC81D\uD2B8 \uBC16 \uC2A4\uD06C\uB9BD\uD2B8\uB294 \uC6D0\uB798 \uD558\uB124\uC2A4 \uC18C\uAD00\uC774 \uC544\uB2C8\uC9C0\uB9CC \uC774\uAC83\uC740 \uC548\uCABD\uC744 \uAC74\uB4DC\uB9B0\uB2E4. \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
+        ), degraded, lang);
+      }
+    }
+    for (const body of interpreterProgramBodies(root, cmd)) {
+      const hit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find((pre) => body.includes(pre));
+      if (hit !== void 0) {
+        return deny(L(
+          `This runs an interpreter program file that writes to \`${hit}\` \u2014 a file only harness commands may change. The program lives in a file (\`sed -f\`, \`perl file.pl\`, \`awk -f\`, \`node file.js\` \u2026), so the harness read it to see what it does, the same as it reads a shell script it is about to run. Use harness commands for that file.`,
+          `\uD574\uC11D\uAE30 \uD504\uB85C\uADF8\uB7A8 \uD30C\uC77C\uC774 \`${hit}\` \uC744(\uB97C) \uC4F4\uB2E4 \u2014 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uAFC0 \uC218 \uC788\uB294 \uD30C\uC77C\uC774\uB2E4. \uD504\uB85C\uADF8\uB7A8\uC774 \uD30C\uC77C \uC548\uC5D0 \uC788\uC5B4(\`sed -f\`\xB7\`perl file.pl\`\xB7\`awk -f\`\xB7\`node file.js\` \u2026) \uD558\uB124\uC2A4\uAC00 \uBB34\uC5C7\uC744 \uD558\uB294\uC9C0 \uADF8 \uBCF8\uBB38\uC744 \uC77D\uC5C8\uB2E4(\uACE7 \uC2E4\uD589\uD560 \uC178 \uC2A4\uD06C\uB9BD\uD2B8\uB97C \uC77D\uB294 \uAC83\uACFC \uAC19\uB2E4). \uADF8 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C \uBC14\uAFD4\uB77C.`
         ), degraded, lang);
       }
     }

@@ -20,7 +20,7 @@ import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
@@ -899,6 +899,39 @@ function invokedScriptBodies(root: string, cmd: string, depth = 0, seen = new Se
 }
 
 /**
+ * [SEC-311] **해석기 프로그램 파일들의 본문** — 셸 본문(`invokedScriptBodies`)의 자매다.
+ *
+ * 비-셸 해석기가 프로그램을 «파일»로 받는 형태(`sed -f prog.sed`·`perl x.pl`·`awk -f`·`node x.js`)는
+ * 그 파일 본문을 아무도 읽지 않아, 그 안 `w .harness/events.jsonl`·`open(">",core)` 가 저널·출하
+ * 대장을 투명하게 위조·절단했다(감정확인 19차). 정적 추출은 `bashwrite` 의 `interpreterProgramFiles`
+ * 가 하고, 여기서 그 경로들을 **실제로 읽는다** — 루트 안이면 abs 로, 절대경로면 그대로(루트 밖
+ * `/tmp/x.pl` 도 셸 본문처럼 본다).
+ *
+ * **크기 캡을 넘으면 셸과 달리 «건너뛴다»(fail-open).** 셸 본문은 캡 초과를 deny 로 올렸지만
+ * (`[SEC-B3]`), 그 태도는 에이전트가 실행하는 셸 스크립트가 작다는 전제에서만 옳다. 해석기는
+ * **정상 프로그램이 크다** — `node dist/cli.js`(수백 KB)·번들·빌드 스크립트를 fail-closed 로 막으면
+ * 「프로그램 실행」 자체가 막혀 과차단이 폭발한다(하네스 자신의 CLI 직접 실행 `node cli.js status`
+ * 는 [SEC-96] 이 여는 조회 경로다). 손으로 쓴 저널 위조기는 작으므로(실측 벡터 전부 <1KB) 캡 안에서
+ * 잡히고, 캡을 넘겨 회피하는 대형 위조기는 **공시 잔여**로 남긴다(셸 자매의 fail-closed 와 비대칭).
+ */
+function interpreterProgramBodies(root: string, cmd: string): string[] {
+  const bodies: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of interpreterProgramFiles(cmd)) {
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+    try {
+      const abs = path.resolve(root, candidate);
+      const st = fs.statSync(abs);
+      if (!st.isFile()) continue;
+      if (st.size > SCRIPT_MAX_BYTES) continue;             // fail-open — 정상 대형 프로그램을 막지 않는다
+      bodies.push(fs.readFileSync(abs, 'utf8'));
+    } catch { /* 없는 파일·권한 없음 — 셸이 알아서 실패한다 */ }
+  }
+  return bodies;
+}
+
+/**
  * [SEC-A] **패치를 꺼내 같은 스캐너로 다시.**
  *
  * `git apply <패치>` 는 이 리포 최악의 구멍이었다 — `echo >> .harness/events.jsonl` 은 막히는데
@@ -1686,6 +1719,29 @@ function preTool(
           `프로젝트 밖 스크립트를 실행하는데, 그 안에서 \`${namedHit}\` 을(를) 쓴다 — 하네스 소유 `
           + '파일이다. 프로젝트 밖 스크립트는 원래 하네스 소관이 아니지만 이것은 안쪽을 건드린다. '
           + '그 파일은 harness 명령으로 바꿔라.',
+        ), degraded, lang);
+      }
+    }
+
+    /**
+     * [SEC-311] **해석기가 «프로그램을 파일로» 받는 형태는 셸 본문 검사가 닿지 않는다.**
+     * `sed -f prog.sed`·`awk -f prog.awk`·`perl x.pl`·`ruby x.rb`·`python3 x.py`·`node x.js` 의 프로그램
+     * 파일 안 `w .harness/events.jsonl`·`open(">",core)` 가 저널·출하대장을 위조/절단했다(감정확인 19차,
+     * 끝단 실증). 그 본문을 읽어(셸 본문과 같은 자매 경로) 코어/정책을 건드리면 **페이즈 무관**으로 막는다 —
+     * 코어 보호가 페이즈 무관이므로(SEC-A/SEC-100 과 같은 논리). 못 읽으면(캡 초과) fail-closed.
+     * 정상형(`awk -f q.awk data.sql`·`perl -ne 'print' f`)은 본문에 코어 경로가 없어 통과한다 — 과차단 0.
+     */
+    for (const body of interpreterProgramBodies(root, cmd)) {
+      const hit = mentionsPath(body, CORE_FILES) ?? POLICY_PREFIXES.find(pre => body.includes(pre));
+      if (hit !== undefined) {
+        return deny(L(
+          `This runs an interpreter program file that writes to \`${hit}\` — a file only harness commands `
+          + 'may change. The program lives in a file (`sed -f`, `perl file.pl`, `awk -f`, `node file.js` …), '
+          + 'so the harness read it to see what it does, the same as it reads a shell script it is about to run. '
+          + 'Use harness commands for that file.',
+          `해석기 프로그램 파일이 \`${hit}\` 을(를) 쓴다 — harness 명령으로만 바꿀 수 있는 파일이다. `
+          + '프로그램이 파일 안에 있어(`sed -f`·`perl file.pl`·`awk -f`·`node file.js` …) 하네스가 무엇을 '
+          + '하는지 그 본문을 읽었다(곧 실행할 셸 스크립트를 읽는 것과 같다). 그 파일은 harness 명령으로 바꿔라.',
         ), degraded, lang);
       }
     }
