@@ -1,18 +1,19 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (16) — SEC-311~314 봉인(17라운드째) · 22차 독립검증 in-flight · 멀티에이전트 재설계 brainstorming(A안 확정)
+## 2026-08-26 (17) — SEC-311~315 봉인(18라운드째) · 23차 독립검증 in-flight(수렴 판별) · 멀티에이전트 A안 설계 승인 대기
 
-**정본.** `main` HEAD `b5d4e83` · **푸시 완료(origin/main 동기)** · clean · **1396 tests green · tsc 0** ·
-대장 verified **330** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~314 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `9669499` · **푸시 완료(origin/main 동기)** · clean · **1397 tests green · tsc 0** ·
+대장 verified **331** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~315 미반영)** — 안정화 후 재설치.
 
-### ✅ 완료 (축2 실효성, 17라운드 봉인 = dequoting 5종 + SEC-303~314)
-dequoting 5종 · SEC-303~310(13R) + **SEC-311·312·313·314(신규 4R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
+### ✅ 완료 (축2 실효성, 18라운드 봉인 = dequoting 5종 + SEC-303~315)
+dequoting 5종 · SEC-303~310(13R) + **SEC-311~315(신규 5R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
 
-**해석기 프로그램파일 봉인 4연속(19~21차 발견)**: SEC-311(본문 미독→읽기·페이즈무관 deny) → SEC-312(열거 누락 bun/deno/버전접미
-→ 정본 INTERPRETERS 파생) → SEC-313(무확장자명 `python3 pyscript` looksLikePath 회피 → 필터 제거) → SEC-314(chdir 상대화
-`chdir(".harness")+open("events.jsonl")` → `interpBodyHit` 결합판정). 각 fix+probe+코퍼스+대장+reanchor+green+커밋푸시.
+**해석기 프로그램파일 봉인 5연속(19~22차 발견)**: SEC-311(본문 미독→읽기·페이즈무관 deny) → SEC-312(열거누락 bun/deno/버전접미
+→ 정본 INTERPRETERS 파생) → SEC-313(무확장자명 looksLikePath 회피→필터 제거) → SEC-314(chdir 상대화→`interpBodyHit` 결합판정)
+→ SEC-315(본문 경로 정규화 부재 `//`·`/./`·`/../`→`collapseSlashPaths`). 각 fix+probe+코퍼스+대장+reanchor+green+커밋푸시.
+**수렴 신호**: 5R 전부 «내가 SEC-311 로 새로 만든 해석기 본문읽기 표면»의 정밀도갭. 22차 관찰=직접-Bash·Write 표면은 촘촘.
 **공시 잔여(README 「알려진 한계」)**: ①in-language 난독(문자열조립·chr()·base64) ②exotic 해석기(julia·raku…) ③≥64KB fail-open
-④같은명령서 파일생성후실행. 이 넷은 순수-훅 정적분석 한계 → 완전한 답=파일시스템 층 강제(향후).
+④같은명령서 파일생성후실행. 순수-훅 정적분석 한계 → 완전한 답=파일시스템 층 강제(향후).
 
 **SEC-312 (20차 발견 · 이번 봉인) — SEC-311 이 해석기 이름 «열거»에 의존해 재발**: `interpreterProgramFiles`
 의 `SCRIPT_INTERP` 가 정본 `INTERPRETERS`(이미 deno·bun·osascript 앎)보다 좁아 `bun forge.js`·`deno run`·
@@ -36,11 +37,12 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311·312·313·314(신규 4R — 해�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중: 22차 독립검증 (백그라운드 서브에이전트, Fable 5)
-`b5d4e83` 기준. **이번엔 시야 확대** — 해석기 영역(SEC-311~314) 촘촘하니 **비-해석기 CORE/정책**(Write/Edit 툴표면·harness
-명령표면·env·저널 재구성·깊이/캡/심링크)을 주력으로. 보고 → `scratchpad/sec300-verify12.md`. **결과 처리**:
-- **CLEAN** → 보안 루프 라운드 종료 후보. G001 checkpoint 판단. (19~21차=SEC-311~314 발견·봉인 완료)
-- **NEW-FINDINGS** → 봉인 패턴 반복→23차. 단 공시 잔여(위 4종)는 새 발견 아님.
+### 🔄 진행 중: 23차 독립검증 (백그라운드 서브에이전트, Fable 5) — 수렴 판별 초점
+`9669499` 기준. 임무: 봉인 스택에 **라이브 갭이 남았나 vs 남은 건 전부 공시 잔여인가** 판별(CLEAN=수렴 근거).
+해석기 잔여 정밀도(가볍게) + **비-해석기 CORE/정책 주력**(Write/Edit·harness 명령·env·저널replay·깊이/캡/심링크) + 표면교차.
+보고 → `scratchpad/sec300-verify13.md`. **결과 처리**:
+- **CLEAN** → 보안 루프 수렴. 사용자와 G001 checkpoint 판단(사용자 결정 1). (19~22차=SEC-311~315 발견·봉인 완료)
+- **NEW-FINDINGS** → 봉인 패턴 반복→24차. 단 공시 잔여(4종)는 새 발견 아님.
 
 ### 🔄 진행 중: 멀티에이전트 재설계 brainstorming (사용자 결정 2 — A안 확정, 설계 승인 대기)
 brainstorming 스킬 진행 중. **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 셋 다 · **A안(워크트리
@@ -62,7 +64,7 @@ design doc(`docs/superpowers/specs/`) → writing-plans.** 참고: `.claude/work
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **22차 검증 결과 수신** → `scratchpad/sec300-verify12.md` grep. CLEAN/NEW-FINDINGS 분기(위·공시 4종 제외).
+1. **23차 검증 결과 수신** → `scratchpad/sec300-verify13.md` grep. CLEAN/NEW-FINDINGS 분기(위·공시 4종 제외).
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트 재설계**: 제시한 A안 설계 확정 승인받아 → design doc(`docs/superpowers/specs/YYYY-MM-DD-multiagent-p8-design.md`) → writing-plans.
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
