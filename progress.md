@@ -16,12 +16,11 @@ core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백). **�
 ### ✅ 마무리·후속 (사용자 지시 「1,2,3 순서대로」)
 1. **푸시 완료** — `0a6eb68..53545d0` origin/main 동기(그 뒤 `d0520ca`+이 핸드오프 미푸시).
 2. **열린 설계 결정 확정**(설계 spec §8·§9 기록, `d0520ca`): **① `.harness/` 스탠스 = A**(커밋된 `.harness/` 하네스 기본 유지, gitignore 는 병렬 모드 전용 §6.0 게이트, 코어 주석·가드 불변). **② dogfood = 인위적 라운드 구성**(별도 샌드박스 harness-init+.harness gitignore 에 독립 개선 2~3건 병렬 라운드 — **실행은 후속**).
-3. **하우스키핑**: 워크트리 4개(`wf_28bae004-b27-*`) 제거 + 병합된 브랜치 4개 삭제(고유커밋 0, 손실 없음) → `.claude/worktrees/` 비움. **플러그인 0.1.2 재설치 = 사용자 인터랙티브 조작 필요**(비대화형 세션서 `/plugin` 불가): 소스 `plugin.json`=0.1.2 준비됨, 설치본 `cache/.../0.1.1` stale → 인터랙티브 `claude` 에서 `/plugin` 로 로컬 마켓플레이스 업데이트/재설치.
+3. **하우스키핑 완료**: 워크트리 4개(`wf_28bae004-b27-*`) 제거 + 병합된 브랜치 4개 삭제(고유커밋 0, 손실 없음) → `.claude/worktrees/` 비움. **플러그인 0.1.1→0.1.2 업데이트 완료**(user scope) — `/plugin` TUI 대신 셸 CLI: `claude plugin marketplace update king-wjang-harness` → `claude plugin update king-wjang-harness@king-wjang-harness`(★ **완전 id `@marketplace` 필수**, 짧은 이름은 "not found"). **재시작 후 적용**(현재 세션은 재시작 전까지 0.1.1).
 
 ### 🔄 다음 즉시 할 일
-1. **dogfood 실행**(후속) — 별도 샌드박스에서 phase-p8-orchestrate 실구동(§8 인위적 라운드). 병렬 워커·워크트리·머지·정산 end-to-end.
-2. **플러그인 0.1.2 재설치**(사용자) — 위 3 참조.
-3. **미푸시 커밋 푸시**(`d0520ca`+핸드오프).
+1. **Claude Code 재시작** — 플러그인 0.1.2 적용(현 세션은 0.1.1).
+2. **dogfood 실행**(후속) — 별도 샌드박스에서 phase-p8-orchestrate 실구동(§8 인위적 라운드). 병렬 워커·워크트리·머지·정산 end-to-end.
 
 ### 최종 리뷰(참고)
 FINAL_ASSESSMENT CHANGES_NEEDED(사유=README 수치뿐, core/구조/스펙 전부 pass) → `665e823` 해소. 보고 `scratchpad/g-p8-review.md`. 리뷰어 확인: brief-override 안전지시가 실 코어출력(loop.ts:626-630 turn-log 줄 방출)과 정합.
