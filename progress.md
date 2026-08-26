@@ -44,8 +44,12 @@
   커밋 `96f82a6`. 대장 verified **324**. **1389 green.**
 - **★ 봉인 누적(축2, 10라운드/12+ CLASS)**: dequoting 5종·SEC-303/304/305/306/307/308. CORE/정책 하드경계
   광범위 봉인. 소스 소프트-잔여(D1·#1d) 공시.
-- **17차 진행 중**(`scratchpad/sec300-verify7.md`, CORE/정책 집중) — SEC-308 반증(슬래시없는 코어·플래그값)·
-  brace-default·경로정규화·extglob/globstar·다표면. **CLEAN 이면 G001 checkpoint→G002(축5).**
+- **17차 = CRITICAL 1 + HIGH 1**: SEC-308 확장(슬래시없는 코어전달 — cd-basename·인터프리터코드 `python3 -c`·
+  flag-attached `-o`/`--out=` → 전 피연산자+플래그값+`-c`/`-e` 코드경로 수집, cd/pushd/popd 제외) · SEC-309
+  (globstar `**/` 0-dir 미구현 → `**/`→`(?:[^/]+/)*`·`**`→`.*`). 커밋 `0c4d3a1`. 대장 verified **325**. 1391 green.
+- **★ 봉인 누적(축2, 11라운드/14 CLASS)**: dequoting 5종 · SEC-303~309. CORE/정책 하드경계 광범위 봉인.
+- **18차 진행 중**(`scratchpad/sec300-verify8.md`, CORE/정책 집중) — SEC-308확장 반증(다른 인라인코드플래그·
+  heredoc·프로세스치환)·brace-default·경로/링크·중괄호실확장·다표면. **CLEAN 이면 G001 checkpoint→G002(축5).**
 - **★ 전략 판단(사용자 결정 대기 가능)**: 순수-훅으로 셸 전체 파싱을 따라잡는 건 긴 꼬리다. 매 라운드가 진짜
   CRITICAL 을 잡아 루프는 유효하나, 「출하 가능(clean sweep)」까지 몇 라운드 더 갈 수 있다. README 「알려진
   한계」가 이미 지목한 **파일시스템 층 강제**가 근본 봉인이라는 대안도 있다(제품 성격 변경 = 사용자 판단).
