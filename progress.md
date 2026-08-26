@@ -1,12 +1,20 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (14) — SEC-311 봉인(14라운드째) · 20차 독립검증 in-flight
+## 2026-08-26 (15) — SEC-311+312 봉인(15라운드째) · 21차 독립검증 in-flight · 멀티에이전트 재설계 brainstorming 중
 
-**정본.** `main` HEAD `cf2cbde` · **푸시 완료(origin/main 동기)** · clean · **1394 tests green · tsc 0** ·
-대장 verified **327** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~311 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `a7f378d` · **푸시 완료(origin/main 동기)** · clean · **1394 tests green · tsc 0** ·
+대장 verified **328** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~312 미반영)** — 안정화 후 재설치.
 
-### ✅ 완료 (축2 실효성, 14라운드 봉인 = dequoting 5종 + SEC-303~311)
-dequoting 5종 · SEC-303~310(13라운드) + **SEC-311(신규)**. **CORE/정책 하드경계 광범위 봉인.**
+### ✅ 완료 (축2 실효성, 15라운드 봉인 = dequoting 5종 + SEC-303~312)
+dequoting 5종 · SEC-303~310(13R) + **SEC-311·312(신규 2R)**. **CORE/정책 하드경계 광범위 봉인.**
+
+**SEC-312 (20차 발견 · 이번 봉인) — SEC-311 이 해석기 이름 «열거»에 의존해 재발**: `interpreterProgramFiles`
+의 `SCRIPT_INTERP` 가 정본 `INTERPRETERS`(이미 deno·bun·osascript 앎)보다 좁아 `bun forge.js`·`deno run`·
+`perl5.36`·`tclsh` 로 다시 열림(내부 모순 — opaqueExecOf 는 「호출측이 읽는다」고 통과시키는데 읽는 쪽이 좁음).
+끝단: `bun forge.js`→저널 gate-approved+P7→`doctor --repair`→P0→P7·게이트 7개 approved(사람 승인 0). **봉인**:
+`SCRIPT_INTERP`=INTERPRETERS 파생(`bashwrite.ts:770`) + tclsh/lua/Rscript 정본 편입(`:532`) + `canonicalInterp`
+버전접미 정규화. 실측 전건 deny·과차단 0·회귀 0·1394 green. 커밋 `a7f378d`. **공시 잔여**: 열거 밖 exotic
+해석기(julia·groovy·raku)는 순수-훅 열거 한계 → README 「알려진 한계」 공시(완전한 답=파일시스템 층 강제).
 
 **SEC-311 (19차 발견 · 이번 봉인) — 해석기 «프로그램 파일» 미독**: `sed -f`·`awk -f`·`perl x.pl`·`ruby x.rb`·
 `python3 x.py`·`node x.js`·`sed --file=` 이 프로그램 본문을 파일에 담아 훅이 못 읽어 그 안 `w .harness/events.jsonl`·
@@ -22,15 +30,22 @@ dequoting 5종 · SEC-303~310(13라운드) + **SEC-311(신규)**. **CORE/정책 
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중: 20차 독립검증 (백그라운드 서브에이전트, Fable 5)
-`cf2cbde` 기준 적대적 검증자 디스패치함(CORE/정책 집중, SEC-311 봉인 두들김). 보고 →
-`scratchpad/sec300-verify10.md`, 마지막 응답에 VERDICT 한 줄. 완료 알림 대기 중. **결과 처리**:
-- **CLEAN** → 보안 루프 1라운드 종료 후보. G001 checkpoint 판단(사용자 결정 1).
-- **NEW-FINDINGS** → 봉인 패턴 반복(fix→probe→코퍼스→대장→reanchor→green→커밋·푸시)→21차.
+### 🔄 진행 중: 21차 독립검증 (백그라운드 서브에이전트, Fable 5)
+`a7f378d` 기준 적대적 검증자 디스패치함(CORE/정책, SEC-312 봉인 두들김 + 새 클래스). 보고 →
+`scratchpad/sec300-verify11.md`, 마지막 응답에 VERDICT 한 줄. 완료 알림 대기 중. **결과 처리**:
+- **CLEAN** → 보안 루프 라운드 종료 후보. G001 checkpoint 판단(사용자 결정 1). (20차=SEC-312, 19차=SEC-311 발견·봉인 완료)
+- **NEW-FINDINGS** → 봉인 패턴 반복(fix→probe→코퍼스→대장→reanchor→green→커밋·푸시)→22차.
 
-### 사용자 결정: 「1,2 진행」 (둘 다) — 2번은 아직 미착수
-1. **보안 루프 계속**: SEC-311 봉인✅ → 20차 검증🔄 → CLEAN 날 때까지 반복. 그다음 G001 checkpoint→G002(축5).
-2. **멀티에이전트 재설계**(구현단계) — ❌ **미착수**(20차 검증 대기 중 시작 가능):
+### 🔄 진행 중: 멀티에이전트 재설계 brainstorming (사용자 결정 2 — 착수함)
+사용자가 「2번 진행」 지시. brainstorming 스킬로 설계 중. **확정된 것**: 결과물=제품+운영 둘 다 · 목적=처리량+난이도별
+모델+구현자≠검증자 셋 다 · **핵심사실**: `.harness/` 는 git 미추적(gitignore도 tracked도 아닌 로컬상태)→워크트리별
+`.harness/` 독립·git병합충돌 0 → **A안(워크트리 격리) 결정적 유리**. 현재 P8=순차(`activeWave` 단수, `wave.ts:204`).
+**대기 중 질문(미응답)**: 워커가 하네스 가드를 받나 — A(워커 무가드, 정본 .harness 는 오케스트레이터만 씀·권장) vs
+C(워커도 자기 `harness init` — events 반출·병합 필요) vs B(코어 N-활성=위험, 제외). 참고: `.claude/worktrees/wf_28bae004-*` 4개 선행 잔여(정리 대상).
+
+### 사용자 결정: 「1,2 진행」 (둘 다)
+1. **보안 루프 계속**: SEC-311·312 봉인✅ → 21차 검증🔄 → CLEAN 날 때까지 반복. 그다음 G001 checkpoint→G002(축5).
+2. **멀티에이전트 재설계**(구현단계) — 🔄 brainstorming 착수(위):
    - 하네스는 에이전트 «디스패치 안 함» — 메인 세션이 스킬대로 wave-executor/wave-verifier 부름. 즉 이 변경은
      **오케스트레이션 층(P8 스킬·에이전트 정의·디스패치 패턴)**이 본체. 난이도별 모델·구현자≠검증자는 이미 있음.
    - **코어 제약**: `state.activeWave` 단수, `wave.ts:204` 이미 활성이면 activate 거부 → 한 `.harness/` 동시 웨이브 불가.
@@ -38,9 +53,9 @@ dequoting 5종 · SEC-303~310(13라운드) + **SEC-311(신규)**. **CORE/정책 
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **20차 검증 결과 수신** → `scratchpad/sec300-verify10.md` grep. CLEAN/NEW-FINDINGS 분기(위).
+1. **21차 검증 결과 수신** → `scratchpad/sec300-verify11.md` grep. CLEAN/NEW-FINDINGS 분기(위).
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
-3. **멀티에이전트 재설계**(사용자 결정 2): (A) 워크트리 격리로 brainstorming/plan → P8 오케스트레이터 스킬·에이전트.
+3. **멀티에이전트 재설계 brainstorming 계속**(사용자 결정 2): 대기 질문(A/C) 응답받아 설계 확정 → design doc → writing-plans.
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
 
 ### 함정·환경 (그대로 유효)
