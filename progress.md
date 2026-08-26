@@ -1,6 +1,6 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (19) — SEC-311~316 봉인+근본통합 · 24차 검증 in-flight(수렴 확인) · 멀티에이전트 A안 설계 심화 중
+## 2026-08-26 (19) — SEC-311~316 봉인+근본통합 · 24차 검증 in-flight(수렴 확인) · 멀티에이전트 설계문서 리뷰 대기
 
 **정본.** `main` HEAD `77e00a9` · **푸시 완료(origin/main 동기)** · clean · **1398 tests green · tsc 0** ·
 대장 verified **332** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~316 미반영)** — 안정화 후 재설치.
@@ -52,15 +52,15 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **CLEAN** → 보안루프 수렴 확정 → 사용자와 G001 축2 checkpoint 판단.
 - **NEW-FINDINGS** → 봉인 패턴. 단 정규화 변형이면 통합이 왜 놓쳤는지 근본에서 재확인, 공시 4종은 제외.
 
-### 🔄 진행 중: 멀티에이전트 재설계 brainstorming (사용자 결정 2 — A안 확정, 설계 승인 대기)
-brainstorming 스킬 진행 중. **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 셋 다 · **A안(워크트리
-격리) 확정**(사용자 선택 — 워커는 워크트리 FS 격리만, 정본 `.harness/` 는 오케스트레이터만 씀). **핵심사실**: `.harness/`
-git 미추적→워크트리별 독립·병합충돌 0. 현재 P8=순차(`activeWave` 단수, `wave.ts:204`).
-**제시한 설계(사용자: 「일부 더 파고들기」 — 심화 중)**: Fable 오케스트레이터가 승인설계(F-x/M-x)→의존그래프 라운드분할(파일스코프=P2 모듈경계 파생)→라운드마다
-워크트리+브랜치 병렬 wave-executor(난이도별 모델)→신규컨텍스트 wave-verifier→pass시 머지+정본 `.harness/` 순차기록. **코어
-무변경**(전부 스킬+에이전트+프로세스). 결과물: 신규스킬 `phase-p8-orchestrate`(기존 p8-implement 위에서 조율)+wave-executor
-파라미터(워크트리경로·스코프·모델)+난이도루브릭+dogfood. 미세결정: 머지타깃=통합브랜치 권장. **다음: 설계 확정 승인받으면
-design doc(`docs/superpowers/specs/`) → writing-plans.** 참고: `.claude/worktrees/wf_28bae004-*` 4개 선행 잔여(정리 대상).
+### 🔄 진행 중: 멀티에이전트 재설계 — ★ 설계 문서 작성·발행, 사용자 리뷰 대기
+**확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 · **A안(워크트리 격리, 워커 무가드, 정본 `.harness/`
+는 오케스트레이터만)** · 코어 무변경. **핵심사실**: `.harness/` git 미추적→워크트리 독립·병합충돌 0 · 코어 노드/웨이브에
+path-scope·난이도 필드 없음→오케스트레이터가 설계문서서 파생. 현재 P8=순차(`activeWave` 단수).
+**★ 설계 문서 완성**(사용자 「일부 더 파고들기」→네 부분 전부 심화): `docs/superpowers/specs/2026-08-26-multiagent-p8-design.md`
+(커밋 `7b42b6d`, 아티팩트 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf). §3 웨이브분해(P2모듈+contract+
+codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(Haiku/Sonnet/Opus 신호표·3strike승급) · §5 머지(통합브랜치·충돌=재디스패치·
+머지후 정본순차회계) · §6 오케스트레이션(신규 `phase-p8-orchestrate`+dispatching-parallel-agents+wave-executor 파라미터).
+**다음: 사용자 리뷰 반영 → 승인 시 `superpowers:writing-plans`(구현계획).** 잔여: dogfood 대상 미정(§8,§9) · `.claude/worktrees/wf_28bae004-*` 4개 정리.
 
 ### 사용자 결정: 「1,2 진행」 (둘 다)
 1. **보안 루프 계속**: SEC-311·312 봉인✅ → 21차 검증🔄 → CLEAN 날 때까지 반복. 그다음 G001 checkpoint→G002(축5).
@@ -74,7 +74,7 @@ design doc(`docs/superpowers/specs/`) → writing-plans.** 참고: `.claude/work
 ### 다음 즉시 할 일
 1. **24차 검증 결과 수신** → `scratchpad/sec300-verify14.md`. CLEAN=수렴확정→G001 checkpoint / NEW=봉인패턴.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
-3. **멀티에이전트 재설계**: 제시한 A안 설계 확정 승인받아 → design doc(`docs/superpowers/specs/YYYY-MM-DD-multiagent-p8-design.md`) → writing-plans.
+3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
 
 ### 함정·환경 (그대로 유효)
