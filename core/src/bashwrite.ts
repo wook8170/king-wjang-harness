@@ -169,20 +169,21 @@ export type Cwd = string | null;
 /** 정적으로 못 읽는 `cd` 대상 — 변수·치환·글롭·홈. */
 const DYNAMIC_CD = /[$`*?~]/;
 
-/** `.`·`..` 를 접어 경로를 한 가지 표기로 만든다. 같은 파일이 두 이름을 갖지 않게. */
-function normalizePath(p: string): string {
+/**
+ * cwd·대상 결합용 — `.`·중복 슬래시만 접고 **`..` 는 보존**한다.
+ *
+ * [SEC-318] 예전엔 `..` 를 렉시컬로 상쇄했는데(`normalizePath`), `cd <심링크> && > ../<코어>` 처럼
+ * 심링크 세그먼트 뒤에 `..` 가 오면 그 상쇄가 심링크를 지워 물리적 착지(realpath)를 못 보게 했다 —
+ * `cd wv && > ../events.jsonl`(`wv`→`.harness/waves`)이 `events.jsonl`(루트, 코어 아님)로 접혀 통과,
+ * 그러나 커널은 `wv` 를 물리적으로 풀고 `..` 로 올라가 `.harness/events.jsonl` 에 실제로 쓴다(SEC-317 의
+ * cwd 표면 쌍둥이, 25차 검증). 그래서 `..` 는 접지 않고 남겨 `judgeWritePath`→`realRelPath`→`realOrSelf`
+ * 가 심링크를 `..` «전에» 물리적으로 풀게 한다. 리터럴 공간(`relPath`)은 여전히 렉시컬로 접으므로
+ * union `[rel, realRel]` 판정은 그대로 성립한다(SEC-317 과 동일 원리로 통일). 실디렉토리 `..`(물리=렉시컬)
+ * 와 정상 쓰기는 불변.
+ */
+function foldPath(p: string): string {
   const abs = p.startsWith('/');
-  const parts: string[] = [];
-  for (const seg of p.split('/')) {
-    if (seg === '' || seg === '.') continue;
-    if (seg === '..') {
-      const top = parts[parts.length - 1];
-      if (parts.length > 0 && top !== '..') parts.pop();
-      else if (!abs) parts.push('..');
-      continue;
-    }
-    parts.push(seg);
-  }
+  const parts = p.split('/').filter(seg => seg !== '' && seg !== '.');
   return (abs ? '/' : '') + parts.join('/');
 }
 
@@ -203,10 +204,10 @@ const CWD_MAX = PATH_MAX_GUESS;
 
 function advanceCwd(cwd: Cwd, op: string | undefined): Cwd {
   if (op === undefined || op === '-' || DYNAMIC_CD.test(op)) return null;
-  if (op.startsWith('/')) return normalizePath(op);
+  if (op.startsWith('/')) return foldPath(op);
   if (cwd === null) return null;
   if (cwd.length + op.length + 1 > CWD_MAX) return null;
-  return normalizePath((cwd ? cwd + '/' : '') + op);
+  return foldPath((cwd ? cwd + '/' : '') + op);
 }
 
 /**
@@ -234,14 +235,14 @@ function resolveIn(cwd: Cwd, p: string): string | null {
     if (cwd === null) return null;                    // cwd 를 못 읽었다 — 「모른다」
     const rest = p.slice(pwdHead[0].length).replace(/^\//, '');
     const joined = rest === '' ? (cwd === '' ? '.' : cwd) : (cwd === '' ? rest : `${cwd}/${rest}`);
-    return /[$`]/.test(joined) ? null : normalizePath(joined);
+    return /[$`]/.test(joined) ? null : foldPath(joined);
   }
   if (/[$`]/.test(p)) return null;
   if (/^~-(?=\/|$)/.test(p)) return null;               // [12차] $OLDPWD 미추적 — 홈 통과 금지
   if (p.startsWith('/') || p.startsWith('~')) return p; // 절대·홈(`~`·`~user`) — cwd 와 무관하다
   if (cwd === null) return null;
   if (cwd === '') return p; // 프로젝트 루트 — 기존 표기 그대로 둔다(거부문이 명령과 같아 보이게)
-  return normalizePath(cwd + '/' + p);
+  return foldPath(cwd + '/' + p);
 }
 
 /**

@@ -38,8 +38,10 @@ describe('[SEC-170] `cd` 뒤의 상대경로도 같은 파일이다', () => {
     expect(scanBashWrites('cd .harness && tee events.jsonl').targets).toContain('.harness/events.jsonl');
     expect(scanBashWrites('cd src && touch app.ts').targets).toContain('src/app.ts');
     expect(scanBashWrites('cd .harness && echo x > state.json').targets).toContain('.harness/state.json');
-    // `..` 는 접힌다 — 같은 파일이 두 이름을 갖지 않게.
-    expect(scanBashWrites('cd .harness && tee ../src/app.ts').targets).toContain('src/app.ts');
+    // [SEC-318] `..` 는 **렉시컬로 접지 않는다** — cd 대상이 심링크면 렉시컬 상쇄가 그것을 지워
+    // 물리 착지(realpath)를 못 보게 하기 때문. 대상은 `..` 를 보존한 채 잡히고, 물리 해석(같은 파일
+    // 판정)은 judgeWritePath→realRelPath 가 한다(실디렉토리 `.harness/../src/app.ts` == `src/app.ts`).
+    expect(scanBashWrites('cd .harness && tee ../src/app.ts').targets).toContain('.harness/../src/app.ts');
     // 여러 번 옮겨도 따라간다.
     expect(scanBashWrites('cd .harness && cd design && tee ledger.yaml').targets)
       .toContain('.harness/design/ledger.yaml');

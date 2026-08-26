@@ -7504,29 +7504,19 @@ var isFlag = (t) => t.startsWith("-");
 var SHORT_FLAG_RE = /^-[A-Za-z]/;
 var looksLikePath = (t) => t !== "" && !isFlag(t) && !/^[a-z]+=/.test(t) && (t.includes("/") || /\.[A-Za-z0-9]+$/.test(t));
 var DYNAMIC_CD = /[$`*?~]/;
-function normalizePath(p) {
+function foldPath(p) {
   const abs = p.startsWith("/");
-  const parts = [];
-  for (const seg of p.split("/")) {
-    if (seg === "" || seg === ".") continue;
-    if (seg === "..") {
-      const top = parts[parts.length - 1];
-      if (parts.length > 0 && top !== "..") parts.pop();
-      else if (!abs) parts.push("..");
-      continue;
-    }
-    parts.push(seg);
-  }
+  const parts = p.split("/").filter((seg) => seg !== "" && seg !== ".");
   return (abs ? "/" : "") + parts.join("/");
 }
 var PATH_MAX_GUESS = 4096;
 var CWD_MAX = PATH_MAX_GUESS;
 function advanceCwd(cwd, op) {
   if (op === void 0 || op === "-" || DYNAMIC_CD.test(op)) return null;
-  if (op.startsWith("/")) return normalizePath(op);
+  if (op.startsWith("/")) return foldPath(op);
   if (cwd === null) return null;
   if (cwd.length + op.length + 1 > CWD_MAX) return null;
-  return normalizePath((cwd ? cwd + "/" : "") + op);
+  return foldPath((cwd ? cwd + "/" : "") + op);
 }
 function resolveIn(cwd, p) {
   const pwdHead = /^\$\{PWD\}|^\$PWD(?![A-Za-z0-9_])|^~\+(?=\/|$)/.exec(p);
@@ -7534,14 +7524,14 @@ function resolveIn(cwd, p) {
     if (cwd === null) return null;
     const rest = p.slice(pwdHead[0].length).replace(/^\//, "");
     const joined = rest === "" ? cwd === "" ? "." : cwd : cwd === "" ? rest : `${cwd}/${rest}`;
-    return /[$`]/.test(joined) ? null : normalizePath(joined);
+    return /[$`]/.test(joined) ? null : foldPath(joined);
   }
   if (/[$`]/.test(p)) return null;
   if (/^~-(?=\/|$)/.test(p)) return null;
   if (p.startsWith("/") || p.startsWith("~")) return p;
   if (cwd === null) return null;
   if (cwd === "") return p;
-  return normalizePath(cwd + "/" + p);
+  return foldPath(cwd + "/" + p);
 }
 function envChdirOf(tokens) {
   for (let i = 0; i < tokens.length; i++) {

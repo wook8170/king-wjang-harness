@@ -712,4 +712,25 @@ describe('[SEC-311·312] 해석기 «프로그램 파일» — 그 안 코어/�
     if (decideWrite(root, 'wv/report.md') === 'deny') over.push('Write wv/report.md');
     expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
   }, 30_000);
+
+  it('★ [SEC-318] `cd <심링크> && > ../<코어>` — 렉시컬 cwd 선접힘이 심링크를 지우던 SEC-317 쌍둥이', () => {
+    const root = setup();
+    fs.symlinkSync('.harness/waves', path.join(root, 'wv'));
+    fs.symlinkSync('.harness/design', path.join(root, 'dsg'));
+    const missed = [
+      'cd wv && echo x > ../events.jsonl', 'cd wv/ && echo x >> ../config.yaml',
+      'cd ./wv && echo x > ../state.json', 'cd dsg && echo x > ../design/ledger.yaml',
+      'pushd wv && echo x > ../events.jsonl', 'cd wv && echo x | tee ../events.jsonl',
+      'cd wv && cp /etc/hosts ../events.jsonl', 'env -C wv sh -c "echo x > ../events.jsonl"',
+      'cd wv/.. && echo x > events.jsonl',
+    ].filter(c => decide(root, c) !== 'deny');
+    expect(missed, `${missed.length}건: ${missed.slice(0, 3).join(' || ')}`).toEqual([]);
+    // 짝: 심링크 통한 waves 정상쓰기·실디렉토리 `..`·비코어 상승은 통과
+    fs.mkdirSync(path.join(root, 'rs'));
+    const over = [
+      'cd wv && echo x > out.txt', 'cd wv && echo x > ../waves/note.md',
+      'cd wv && echo x > ../notes.md', 'cd rs && echo x > ../README.md',
+    ].filter(c => decide(root, c) === 'deny');
+    expect(over, `과차단: ${over.join(' || ')}`).toEqual([]);
+  }, 30_000);
 });
