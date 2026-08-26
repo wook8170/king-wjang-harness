@@ -48,8 +48,11 @@
   flag-attached `-o`/`--out=` → 전 피연산자+플래그값+`-c`/`-e` 코드경로 수집, cd/pushd/popd 제외) · SEC-309
   (globstar `**/` 0-dir 미구현 → `**/`→`(?:[^/]+/)*`·`**`→`.*`). 커밋 `0c4d3a1`. 대장 verified **325**. 1391 green.
 - **★ 봉인 누적(축2, 11라운드/14 CLASS)**: dequoting 5종 · SEC-303~309. CORE/정책 하드경계 광범위 봉인.
-- **18차 진행 중**(`scratchpad/sec300-verify8.md`, CORE/정책 집중) — SEC-308확장 반증(다른 인라인코드플래그·
-  heredoc·프로세스치환)·brace-default·경로/링크·중괄호실확장·다표면. **CLEAN 이면 G001 checkpoint→G002(축5).**
+- **18차 = CRITICAL 1 (SEC-310)**: sed 가 `-i` 없이 프로그램 안 `w`/`W`/`s///w` 로 코어 위조·절단
+  (CONDITIONAL_WRITERS.sed 가 `-i` 만 봄) → `sedWriteTargets` 로 w-대상만 추출 판정. 커밋 `b8ccc85`. 대장 **326**. 1392 green.
+- **★ 봉인 누적(축2, 12라운드/15 CLASS)**: dequoting 5종 · SEC-303~310. CORE/정책 하드경계 광범위 봉인.
+- **19차 진행 중**(`scratchpad/sec300-verify9.md`, CORE/정책 집중) — SEC-310 반증(sed 다른 명령·awk/ed/jq/yq/vim
+  인라인쓰기)·미해결 net·경로/링크·다표면. **CLEAN 이면 G001 checkpoint→G002(축5).**
 - **★ 전략 판단(사용자 결정 대기 가능)**: 순수-훅으로 셸 전체 파싱을 따라잡는 건 긴 꼬리다. 매 라운드가 진짜
   CRITICAL 을 잡아 루프는 유효하나, 「출하 가능(clean sweep)」까지 몇 라운드 더 갈 수 있다. README 「알려진
   한계」가 이미 지목한 **파일시스템 층 강제**가 근본 봉인이라는 대안도 있다(제품 성격 변경 = 사용자 판단).
