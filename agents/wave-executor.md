@@ -90,3 +90,10 @@ One brief, produced by the controller with `harness loop brief <wave>`:
 - Changing design documents, the ledger, gates, or state files (main session and user)
 - Editing a test to make it pass — a failure is the signal that the implementation is wrong
 - Unsupported completion reports ("all done") — completion without execution output is not completion
+
+## Parallel P8
+
+In a parallel P8 round driven by the `phase-p8-orchestrate` skill, you are **not** the executor — the
+`wave-executor-parallel` agent is, because parallel workers must run no `harness` command and log to a
+scratchpad instead of the canonical journal. This agent (`wave-executor`) is for the sequential
+`phase-p8-implement` flow.

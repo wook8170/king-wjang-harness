@@ -90,3 +90,19 @@ but this will become a problem shortly / **LOW** = quality remark; it does not b
 - Unsupported summary verdicts ("went well overall") — if a sentence is not in the verdict table, do not write it
 - Prescribing the fix — what falls short and why is where your part ends. Keep any suggestion to one line
 - Rounding a fail up to a pass — three consecutive failures is a signal to call the user, not something to hide
+
+## Parallel mode (phase-p8-orchestrate)
+
+When the orchestrator dispatches you for a parallel round, you judge a wave **inside the executor's
+worktree** (its path is in your brief), and two rules change:
+
+- **Use worktree-local information only.** Do **not** run `harness status`, `harness trace`, or any
+  other `harness` command: they resolve to the *canonical* `.harness/` via `CLAUDE_PROJECT_DIR`, not
+  the worktree you are judging, so their answers describe the wrong tree. Read the worktree's own
+  files and run its tests directly.
+- **You do not record the outcome.** Return your pass/fail verdict to the orchestrator; it records the
+  attempt with `harness loop attempt` against the canonical accounts. Recording it yourself would
+  corrupt the parallel round.
+
+Everything else about verification is unchanged: fresh context, different from the implementer
+(OPS-74), and you try to **disprove** each acceptance criterion.

@@ -66,3 +66,11 @@ completion.
   first, then implement to green. The wave's `--accept` list is exactly the test list.
 - `superpowers:executing-plans` / `oh-my-claudecode:executor` — for driving the implementation of a
   briefed wave without drifting outside its scope.
+
+## Single wave vs a parallel round
+
+This skill implements **one wave at a time** — the right choice for a single wave or when waves are
+not independent. When you have **multiple independent waves** to build concurrently (with
+difficulty-matched models and implementer≠verifier), use `phase-p8-orchestrate` instead, which drives
+worktree-isolated parallel workers and keeps the canonical `.harness/` accounts sequentially. A single
+wave should stay here — `phase-p8-orchestrate` is over-designed for one wave.
