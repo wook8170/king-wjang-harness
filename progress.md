@@ -1,160 +1,53 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (28) — ★ ULTRAGOAL 6/7 complete · G006 재감정 SHIP-READY · G007 최종게이트만 남음 · 설계 v2 리뷰 대기
+## 2026-08-26 (29) — ★ ULTRAGOAL 6/7 · G006 SHIP-READY · G007 최종게이트만 남음 · 멀티에이전트 설계 v2 리뷰 대기
 
-**정본.** `main` HEAD `fddf0b8` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
-대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `f5d9793`(+이 핸드오프 커밋) · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+대장 verified **334 · open BLOCKER/HIGH 0** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
 
-### ★★ G006 독립 재감정 = VERDICT SHIP-READY (7축 전부 3-R ≥4.8 · 대장 open BLOCKER/HIGH 0)
-신규 컨텍스트 독립 감정자(구현자≠감정자)가 7축 전부 직접 실측: 축1(MISSING0·3실패모드E2E)·축2(적대35벡터 0mismatch·끝단실증)·
-축3(1400green×3·tsc0·중복0)·축4(대장open 0)·축5(폴백wall<150·inproc<50)·축6(--help·20명령군·침묵성공0)·축7(LICENSE·4언어·en+ko·광고정확).
-이번 세션 SEC-300~318 봉인이 축2 뿐 아니라 축1(옛 BLOCKER/MEDIUM 해소)까지 견인. 보고 `scratchpad/g006-reappraise.md`.
-LOW 잔여(README 테스트수 1377→1400, 4언어) 정리 완료. 00-summary 에 G006 통과 노트 추가. **출하 판정의 「7축≥4.8+open 0」 조건 충족.**
-### ULTRAGOAL 6/7 complete — 남은 것: **G007 finalshipgate** (ai-slop-cleaner + verification + $code-review 최종 게이트, 전부 clean 이어야 complete)
+이 세션 요약: **보안 8라운드 봉인(SEC-311~318)→26차 CLEAN 수렴 → ULTRAGOAL 6/7 완주(G006 독립 재감정 SHIP-READY) → 멀티에이전트 설계 v2.**
 
-### ★ ULTRAGOAL 5/7 complete (`omc ultragoal status`)
-- **G001 축2 실효성** ✅ (26차 CLEAN) · **G002 축5 가성비** ✅ (wall<150ms·in-proc<50ms) · **G003 축1 유용성** ✅ (MISSING 0·
-  3대 실패모드 E2E·옛 BLOCKER/MEDIUM 해소) — (23)(24) 참조.
-- **G004 축6 사용성** ✅ — `--help` exit0·명령군 **20개**(목표「13」낡음) 전부 나열·하위명령 안내 14/14·**침묵성공 0**(성공 6종 피드백)·첫실행 온보딩(init+session-start).
-- **G005 축7 상품성** ✅ — LICENSE(MIT)·README 4언어(md/ja/zh/ko)·영문기본+lang:ko(config·env 전환 확인)·광고 정확성(4언어 🔜/예정 0·'198 tests' 0, PROD-A/B·USE-81 정리).
-- **G006 reappraise** [pending] ← **다음. 7축 전부 3-R>=4.8 신규컨텍스트 독립 재감정 + 대장 open BLOCKER/HIGH 0.** 축3·4 는 원래 4.8,
-  축1·2·5·6·7 은 이번에 4.8 측정 — G006 이 이 측정들을 «독립 적대 검증」으로 확정(brief 요구: 구현자≠감정자). 미달 축은 보완→재감정 루프.
-- **G007 finalshipgate** [pending] — ai-slop-cleaner + verification + $code-review 최종 게이트(전부 clean 이어야 complete).
+### ✅ 완료 (이번 세션)
 
-### ★ ULTRAGOAL 3/7 complete (`omc ultragoal status`)
-- **G001 축2 실효성** ✅ · **G002 축5 가성비** ✅ (위 (23) 참조)
-- **G003 축1 유용성** ✅ complete — 재측정: MISSING 0(문서 49조합·최상위 미실재 0·guidance-commands-exist green) · 3대
-  실패모드 E2E bidirectional(설계무시 deny/allow·미정산종료 block/allow·세션단절 상태영속). ★ 옛 감정(round3l 3.0)의
-  감점요인 해소 확인: [BLOCKER] 일곱번째 표기(basename 조립) 이제 전부 DENY(SEC-303/213/306, 26차 CLEAN) · [MEDIUM] 조회
-  과차단(sed -n·cp 백업) 이제 전부 ALLOW → 4.8 충족. (독립 재감정은 G006.)
-- **G004 축6 사용성 / G005 축7 상품성** [pending] · **G006 reappraise**(7축 3-R 독립재감정) · **G007 finalshipgate** [pending]
+**보안 — SEC-311~318 (8연속 CRITICAL 봉인, 19~26차 독립검증)**. 「모델이 훅을 논파 못 한다」의 급소들:
+- **SEC-311~316**(해석기 프로그램파일 클래스): 본문미독→열거누락→무확장자→chdir→슬래시→케이스. 6R 후 **근본 통합**(`77e00a9`):
+  즉석 substring 폐기, `harnessCandidates`(hook.ts)가 `.harness`토큰+chdir후보를 정본 `judgeWritePath`(realpath 일괄)로 판정 → 정규화 whack-a-mole 종료.
+- **SEC-317+318**(심링크+`..` 물리-vs-렉시컬, 전 표면): `realRelPath`·`resolveIn` 이 `path.resolve`/`normalizePath` 로 `..` 를 렉시컬
+  선접혀 심링크를 지운 채 판정. 봉인: `realRelPath` raw 결합(`083d328`) + `normalizePath→foldPath`(`..` 보존, `37c9bc6`). 끝단 P7 게이트
+  개통 킬체인 실증. **구조 통찰**: `judgeWritePath` 의 `union[rel(렉시컬), realRel(물리)]` 이 셸의 두 `..` 해석(리다이렉트=커널물리, cd인자=논리)을 양쪽 다 덮어 필요충분.
+- **26차 = CLEAN**(40+변형 끝단 전수·신규0·회귀0·과차단0) → 보안 루프 수렴. bypass-corpus 「SEC-311~318」 상시화. 봉인패턴: fix→probe(짝)→코퍼스→대장→reanchor→green→커밋·푸시.
 
-### ★ ULTRAGOAL 진행 (`.omc/ultragoal`, `omc ultragoal status`) — 2/7 complete
-- **G001 축2 실효성** ✅ complete — 보안 루프 26차 CLEAN(SEC-300~318 봉인·bypass-corpus 상시화·과차단 0).
-- **G002 축5 가성비** ✅ complete — 훅 폴백 wall-time p95 realistic 102.8ms·corrupt 85.7ms <150ms · in-proc 델타
-  +18.4/+5.9ms <50ms · 파싱경로 <1000ms. ★ SEC-311~318 새 파싱표면(해석기 본문·심링크+..·foldPath)을 벤치에 편입
-  (interp-body 72.9ms·symlink-cd 75.9ms ≈ plain 기준 → 추가비용 ~0ms). 커밋 `02de8bf`. 벤치=`scripts/bench-hook-latency.mjs`.
-- **G003 축1 유용성 / G004 축6 사용성 / G005 축7 상품성** [pending] — 3-N 기준(낡음)이라 재감정 필요(brief).
-- **G006 reappraise** [pending] — 7축 전부 3-R>=4.8 독립 재감정 + 대장 open 0. **여기서 축2·5 도 독립 재감정.**
-- **G007 finalshipgate** [pending] — ai-slop-cleaner + verification + code-review 최종 게이트.
-- checkpoint 방법: `omc ultragoal checkpoint --goal-id <id> --status complete --evidence "…" --claude-goal-json <집계스냅샷>`.
-  이 세션은 Claude `/goal` 미사용(터미널 명령·설정 불가) → `--claude-goal-json` 은 집계목표(G001~G007, status active)로 **원장만** 조정.
-  실제 `/goal` 가드는 사용자가 인터랙티브 세션서 타이핑해야 함(원장 checkpoint 와 별개).
+**ULTRAGOAL 6/7 complete** (`.omc/ultragoal`, `omc ultragoal status`) — 7축 rubric(`docs/release-readiness/2026-08-21/rubric.md`):
+- G001 축2 실효성 ✅ · G002 축5 가성비 ✅(폴백 wall p95<150·in-proc델타<50, 벤치 `scripts/bench-hook-latency.mjs` 에 해석기/심링크 shape 편입)
+- G003 축1 유용성 ✅(MISSING0·3실패모드E2E·옛 BLOCKER/MEDIUM 해소) · G004 축6 사용성 ✅(--help·20명령군·침묵성공0) · G005 축7 상품성 ✅(LICENSE·4언어·en+lang:ko·광고정확)
+- **G006 reappraise ✅ = VERDICT SHIP-READY** — 신규컨텍스트 독립감정자가 7축 전부 3-R≥4.8 직접 실측 + 대장 open BLOCKER/HIGH 0. 보고 `scratchpad/g006-reappraise.md`. LOW잔여(README 1377→1400) 정리, 00-summary G006 노트.
 
-### ★★ 보안 루프 수렴 — 26차 = VERDICT CLEAN (8연속 봉인 SEC-311~318 후 첫 CLEAN)
-사용자 결정1의 종료조건(「CLEAN 나올 때까지 반복」) **도달**. 26차 검증자가 심링크+`..` 물리-vs-렉시컬 클래스를 40+ 변형
-끝단 전수 확인 → 전 표면 DENY, 신규 0, SEC-318 유효, 과차단 회귀 0. 보고 `scratchpad/sec300-verify16.md`.
-**핵심 구조 통찰**: `judgeWritePath` 의 `union[rel, realRel]` 이 셸의 두 `..` 해석을 **양쪽 다** 덮는다 — 리다이렉트 안 `..`
-=커널 물리해석→`realRel`(realpath), `cd`/`$PWD`/`~+`/env-C 인자 `..`=셸 논리해석→`rel`(렉시컬). SEC-318 이 `foldPath` 로
-`..` 를 «보존」한 덕에 두 공간이 같은 문자열에서 계산돼 이 클래스가 구조적으로 완결. (검증자가 `cd <루트밖심링크> && cd .. &&
->> .harness/events.jsonl` 로 물리-only 면 뚫릴 지점을 렉시컬이 잡음을 실증 → union 이 필요충분.)
-**비-결함 관찰(선택적 개선, 보안 아님)**: `pushd .harness && popd && > config.yaml` → 보수적 과차단(popd 를 pushd 스택으로
-미추적, cwd 를 `.harness` 로 남김). `..` 무관·SEC-318 이전부터 존재·안전방향. popd 정확추적 처방이 과차단 0 이면 개선 가능.
+**멀티에이전트 설계 v2 완성** — `docs/superpowers/specs/2026-08-26-multiagent-p8-design.md`(커밋 `5cadced`, 아티팩트 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf).
+독립 리뷰 **REWORK**(보고 `scratchpad/design-review-multiagent.md`) 전부 반영: BLOCKER-1(`.harness/` 격리=집행 전제조건) · BLOCKER-2(회계순서
+**선-create→병렬→머지→후-정산**, 코어 diff 0) · MAJOR-1(신뢰경계=세션전역 훅가드, 워커도 가드됨) · MAJOR-2~5 · MINOR 6. **A안(워크트리 격리) 유지.**
 
-### ★ SEC-318 (25차, 이번 봉인) — SEC-317 의 cwd 표면 쌍둥이
-`cd <심링크> && > ../<코어>`: SEC-317 은 직접 대상경로(`realRelPath`)만 물리해석하게 고쳤으나, 셸 `cd wv`(wv→`.harness/waves`)
-로 cwd 옮긴 뒤 `../events.jsonl` 은 `resolveIn` 의 `normalizePath` 가 렉시컬로 `wv/..` 상쇄→`events.jsonl`(루트)로 심링크를
-지운 채 판정→allow, 커널은 물리적으로 `.harness/events.jsonl` 에 씀. 14벡터(redirect·tee·sed-i·cp·env-C·pushd·중첩)·끝단
-doctor→P7. **봉인**(`37c9bc6`): `normalizePath`→`foldPath`(`.`·중복슬래시만 접고 `..` 보존, bashwrite.ts:184) → realRelPath 물리해석.
-회귀 0(실디렉토리 cd·다중 cd·SEC-170)·과차단 0. ★ SEC-317+318 이 심링크+`..` 물리-vs-렉시컬 클래스를 두 표면에서 닫음.
+### 🔄 진행 중 / 다음 즉시 할 일 — 사용자 판단 대기
+남은 것은 두 갈래. 사용자가 방향 지시:
+1. **(가) G007 finalshipgate** — ultragoal 최종 story. **ai-slop-cleaner + verification + `$code-review` 전부 clean → 7/7 완주 → 최종 「출하 가능」.**
+   checkpoint 시 `--quality-gate-json`(aiSlopCleaner·verification·codeReview 증거) 필요.
+2. **(나) 멀티에이전트 설계 v2 리뷰 → `superpowers:writing-plans`(구현계획)** — 결정2 마무리. v2 아티팩트 리뷰 후 구현계획.
+3. **(다) 멈춤** — 6/7·SHIP-READY 로 매듭.
+(이전 세션 미완: 안정화 후 로컬 플러그인 0.1.2 재설치 — 현재 0.1.1 stale.)
 
-### ★ 이번 세션 보안 = SEC-311~317 (7연속 봉인)
-- **SEC-311~316**(해석기 프로그램파일 클래스, 19~23차): 미독→열거→무확장자→chdir→슬래시→케이스. 6R 후 **근본 통합**
-  (`77e00a9`): 즉석 substring 폐기, `harnessCandidates`(hook.ts:952)가 `.harness` 토큰+chdir 후보를 정본 `judgeWritePath`
-  (realpath 일괄)로 판정 → 정규화 whack-a-mole 종료.
-- **★ SEC-317**(24차, 전 표면 관통 — 정규화 아님): `realRelPath` 가 `path.resolve` 로 `..` 를 렉시컬 선접혀,
-  심링크(`wv`→`.harness/waves` 하위디렉토리, 별칭생성 정상)+`..` 상승이 realpath 를 앞질러 Write·셸·해석기·doctor
-  **전 표면**에서 코어 위조(끝단: 저널→doctor --repair→P0~P6 approved→phase P7). **봉인**(`083d328`): `realRelPath` 를
-  raw 결합(`path.resolve`/`join` 금지)→realOrSelf 가 심링크를 `..` 전에 물리적으로 풀게 함(hook.ts:738) + `harnessCandidates`
-  가 `..` 상승 토큰도 추출. 실측 3코어×3표면 deny·회귀 0·과차단 0(별칭생성·waves쓰기·실디렉토리 `..` 통과).
+### 미해결 · 확인 대기
+- **최종 출하 판정**: G007(최종 리뷰 게이트) 통과해야 「출하 가능」. 00-summary 는 G006 통과 노트 추가했으나 헤더 「출하 불가」는 G007 이 확정할 몫(그대로 둠).
+- **설계 v2 스탠스 긴장**(BLOCKER-1 잔여): `.harness/` 를 코어는 커밋모델(wave.ts:116)로 문서화, 병렬 오케스트레이션은 gitignore 요구 → 하네스 공식 스탠스 결정 열림.
+- 비-결함 관찰(선택·보안 아님): `pushd .harness && popd && > config.yaml` 보수적 과차단(popd 스택 미추적). 안전방향·`..`무관.
+- 소스 소프트-잔여(공시, 발견 카운트 제외): #1d(동적cd×조립 src)·D1(MCP 부차필드 소스 디코이). 해석기 공시 4종(in-language 난독·exotic 해석기·≥64KB fail-open·같은명령서 생성후실행) — README 「알려진 한계」.
 
-### ✅ 완료 (축2 실효성, 19라운드 봉인 = dequoting 5종 + SEC-303~316)
-dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
-
-**해석기 프로그램파일 봉인 6연속(19~23차 발견)**: SEC-311(본문 미독→읽기·페이즈무관 deny) → SEC-312(열거누락 bun/deno/버전접미
-→ 정본 INTERPRETERS 파생) → SEC-313(무확장자명 looksLikePath 회피→필터 제거) → SEC-314(chdir 상대화→`interpBodyHit` 결합)
-→ SEC-315(슬래시 정규화 `//`·`/./`·`/../`→`collapseSlashPaths`) → SEC-316(케이스무시 FS 정규화→`isCaseInsensitiveFS`+toLowerCase).
-**★ 수렴 신호 강함**: 최근 3건(314/315/316)이 전부 `interpBodyHit`(hook.ts:981) 의 «즉석 substring 매칭»이 정규화를
-하나씩 빠뜨린 것 — chdir·슬래시·케이스. 22차 관찰=직접-Bash·Write 표면은 `judgeWritePath` realpath 로 촘촘.
-**★ 근본 수정 후보(사용자 판단 대기)**: `interpBodyHit` 의 substring 을 버리고, 본문에서 `.harness`-루트 경로토큰을 뽑아
-**정본 `judgeWritePath`(realpath=슬래시+케이스+심링크+`..` 일괄)로 판정** → 이 정규화 하위루프를 한 번에 종료. (단 23차 검증자는
-비용·오탐 이유로 케이스게이트 방식을 권장했음 — 트레이드오프 있음. chdir 결합절은 별도 유지 필요.)
-**공시 잔여(README)**: ①in-language 난독 ②exotic 해석기 ③≥64KB fail-open ④같은명령서 생성후실행. 순수-훅 한계→파일시스템 층.
-
-**SEC-312 (20차 발견 · 이번 봉인) — SEC-311 이 해석기 이름 «열거»에 의존해 재발**: `interpreterProgramFiles`
-의 `SCRIPT_INTERP` 가 정본 `INTERPRETERS`(이미 deno·bun·osascript 앎)보다 좁아 `bun forge.js`·`deno run`·
-`perl5.36`·`tclsh` 로 다시 열림(내부 모순 — opaqueExecOf 는 「호출측이 읽는다」고 통과시키는데 읽는 쪽이 좁음).
-끝단: `bun forge.js`→저널 gate-approved+P7→`doctor --repair`→P0→P7·게이트 7개 approved(사람 승인 0). **봉인**:
-`SCRIPT_INTERP`=INTERPRETERS 파생(`bashwrite.ts:770`) + tclsh/lua/Rscript 정본 편입(`:532`) + `canonicalInterp`
-버전접미 정규화. 실측 전건 deny·과차단 0·회귀 0·1394 green. 커밋 `a7f378d`. **공시 잔여**: 열거 밖 exotic
-해석기(julia·groovy·raku)는 순수-훅 열거 한계 → README 「알려진 한계」 공시(완전한 답=파일시스템 층 강제).
-
-**SEC-311 (19차 발견 · 이번 봉인) — 해석기 «프로그램 파일» 미독**: `sed -f`·`awk -f`·`perl x.pl`·`ruby x.rb`·
-`python3 x.py`·`node x.js`·`sed --file=` 이 프로그램 본문을 파일에 담아 훅이 못 읽어 그 안 `w .harness/events.jsonl`·
-`open(">",core)` 로 저널·출하대장 위조·절단 + read-only 오분류(stop 가드 우회). **봉인 구현**:
-- `bashwrite.ts:809` `interpreterProgramFiles(cmd)` — 프로그램파일 경로 정적 추출(sed/awk=`-f`·`--file=`,
-  perl/ruby/php/python/node=인라인코드(`hasInlineProgram`) 없을 때 경로형 피연산자). `commandLines` 로 셸 unwrap.
-- `hook.ts:1734` `interpreterProgramBodies` — 셸 본문의 자매로 본문 읽어 `mentionsPath(CORE)`+POLICY_PREFIXES
-  언급 시 **페이즈 무관 deny**. **대용량(64KB↑)은 fail-open**(정상 번들·`node cli.js status` 실행 안 막으려 —
-  셸의 fail-closed 와 비대칭. 손 위조기는 <1KB).
-- `bashwrite.ts:916` `isReadOnlyCommand` — 프로그램파일 실행형을 활동으로 집계(정산강제 복원).
-- 실측 6코어·정책 × 6해석기 + 셸래핑 전건 deny · **과차단 0**(정상 `sed -f fmt.sed src`·`node build.js`·대용량·
-  코어읽기·없는파일·인라인필터 통과) · SEC-96 강제형 deny 유지. 상시 코퍼스 편입 + 대장 verified 327. 커밋 `cf2cbde`.
-- **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
-  미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
-
-### ⏸️ 다음 갈림 — 사용자 판단 (6/7 · SHIP-READY 후)
-- **(가) G007 최종 게이트 진행**: ai-slop-cleaner(슬롭 정리) + verification(검증) + `$code-review`(diff 리뷰) 전부 clean → G007 complete
-  → ULTRAGOAL 7/7 완주 → 최종 「출하 가능」 선언. (ultragoal 최종 story 는 `--quality-gate-json` 필요.)
-- **(나) 멀티에이전트 설계 v2 리뷰→writing-plans**: 결정2 마무리. 설계 v2 아티팩트 리뷰 후 구현계획.
-- **(다) 여기서 멈춤**: 6/7·SHIP-READY 로 큰 매듭. progress.md 로 이어받기.
-
-### (참고) G006/설계리뷰 완료 기록
-- **멀티에이전트 설계 독립 리뷰** ✅ 완료 = **REWORK**(BLOCKER 2·MAJOR 5·MINOR 6, 보고 `scratchpad/design-review-multiagent.md`).
-  → **설계 v2 재작성 완료**(커밋 `5cadced`, 아티팩트 갱신 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf). 반영:
-  BLOCKER-1 `.harness/` 격리=집행 전제조건(0단계 검사)·코어 커밋모델 모순 명시 · BLOCKER-2 회계순서 선-create→병렬→머지→후-정산
-  (코어 diff 0 로 브리프/유령참조/증적id/재개 복구) · MAJOR-1 신뢰경계=세션전역 훅가드(워커도 가드됨) · MAJOR-2 wave-executor
-  병렬모드(harness금지·scratchpad 턴로그) · MAJOR-3 라운드 통합스위트 · MAJOR-4 계약/생성파일 클래스 · MAJOR-5 워크트리 네이티브
-  (Agent isolation:worktree) · MINOR 6건. **A안 유지.** 다음: 사용자 v2 리뷰 → 승인 시 writing-plans.
-
-### (참고) 이전 갈림 옵션
-사용자 결정(축2 매듭·G002 진행) 이행 완료. 다음 갈림:
-- **(가) G003 축1 유용성 진행**: ultragoal 순서대로 계속. 문서·스킬·에이전트 부르는 명령 MISSING 0 실측 + 3대 실패모드 E2E.
-- **(나) 멀티에이전트 설계 리뷰**: 결정2(설계문서 리뷰→writing-plans)로 이동. 아티팩트 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf
-- **(다) G006 독립 재감정 앞당김**: 축2·5 를 신규 컨텍스트 독립 검증자로 재감정(brief 의 3-R 요구) 후 다음 축.
-- **(라) popd 선택적 개선**(보안 아님, 소소).
-
-### 🔄 진행 중: 멀티에이전트 재설계 — ★ 설계 문서 작성·발행, 사용자 리뷰 대기
-**확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 · **A안(워크트리 격리, 워커 무가드, 정본 `.harness/`
-는 오케스트레이터만)** · 코어 무변경. **핵심사실**: `.harness/` git 미추적→워크트리 독립·병합충돌 0 · 코어 노드/웨이브에
-path-scope·난이도 필드 없음→오케스트레이터가 설계문서서 파생. 현재 P8=순차(`activeWave` 단수).
-**★ 설계 문서 완성**(사용자 「일부 더 파고들기」→네 부분 전부 심화): `docs/superpowers/specs/2026-08-26-multiagent-p8-design.md`
-(커밋 `7b42b6d`, 아티팩트 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf). §3 웨이브분해(P2모듈+contract+
-codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(Haiku/Sonnet/Opus 신호표·3strike승급) · §5 머지(통합브랜치·충돌=재디스패치·
-머지후 정본순차회계) · §6 오케스트레이션(신규 `phase-p8-orchestrate`+dispatching-parallel-agents+wave-executor 파라미터).
-**다음: 사용자 리뷰 반영 → 승인 시 `superpowers:writing-plans`(구현계획).** 잔여: dogfood 대상 미정(§8,§9) · `.claude/worktrees/wf_28bae004-*` 4개 정리.
-
-### 사용자 결정: 「1,2 진행」 (둘 다)
-1. **보안 루프 계속**: SEC-311·312 봉인✅ → 21차 검증🔄 → CLEAN 날 때까지 반복. 그다음 G001 checkpoint→G002(축5).
-2. **멀티에이전트 재설계**(구현단계) — 🔄 brainstorming 착수(위):
-   - 하네스는 에이전트 «디스패치 안 함» — 메인 세션이 스킬대로 wave-executor/wave-verifier 부름. 즉 이 변경은
-     **오케스트레이션 층(P8 스킬·에이전트 정의·디스패치 패턴)**이 본체. 난이도별 모델·구현자≠검증자는 이미 있음.
-   - **코어 제약**: `state.activeWave` 단수, `wave.ts:204` 이미 활성이면 activate 거부 → 한 `.harness/` 동시 웨이브 불가.
-   - **권장 (A) 워크트리별 웨이브 격리 — 코어 무변경**: 병렬워커마다 자기 워크트리+자기 `.harness/`. Fable 오케스트레이터가
-     N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
-
-### 다음 즉시 할 일
-1. **다음 방향 결정**(가 G007 최종게이트 / 나 설계 v2 리뷰→writing-plans / 다 멈춤) — 사용자 판단.
-2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
-3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
-4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
-
-### 함정·환경 (그대로 유효)
-- 독립검증 라운드 ~15분 → 머신 절전 시 실패. `caffeinate` 권장. 검증자 지시에 `CLAUDE_PROJECT_DIR` 매 명령 유지 필수(자기참조 방지).
-- 대장 편집 시 정규식 리터럴 `|` 금지(마크다운 표 깨짐)→산문. 편집 후 `reanchor-citations.py HEAD` → 「후보 N개/수동」은 손으로.
-- 소스 소프트-잔여(공시): #1d(동적cd×조립 src), D1(MCP 부차필드 소스 디코이) — 발견 카운트 제외.
-- 봉인 패턴: fix → 직접 probe(짝 포함) → `bypass-corpus` 코퍼스 편입 → 대장 verified 행 → reanchor → 전체 green → 커밋·푸시.
-- 빌드: `npm run build`(리포 루트) → `core/dist/cli.js` 재생성(git 추적). tsc 는 `cd core && npx tsc --noEmit`.
+### 시스템 지식 · 함정 (그대로 유효)
+- **ULTRAGOAL checkpoint**: `omc ultragoal checkpoint --goal-id <id> --status complete --evidence "…" --claude-goal-json <집계스냅샷>`. 이 세션은 Claude `/goal`
+  미사용(터미널 명령·설정 불가) → `--claude-goal-json` 은 집계목표(G001~G007, status active)로 **원장만** 조정(실제 `/goal` 가드는 사용자가 인터랙티브 세션서 타이핑, 원장 checkpoint 와 별개). pending goal 은 `omc ultragoal complete-goals` 로 start 후에만 checkpoint 가능.
+- **독립검증 서브에이전트**(구현자≠감정자, OPS-74): 신규 컨텍스트 Fable5. ~15분 → 절전 시 실패, `caffeinate -dimsu &` 지시. 검증자 지시에 `CLAUDE_PROJECT_DIR="$D"` **매 명령** 유지 필수(자기참조 방지). 보고는 `scratchpad/*.md` 파일로 받아 grep(간결 모드).
+- **대장 편집**: 정규식 리터럴 `|` 금지(마크다운 표 깨짐)→산문. 편집 후 `docs/release-readiness/2026-08-21/round3i/reanchor-citations.py HEAD` → 「수동」 항목(기준에서도 무의미)은 손으로 유의미 줄에 재지정.
+- **빌드/검증**: `npm run build`(리포 루트)→`core/dist/cli.js`(git 추적) · `cd core && npx tsc --noEmit`(0) · `npx vitest run`(1400). 오라클: `printf '<json>' | CLAUDE_PROJECT_DIR=$D bin/harness hook <event>`(빈출력=allow).
+- **화면/결과물은 아티팩트로**(원격 iPad): 설계문서·감정서 등 보여줄 것은 `Artifact` 로. 갱신은 같은 파일경로 재발행(URL 유지).
+- 선행 워크트리 잔여 `.claude/worktrees/wf_28bae004-*` 4개 — 멀티에이전트 dogfood 전 정리 대상.
 
 ---
 
