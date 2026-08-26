@@ -144,7 +144,7 @@ alongside, because a large part of any absolute number is that floor and not thi
 ### Install (as a Claude Code plugin)
 
 ```bash
-claude plugin marketplace add <this-repo>
+claude plugin marketplace add wook8170/king-wjang-harness
 claude plugin install king-wjang-harness@king-wjang-harness
 ```
 

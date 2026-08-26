@@ -1,5 +1,27 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-27 (36) — ★ 저장소 공개 완료(전략 A) + README 현행화 push. 다음=공식 디렉터리 제출·스킬 플러그인化
+
+**정본.** `main` HEAD **`3af6fbd`**(+ 설치안내 currency 커밋 진행 중) · **origin/main = PUBLIC** · 트리 clean 지향.
+`github.com/wook8170/king-wjang-harness` **PUBLIC 전환 완료** · 1404 tests green·tsc0·doc-claims 16/16 확인 후 push.
+
+### 이번 완료
+- **공개 전략 A 채택·실행**: 저장소 공개(감사문서 포함 — 설치 tarball엔 export-ignore로 불포함). `gh repo edit --visibility public` 성공. **push는 전환 직후 "repo disabled" 403 → 8초 후 재시도 성공**(전파 지연, 결함 아님).
+- **README.md 현행화 push**: Status "not-ready"→v0.1.2 SHIP-READY + 11축 검증 요약 · Support "private"→공개 문구 · **설치안내 `<this-repo>`→`wook8170/king-wjang-harness`**(이 currency는 별도 커밋으로 push 예정).
+- **출하검증 HTML 아티팩트**: https://claude.ai/code/artifact/cf9183e7-93fa-4024-a1f3-bbd3879669bc (round3s, 파일 `scratchpad/verdict.html`).
+- 이제 남들이 설치 가능: `/plugin marketplace add wook8170/king-wjang-harness` → `/plugin install king-wjang-harness@king-wjang-harness`.
+
+### 다음 즉시 할 일 (사용자 요청 잔여)
+1. **설치안내 currency 커밋 push**(진행 중 — README `<this-repo>`→실값).
+2. **공식 디렉터리 제출**(사용자가 폼 작성): `https://clau.de/plugin-directory-submission`. 내가 **제출 문구·git-subdir 엔트리 초안** 제공 가능. git-subdir 소스 예: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:<HEAD>}`. **name 불변** 유의.
+3. **스킬 `verifying-production-readiness` 배포 형태 결정 미정**(standalone 플러그인 vs harness 동봉). 스킬레포(`~/.claude/skills/verifying-production-readiness`)는 **리모트 없음·`.claude-plugin` 없음** → 플러그인化 필요.
+4. (선택) KO/JA/ZH 3종 README도 "not-ready"→SHIP-READY 미러링(현재 영문만 갱신, doc-claims 비강제라 안 깨지나 불일치).
+5. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9 유휴 재측정.
+
+### 함정(이번 확인)
+- **공개 직후 push 403 "repository is disabled"는 전파 지연** — 수초 후 재시도로 해소(gh api는 그 시점에도 disabled:false). 재시도 1회로 성공.
+- gh 인증 = `wook8170`(keyring). 원격에 `feature/core-engine-v0` 구브랜치도 공개됨(무해).
+
 ## 2026-08-26 (35) — 공개/등록/README 진행 중: 공개 전략 결정 대기(A/B/C)
 
 **미커밋 워킹트리 변경 있음** — 커밋/공개 전에 아래 결정 필요.
