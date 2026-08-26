@@ -231,6 +231,11 @@ const CMD_SHAPES = {
   'long-noslash': `echo ${'a'.repeat(200_000)}`,
   'cd-redirect': Array.from({ length: 1000 }, () => 'cd x > f').join(' ; '),
   quoted: Array.from({ length: 1000 }, (_, i) => `echo 'a && b; c' > out${i}.txt`).join(' ; '),
+  // [SEC-311~318] 해석기 프로그램 «파일 본문» 검사와 심링크+`..` 물리해석은 명령문이 아니라 파일을
+  // 읽어 판정한다 — 벤치의 사각이었다. 64KB 적대적 본문(`harnessCandidates` 의 두 matchAll 정규식을
+  // `.harness`·`/../` 토큰으로 스트레스)과 심링크 cwd 상승을 실어 이 경로도 2차가 아님을 상시 재현한다.
+  'interp-body': 'perl big.pl',
+  'symlink-cd': 'cd wv && echo x > ../events.jsonl',
 };
 
 console.log();
@@ -238,6 +243,11 @@ console.log(L('| Command shape | p95 | Gate |', '| 명령 부류 | p95 | 게이�
 console.log('|---|---|---|');
 {
   const root = makeProject('realistic');
+  // [SEC-311~318] 위 두 shape 가 읽을 파일·심링크를 심는다(하네스 소유 경로를 겨눠 본문/해석기 경로를
+  // 실제로 발화시킨다 — 판정이 deny 든 allow 든 훅 «시간»은 같으므로 측정에는 무관하다).
+  const body = 'open(F,">>","wv/../events.jsonl");# .harness/x/../y .harness/events.jsonl '.repeat(1200);
+  fs.writeFileSync(path.join(root, 'big.pl'), body.slice(0, 64_000));
+  fs.symlinkSync('.harness/waves', path.join(root, 'wv'));
   for (const [shape, command] of Object.entries(CMD_SHAPES)) {
     const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
     const one = () => execFileSync(hook, ['pre-tool'], {
