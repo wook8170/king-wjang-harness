@@ -1,9 +1,16 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (25) — ULTRAGOAL 5/7 complete (축2·축5·축1·축6·축7) · G006(독립 재감정) 지점 · 멀티에이전트 설계 리뷰 대기
+## 2026-08-26 (28) — ★ ULTRAGOAL 6/7 complete · G006 재감정 SHIP-READY · G007 최종게이트만 남음 · 설계 v2 리뷰 대기
 
-**정본.** `main` HEAD `fbbec3c` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+**정본.** `main` HEAD `fddf0b8` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
 대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+
+### ★★ G006 독립 재감정 = VERDICT SHIP-READY (7축 전부 3-R ≥4.8 · 대장 open BLOCKER/HIGH 0)
+신규 컨텍스트 독립 감정자(구현자≠감정자)가 7축 전부 직접 실측: 축1(MISSING0·3실패모드E2E)·축2(적대35벡터 0mismatch·끝단실증)·
+축3(1400green×3·tsc0·중복0)·축4(대장open 0)·축5(폴백wall<150·inproc<50)·축6(--help·20명령군·침묵성공0)·축7(LICENSE·4언어·en+ko·광고정확).
+이번 세션 SEC-300~318 봉인이 축2 뿐 아니라 축1(옛 BLOCKER/MEDIUM 해소)까지 견인. 보고 `scratchpad/g006-reappraise.md`.
+LOW 잔여(README 테스트수 1377→1400, 4언어) 정리 완료. 00-summary 에 G006 통과 노트 추가. **출하 판정의 「7축≥4.8+open 0」 조건 충족.**
+### ULTRAGOAL 6/7 complete — 남은 것: **G007 finalshipgate** (ai-slop-cleaner + verification + $code-review 최종 게이트, 전부 clean 이어야 complete)
 
 ### ★ ULTRAGOAL 5/7 complete (`omc ultragoal status`)
 - **G001 축2 실효성** ✅ (26차 CLEAN) · **G002 축5 가성비** ✅ (wall<150ms·in-proc<50ms) · **G003 축1 유용성** ✅ (MISSING 0·
@@ -96,10 +103,13 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중 (백그라운드 독립 검증 2건, Fable 5) — 사용자 「G006 진행하고 설계 리뷰」
-- **G006 7축 독립 재감정**: `d331ef0` 기준, rubric 정본으로 7축 전부 직접 재측정(구현자≠감정자). 축1·5·6·7 = 내 측정 독립확정,
-  축2 = bypass-corpus+표본, 축3·4 = 테스트/대장. 보고 → `scratchpad/g006-reappraise.md`. VERDICT: SHIP-READY 또는 미달축 목록.
-  → 전 축 >=4.8+open 0 면 G006 complete → G007(최종 게이트). 미달축은 보완→재감정 루프.
+### ⏸️ 다음 갈림 — 사용자 판단 (6/7 · SHIP-READY 후)
+- **(가) G007 최종 게이트 진행**: ai-slop-cleaner(슬롭 정리) + verification(검증) + `$code-review`(diff 리뷰) 전부 clean → G007 complete
+  → ULTRAGOAL 7/7 완주 → 최종 「출하 가능」 선언. (ultragoal 최종 story 는 `--quality-gate-json` 필요.)
+- **(나) 멀티에이전트 설계 v2 리뷰→writing-plans**: 결정2 마무리. 설계 v2 아티팩트 리뷰 후 구현계획.
+- **(다) 여기서 멈춤**: 6/7·SHIP-READY 로 큰 매듭. progress.md 로 이어받기.
+
+### (참고) G006/설계리뷰 완료 기록
 - **멀티에이전트 설계 독립 리뷰** ✅ 완료 = **REWORK**(BLOCKER 2·MAJOR 5·MINOR 6, 보고 `scratchpad/design-review-multiagent.md`).
   → **설계 v2 재작성 완료**(커밋 `5cadced`, 아티팩트 갱신 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf). 반영:
   BLOCKER-1 `.harness/` 격리=집행 전제조건(0단계 검사)·코어 커밋모델 모순 명시 · BLOCKER-2 회계순서 선-create→병렬→머지→후-정산
@@ -134,7 +144,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **다음 방향 결정**(가 G006 독립재감정 진행 / 나 설계리뷰 / 다 여기서 멈춤) — 사용자 판단.
+1. **다음 방향 결정**(가 G007 최종게이트 / 나 설계 v2 리뷰→writing-plans / 다 멈춤) — 사용자 판단.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
