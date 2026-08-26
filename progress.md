@@ -1,9 +1,21 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (22) — ★ 보안 루프 수렴(26차 CLEAN) · G001 축2 checkpoint 지점 · 멀티에이전트 설계 리뷰 대기
+## 2026-08-26 (23) — ULTRAGOAL 2/7 complete (G001 축2 + G002 축5) · G003+ 진행 판단 대기 · 멀티에이전트 설계 리뷰 대기
 
-**정본.** `main` HEAD `0b82207` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
+**정본.** `main` HEAD `02de8bf` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
 대장 verified **334** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~318 미반영)** — 안정화 후 재설치.
+
+### ★ ULTRAGOAL 진행 (`.omc/ultragoal`, `omc ultragoal status`) — 2/7 complete
+- **G001 축2 실효성** ✅ complete — 보안 루프 26차 CLEAN(SEC-300~318 봉인·bypass-corpus 상시화·과차단 0).
+- **G002 축5 가성비** ✅ complete — 훅 폴백 wall-time p95 realistic 102.8ms·corrupt 85.7ms <150ms · in-proc 델타
+  +18.4/+5.9ms <50ms · 파싱경로 <1000ms. ★ SEC-311~318 새 파싱표면(해석기 본문·심링크+..·foldPath)을 벤치에 편입
+  (interp-body 72.9ms·symlink-cd 75.9ms ≈ plain 기준 → 추가비용 ~0ms). 커밋 `02de8bf`. 벤치=`scripts/bench-hook-latency.mjs`.
+- **G003 축1 유용성 / G004 축6 사용성 / G005 축7 상품성** [pending] — 3-N 기준(낡음)이라 재감정 필요(brief).
+- **G006 reappraise** [pending] — 7축 전부 3-R>=4.8 독립 재감정 + 대장 open 0. **여기서 축2·5 도 독립 재감정.**
+- **G007 finalshipgate** [pending] — ai-slop-cleaner + verification + code-review 최종 게이트.
+- checkpoint 방법: `omc ultragoal checkpoint --goal-id <id> --status complete --evidence "…" --claude-goal-json <집계스냅샷>`.
+  이 세션은 Claude `/goal` 미사용(터미널 명령·설정 불가) → `--claude-goal-json` 은 집계목표(G001~G007, status active)로 **원장만** 조정.
+  실제 `/goal` 가드는 사용자가 인터랙티브 세션서 타이핑해야 함(원장 checkpoint 와 별개).
 
 ### ★★ 보안 루프 수렴 — 26차 = VERDICT CLEAN (8연속 봉인 SEC-311~318 후 첫 CLEAN)
 사용자 결정1의 종료조건(「CLEAN 나올 때까지 반복」) **도달**. 26차 검증자가 심링크+`..` 물리-vs-렉시컬 클래스를 40+ 변형
@@ -67,12 +79,12 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### ⏸️ 보안 루프 = 수렴(26차 CLEAN). 27차 자동 미디스패치 — 사용자 판단 대기
-8연속 봉인 후 첫 CLEAN 도달 = 사용자 결정1 종료조건 충족. **G001 축2 checkpoint 지점.** 다음 갈림(사용자 판단):
-- **(가) 축2 매듭·G002(축5) 진행**: 결정1 시나리오대로. 축2(변경 안전성/실효성) 수렴 선언 → G001 checkpoint → G002.
-- **(나) 확인 사살 1회**: 첫 CLEAN 이라 27차 한 번 더(다른 각도) 돌려 CLEAN 재확인 후 매듭.
-- **(다) 멀티에이전트 설계 리뷰**: 보안 매듭짓고 결정2(설계문서 리뷰→writing-plans)로 이동.
-- **(라) popd 선택적 개선**: 비-결함 보수적 과차단 정리(보안 아님, 소소).
+### ⏸️ 다음 방향 — 사용자 판단 대기 (G001·G002 완료 후)
+사용자 결정(축2 매듭·G002 진행) 이행 완료. 다음 갈림:
+- **(가) G003 축1 유용성 진행**: ultragoal 순서대로 계속. 문서·스킬·에이전트 부르는 명령 MISSING 0 실측 + 3대 실패모드 E2E.
+- **(나) 멀티에이전트 설계 리뷰**: 결정2(설계문서 리뷰→writing-plans)로 이동. 아티팩트 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf
+- **(다) G006 독립 재감정 앞당김**: 축2·5 를 신규 컨텍스트 독립 검증자로 재감정(brief 의 3-R 요구) 후 다음 축.
+- **(라) popd 선택적 개선**(보안 아님, 소소).
 
 ### 🔄 진행 중: 멀티에이전트 재설계 — ★ 설계 문서 작성·발행, 사용자 리뷰 대기
 **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 · **A안(워크트리 격리, 워커 무가드, 정본 `.harness/`
@@ -94,7 +106,7 @@ codesight 파생·서로소=병렬·위상라운드) · §4 난이도루브릭(H
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **보안 checkpoint 갈림 결정**(가 축2매듭·G002 / 나 27차 재확인 / 다 설계리뷰 / 라 popd개선) — 사용자 판단.
+1. **다음 방향 결정**(가 G003 축1 / 나 설계리뷰 / 다 G006 재감정 / 라 popd) — 사용자 판단.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트**: 설계문서 사용자 리뷰 반영 → 승인 시 writing-plans. (문서·아티팩트 발행 완료)
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
