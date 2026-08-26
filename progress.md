@@ -1,5 +1,28 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (32) — 멀티에이전트 P8 오케스트레이션 구현계획 실행 완료(subagent-driven) · 푸시 대기
+
+**정본.** `main` HEAD `968335d`(+이 핸드오프 커밋) · **미푸시 로컬 커밋 4개**(origin/main 미반영) · **1404 tests green · tsc 0** · repo 0.1.2.
+core/src **무변경**(A안 계약: `git diff 338f0d9 -- core/src` 공백).
+
+이 세션(웨이브32): **구현계획 7개 태스크 전부 실행 완료.** 코드 태스크는 서브에이전트, prose 산출물은 인라인(계획에 확정 기술된 내용 전사), 끝에 독립 리뷰.
+
+### ✅ 완료 (웨이브 32) — 로컬 커밋 4개(338f0d9 이후)
+- `7be0700` **스모크 테스트**(`core/test/orchestrate-presettle-smoke.test.ts`, Sonnet 서브에이전트) — pending 웨이브가 `buildExecutorBrief`/`buildVerifierBrief`/`recordAttempt` 수용·미활성 확정(4 tests). **코어 무변경으로 통과 = A안 전제 실증.**
+- `6e538eb` **skill+agents**: `skills/phase-p8-orchestrate/SKILL.md`(§2 흐름·§6.0 게이트·§3 분해·§5 머지·§6.1~6.4·트리거 배타화) · `references/difficulty-model-rubric.md`(검증자 하한 Sonnet) · `agents/wave-executor-parallel.md`(harness 금지·scratchpad 턴로그·**brief의 "harness wave update" 줄 명시 무효화**) · `wave-verifier.md`(병렬 노트) · `wave-executor.md`+`phase-p8-implement/SKILL.md`(상호참조).
+- `968335d` **README ×4 파일수 57→58** — 아래 함정 참조.
+- 검증: build ok · tsc0 · **npm test 1404 pass** · core/src diff 공백 · 스펙 커버리지 grep 전부 · cross-ref 해소.
+
+### 🔄 다음 즉시 할 일
+1. **푸시** — 로컬 4커밋(`0a6eb68..968335d`)이 origin/main 미반영. 사용자 승인 시 `git push origin main`(이전 관례=main 직접 푸시).
+2. **최종 리뷰 회수 확인**: 최종 독립 리뷰(Opus, 신규컨텍스트, `git diff 338f0d9..HEAD` 대상) 실행됐으나 **포그라운드 에이전트 최종 텍스트가 미반환**(환경 특성). 재개(SendMessage af43db27e62068729) 회신 대기 중. 내 직접 검증(객관기준 전부 pass)로 갈음 가능.
+3. **미해결 2건(실행과 독립·설계 결정)**: ① 하네스 전역 `.harness/` 스탠스(§9) ② dogfood 대상(§8). 아직 열림.
+
+### 시스템 지식 · 함정 (웨이브32 신규 + 유효)
+- **★ doc-claims 커플링**: `core/test/doc-claims.test.ts`(line 105)가 **4개 README의 `(N files)` 표기 = core/test 실제 `*.test.ts` 수** 를 강제. **테스트 파일 추가 시 README 4언어 파일수 갱신 필수**(이번 57→58). 테스트 수(1400)는 언어 간 일치만 요구(실측 불묶음), 배포/리포전용 수(1360·17)는 독립 측정치.
+- **★ 포그라운드 서브에이전트 최종 리포트 미반환**: 이 세션에서 `run_in_background:false` Agent가 완료해도 최종 텍스트가 "Done."/"No new instruction"만 옴 → **결과는 실측(파일·테스트·git)으로 검증**하거나 SendMessage 로 회수. 구현 성공/실패 판단을 에이전트 반환 텍스트에 의존하지 말 것.
+- (유효) **/Volumes grep 간헐 미스** → deadness·사용처는 tsc/test. **게이트/리뷰 에이전트 절전+워치독 취약** → `caffeinate -dimsu &`(이 세션 가동 중). 빌드/검증: `npm run build`·`npm run check`(tsc0)·`npm test`(1404).
+
 ## 2026-08-26 (31) — 멀티에이전트 P8 오케스트레이션 구현계획 작성 완료 · 실행 선택 대기
 
 **정본.** `main` HEAD `0a6eb68` · **미커밋 워킹트리 변경 1건**(구현계획 doc) · 1400 tests green · tsc 0 · repo 0.1.2.
