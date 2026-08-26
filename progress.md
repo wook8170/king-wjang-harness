@@ -1,5 +1,36 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (30) — ★★ ULTRAGOAL 7/7 완주 · G007 최종게이트 통과 · 최종 판정 «출하 가능»(SHIP-READY)
+
+**정본.** `main` HEAD `bfcd8d1` + **미커밋 워킹트리 변경 2건**(아직 커밋 안 함 — 사용자 지시 대기) · **1400 tests green · tsc 0** ·
+대장 verified 334 · open BLOCKER/HIGH 0 · repo 버전 0.1.2. ⚠️ 로컬 플러그인 0.1.1 stale — 안정화 후 재설치.
+
+이 세션: **(가) G007 최종 출하 게이트 완주.** ai-slop-cleaner + verification + code-review 세 게이트 전부 클린 → ULTRAGOAL **7/7** → 감정서 «출하 가능».
+
+### ✅ 완료 (이번 세션 · 웨이브 30)
+- **G007 finalshipgate = complete** (`omc ultragoal status` → 7/7, ledger goal_completed). 품질게이트 CLI 검증 통과(aiSlopCleaner=passed · verification=passed · codeReview recommendation=APPROVE + architectStatus=CLEAR). checkpoint 에 `--quality-gate-json`+`--claude-goal-json`(집계 complete) 전달.
+- **게이트1 ai-slop-cleaner** (reviewer, 31 core/src 전수, 컴파일러 검증): 죽은 export 쌍 **1건 제거** — `COMMAND_KEYS`+`CommandKey`(profile.ts, −4L, 사문화 스펙앵커 — `commandFor(key:string)` 가 의도적으로 string 을 받아 소비처 없음). 제거 후 tsc0·1400 green·**dist 무변경**(이미 tree-shake). 오탐 `getCanvasLink` 는 **게이트가 잡아**(design.test.ts import → tsc/test 4 fail) 즉시 복원. 우연 동명 6개(requireUxId/resolve/waveEntries/editDistance/globToRegExp/relFromRoot)는 바디 diff 로 상이 확인 → 슬롭 아님. 유일 진짜 중복 `attempt<T>`(report.ts≡ship.ts 7L)는 LOW 노트만(순수헬퍼·드리프트위험 0·ENG-217 원칙과 정합).
+- **게이트2 verification**: `npm run build` ok · `npm run check`(tsc --noEmit) 0 · `npm test` 57파일/1400 green.
+- **게이트3 code-review**: **APPROVE + architect CLEAR**. profile.ts·design.ts 전독 + hook.ts 보안심장부(judgeWritePath·realRelPath·harnessCandidates·SEC-92/175/263/290/194/317/318) 정독 → correctness·구조 블로커 0. 단일 판정 퍼널·렉시컬+물리 이중공간·fail-closed 캡·정본 파생(드리프트 차단). 26 보안라운드+G006 SHIP-READY 교차확인.
+- **감정서 전환**: `docs/release-readiness/2026-08-21/00-summary.md` 상단 현재상태 블록에 **«최종 판정: 출하 가능 (SHIP-READY) — 7/7»** 명시(3-R 이력·하단 「(이전) 출하 불가」 라운드기록은 그대로 보존). reanchor-citations.py HEAD → 「옮긴 것 없음」(밀린 인용 없음).
+
+### 🔄 다음 즉시 할 일 — 사용자 판단 대기
+1. **커밋/푸시** — 워킹트리 변경 2건(`core/src/profile.ts` −4, `00-summary.md`)이 **미커밋**. 사용자가 지시하면 브랜치/커밋/푸시(커밋·푸시는 사용자 요청 시에만).
+2. **결정2 잔여**: 멀티에이전트 설계 v2 리뷰 → `superpowers:writing-plans` 구현계획 (원하면).
+3. **로컬 플러그인 0.1.2 재설치**(현재 0.1.1 stale) — 안정화 후.
+
+### 미해결 · 확인 대기
+- **최종 출하 판정은 확정**(7/7·G007 통과). 00-summary 하단의 역사적 「출하 불가」 블록들은 날짜박힌 라운드 회고라 보존 — 상단 현재판정이 정본.
+- 설계 v2 스탠스 긴장(BLOCKER-1 잔여): `.harness/` 격리(코어 커밋모델 vs 병렬 gitignore) — 하네스 공식 스탠스 결정 열림(멀티에이전트 진행 시).
+
+### 시스템 지식 · 함정 (이번 세션 신규 + 유효)
+- **★ /Volumes 마운트에서 grep 간헐 미스**: `grep`(재귀·-c 모두)이 **존재하는 매치를 놓치는 일이 있다**(design.test.ts 의 getCanvasLink import 를 놓쳐 죽은코드 오탐 발생). **deadness·사용처 판정은 grep 아닌 tsc/test 로**(컴파일러가 진실). 실제로 이번 게이트가 오탐을 tsc 4-fail 로 잡아냈다.
+- **독립검증 서브에이전트가 절전+워치독에 취약**: 이번 세션 게이트용 background Agent 2개가 **600s 워치독 타임아웃 + 절전 mid-response** 로 반복 실패(리포트 미작성). `caffeinate -dimsu &` 필수, 그래도 15분 장시간 리뷰는 위험. **대안: 게이트를 메인 세션 인라인으로**(메인은 워치독·절전에 안 죽음). 이번엔 인라인으로 완주.
+- **ULTRAGOAL 최종 checkpoint 스키마**(`oh-my-claude-sisyphus/dist/ultragoal/artifacts.js`): `--quality-gate-json` 필수 = `{aiSlopCleaner:{status:"passed",evidence}, verification:{status:"passed",commands:[비어있지않은 문자열], evidence}, codeReview:{recommendation:"APPROVE",architectStatus:"CLEAR",evidence}}`. 세미콜론 든 objective 는 **파일 경로로** 전달(셸 quoting 회피). complete-goals 로 pending→in_progress 먼저.
+- **이 repo 엔 `.harness/` 없음**(하네스가 자기자신에 미적용 — 자기참조금지 정합) → core/src 편집에 PreToolUse 게이트 없음(자유편집 가능).
+- 빌드/검증: `npm run build`→`core/dist/cli.js`(git추적, 단 COMMAND_KEYS 류는 tree-shake) · `npm run check`(tsc0) · `npm test`(1400). 대장편집 후 `round3i/reanchor-citations.py HEAD`.
+- 선행 워크트리 잔여 `.claude/worktrees/wf_28bae004-*` 4개 — 멀티에이전트 dogfood 전 정리.
+
 ## 2026-08-26 (29) — ★ ULTRAGOAL 6/7 · G006 SHIP-READY · G007 최종게이트만 남음 · 멀티에이전트 설계 v2 리뷰 대기
 
 **정본.** `main` HEAD `f5d9793`(+이 핸드오프 커밋) · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·

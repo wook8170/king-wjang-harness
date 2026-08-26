@@ -74,10 +74,6 @@ export interface Profile {
   dir: string;
 }
 
-/** §9가 정한 명령 키. 프로파일은 이보다 더 담아도 되고, 덜 담아도 된다. */
-export const COMMAND_KEYS = ['test', 'build', 'deploy', 'e2e', 'dev-server'] as const;
-export type CommandKey = (typeof COMMAND_KEYS)[number];
-
 const GENERIC = 'generic';
 
 /**

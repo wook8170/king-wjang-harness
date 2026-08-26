@@ -14,8 +14,12 @@
 > 중복규칙 0) · 축4 품질(대장 open BLOCKER/HIGH 0) · 축5 가성비(폴백 wall p95 <150ms·in-proc <50ms) · 축6 사용성(--help·20명령군·
 > 침묵성공 0) · 축7 상품성(LICENSE·README 4언어·en기본+lang:ko·광고 정확성). 이번 세션 SEC-300~318 봉인(19라운드, 26차 독립검증
 > CLEAN)이 축2 뿐 아니라 축1(옛 BLOCKER 일곱째표기·MEDIUM 조회과차단 해소)까지 끌어올렸다. 감정서: `scratchpad/g006-reappraise.md`.
-> **출하 판정의 「7축 ≥4.8 + 대장 open 0」 조건 충족.** 남은 것은 **G007 최종 리뷰 게이트**(ai-slop-cleaner + verification +
-> $code-review) — 그 클린 통과 시 최종 「출하 가능」. 아래 3-R 이력은 그대로 둔다(당시 축1·5·6·7 미재감정 상태의 기록).
+> **출하 판정의 「7축 ≥4.8 + 대장 open 0」 조건 충족, 그리고 G007 최종 리뷰 게이트 통과.**
+> **★ 최종 판정: 출하 가능 (SHIP-READY) — ULTRAGOAL 7/7 완주 (2026-08-26).**
+> G007 세 게이트 전부 클린: ai-slop-cleaner(죽은 export 쌍 1건 제거 후 클린 — COMMAND_KEYS/CommandKey, tsc 0·1400 green·dist 무변경) ·
+> verification(npm run build ok · npm run check tsc 0 · npm test 1400/1400) · $code-review(APPROVE + architect CLEAR — 보안 판정 퍼널
+> judgeWritePath 렉시컬+물리 이중공간·fail-closed 캡·정본 파생 상 correctness·구조 블로커 0). 근거는 ULTRAGOAL 원장(G007)에.
+> 아래 3-R 이력은 그대로 둔다(당시 축1·5·6·7 미재감정 상태의 기록).
 >
 > ## (이전) 출하 불가 (판정 유지) · 축 2·3·4 는 4.8 로 올린다
 >
