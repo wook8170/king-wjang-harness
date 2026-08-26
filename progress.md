@@ -1,19 +1,22 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
-## 2026-08-26 (17) — SEC-311~315 봉인(18라운드째) · 23차 독립검증 in-flight(수렴 판별) · 멀티에이전트 A안 설계 승인 대기
+## 2026-08-26 (18) — SEC-311~316 봉인(19라운드째) · 보안루프 수렴 판단 대기 · 멀티에이전트 A안 설계 승인 대기
 
-**정본.** `main` HEAD `9669499` · **푸시 완료(origin/main 동기)** · clean · **1397 tests green · tsc 0** ·
-대장 verified **331** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~315 미반영)** — 안정화 후 재설치.
+**정본.** `main` HEAD `534ba6c` · **푸시 완료(origin/main 동기)** · clean · **1398 tests green · tsc 0** ·
+대장 verified **332** · repo 버전 **0.1.2**. ⚠️ **로컬 플러그인 = 0.1.1(stale — SEC-300~316 미반영)** — 안정화 후 재설치.
 
-### ✅ 완료 (축2 실효성, 18라운드 봉인 = dequoting 5종 + SEC-303~315)
-dequoting 5종 · SEC-303~310(13R) + **SEC-311~315(신규 5R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
+### ✅ 완료 (축2 실효성, 19라운드 봉인 = dequoting 5종 + SEC-303~316)
+dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프로그램파일 클래스)**. **CORE/정책 하드경계 광범위 봉인.**
 
-**해석기 프로그램파일 봉인 5연속(19~22차 발견)**: SEC-311(본문 미독→읽기·페이즈무관 deny) → SEC-312(열거누락 bun/deno/버전접미
-→ 정본 INTERPRETERS 파생) → SEC-313(무확장자명 looksLikePath 회피→필터 제거) → SEC-314(chdir 상대화→`interpBodyHit` 결합판정)
-→ SEC-315(본문 경로 정규화 부재 `//`·`/./`·`/../`→`collapseSlashPaths`). 각 fix+probe+코퍼스+대장+reanchor+green+커밋푸시.
-**수렴 신호**: 5R 전부 «내가 SEC-311 로 새로 만든 해석기 본문읽기 표면»의 정밀도갭. 22차 관찰=직접-Bash·Write 표면은 촘촘.
-**공시 잔여(README 「알려진 한계」)**: ①in-language 난독(문자열조립·chr()·base64) ②exotic 해석기(julia·raku…) ③≥64KB fail-open
-④같은명령서 파일생성후실행. 순수-훅 정적분석 한계 → 완전한 답=파일시스템 층 강제(향후).
+**해석기 프로그램파일 봉인 6연속(19~23차 발견)**: SEC-311(본문 미독→읽기·페이즈무관 deny) → SEC-312(열거누락 bun/deno/버전접미
+→ 정본 INTERPRETERS 파생) → SEC-313(무확장자명 looksLikePath 회피→필터 제거) → SEC-314(chdir 상대화→`interpBodyHit` 결합)
+→ SEC-315(슬래시 정규화 `//`·`/./`·`/../`→`collapseSlashPaths`) → SEC-316(케이스무시 FS 정규화→`isCaseInsensitiveFS`+toLowerCase).
+**★ 수렴 신호 강함**: 최근 3건(314/315/316)이 전부 `interpBodyHit`(hook.ts:981) 의 «즉석 substring 매칭»이 정규화를
+하나씩 빠뜨린 것 — chdir·슬래시·케이스. 22차 관찰=직접-Bash·Write 표면은 `judgeWritePath` realpath 로 촘촘.
+**★ 근본 수정 후보(사용자 판단 대기)**: `interpBodyHit` 의 substring 을 버리고, 본문에서 `.harness`-루트 경로토큰을 뽑아
+**정본 `judgeWritePath`(realpath=슬래시+케이스+심링크+`..` 일괄)로 판정** → 이 정규화 하위루프를 한 번에 종료. (단 23차 검증자는
+비용·오탐 이유로 케이스게이트 방식을 권장했음 — 트레이드오프 있음. chdir 결합절은 별도 유지 필요.)
+**공시 잔여(README)**: ①in-language 난독 ②exotic 해석기 ③≥64KB fail-open ④같은명령서 생성후실행. 순수-훅 한계→파일시스템 층.
 
 **SEC-312 (20차 발견 · 이번 봉인) — SEC-311 이 해석기 이름 «열거»에 의존해 재발**: `interpreterProgramFiles`
 의 `SCRIPT_INTERP` 가 정본 `INTERPRETERS`(이미 deno·bun·osascript 앎)보다 좁아 `bun forge.js`·`deno run`·
@@ -37,12 +40,12 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~315(신규 5R — 해석기 프�
 - **공시 잔여(신규 아님)**: ① 같은 명령서 파일 생성후 실행(`printf …>q.sed && sed -f q.sed`) = pre-tool 파일부재
   미독 — **셸 자매도 동일**(실측 SH1 확인). ② 대형(≥64KB) 프로그램파일 fail-open. 20차 검증에서 재현돼도 카운트 제외.
 
-### 🔄 진행 중: 23차 독립검증 (백그라운드 서브에이전트, Fable 5) — 수렴 판별 초점
-`9669499` 기준. 임무: 봉인 스택에 **라이브 갭이 남았나 vs 남은 건 전부 공시 잔여인가** 판별(CLEAN=수렴 근거).
-해석기 잔여 정밀도(가볍게) + **비-해석기 CORE/정책 주력**(Write/Edit·harness 명령·env·저널replay·깊이/캡/심링크) + 표면교차.
-보고 → `scratchpad/sec300-verify13.md`. **결과 처리**:
-- **CLEAN** → 보안 루프 수렴. 사용자와 G001 checkpoint 판단(사용자 결정 1). (19~22차=SEC-311~315 발견·봉인 완료)
-- **NEW-FINDINGS** → 봉인 패턴 반복→24차. 단 공시 잔여(4종)는 새 발견 아님.
+### ⏸️ 보안루프 일시정지 — 사용자 판단 대기 (24차 미디스패치)
+6연속 봉인 후 **수렴 판단을 사용자에게 넘김**. 두 갈림:
+- **(가) 근본 수정 먼저**: `interpBodyHit` 을 `judgeWritePath` 정규화로 재작성(위 근본 수정 후보) → 정규화 whack-a-mole 종료 → 그 후 24차.
+- **(나) 계속 per-variant**: 24차 바로 디스패치, 새 정규화 변형 나오면 또 패치.
+- **(다) 보안루프 checkpoint**: 여기서 「닫힘 클래스 봉인 + 공시 잔여 명시」로 G001 축2 매듭, item 2(멀티에이전트)로 이동.
+(23차까지 결과: 19~23차=SEC-311~316 발견·봉인. 보고 `scratchpad/sec300-verify13.md`.)
 
 ### 🔄 진행 중: 멀티에이전트 재설계 brainstorming (사용자 결정 2 — A안 확정, 설계 승인 대기)
 brainstorming 스킬 진행 중. **확정**: 결과물=제품+운영 · 목적=처리량+난이도별모델+구현자≠검증자 셋 다 · **A안(워크트리
@@ -64,7 +67,7 @@ design doc(`docs/superpowers/specs/`) → writing-plans.** 참고: `.claude/work
      N 워크트리 디스패치→취합→머지. (대안 B: 코어 N-활성웨이브 확장 — 비권장.) **미결정**: (A)vs(B)·난이도→모델·의존그래프 분해·머지.
 
 ### 다음 즉시 할 일
-1. **23차 검증 결과 수신** → `scratchpad/sec300-verify13.md` grep. CLEAN/NEW-FINDINGS 분기(위·공시 4종 제외).
+1. **보안루프 갈림 결정**(가 근본수정 / 나 24차계속 / 다 checkpoint) — 사용자 판단 후 진행.
 2. NEW-FINDINGS 면 봉인 패턴 반복. CLEAN 이면 사용자와 G001 checkpoint 판단.
 3. **멀티에이전트 재설계**: 제시한 A안 설계 확정 승인받아 → design doc(`docs/superpowers/specs/YYYY-MM-DD-multiagent-p8-design.md`) → writing-plans.
 4. 안정화 후 로컬 플러그인 0.1.2 재설치(현재 0.1.1 stale).
