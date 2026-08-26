@@ -1,5 +1,28 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-26 (31) — 멀티에이전트 P8 오케스트레이션 구현계획 작성 완료 · 실행 선택 대기
+
+**정본.** `main` HEAD `0a6eb68` · **미커밋 워킹트리 변경 1건**(구현계획 doc) · 1400 tests green · tsc 0 · repo 0.1.2.
+
+이 세션(웨이브31): **(나) 멀티에이전트 구현계획** — 설계 v2 정독 → `superpowers:writing-plans` 로 구현계획 산출.
+
+### ✅ 완료 (웨이브 31)
+- **구현계획 작성**: `docs/superpowers/plans/2026-08-26-multiagent-p8-orchestrate.md`(미커밋). 아티팩트 https://claude.ai/code/artifact/244abcfd-0611-4fb3-be2f-a70d946c94bc
+- 설계 근거화: 코어표면 실측(buildExecutorBrief=loop.ts:583·active 불요, recordAttempt=196, createWave=wave.ts:138 pending 유지), skill/agent 포맷 확인, 리포 레이아웃(skills/·agents/) 확정.
+- **결정 확정(계획 내)**: ① 별도 `wave-executor-parallel.md` 에이전트(플래그 아님 — 병렬은 harness 명령 금지·scratchpad 턴로그로 철칙 반전) ② rubric = `skills/phase-p8-orchestrate/references/difficulty-model-rubric.md` ③ **Task1=스모크 테스트 먼저**(코어 무변경 전제 잠금: pending 웨이브가 brief/attempt 수용).
+- **핵심 구현통찰**: `buildExecutorBrief` 출력이 「매 턴 harness wave update」 경계줄을 **본문에 포함** → 병렬 executor 에이전트가 그 줄을 **명시적으로 무효화**해야 함(§6.2 근거 실측).
+- 계획 태스크 7개: (1)스모크 (2)rubric (3)wave-executor-parallel (4)wave-verifier 병렬노트 (5)phase-p8-orchestrate SKILL (6)교차참조 (7)수용검증(core diff 0·스위트 green·§7 self-review). writing-plans self-review 완료(스펙 §1~§10 전부 태스크 대응).
+
+### 🔄 다음 즉시 할 일 — 사용자 판단 대기
+1. **실행 방식 선택**: (A) subagent-driven(권장·태스크별 신규 서브에이전트+2단계 리뷰) 또는 (B) 인라인(executing-plans·체크포인트). 실행은 구현국면 → Opus 4.8/Sonnet.
+2. **구현계획 doc 커밋?** (현재 미커밋 — 사용자 요청 시 커밋)
+3. **미해결 2건(계획이 표면화, 실행 전 결정 필요)**: ① 하네스 전역 `.harness/` 스탠스(§9 BLOCKER-1 잔여 — 계획은 병렬만 gitignore로 못박고 긴장 명시, 전역 공식스탠스는 별개 문서결정) ② dogfood 대상(§8 — 이 리포는 설계/보안 트랙이라 자연스런 병렬 P8 웨이브 없음 → 인위적 소규모 독립개선 2~3건 협의).
+
+### 시스템 지식 · 함정 (유효 + 웨이브31 신규)
+- **★ 코어 무변경(A안) 계획**: 결과물은 skills/agents 마크다운 + 스모크 1개(core/test/, core/src 아님). 수용기준 = `git diff --stat -- core/src` 무출력.
+- (웨이브30 유효) **/Volumes 마운트 grep 간헐 미스** → deadness·사용처는 tsc/test 로. **게이트 에이전트 절전+워치독 취약** → 메인 인라인 권장. **ULTRAGOAL checkpoint quality-gate-json 스키마**(aiSlopCleaner/verification/codeReview). `.harness/` 이 리포엔 없음(자기 미적용).
+- 빌드/검증: `npm run build`·`npm run check`(tsc0)·`npm test`(1400). 대장편집 후 `round3i/reanchor-citations.py HEAD`.
+
 ## 2026-08-26 (30) — ★★ ULTRAGOAL 7/7 완주 · G007 최종게이트 통과 · 최종 판정 «출하 가능»(SHIP-READY)
 
 **정본.** `main` HEAD `679e5bd` · **푸시 완료(origin/main 동기)** · clean · **1400 tests green · tsc 0** ·
