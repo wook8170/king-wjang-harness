@@ -1,7 +1,8 @@
 # Difficulty → model rubric (P8 parallel orchestration)
 
 The orchestrator scores each wave by rule table (no ML), then picks the implementer and verifier
-models. On 3 consecutive failures of a wave, promote it one tier (spec §5 3-strike).
+models. On 3 consecutive failures of a wave, promote it one tier (spec §4); a wave that keeps
+failing after promotion summons the user (spec §5 3-strike).
 
 | Difficulty | Signals | Implementer | Verifier |
 |---|---|---|---|

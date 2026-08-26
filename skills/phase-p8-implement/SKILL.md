@@ -1,6 +1,6 @@
 ---
 name: phase-p8-implement
-description: Use when driving P8 (IMPLEMENT) of the harness build track — implementing the design wave by wave, where each wave is one instruction sheet the core keeps accounts for, acceptance criteria come straight from the P3 features, and a wave-executor implements exactly one sheet without leaking outside it. Triggers - "implement this wave", "build the feature", harness phase set P8, harness wave create, dispatching wave-executor, the wave loop, loop brief, loop attempt, settling a wave, wave complete.
+description: Use when driving P8 (IMPLEMENT) of the harness build track — implementing the design wave by wave, where each wave is one instruction sheet the core keeps accounts for, acceptance criteria come straight from the P3 features, and a wave-executor implements exactly one sheet without leaking outside it. Triggers - "implement this wave", "build the feature", harness phase set P8, harness wave create, dispatching wave-executor, the wave loop, loop brief, loop attempt, settling a wave, wave complete. For MULTIPLE INDEPENDENT waves in parallel, use phase-p8-orchestrate instead.
 ---
 
 # P8 IMPLEMENT — one wave, one instruction sheet, accounts that stay honest
