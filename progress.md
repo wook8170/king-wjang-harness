@@ -100,8 +100,12 @@ dequoting 5종 · SEC-303~310(13R) + **SEC-311~316(신규 6R — 해석기 프�
 - **G006 7축 독립 재감정**: `d331ef0` 기준, rubric 정본으로 7축 전부 직접 재측정(구현자≠감정자). 축1·5·6·7 = 내 측정 독립확정,
   축2 = bypass-corpus+표본, 축3·4 = 테스트/대장. 보고 → `scratchpad/g006-reappraise.md`. VERDICT: SHIP-READY 또는 미달축 목록.
   → 전 축 >=4.8+open 0 면 G006 complete → G007(최종 게이트). 미달축은 보완→재감정 루프.
-- **멀티에이전트 설계 독립 리뷰**: 설계문서(`docs/superpowers/specs/2026-08-26-multiagent-p8-design.md`) 논리·실현가능성·갭.
-  보고 → `scratchpad/design-review-multiagent.md`. APPROVE / APPROVE-WITH-CHANGES / REWORK. → 반영 후 writing-plans.
+- **멀티에이전트 설계 독립 리뷰** ✅ 완료 = **REWORK**(BLOCKER 2·MAJOR 5·MINOR 6, 보고 `scratchpad/design-review-multiagent.md`).
+  → **설계 v2 재작성 완료**(커밋 `5cadced`, 아티팩트 갱신 https://claude.ai/code/artifact/b4ecfbf3-b887-4840-ba4d-edcdb913f9cf). 반영:
+  BLOCKER-1 `.harness/` 격리=집행 전제조건(0단계 검사)·코어 커밋모델 모순 명시 · BLOCKER-2 회계순서 선-create→병렬→머지→후-정산
+  (코어 diff 0 로 브리프/유령참조/증적id/재개 복구) · MAJOR-1 신뢰경계=세션전역 훅가드(워커도 가드됨) · MAJOR-2 wave-executor
+  병렬모드(harness금지·scratchpad 턴로그) · MAJOR-3 라운드 통합스위트 · MAJOR-4 계약/생성파일 클래스 · MAJOR-5 워크트리 네이티브
+  (Agent isolation:worktree) · MINOR 6건. **A안 유지.** 다음: 사용자 v2 리뷰 → 승인 시 writing-plans.
 
 ### (참고) 이전 갈림 옵션
 사용자 결정(축2 매듭·G002 진행) 이행 완료. 다음 갈림:
