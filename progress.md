@@ -1,5 +1,32 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-27 (37) — KO/JA/ZH README 현행화 커밋(로컬). 다음=push 여부 확인 + 공식 디렉터리 제출(사용자)
+
+**정본.** `main` HEAD **`d4c10be`**(로컬 커밋, **아직 push 안 함**) · `origin/main` = `5d31d04` · 트리 clean.
+스킬 레포 `wook8170/verifying-production-readiness` HEAD `c4590d1`(공개·clean, 변경 없음).
+
+### 이번 완료 (문서 전용 — 소스 무변경)
+- **KO/JA/ZH 상태 절 미러링**: `v0.1.0` + 「출하 불가/出荷不可/不可出货」 → **v0.1.2 SHIP-READY** + 영문판과 같은 11축 검증 요약(게이트 13→12 PASS, 적대적 ~40표기, npm audit 0, gitleaks 307커밋 0, 1404 green) + 자기적용 인용구 + 「무엇이 만들어져 있나」 소제목.
+- **KO/JA/ZH 설치안내 currency**: `claude plugin marketplace add <this-repo>` → `wook8170/king-wjang-harness` (영문만 고쳐져 있었음 — 3종 낙오분 처리).
+- **KO/JA/ZH 지원 절**: 「저장소는 비공개다 → 받은 경로로 신고」 → 공개 반영, **GitHub 이슈** 안내.
+- **4종 공통**: `verifying-production-readiness` 「부르지만 동봉 안 함」 줄에 **별도 플러그인 설치 명령** 추가(발견성).
+- 검증: **1404 tests green (58 files)** · doc-claims 16/16 · i18n-en-default 7/7 · `<this-repo>`·`v0.1.0`·「출하 불가」 잔여 0.
+
+### 다음 즉시 할 일
+1. **`git push` 여부 사용자 확인** — 공개 저장소로 나가는 변경이라 승인 대기 중. 승인 시 `git push origin main` 한 줄.
+2. **공식 디렉터리 제출(사용자가 폼 작성)**: `https://clau.de/plugin-directory-submission`, 두 플러그인 각각.
+   - harness: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:<push 후 HEAD>}`.
+   - skill: `{source:git-subdir, url:https://github.com/wook8170/verifying-production-readiness.git, path:., ref:main, sha:c4590d1}`. **name 불변** 유의.
+3. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9(훅 지연) 유휴 재측정.
+
+### 함정(유효)
+- **스킬 이중 관리**: 원본 `~/.claude/skills/verifying-production-readiness/` ↔ 배포본 `/Volumes/WorkSpace/0200_Dev/verifying-production-readiness/` — 수정 시 수동 cp 동기.
+- **스킬을 harness 에 동봉 불가**: `i18n-en-default.test.ts [I18N-72]` 가 `skills/`·`agents/`·`.claude-plugin/` 한글 스캔 → 한국어 스킬 동봉 시 빨강. 별도 레포는 스캔 밖.
+- **doc-claims 가 README 를 실제로 검사**: 테스트 수·파일 수(58)·`harness_*` MCP 이름·npm 스크립트·설정 키·지원 절 문구가 4개 언어에서 일치해야 한다. README 손대면 `npx vitest run core/test/doc-claims.test.ts` 필수.
+- 공개 직후 push 403 「repository is disabled」는 전파 지연 — 수초 후 재시도로 해소.
+- 플러그인 skill 노출은 `skills/<이름>/SKILL.md` 경로여야 함.
+
+
 ## 2026-08-27 (36) — ★ 저장소 공개 완료(전략 A) + README 현행화 push. 다음=공식 디렉터리 제출·스킬 플러그인化
 
 **정본.** `main` HEAD **`3af6fbd`**(+ 설치안내 currency 커밋 진행 중) · **origin/main = PUBLIC** · 트리 clean 지향.
