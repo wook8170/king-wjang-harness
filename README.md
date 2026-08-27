@@ -285,7 +285,9 @@ core — is a wall.
 - **Content that arrives from outside can carry an alias the command text never names.** A symlink inside an archive is in neither the command nor the filesystem at the moment of judgment, so the hook cannot see it. An earlier rule that refused writes onto freshly-created paths after an extract, clone or install was **removed**: one extra word defeated it (`mkdir h && tar -xf a.tar -C h && echo x > h/f`), and it blocked ordinary single commands (`git clone <url> y && echo x > y/f`). Closing this belongs to the filesystem layer, not the hook.
 - **Hard links that already exist are only checked against the core files.** Creating a new name for a protected file is refused, and an existing alias of `config.yaml`/`state.json`/`events.jsonl` is caught by inode. An alias of a *source* file made before the harness was installed is not — matching every source by inode would cost a directory walk on every write, and a slow verdict is a hook that times out, which is a hook that allows.
 
-- The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed separately.
+- The `verifying-production-readiness` skill is **called but not bundled** — it has to be installed
+  separately: `claude plugin marketplace add wook8170/verifying-production-readiness` then
+  `claude plugin install verifying-production-readiness@verifying-production-readiness`.
 - **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.
 - `/remote-control` is **not provided by this plugin**; the session hint is conditional guidance, not an instruction.
 - A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.

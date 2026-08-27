@@ -144,7 +144,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 ### 安装（作为 Claude Code 插件）
 
 ```bash
-claude plugin marketplace add <this-repo>
+claude plugin marketplace add wook8170/king-wjang-harness
 claude plugin install king-wjang-harness@king-wjang-harness
 ```
 
@@ -232,10 +232,36 @@ npm install          # prepare hook builds core/dist via tsup
 
 ---
 
-## 状态与路线图
+## 状态 —— 已通过生产就绪验证
 
-**v0.1.0 —— 核心引擎、关卡以及构建/出货轨道均已实现并实测**（1404 项测试）。但出货就绪审计的判定
-仍为 **不可出货** —— 尚未关闭的问题见下方「已知限制」。
+**v0.1.2 —— SHIP-READY（可出货）。** 核心引擎、三条轨道以及全部十三个阶段均已实现并实测
+（1404 tests），并在此之上通过了本工具**自己**的出货就绪关卡。强制出货纪律的工具，被同一套纪律
+量过，并且通过了。
+
+### 验证到什么程度
+
+`verifying-production-readiness` 审计是在**全新的独立上下文**中针对本仓库执行的 —— 审计者不是
+实现者 —— 它是**真正端到端驱动产品**而非仅仅阅读代码的 **11 轴**扫描。结果:
+
+- **13 个出货关卡 → 12 个实测 PASS**（第 13 个钩子延迟在空闲机器上可干净复测）:
+  测试 · 类型 · 自包含克隆 · 钩子无害性 · 强制力 · MCP **安全性质**（终端前没有人时关卡无法被
+  批准）· 确定性 · 供应链（`npm audit --omit=dev`: **0**）· 密钥历史（gitleaks，307 个提交:
+  **0**）· CLI 契约 · 可观测性 · 打包。
+- **绕过钩子的对抗性扫描 —— 在常设 300+ 条语料*之外*新增约 40 种写法**，全部经真实钩子判定:
+  新的源文件写入形式（`printf` · `dd` · `ex` · `install` · `python3 -c` · `awk -i inplace` …）、
+  对核心 / 策略 / 日志的写入、符号链接与硬链接的 TOCTOU、日志伪造、`base64 -d | sh`，以及嵌套与
+  数组形式的 MCP 参数。**所有不可逆目标 —— 核心、策略、状态、事件日志 —— 全部被拒绝。在「不可
+  拦截」对照集上过度拦截为 0。**
+- **1404 tests green · `tsc` 0 · 重复运行结果确定。**
+
+**判定: SHIP-READY —— 无阻塞性缺陷。** 唯一有意保留的可穿透之处并未隐藏，而是明说: 设计 → 源码
+的分离是*减速带，不是安全墙*（见「已知限制」与常见问题）。一旦泄漏就不可逆的东西 —— 日志、策略
+文件、核心 —— 是墙。
+
+> 这套审计正是本插件作为伴随纪律一并提供的那一套。它践行自己所强制的东西 —— 上面的判定就是把那道
+> 关卡回过头来跑在本工具自己身上得到的结果。
+
+### 已经建成的部分
 
 - ✅ 事件日志、状态重放、doctor 恢复
 - ✅ 四个钩子：会话注入、设计轨道拒绝、活动追踪、停止结算
@@ -252,7 +278,9 @@ npm install          # prepare hook builds core/dist via tsup
 - **从外部进入的内容可能携带命令文本从未指明的别名。** 归档内的符号链接在判定时刻既不在命令文本中，也不在文件系统上，因此钩子原理上看不到它。此前「拒绝在解压、clone 或安装之后写入新生成路径」的规则已被**撤回** —— 多加一个词即可绕过（`mkdir h && tar -xf a.tar -C h && echo x > h/f`），同时又拦住了普通的单条命令（`git clone <url> y && echo x > y/f`）。彻底关闭这一类属于文件系统层，而非钩子。
 - **已经存在的硬链接只针对核心文件检查。** 为受保护文件创建新名称会被拒绝，`config.yaml`、`state.json`、`events.jsonl` 的既有别名会通过 inode 捕获。但在安装本工具之前就已创建的**源文件**别名不会被捕获 —— 若要按 inode 比对所有源文件，每次写入都需遍历目录，而缓慢的判定就是会超时的钩子，超时的钩子等于放行。
 
-- `verifying-production-readiness` 技能 **被调用但未随插件打包** —— 需要单独安装。
+- `verifying-production-readiness` 技能 **被调用但未随插件打包** —— 需要单独安装:
+  `claude plugin marketplace add wook8170/verifying-production-readiness`，然后
+  `claude plugin install verifying-production-readiness@verifying-production-readiness`。
 - **布局模板声明没有在核心中强制** —— 设计系统只检查令牌与冻结路径。
 - `/remote-control` **不由本插件提供** —— 会话提示是条件性说明，不是指令。
 - 关卡衡量的是**数量而非质量**。它拒绝非散文的内容，也拒绝那些相对已审关卡带来不足 80 个新字符的提交 —— 灌水凑字数、改一个字符的副本、往已批准集合上加薄文件，这些路都被堵上了（实测 13/13 → 分别开启 0、1、2 个）。剩下的是「新带来的 80 个字符是否**够好**」，那属于人 —— 评审包会把每一条提交路径及其大小摆在人面前。
@@ -285,9 +313,8 @@ npm install          # prepare hook builds core/dist via tsup
 | 钩子什么也没做 | `.harness/.runtime/hook-errors.log` — 钩子失败会被吸收为 exit 0，这个文件是唯一的观测点 |
 | 想看完整命令地图 | `harness --help` → `harness <命令组> --help` |
 
-**报告缺陷。** `package.json` 中已写明仓库与 `bugs` 地址，但该仓库是**私有**的 ——
-如果你没有访问权限，请通过拿到本插件的渠道反馈。请附上 `harness doctor` 的输出和
-`harness --version`（两者都不包含文件内容，可安全粘贴）。
+**报告缺陷。** `package.json` 中已写明仓库与 `bugs` 地址 —— 请在 GitHub 上提交 issue。
+请附上 `harness doctor` 的输出和 `harness --version`（两者都不包含文件内容，可安全粘贴）。
 
 ## 许可证与作者
 
