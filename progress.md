@@ -1,5 +1,33 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-08-27 (38) — ★ FLAKE-01 수정·대장 등재 완료 · G9 는 유휴 창 대기(부하 중 재측정만 확보)
+
+**정본.** `main` HEAD **`4ea201b`**(로컬, **push 안 함**) · `origin/main` = `3654cbe` · 트리 clean · 1404 green · tsc 0.
+
+### 이번 완료
+- **FLAKE-01 닫음 (백로그 소진)** — 절대 wall-clock 단언 2건을 부하 둔감형으로:
+  - `cost-3i-residuals.test.ts:114` [COST-129] — `perCall < 1ms` 폐기 → **같은 실행 안의 비율**(첫 파싱 1회 vs 캐시 50회, 캐시가 100배 이상 빠를 것). 실측 여유 **6673배**. 부하는 양쪽을 함께 부풀리므로 비율은 살아남는다.
+  - `med-3j-residuals.test.ts:410` [COST-228] — `< 500ms` → **최소값 3회 + 부류 문턱 2000ms**. 유휴 실측 4~51ms(40배 여유), 수정 전 회귀는 **50KB 에서 이미 3495ms**(200KB 면 수십 초).
+  - **변이 검증(둘 다 «깨지면 red» 확인)**: `config.ts` 캐시 히트 반환 차단 → COST-129 red(비율 6094>100) · `pathLikeMentions` 200KB 경로 2500ms 지연 주입 → COST-228 red(2510>2000). 원복 확인.
+  - **부하 재현 3중 동시 실행(load 47.9 피크) → 3/3 × 1404 pass**. (한계: 원 재현은 load 158 이었다 — 이번은 그보다 약한 스트레스.)
+- **정본 대장 등재**: `docs/release-readiness/2026-08-21/ledger.md` 에 `FLAKE-01`(LOW·축09·verified·measured) 행 추가 + 헤더 집계 verified 334→**335** + `00-summary.md` **현재** 판정 블록 집계 동기(이전 판정 블록은 그때의 사실이라 불변) + `round3s-reaudit.md` §FLAKE-01 에 후속 한 줄.
+- **G9(훅 지연) 재측정 — 확정 못 함.** `node scripts/bench-hook-latency.mjs` 실행했으나 **머신 부하(load 12.9)** 로 전 판정이 「pass — machine busy」 표기. 게이트 델타는 전부 50ms 미만(realistic in-proc **+29.0ms** · wall **+33.0ms** · corrupt in-proc **+16.6ms** · wall **-20.8ms**)이나, **벤치 자신의 규율상 부하 창 측정은 판정이 아니다**(부하는 델타를 부풀리기도 줄이기도 한다 — 이번엔 normal p95 도 178ms 로 함께 떠서 델타가 눌렸을 수 있다). **유휴 창에서 재실행 필요.**
+
+### 다음 즉시 할 일
+1. **`git push` 여부 확인** — `4ea201b`(+ 이 핸드오프) 승인 대기. `git push origin main`.
+2. **공식 디렉터리 제출(사용자가 폼 작성)**: `https://clau.de/plugin-directory-submission` — harness `{git-subdir, github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:<push 후 HEAD>}` · skill `{... /verifying-production-readiness.git, ..., sha:c4590d1}`. **name 불변**.
+3. **G9 유휴 재측정** — 조용한 창에서 `node scripts/bench-hook-latency.mjs`, 「machine busy」 표기 없이 델타 < 50ms 확인. (결함 아님, 측정 가용성 문제.)
+
+### 미해결·확인 대기
+- **정본 대장 헤더의 「판정 출하 불가」가 낡았다** — `ledger.md` 헤더·`00-summary.md` 현재 판정 블록은 라운드 3-K 시점 문구인데, 라운드 3-S 재감사·README 는 **SHIP-READY**. 감사 판정 문구는 감사자의 것이라 임의로 고치지 않았다. **사용자 판단 필요**(고칠지, 「이후 3-S 에서 SHIP-READY 로 갱신됨」 주석만 달지).
+
+### 함정(이번 확인)
+- **대장 행을 추가하면 테스트가 잡는다** — `core/test/ledger-summary-sync.test.ts` [VAL-B] 가 `ledger.md` 행 집계와 `00-summary.md` **첫 「# 판정」 블록**의 verified 수를 대조한다. 행만 넣고 요약을 안 고치면 red.
+- **대장의 `file:line` 인용도 검사된다** [VAL-C] — 인용 줄이 실재하고 「의미 있는 글자 2자 이상」이어야 한다. 테스트 파일을 고치면 **인용 줄이 밀리므로 재앵커 필수**(이번에 108→114, 403→410).
+- **측정 위생**: 벤치와 vitest 를 동시에 돌리면 서로 오염시킨다. G9 측정 중에는 테스트를 돌리지 않았다.
+- 스킬 이중 관리(`~/.claude/skills/…` ↔ 배포 레포)·i18n 한글 스캔으로 스킬 동봉 불가 — 유효.
+
+
 ## 2026-08-27 (37) — KO/JA/ZH README 현행화 커밋(로컬). 다음=push 여부 확인 + 공식 디렉터리 제출(사용자)
 
 **정본.** `main` HEAD = `origin/main` = **`b787586`**(push 완료, 사용자 수행) · 트리 clean.
