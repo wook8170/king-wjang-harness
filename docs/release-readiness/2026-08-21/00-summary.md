@@ -184,7 +184,7 @@
 > [COST-261](stdin 상한이 타임아웃보다 커서 그 사이가 fail-open) ·
 > [COST-262](벤치가 명령 파싱 경로를 안 봐서 2차 회귀가 CI 에 안 걸리던 것 — **게이트 신설**).
 > 선제 조사로 [SEC-259](위치 가정 잔여 3도구)도 함께 닫았다. **open 0**.
-> 대장: **verified 334 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**.
+> 대장: **verified 335 · open 0 · deferred 5 · open BLOCKER 0 · HIGH 0**(2026-08-27 `FLAKE-01` 등재·봉인 포함).
 
 ---
 

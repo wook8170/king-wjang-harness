@@ -101,11 +101,18 @@ describe('[COST-129] 훅 1회당 config 를 한 번만 파싱한다', () => {
     const big = ['lang: en'];
     for (let i = 0; i < 2000; i++) big.push(`k_${i}: cmd-${i}`);
     fs.writeFileSync(configPath(root), big.join('\n') + '\n');
-    loadConfig(root);                                   // 첫 파싱
+    // [FLAKE-01] 절대 wall-clock(<1ms)으로 재면 **제품이 아니라 측정 머신을 잰다** — 부하 창에서
+    // 2.139ms 가 관측돼 스퓨리어스 red 가 났다. 잡으려는 것은 「몇 ms」가 아니라 **캐시가 먹느냐**
+    // 이므로, 같은 실행 안에서 파싱 1회와 캐시 호출을 나란히 재어 **비율**로 판정한다. 부하는 양쪽을
+    // 함께 부풀리므로 비율은 살아남는다(실측 여유 6673배 — 캐시가 죽으면 비율은 1 근처로 떨어진다).
+    const p0 = process.hrtime.bigint();
+    loadConfig(root);                                   // 최초 = 반드시 파싱
+    const parseMs = Number(process.hrtime.bigint() - p0) / 1e6;
     const s = process.hrtime.bigint();
     for (let i = 0; i < 50; i++) loadConfig(root);
     const perCall = Number(process.hrtime.bigint() - s) / 1e6 / 50;
-    expect(perCall, `캐시가 안 먹는다: ${perCall.toFixed(3)}ms/호출`).toBeLessThan(1);
+    expect(perCall * 100, `캐시가 안 먹는다: 캐시 ${perCall.toFixed(3)}ms/호출 vs 첫 파싱 ${parseMs.toFixed(1)}ms`)
+      .toBeLessThan(parseMs);
   });
 
   it('파일이 바뀌면 반드시 다시 읽는다 — 성능을 위해 정확성을 내주지 않는다', () => {

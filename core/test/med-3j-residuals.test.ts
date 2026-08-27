@@ -395,12 +395,19 @@ describe('[COST-228] 안전망이 입력 길이에 선형이다 — 타임아웃
   it('슬래시 없는 긴 입력에서 2차로 터지지 않는다', () => {
     const cmd = 'cp x y; echo ' + 'a'.repeat(200 * 1024);
     pathLikeMentions(cmd);                       // 워밍업
-    const t0 = Date.now();
-    pathLikeMentions(cmd);
-    const ms = Date.now() - t0;
-    // 수정 전 실측: 50KB 에서 이미 3495ms — 10초 훅 타임아웃은 **통과**로 떨어진다.
+    // [FLAKE-01] 부하 창에서 640ms 가 관측돼 <500ms 가 스퓨리어스로 빨개졌다. 문턱을 조이면
+    // 제품이 아니라 측정 머신을 재게 된다. 두 가지로 부하에 둔감하게 만든다:
+    //  ① **최소값**을 쓴다 — 선점당하지 않은 표본이 하나만 있으면 된다.
+    //  ② 문턱을 「부류」 크기로 잡는다 — 수정 전 실측은 **50KB 에서 이미 3495ms**(= 200KB 면 2차로
+    //     수십 초). 유휴 실측은 4~51ms 이므로 2000ms 는 정상 대비 40배 여유, 회귀 대비 10배 아래다.
     // 잡으려는 것은 특정 밀리초가 아니라 「길이의 제곱」이라는 **부류**다.
-    expect(ms, `200KB 입력에 ${ms}ms 걸렸다 — 2차 폭발이 돌아왔는지 보라`).toBeLessThan(500);
+    let ms = Infinity;
+    for (let i = 0; i < 3; i++) {
+      const t0 = process.hrtime.bigint();
+      pathLikeMentions(cmd);
+      ms = Math.min(ms, Number(process.hrtime.bigint() - t0) / 1e6);
+    }
+    expect(ms, `200KB 입력에 ${ms.toFixed(0)}ms 걸렸다 — 2차 폭발이 돌아왔는지 보라`).toBeLessThan(2000);
   });
 
   it('추출 결과는 그대로다 — 비용만 뺐지 판정을 바꾸지 않았다', () => {
