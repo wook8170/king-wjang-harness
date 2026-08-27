@@ -2,7 +2,7 @@
 
 ## 2026-08-27 (37) — KO/JA/ZH README 현행화 커밋(로컬). 다음=push 여부 확인 + 공식 디렉터리 제출(사용자)
 
-**정본.** `main` HEAD **`d4c10be`**(로컬 커밋, **아직 push 안 함**) · `origin/main` = `5d31d04` · 트리 clean.
+**정본.** `main` HEAD = `origin/main` = **`b787586`**(push 완료, 사용자 수행) · 트리 clean.
 스킬 레포 `wook8170/verifying-production-readiness` HEAD `c4590d1`(공개·clean, 변경 없음).
 
 ### 이번 완료 (문서 전용 — 소스 무변경)
@@ -13,11 +13,10 @@
 - 검증: **1404 tests green (58 files)** · doc-claims 16/16 · i18n-en-default 7/7 · `<this-repo>`·`v0.1.0`·「출하 불가」 잔여 0.
 
 ### 다음 즉시 할 일
-1. **`git push` 여부 사용자 확인** — 공개 저장소로 나가는 변경이라 승인 대기 중. 승인 시 `git push origin main` 한 줄.
-2. **공식 디렉터리 제출(사용자가 폼 작성)**: `https://clau.de/plugin-directory-submission`, 두 플러그인 각각.
-   - harness: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:<push 후 HEAD>}`.
+1. **공식 디렉터리 제출(사용자가 폼 작성)**: `https://clau.de/plugin-directory-submission`, 두 플러그인 각각.
+   - harness: `{source:git-subdir, url:https://github.com/wook8170/king-wjang-harness.git, path:., ref:main, sha:b787586}`.
    - skill: `{source:git-subdir, url:https://github.com/wook8170/verifying-production-readiness.git, path:., ref:main, sha:c4590d1}`. **name 불변** 유의.
-3. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9(훅 지연) 유휴 재측정.
+2. (백로그) FLAKE-01 정본 대장 등재 + BUSY-aware화 · G9(훅 지연) 유휴 재측정.
 
 ### 함정(유효)
 - **스킬 이중 관리**: 원본 `~/.claude/skills/verifying-production-readiness/` ↔ 배포본 `/Volumes/WorkSpace/0200_Dev/verifying-production-readiness/` — 수정 시 수동 cp 동기.
