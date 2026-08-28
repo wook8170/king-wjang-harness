@@ -1,0 +1,36 @@
+### 재검증 2026-08-28 — DEP-11(㉠) · SHIP-02(㉡)
+host: Darwin 25.5.0 · node: v22.22.2 · npm: 10.9.7
+
+## ㉠-1  문서대로 설치된 실기(real HOME) 플러그인 캐시에 node_modules 가 있는가
+  0.0.1   node_modules=PRESENT size= 66M  pkgs=73
+  0.1.0   node_modules=PRESENT size= 66M  pkgs=73
+  0.1.1   node_modules=PRESENT size= 66M  pkgs=73
+  0.1.2   node_modules=PRESENT size= 66M  pkgs=73
+  캐시 총량: 609M  (버전마다 한 벌씩 쌓인다 — SHIP-04 ④ 와 일치)
+
+## ㉠-2  npm audit 의 critical/high 가 실제로 내려온 집합에 들어 있는가
+  present: esbuild
+  present: rollup
+  present: vite
+  present: vitest
+  esbuild=0.27.7 vite=5.4.21 vitest=2.1.9
+  → DEP-11 「devDependency 는 설치자 머신에 안 내려온다」는 사실이 아니다. rejected.
+
+## ㉠-3  그렇다면 실행 경로에 닿는가 — node_modules 를 뺀 사본으로 실기 구동
+  node_modules: ABSENT
+  bin/harness status → No .harness/ here — run `harness init` first.
+  bin/harness --version → king-wjang-harness v0.1.2
+  mcp/server.js initialize → {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":true}},"serverInfo":{"name":"king-wjang-harness","versio
+  실행 진입점의 외부 require: require("buffer") require("crypto") require("fs") require("path") require("process") require("tty") require('fs') require('node:fs') require('node:path') require('path') 
+  → 전부 Node 내장. 설치된 73패키지는 디스크에만 있고 실행 경로에 없다.
+  → npm ci 는 --ignore-scripts 로 돌므로 설치 시점 실행도 없다(ax10-plugin-npmci.log:8).
+
+## ㉡  SHIP-02 — 'harness' 가 PATH 에 없다는 측정의 범위
+  (a) 에이전트가 명령을 실행하는 셸: /Users/wjang/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/bin/harness
+      harness --version → king-wjang-harness v0.1.2
+  (b) 사용자 본인의 셸(청정 env): NOT on PATH
+  (c) README 가 새로 안내하는 한 줄을 (b) 와 같은 청정 env 에서 그대로 실행:
+      command -v harness → /Users/wjang/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/bin/harness
+      harness --version  → king-wjang-harness v0.1.2
+  → SHIP-02 의 측정은 (b) 에서만 참이었다. (a) 에서는 그대로 동작한다 — Claude Code 가
+     플러그인 bin/ 을 에이전트 셸 PATH 에 얹는다. README 는 이 구분을 적지 않았다 → 그 문장을 넣어 닫는다.

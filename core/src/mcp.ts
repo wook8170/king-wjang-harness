@@ -141,6 +141,8 @@ export function toolDefinitions(): McpToolDef[] {
           design_refs: strArrProp('Design-ledger node ids this wave implements (e.g. F-12, API-23)'),
           acceptance: strArrProp('Acceptance criteria'),
         },
+        // [API-11] 도메인이 goal 없는 웨이브를 거부한다 — 스키마도 그렇게 말해야 한다.
+        required: ['goal'],
       },
     },
     {

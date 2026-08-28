@@ -111,14 +111,14 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 - **Deterministic** — No wall-clock, no randomness in any decision path. Same input → same verdict, every run. (Verified across 3 identical test runs.)
 - **Observable fail-open** — When the harness *does* fall silent, it leaves a trace in `.harness/.runtime/hook-errors.log`; `harness doctor` counts and surfaces it. An unobserved fail-open is worse than none.
 - **Injection-hardened** — Wave frontmatter and turn-log text (written by *past* sessions) are untrusted input. Before any of it enters an instruction channel, it's sanitized — newlines neutralized, control characters stripped, excerpts wrapped in content-hash nonce fences so a forged log can't break out and impersonate a harness instruction.
-- **Self-contained** — The built `core/dist/` is committed; a plain clone works with no build step. `yaml` is bundled inline. `npm audit --omit=dev`: **0 vulnerabilities.**
+- **Self-contained at runtime** — The built `core/dist/` is committed; a plain clone works with no build step. `yaml` is bundled inline, and every runtime entry point resolves to Node built-ins only. `npm audit --omit=dev`: **0 vulnerabilities.** (Scope: `claude plugin install` still runs `npm ci --ignore-scripts` inside the plugin cache, so the dev toolchain lands on disk there — 73 packages, ~66 MB per version. None of it is on any execution path; the CLI, the hooks and the MCP server all run with `node_modules` absent.)
 
 ### Measured
 
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1490 passing** (63 files) — 17 are repo-only checks that skip in the published package (1450 there) |
+| Test suite | **1491 passing** (63 files) — 17 are repo-only checks that skip in the published package (1451 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -178,6 +178,16 @@ Your active role is at the **decision points**: approve the design, decide when 
 > Works identically in the terminal and in the Claude desktop app — same engine, same hooks.
 
 ### Command reference
+
+**Where `harness` lives.** The CLI ships inside the plugin. Claude Code puts the plugin's `bin/` on
+the PATH of the shell your agent runs commands in — so the table below works verbatim there, and
+that is where these commands are normally run. Your own terminal does not get that entry; to drive
+it by hand, add the installed plugin's `bin/` yourself:
+
+```bash
+export PATH="$(ls -d "$HOME"/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/*/bin | tail -1):$PATH"
+harness --version
+```
 
 | Command | What it does |
 |---|---|
@@ -250,7 +260,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1490 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1491 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -270,7 +280,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1490 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1491 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and

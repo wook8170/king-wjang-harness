@@ -8,7 +8,43 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed — exit codes now separate "the verdict is no" from "the command did not run" ([API-05])
+
+Both used to be `1`. A release script running `harness ship verdict` could not tell
+"the product is not ready" apart from "you typo'd the subcommand" or "you ran it in
+the wrong directory". The contract is now:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success / the verdict is yes |
+| `1` | Usage or environment error |
+| `2` | **The verdict is no** — `ship verdict` NO-GO · `doctor` diagnosis failed · `gate verify` drift · `evidence check` short |
+
+Anything non-zero still trips `cmd || exit 1`, so existing scripts keep working —
+the only change is that they *can* now tell the two apart. Written into the tail of
+`harness --help` and all four READMEs.
+
+### Changed — the shell rule now blocks execution, not mention ([API-01])
+
+The rule used to deny a command that merely *named* a harness path, including inside a
+closed quote or a heredoc body — pinned in `policy.test.ts` as "deliberate over-blocking",
+on the premise that narrowing it would open `bash -c "..."`. That premise was disproved by
+measurement: with the rule narrowed, all 20 bypass shapes (`bash -c`, `eval`, backticks,
+`$()`, `xargs`, newline and prefix forms, absolute paths, direct core invocation) still
+fail closed. The contract is now **execution is blocked, recording is not**.
+
+Changed: `echo "run harness doctor --accept-policy" >> README.md` goes from deny to allow.
+Unchanged: command substitution is execution even inside quotes, so it is still denied.
+This is a security-contract change — the evidence is `evidence/probe-approve.js`
+(20 bypasses × 7 legitimate commands).
+
+### Fixed — the MCP schema advertised `goal` as optional and then refused the call ([API-11])
+
+`harness_wave_create` declared no `required` array, so a client reading the schema
+could build a call the implementation rejected with `isError: true`. A machine-readable
+schema is an advertisement; this one did not match the product. `goal` is now declared
+required, and `core/test/mcp.test.ts` pins the schema against the implementation's
+actual refusal so the two cannot drift apart again.
 
 ## [0.1.2] — 2026-08-26
 

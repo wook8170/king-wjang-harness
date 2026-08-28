@@ -189,6 +189,13 @@ describe('mcp: 코어 위임', () => {
     expect(r.content).toMatch(/F-404/);
   });
 
+  it('[API-11] wave create 는 스키마가 필수라 말하는 것과 구현이 거부하는 것이 일치한다', () => {
+    // 스키마는 기계가 읽는 광고다 — 선택이라 적고 거부하면 광고↔실물 불일치가 된다.
+    expect(defByName('harness_wave_create')!.inputSchema.required).toContain('goal');
+    const r = callTool(setup(), 'harness_wave_create', { milestone: 'M1', acceptance: [] });
+    expect(r.ok).toBe(false); // 메시지는 로케일에 따라 달라지므로 거부 «여부»만 계약이다
+  });
+
   it('wave update 는 빈 턴 로그를 거부한다', () => {
     const root = setup();
     upsertNode(root, { id: 'F-1', title: 'x', version: 1, status: 'draft' });
