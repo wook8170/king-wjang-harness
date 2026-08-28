@@ -35,31 +35,24 @@ figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0
 <p><strong>선행 리포트</strong>: <code>docs/release-readiness/2026-08-21/</code> 은 <strong>근거로 쓰지 않았다.</strong> 모든 판정을 이번 세션에서 다시 관측했다(Iron Rule 7).</p>
 <p>---</p>
 <h2>판정</h2>
-<div class='quote'>출하 가능 (GO)</div>
+<div class='quote'>조건부 출하 가능 (CONDITIONAL GO)</div>
 <div class='quote'></div>
-<div class='quote'><strong>착수 시점 판정은 출하 불가(NO-GO)였다</strong> — 차단 결함 3건, 적색 게이트 7개.</div>
-<div class='quote'>수정 라운드 1~3 을 거쳐 <strong>차단 0 · open HIGH 0 · 게이트 13/13 충족</strong>이 됐다.</div>
-<div class='quote'>잔여 38건은 전부 MED/LOW 로 <strong>출하 후 백로그</strong>다.</div>
+<div class='quote'><strong>한때 「출하 가능(GO)」으로 적었으나 되돌렸다.</strong> 읽는 사람이 「open 37건인데 GO?」라고 물었고,</div>
+<div class='quote'>그 질문으로 목록을 다시 훑자 <strong>게이트 판정과 충돌하는 open 항목 둘</strong>이 나왔다.</div>
+<div class='quote'>이음매 점검을 「축끼리 어긋났는가」로만 했지 **「축의 결론이 게이트 판정과 어긋났는가」로는</div>
+<div class='quote'>하지 않은 것**이 원인이다. 판정을 낮춰 적는다.</div>
 <div class='quote'></div>
-<div class='quote'>모든 수정은 <strong>근본 원인 수정 → 건별 회귀 테스트 → 재측정 → 변이 검증</strong>(고친 곳을 되돌려</div>
-<div class='quote'>실제로 red 가 되는지 확인)을 거쳤다. 테스트 <strong>1404 → 1490</strong>(회귀 85건 추가), tsc 0.</div>
+<div class='quote'>착수 시 차단 3건 · 적색 게이트 7개 · open HIGH 4건은 <strong>전부 닫혔다</strong>(라운드 1~3, 전건 회귀</div>
+<div class='quote'>테스트 + 변이 검증). 테스트 1404 → <strong>1490</strong>, tsc 0. 그 성과는 그대로다.</div>
+<h3>출하 전에 닫아야 할 조건 — 둘</h3>
 <div class="tbl"><table>
-<tr><th>착수 시 차단 3건</th><th>무엇이었나</th><th>지금</th></tr>
-<tr><td><strong>API-01</strong></td><td>FD 복제 리다이렉트(<code>2&gt;&amp;1</code>) 하나로 <strong>읽기 전용 명령이 소스 쓰기로 오판</strong>됐다</td><td><strong>verified</strong> — 과차단 7/12 → <strong>0/12</strong>, 관통 0/8 유지</td></tr>
-<tr><td><strong>OPS-01</strong></td><td>저널이 손상돼도 상태 파일만 멀쩡하면 <strong>UI 어디에도 안 보였다</strong></td><td><strong>verified</strong> — 세션 시작 배너가 말한다</td></tr>
-<tr><td><strong>OPS-02</strong></td><td>번들이 없으면 <strong>강제가 조용히 꺼지는데</strong> <code>doctor</code> 는 <code>ok:true</code> 였다</td><td><strong>verified</strong> — <code>hook-errors.log</code> 에 흔적, <code>doctor</code> 가 이미 그걸 센다</td></tr>
+<tr><th>#</th><th>조건</th><th>누가·무엇을·어떻게 확인</th></tr>
+<tr><td>㉠</td><td><strong>DEP-11 재검증 — G9 의 근거가 흔들린다</strong></td><td>축⑦은 「플러그인 설치가 npm 을 트리거하지 않는다」를 <code>code</code>(lifecycle 훅 부재)로 <strong>verified</strong> 했는데, 축⑩은 <code>claude plugin install</code> 이 캐시에서 **<code>npm ci</code><strong> 를 돌아 </strong>68MB/73패키지<strong>를 내려받는 것을 </strong>npm 디버그 로그로 실측<strong>했다(SHIP-04). </strong>실측이 코드 독해를 이긴다.** 사실이면 <code>npm audit</code> 의 critical 1·high 1 이 <strong>사용자 머신에 내려온다</strong> — G9(프로덕션 도달 0)의 근거 문장을 다시 세워야 한다. 확인: 깨끗한 HOME 에서 설치 후 <code>node_modules</code> 존재와 실행 경로 도달 여부</td></tr>
+<tr><td>㉡</td><td><strong>SHIP-02 — G3 와 충돌</strong></td><td>G3 목표는 「광고↔실물 <strong>불일치 0</strong>」인데, README 명령표는 <code>harness …</code> 로 쓰여 있고 **문서대로 설치한 깨끗한 HOME 에서 <code>harness</code> 는 PATH 에 없다**(measured). 축①은 <code>node bin/harness --help</code> 로만 확인해 이 경로를 밟지 않았다. 확인: README 를 실제 호출 방법으로 고치거나, 못 고치면 <strong>G3 를 미달로 되돌린다</strong></td></tr>
 </table></div>
-<p><strong>적색 게이트 7개도 전부 닫았다</strong>: G3 번역 누락 · G4 exit code·훅 예산 · G5 폭 80 표 정렬 ·</p>
-<p>G7 훅 지연 실측 · G10 불변식 2건 · G12 태그·스키마 · G13 관측성 6건.</p>
-<p><strong>HIGH 로 남아 있던 4건</strong>도 닫혔다 — OPS-06(타임아웃 → fail-open) · OPS-08(저널 비밀 마스킹) ·</p>
-<p>API-03(config 오타 침묵) · <strong>API-02 는 근거를 들어 기각</strong>(비대칭이 보이는 자리와 위반이</p>
-<p>완성되는 자리가 다르다 — 들여오기 경로 <strong>10/10 전건 차단</strong> 실증).</p>
-<h3>출하 시 할 일 — 결함이 아니라 <strong>출하 행위</strong></h3>
-<div class="tbl"><table>
-<tr><th>무엇을</th><th>왜</th></tr>
-<tr><td>**커밋 + <code>git push --tags</code>**</td><td>라운드 1~3 변경과 <code>v0.1.1</code>·<code>v0.1.2</code> 태그가 아직 로컬에만 있다. 태그 내용은 실측 확인됨(v0.1.2 에 SEC-300 수정 有, v0.1.0 에 無) — 원격 사용자가 되돌아갈 수 있으려면 push 가 필요하다</td></tr>
-<tr><td><strong>계약 변경 2건 고지</strong></td><td>① 보안: 「인용부호 안 언급도 막는다」 → <strong>「실행은 막고 기록은 막지 않는다」</strong>(근거였던 「좁히면 <code>bash -c</code> 가 열린다」가 실측 반증됨 — 우회 20종 전부 계속 차단) ② 공개: **종료코드 <code>2</code> 신설**(판정이 「아니오」). 0 이 아니면 기존 `cmd \</td><td>\</td><td>exit 1` 은 그대로 걸린다</td></tr>
-</table></div>
+<p><strong>장부 위생도 함께 고친다.</strong> GO 는 「잔여가 <strong>전부 출하 후 백로그</strong>」를 요구하는데 40건이 <code>open</code></p>
+<p>으로만 남아 있다. 진짜 백로그는 <code>deferred</code> + 사유로 전환해야 <strong>대장만 보고도 판정이 읽힌다</strong> —</p>
+<p>지금 상태에서 「미결 40건인데 GO?」라고 읽히는 것은 읽는 사람이 옳다.</p>
 <p>---</p>
 <h3>이 감사가 실제로 발견한 것 — 한 문단</h3>
 <p><strong>강제 자체는 매우 강하다.</strong> 설계 트랙 소스 쓰기 우회 <strong>28/28 차단</strong>(축④) · 셸 쓰기 우회 <strong>30+ 형태 전건 차단</strong>(축⑥) · 저널·상태 파일 덮어쓰기 <strong>10/10 차단</strong>(오케스트레이터 프로브) · 이력 비밀 <strong>0/315 커밋</strong> · 커밋된 <code>core/dist</code> 가 소스와 <strong>바이트 일치</strong>(세 축이 독립 확인) · 테스트 <strong>1404/1404 × 3회 동일</strong>(착수 시점) · tsc <strong>0</strong>. 이 제품이 파는 「모델은 반환값과 논쟁할 수 없다」는 실측으로 성립한다.</p>
@@ -73,13 +66,13 @@ figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0
 <tr><th>#</th><th>게이트</th><th>목표 (착수 전 확정)</th><th>실측</th><th>판정</th></tr>
 <tr><td>G1</td><td>테스트</td><td>vitest <strong>fail 0</strong> · 사유 없는 skip 0</td><td><strong>1490 pass / fail 0</strong> · 63 파일 (착수 시 1404/58 — 라운드 1~3 이 회귀 85건 추가) · 3회 전부 동일 (<code>evidence/g1-g11-vitest-x3.log:2</code>)</td><td><strong>충족</strong></td></tr>
 <tr><td>G2</td><td>타입·빌드</td><td>tsc 오류 <strong>0</strong> · 빌드 성공 · dist 산출물 존재</td><td><strong>오류 0</strong> — <code>npm run check</code> exit 0 · dist sha256 <code>eadb7c04…</code> / <code>fba8991f…</code></td><td><strong>충족</strong></td></tr>
-<tr><td>G3</td><td>기능 완성도 ①</td><td>광고↔실물 불일치 <strong>0</strong></td><td><strong>불일치 0</strong> — ko/ja/zh 에 인터프리터 우회 고지 번역 삽입 · 「알려진 한계」 불릿 <strong>6/6/6/6</strong> · <code>64 KB</code> 언급 4/4 · 구조 검사 상시화(<code>core/test/doc-claims.test.ts</code>)</td><td><strong>충족</strong></td></tr>
+<tr><td>G3</td><td>기능 완성도 ①</td><td>광고↔실물 불일치 <strong>0</strong></td><td>「알려진 한계」 불릿 <strong>6/6/6/6</strong> · <code>64 KB</code> 언급 4/4 · 구조 검사 상시화 — <strong>그러나 SHIP-02 가 미해결</strong>: README 명령표가 쓰는 실행 이름이 문서대로 설치하면 PATH 에 없다(measured). 이것도 광고↔실물 불일치다</td><td><strong>미달</strong>(㉡)</td></tr>
 <tr><td>G4</td><td>CLI 계약 ②</td><td>exit code 계약 위반 0 · <code>--help</code> 정확성 · 비TTY 안전</td><td><code>--help</code> 정확성 <strong>충족</strong> · 비TTY <strong>충족</strong> · <strong>exit code 3구간 분리</strong>(NO-GO→2 · 오타/환경→1 · 정상→0, 실측) · <strong>10초 예산 충족</strong> — 상한을 실측으로 4MB→1MB 재역산, 상한에서 4.4s(여유 2.3배, 부하 창) · 상한 초과는 112ms 에 즉시 거부</td><td><strong>충족</strong></td></tr>
 <tr><td>G5</td><td>출력·접근성 ③</td><td>ANSI 0 · NO_COLOR 준수 · 폭 80 깨짐 0 · 비ASCII 실패 0 · i18n 키 누락 0</td><td>ANSI <strong>0바이트</strong> · NO_COLOR·FORCE_COLOR·TERM=dumb <strong>바이트 동일</strong> · 비ASCII <strong>0 실패</strong> · en/ko 키 428벌 <strong>누락 0</strong> · <strong>폭 80 깨짐 0</strong> — 표 행 502개(en/ko × 80·100열) 전수 검사, 전각 폭 계산 포함 (<code>evidence/probe-width.js</code>)</td><td><strong>충족</strong></td></tr>
 <tr><td>G6</td><td>E2E ④ 🔴</td><td>페르소나 시나리오 실패 <strong>0</strong></td><td><strong>실패 0</strong> — 페르소나 4명 완주, 우회 28/28 차단 · 정당 작업 20/20 허용 (<code>evidence/ax04-P2.log:1</code>)</td><td><strong>충족</strong></td></tr>
 <tr><td>G7</td><td>성능 ⑤</td><td>폴백 추가 지연 in-proc·wall &lt; 50ms · 셸 게이트 p95 &lt; 10ms · 대용량에서 OOM·무한대기 0</td><td><strong>충족</strong> — 유휴 창(load 3.95, 「machine busy」 표기 <strong>0</strong>)에서 폴백 추가 지연 realistic <strong>in-proc +15.2ms · wall +32.9ms</strong>, corrupt <strong>+10.7 / +22.2ms</strong> — 전건 PASS(문턱 50ms) · 명령 파싱 6형태 전부 PASS · 훅 e2e 상한에서 4.4s/예산 10s (<code>evidence/g7-bench-idle.log:1</code>) · OPS-06 수정 후 대조에서도 +27.6/+11.3ms 로 문턱 아래 유지</td><td><strong>충족</strong></td></tr>
 <tr><td>G8</td><td>보안 ⑥</td><td>소스 쓰기 관통 0 · 셸 인젝션 0 · 이력 비밀 0 · 임시파일 권한 0</td><td><strong>4개 항목 전부 0</strong> — 관통 0 · <code>child_process</code> 전무 · gitleaks <strong>0/316 커밋</strong> (<code>evidence/ax06-gitleaks.log:10</code>) · 임시파일 생성 자체가 없음. <strong>근거 범위 주의</strong>: gitleaks 0 은 「gitleaks 룰에 걸리는 비밀이 없다」만 말한다 — GitHub 푸시 보호가 막는 형태를 gitleaks 가 통과시킨 사례를 실측했다(ORCH-11)</td><td><strong>충족</strong>(범위 명시)</td></tr>
-<tr><td>G9</td><td>공급망 ⑦</td><td>프로덕션 도달 critical/high <strong>0</strong> · 라이선스 충돌 0 · 락파일 고정</td><td><strong>도달 0</strong> (<code>evidence/ax07-npm-audit-prod.json:1</code>) · 라이선스 충돌 <strong>0</strong>(88 패키지 전수) · <code>npm ci</code> <strong>무변경</strong></td><td><strong>충족</strong></td></tr>
+<tr><td>G9</td><td>공급망 ⑦</td><td>프로덕션 도달 critical/high <strong>0</strong> · 라이선스 충돌 0 · 락파일 고정</td><td><code>npm audit --omit=dev</code> 전 카테고리 <strong>0</strong> · 라이선스 충돌 <strong>0</strong>(88패키지) · <code>npm ci</code> 무변경 — <strong>그러나 「도달 0」의 근거 한 축(DEP-11: devDep 이 설치자 머신에 안 내려온다)이 축⑩ 실측(SHIP-04)과 충돌한다.</strong> 근거를 다시 세우기 전까지 이 충족은 <strong>잠정</strong>이다</td><td><strong>재확인 필요</strong>(㉠)</td></tr>
 <tr><td>G10</td><td>논리·정합성 ⑧</td><td>불변식 위반 0 · 저널 파괴 경로 0 · 불가능 전이 0 · 경계값 실패 0</td><td>불가능 전이 <strong>0/7</strong> · 경계값 실질 실패 <strong>0</strong> · <strong>불변식 위반 0</strong> — 전이 시 해시 드리프트 자동 무효화(LOGIC-01) · <code>--out</code> 소유 파일 가드(LOGIC-02, 목록을 <code>policy.ts</code> 한 벌로) · <strong>저널 파괴 경로 0</strong>(사람 레인 포함) · 손상된 웨이브 지시서를 <code>doctor</code> 가 탐지(OPS-17)</td><td><strong>충족</strong></td></tr>
 <tr><td>G11</td><td>결정성 ⑨</td><td>3회 반복 결과 동일 · 설명 못 하는 실패 0 · 빌드 산출물 해시 동일</td><td><strong>3회 전부 1404 pass 동일</strong>(착수 시점 측정) — load 14.4 / 27.4 / 35.6 의 <strong>악조건에서</strong> (<code>evidence/g1-g11-vitest-x3.log:1</code>) · 설명 못 하는 실패 <strong>0</strong> · 재현 빌드 <strong>3개 축이 독립 확인</strong></td><td><strong>충족</strong></td></tr>
 <tr><td>G12</td><td>배포·롤백 ⑩</td><td>설치·업그레이드·롤백 각 1회 실측 성공 · 조용한 기본값 0</td><td>설치 <strong>성공</strong>(HOME 3개, 16.0s) · 업그레이드 <strong>2건 성공</strong> · 롤백 <strong>실측 성공</strong> · <strong>조용한 기본값 0</strong> — 번들 부재가 로그에 남고(OPS-02) 미래 schemaVersion 을 모든 표면이 거부(SHIP-06) · <strong>되돌아갈 안전한 버전 확보</strong>(v0.1.2 태그, SEC-300 수정 有 실측) — 배포(<code>git push --tags</code>)는 출하 «행위»이지 판정 대상이 아니다</td><td><strong>충족</strong></td></tr>
@@ -156,7 +149,7 @@ figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0
 <p>6. <strong>부하 창이 항상 나쁜 것은 아니다.</strong> 결정성(G11)은 load 14→36 의 악조건에서 3/3 동일이 나와, 조용한 창보다 <strong>강한</strong> 근거가 됐다. 타이밍 게이트(G7)만 조용한 창을 요구한다 — 무엇을 재느냐로 갈린다.</p>
 <hr>
 <h2>결함 대장 (정본)</h2>
-<p><strong>갱신</strong> 2026-08-28 · <strong>판정</strong> 출하 가능 · <strong>open BLOCKER</strong> 0 · <strong>open 전체</strong> 37</p>
+<p><strong>갱신</strong> 2026-08-28 · <strong>판정</strong> 조건부 출하 가능 · <strong>open BLOCKER</strong> 0 · <strong>open 전체</strong> 40</p>
 <p>대상 <code>bacb4bc</code> (main) · 축: ①②③④⑤⑥⑦⑧⑨⑩⑪ (전수) · 뺀 축: 없음</p>
 <div class="tbl"><table>
 <tr><th>ID</th><th>심각도</th><th>축</th><th>한 줄</th><th>상태</th><th>근거등급</th><th>근거</th><th>닫은 증거</th></tr>
@@ -170,7 +163,7 @@ figcaption{color:var(--mut);font-size:.85em}p{margin:.4rem 0}.li{margin:.15rem 0
 <tr><td>DEP-08</td><td>—</td><td>07</td><td>락파일 고정도 완전 — 160항목 전부 integrity 해시 · <code>npm ci</code> 무변경</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>package-lock.json:2</code></td><td>축⑦ §DEP-08 · 샌드박스 <code>npm ci</code> exit 0 + diff 동일</td></tr>
 <tr><td>DEP-09</td><td>—</td><td>07</td><td>라이선스 충돌 0 — 설치 88패키지 전수 허용적(MIT80·Apache3·ISC3·BSD3C2), copyleft 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>package.json:5</code></td><td>축⑦ §DEP-09</td></tr>
 <tr><td>DEP-10</td><td>—</td><td>07</td><td>배포 표면 깔끔 — 144파일 2.99MB, node_modules·내부문서·자격증명 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-27/07-supply-chain.md:188</code></td><td>축⑦ §DEP-10 · `git archive HEAD \</td><td>tar -t` 전수</td></tr>
-<tr><td>DEP-11</td><td>—</td><td>07</td><td>마켓플레이스 설치 경로는 npm 을 트리거하지 않음 → devDependency 가 설치자 머신에 안 내려온다</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>mcp/server.js:1</code></td><td>축⑦ §DEP-11 · lifecycle 훅 0</td></tr>
+<tr><td>DEP-11</td><td>—</td><td><span class="badge b-HIGH">HIGH</span></td><td><strong>(감사 오류 의심 — 재검증 필요)</strong> 「플러그인 설치는 npm 을 트리거하지 않는다」가 축⑩ 실측과 정면 충돌한다: SHIP-04 는 <code>claude plugin install</code> 이 캐시에서 **<code>npm ci</code><strong> 를 돌아 </strong>68MB/73패키지**를 내려받는 것을 npm 로그로 확인했다. <code>code</code> 추론(lifecycle 훅 부재)이 <code>measured</code> 를 이길 수 없다 — <strong>G9 의 근거 한 축이 여기 걸려 있다</strong></td><td><span class="badge b-open">open</span></td><td><span class="badge b-code">code</span></td><td><code>mcp/server.js:1</code></td><td>—</td></tr>
 <tr><td>FEAT-01</td><td><span class="badge b-MED">MED</span></td><td>01</td><td>영문 「Known limits」의 인터프리터 우회 한계 고지가 ko/ja/zh 3개 언어에서 통째로 누락 (불릿 6 vs 5)</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-code">code</span></td><td><code>README.md:296</code></td><td><code>docs/release-readiness/2026-08-27/fixes-round2.md</code> §G3 · ko/ja/zh 번역 삽입 · 불릿 6/6/6/6 실측 · 재발 방지 구조 검사 <code>core/test/doc-claims.test.ts</code></td></tr>
 <tr><td>FEAT-02</td><td><span class="badge b-LOW">LOW</span></td><td>01</td><td><code>~240 tokens/session</code> 수치에만 재현 명령이 없다 (같은 표의 지연 행은 <code>npm run bench:hook</code> 명시)</td><td><span class="badge b-open">open</span></td><td><span class="badge b-code">code</span></td><td><code>README.md:122</code></td><td>—</td></tr>
 <tr><td>FEAT-03</td><td>—</td><td>01</td><td>P0→P12 전 구간 실동작 — 게이트 6회·웨이브 3개·doctor 복구·report 까지 단절 0 · 침묵 실패 0</td><td><span class="badge b-verified">verified</span></td><td><span class="badge b-measured">measured</span></td><td><code>docs/release-readiness/2026-08-27/01-features.md:148</code></td><td>축① §FEAT-03 · 샌드박스 3개 완주</td></tr>

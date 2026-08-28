@@ -1,6 +1,6 @@
 # 결함 대장 (정본)
 
-**갱신** 2026-08-28 · **판정** 출하 가능 · **open BLOCKER** 0 · **open 전체** 37
+**갱신** 2026-08-28 · **판정** 조건부 출하 가능 · **open BLOCKER** 0 · **open 전체** 40
 대상 `bacb4bc` (main) · 축: ①②③④⑤⑥⑦⑧⑨⑩⑪ (전수) · 뺀 축: 없음
 
 | ID | 심각도 | 축 | 한 줄 | 상태 | 근거등급 | 근거 | 닫은 증거 |
@@ -15,7 +15,7 @@
 | DEP-08 | — | 07 | 락파일 고정도 완전 — 160항목 전부 integrity 해시 · `npm ci` 무변경 | verified | measured | `package-lock.json:2` | 축⑦ §DEP-08 · 샌드박스 `npm ci` exit 0 + diff 동일 |
 | DEP-09 | — | 07 | 라이선스 충돌 0 — 설치 88패키지 전수 허용적(MIT80·Apache3·ISC3·BSD3C2), copyleft 0 | verified | measured | `package.json:5` | 축⑦ §DEP-09 |
 | DEP-10 | — | 07 | 배포 표면 깔끔 — 144파일 2.99MB, node_modules·내부문서·자격증명 0 | verified | measured | `docs/release-readiness/2026-08-27/07-supply-chain.md:188` | 축⑦ §DEP-10 · `git archive HEAD \| tar -t` 전수 |
-| DEP-11 | — | 07 | 마켓플레이스 설치 경로는 npm 을 트리거하지 않음 → devDependency 가 설치자 머신에 안 내려온다 | verified | measured | `mcp/server.js:1` | 축⑦ §DEP-11 · lifecycle 훅 0 |
+| DEP-11 | — | HIGH | **(감사 오류 의심 — 재검증 필요)** 「플러그인 설치는 npm 을 트리거하지 않는다」가 축⑩ 실측과 정면 충돌한다: SHIP-04 는 `claude plugin install` 이 캐시에서 **`npm ci`** 를 돌아 **68MB/73패키지**를 내려받는 것을 npm 로그로 확인했다. `code` 추론(lifecycle 훅 부재)이 `measured` 를 이길 수 없다 — **G9 의 근거 한 축이 여기 걸려 있다** | open | code | `mcp/server.js:1` | — |
 | FEAT-01 | MED | 01 | 영문 「Known limits」의 인터프리터 우회 한계 고지가 ko/ja/zh 3개 언어에서 통째로 누락 (불릿 6 vs 5) | verified | code | `README.md:296` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G3 · ko/ja/zh 번역 삽입 · 불릿 6/6/6/6 실측 · 재발 방지 구조 검사 `core/test/doc-claims.test.ts` |
 | FEAT-02 | LOW | 01 | `~240 tokens/session` 수치에만 재현 명령이 없다 (같은 표의 지연 행은 `npm run bench:hook` 명시) | open | code | `README.md:122` | — |
 | FEAT-03 | — | 01 | P0→P12 전 구간 실동작 — 게이트 6회·웨이브 3개·doctor 복구·report 까지 단절 0 · 침묵 실패 0 | verified | measured | `docs/release-readiness/2026-08-27/01-features.md:148` | 축① §FEAT-03 · 샌드박스 3개 완주 |
