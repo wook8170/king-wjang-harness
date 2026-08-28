@@ -1,0 +1,45 @@
+=== 변경 후 대조 측정 (부하 창 — in-process 델타 비교용) ===
+19:43  up 5 days, 23:57, 1 user, load averages: 5.94 7.78 7.61
+Fri Aug 28 19:43:36 KST 2026
+
+# Hook latency — two surfaces: in-process (the judgement itself) and process wall-time
+#   wall-time is what you wait for on every tool call; in-process is what this tool costs
+#   once `node` startup and bundle loading are excluded. The gate applies to both.
+# node v22.22.2 · arm64 · 10 cores · load 7.79 8.13 7.73
+# journal 100,000 entries · n=30 · 3 warm-up runs discarded
+# `node` startup floor on this machine: p50 46.2ms · p95 81.1ms
+#   ^ that floor belongs to your machine, not to this tool. Every absolute number below includes it.
+
+# !! This machine is busy (1-min load 7.79 on 10 cores).
+#    Wall-time p95 measures whatever else is running too. Re-run on an idle machine before
+#    reading a verdict below — a busy box can inflate the delta several-fold.
+#    Every verdict below is marked "machine busy" — passes included. Load moves the delta
+#    both ways, so a pass measured here is not a pass either.
+
+| Journal shape | Surface | Normal p95 | Degraded (fallback) p95 | Fallback adds | Gate |
+|---|---|---|---|---|---|
+| realistic | in-process | 0.1ms | 27.7ms | **+27.6ms** | pass — machine busy |
+| realistic | wall-time | 122.4ms | 212.6ms | **+90.2ms** | over — machine busy |
+| corrupt | in-process | 0.2ms | 11.5ms | **+11.3ms** | pass — machine busy |
+| corrupt | wall-time | 220.8ms | 229.7ms | **+8.8ms** | pass — machine busy |
+| all-state | in-process | 0.4ms | 79.6ms | **+79.2ms** | recorded only |
+| all-state | wall-time | 121.3ms | 172.3ms | **+50.9ms** | recorded only |
+
+| Command shape | p95 | Gate |
+|---|---|---|
+| plain | 121.2ms | pass — machine busy |
+| long-noslash | 318.5ms | pass — machine busy |
+| cd-redirect | 568.9ms | pass — machine busy |
+| quoted | 697.1ms | pass — machine busy |
+| interp-body | 635.5ms | pass — machine busy |
+| symlink-cd | 191.6ms | pass — machine busy |
+Command parsing must stay under 1000ms p95 — these shapes are the ones that
+went quadratic before (long paths without slashes, repeated `cd` with redirects).
+A hook that exceeds its 10s timeout is killed — and a killed hook allows the call.
+
+Gate G9 is on the last column — **the fallback must add less than 50ms p95**.
+It is a delta, not an absolute, because most of any absolute figure is the `node` startup
+above — a number this tool does not control.
+`all-state` (every line a state transition) is adversarial input: recorded, not gated. The
+journal only grows through harness commands, so reaching 100,000 transitions means running
+100,000 of them — hard to reach in practice, though nothing caps it.

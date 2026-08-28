@@ -1,0 +1,72 @@
+=== axis 11 (ops) — full sweep of catch/silent-failure sites, core/src/*.ts + bin/harness + mcp/server.js ===
+Method: `rg -n 'catch\s*(\([^)]*\))?\s*\{' core/src/*.ts bin/harness bin/harness-hook mcp/server.js`
+(115 matches) + a small Python script (extract_catches.py, balanced-brace body extraction) to
+pull every catch body for review. `catch (e) {}` / `catch {}` completely-empty-body count: 0
+(rg for the literal empty-body pattern also returned 0 matches — every catch in this codebase
+has SOME body, even if it's just a comment).
+
+Per-file counts: hook.ts 15, cli.ts 13, profile.ts 10, evidence.ts 8, mcp/server.js 7, gate.ts 7,
+doctor.ts 5, wave.ts 4, report.ts 4, registry.ts 4, ledger.ts 4, ship.ts 3, policy.ts 3,
+loop.ts 3, events.ts 3, design.ts 3, config.ts 3, adr.ts 3, usage.ts 2, tokens.ts 2,
+migrate.ts 2, mcp.ts 2, tr.ts 1, state.ts 1, runtime.ts 1, paths.ts 1, bin/harness 1.
+Total 115, full bodies logged in catch-bodies.txt (not reproduced here for length).
+
+"Who finds out if this fails" verdict per notable site (the rest either rethrow with a
+harness-authored message, or `continue`/`return null` in a context where the caller already
+reports the parent condition — reviewed and considered fine):
+
+- core/src/runtime.ts:7-10 (noteActivity) — NOT wrapped at all (only clearActivity, a sibling
+  function, is). Failure is silent with ZERO trace anywhere. -> OPS-03 (see
+  ax11-doctor-blindspots.log for the live repro).
+
+- core/src/hook.ts:354-355 (logHookError's own mkdir+append) — deliberately silent
+  ("판정기의 유일한 의무는 세션을 깨뜨리지 않는 것이다"). Reasonable IF something else is
+  watching, but nothing is (compounds OPS-03: the ONE place designed to record
+  "a judgement failed" fails at exactly the same time noteActivity does, under the same
+  read-only condition).
+
+- core/src/policy.ts:68/87/102 (listPolicyFiles / computePolicyHash) — an unreadable
+  `.harness/config.yaml` or `.harness/profile/` is treated identically to "file absent". By
+  design this still shows up as a hash mismatch against the pinned baseline (doctor.ts:270-289
+  warns on mismatch) IF a baseline was ever pinned — reviewed, no live-repro gap found beyond
+  what OPS-01's "corrupt journal can un-pin the baseline" note covers (a corrupted journal loses
+  the `policy-pinned` event too, silently reverting to the "not pinned yet" note instead of a
+  drift warning — see ax11-hook-fail-open.log Probe 3; not filed as a separate ID, folded into
+  OPS-01's evidence since it's the same root cause).
+
+- core/src/doctor.ts:77 (sweepOrphanTmp) — "경합·권한 실패가 진단 전체를 막지는 않는다";
+  correctly scoped to a best-effort cleanup of dead-pid temp files, doesn't hide a real issue
+  (verified, no defect).
+
+- core/src/doctor.ts:348 (hook-errors.log rotation on --repair) — rotation failure leaves the
+  warning in place for next run rather than losing it; correct trade-off (verified, no defect).
+
+- core/src/mcp.ts:340/371 — forwards the underlying harness error message as-is (already
+  harness-authored elsewhere), or appends a "Warning: review packet generation failed (the
+  submission still stands)" — both surface to the MCP caller. No silent loss.
+
+- mcp/server.js:159 — "no handler failure may kill the server" — logs to stderr AND returns a
+  JSON-RPC error response with the id when available; reasonable (verified, no defect).
+
+- mcp/server.js:179/183 — best-effort watcher close/create, see ax11-fd-process-leak.log
+  (verified, no defect; not a decision-relevant failure).
+
+- core/src/cli.ts:1202 (design inventory --from) — the one UNWRAPPED read in this survey that
+  actually surfaces to a user as a raw error (see ax11-error-messages.log #16) -> OPS-09.
+
+Everything else surveyed either (a) rethrows through this codebase's `tr()`/`L()` friendly-
+message wrapper (the dominant, deliberate pattern throughout — dozens of examples), or (b) is a
+`continue`/`return null|[]|false` inside a loop/lookup where the caller already reports "not
+found"/"no such X" using the harness's own message conventions, not a bare failure.
+
+Fault-injection attempts (5+ required by the brief) actually exercised end-to-end, cross-
+referenced to their evidence files:
+  1. core/dist/cli.js deleted -> ax11-hook-fail-open.log (Probe 1)
+  2. .harness/ chmod 555 (read-only) -> ax11-doctor-blindspots.log (Probes A-D)
+  3. events.jsonl corrupted mid-line -> ax11-hook-fail-open.log (Probe 3)
+  4. journal grown to 6M lines / 532MB + state.json missing -> ax11-journal-growth-timeout.log
+  5. state.json hand-diverged from journal (phase mismatch) -> ax11-doctor-blindspots.log
+     (Probe D setup) and confirmed detected by plain `doctor`
+  6. missing --from file on `design inventory` -> ax11-error-messages.log (#16)
+  7. 200x hook invocation stress (disk/proc, not literally "disk full" but same family) ->
+     ax11-fd-process-leak.log

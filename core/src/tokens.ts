@@ -118,7 +118,8 @@ export const TOKEN_DOC_SKELETON = `{
                   "lineHeight": { "normal": "1.5" } },
   "radius":     { "md": "8px" },
   "shadow":     { "md": "0 1px 2px rgba(0,0,0,.08)" },
-  "motion":     { "duration": { "fast": "120ms" }, "easing": { "standard": "cubic-bezier(.2,0,0,1)" } },
+  "motion":     { "duration": { "fast": "120ms" },
+                  "easing":   { "standard": "cubic-bezier(.2,0,0,1)" } },
   "breakpoint": { "md": "768px" }
 }`;
 

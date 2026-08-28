@@ -218,11 +218,121 @@ export const COMMANDS: CommandGroup[] = [
  */
 const MAX_LEFT = 30;
 
+/**
+ * [UX-01] **설명이 넘치면 접어서 설명 칸에 맞춰 들여쓴다.**
+ *
+ * 예전에는 요약문을 패딩 뒤에 그대로 이어 붙였다. 짧은 요약은 문제없이 지나가지만 `doctor`(178자)·
+ * `tokens gen`(173자)·토큰 문서 힌트(231자)는 실제 80열 터미널에서 둘째 줄부터 **왼쪽 끝으로
+ * 돌아가** 어느 명령의 설명인지 시각적으로 추적할 수 없었다. 표가 표가 아니게 된다.
+ *
+ * 폭은 `process.stdout.columns` 를 쓰되 **비TTY(파이프·리다이렉트)면 고정값**이다 — 그래야
+ * CI 로그와 테스트가 환경에 따라 흔들리지 않는다(결정성). 상·하한을 두는 이유는 아주 좁거나
+ * 아주 넓은 터미널에서 접기가 오히려 읽기를 해치기 때문이다.
+ */
+const WRAP_MIN = 60;
+const WRAP_MAX = 120;
+const WRAP_FIXED = 100;                                   // 비TTY 기본 — 결정적이어야 한다
+
+function wrapWidth(): number {
+  // `COLUMNS` 를 먼저 본다 — 사람이 폭을 말해 준 것이고, 파이프 뒤에서도 검증할 수 있는
+  // 유일한 손잡이다(비TTY 에서는 `process.stdout.columns` 가 없다).
+  const env = Number(process.env.COLUMNS);
+  const c = Number.isFinite(env) && env > 0
+    ? env
+    : (process.stdout.isTTY ? process.stdout.columns : undefined);
+  if (typeof c !== 'number' || !Number.isFinite(c)) return WRAP_FIXED;
+  return Math.max(WRAP_MIN, Math.min(WRAP_MAX, c));
+}
+
+/**
+ * [UX-12] **터미널 폭은 글자 수가 아니라 「칸」이다.** 한글·CJK·전각 문장부호는 한 글자가
+ * 두 칸을 차지한다. `str.length` 로 접으면 한국어 도움말이 실제로는 두 배 폭이 돼 80열에서
+ * 넘친다 — 감사가 「코드에 있으나 호출 경로가 없다」고 남긴 잠재 결함인데, 접기를 넣는 순간
+ * 그 경로가 **생긴다.** 그래서 여기서 함께 닫는다.
+ */
+function displayWidth(s: string): number {
+  let w = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const wide = (c >= 0x1100 && c <= 0x115f)          // 한글 자모
+      || (c >= 0x2e80 && c <= 0xa4cf)                  // CJK 부수·한자·가나
+      || (c >= 0xac00 && c <= 0xd7a3)                  // 한글 음절
+      || (c >= 0xf900 && c <= 0xfaff)                  // CJK 호환
+      || (c >= 0xfe30 && c <= 0xfe6f)                  // 세로쓰기 형태
+      || (c >= 0xff00 && c <= 0xff60)                  // 전각 영숫자·문장부호
+      || (c >= 0xffe0 && c <= 0xffe6)
+      || (c >= 0x1f300 && c <= 0x1f9ff);               // 이모지
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+
+/**
+ * 낱말 하나가 폭보다 길 때 **자연 구분자에서** 더 쪼갠다.
+ *
+ * 두 부류가 여기 걸린다: ① `critical raise --reason <repeated-failure|backtrack-needed|…>`
+ * 같은 **사용법 서식**(129칸), ② 공백이 드문 **한국어 구절**(`떨어진다(tokens.css·tokens.ts·…)`).
+ * 아무 데서나 자르면 경로·플래그가 깨져 복붙이 안 되므로, 구분자 «뒤»에서만 끊는다.
+ * 그래도 안 되면 그 조각은 그대로 둔다 — 넘치는 편이 뜻이 깨지는 것보다 낫다.
+ */
+function splitLongWord(word: string, width: number): string[] {
+  if (displayWidth(word) <= width) return [word];
+  const pieces: string[] = [];
+  let cur = '';
+  for (const part of word.split(/(?<=[|,/·、;])/)) {
+    if (cur === '') cur = part;
+    else if (displayWidth(cur) + displayWidth(part) <= width) cur += part;
+    else { pieces.push(cur); cur = part; }
+  }
+  if (cur !== '') pieces.push(cur);
+  return pieces;
+}
+
+/** 낱말 경계로 접는다. 넘치는 낱말은 `splitLongWord` 가 구분자에서 한 번 더 쪼갠다. */
+function foldWords(text: string, width: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  const push = (): void => { if (line !== '') { out.push(line); line = ''; } };
+  for (const raw of text.split(' ')) {
+    for (const word of splitLongWord(raw, width)) {
+      if (line === '') line = word;
+      else if (displayWidth(line) + 1 + displayWidth(word) <= width) line += ` ${word}`;
+      else { push(); line = word; }
+    }
+  }
+  push();
+  return out.length > 0 ? out : [''];
+}
+
+/**
+ * note 는 **줄 단위로** 접는다. 원래 줄바꿈은 저자가 의도한 것이고, 그 안에 코드 예시가 있다.
+ * 들여쓰기·중괄호·`"키":` 가 보이면 코드로 보고 **그대로 둔다** — 넘치는 편이 예시가
+ * 깨지는 것보다 낫다(복붙해서 쓰라고 인쇄하는 것이다).
+ */
+function foldNote(text: string, width: number): string[] {
+  return text.split('\n').flatMap(line => (
+    /^\s/.test(line) || /[{}[\]]/.test(line) || /"\s*:/.test(line)
+      ? [line]
+      : foldWords(line, width)));
+}
+
 function table(rows: { left: string; summary: string }[]): string[] {
   const width = Math.min(MAX_LEFT, Math.max(...rows.map(r => r.left.length), 0));
-  return rows.map(r => (r.left.length > width
-    ? `  ${r.left}\n  ${' '.repeat(width)}  ${r.summary}`
-    : `  ${r.left.padEnd(width)}  ${r.summary}`));
+  const indent = 2 + width + 2;                           // '  ' + 좌열 + '  '
+  // 하한을 두면 좁은 터미널에서 **오히려 폭을 넘긴다**(indent + 하한 > 폭). 좁으면 좁은 대로 접는다.
+  const room = Math.max(1, wrapWidth() - indent);         // 설명 칸에 남는 폭
+  return rows.map(r => {
+    const folded = foldWords(r.summary, room);
+    const cont = folded.slice(1).map(l => `${' '.repeat(indent)}${l}`);
+    if (r.left.length > width) {
+      // 좌열 자체가 폭을 넘는 사용법 서식(`critical raise --reason <a|b|c…>` 은 129칸이었다).
+      // 이어지는 조각은 서식 안쪽임을 보이게 네 칸 더 들여쓴다.
+      const left = foldWords(r.left, Math.max(1, wrapWidth() - 2));
+      const leftLines = [`  ${left[0]}`, ...left.slice(1).map(l => `      ${l}`)];
+      return [...leftLines, `${' '.repeat(indent)}${folded[0]}`, ...cont].join('\n');
+    }
+    return [`  ${r.left.padEnd(width)}  ${folded[0]}`, ...cont].join('\n');
+  });
 }
 
 /** 최상위 사용법. `harness`·`harness --help`·`-h`·`help` 가 전부 여기로 온다. */
@@ -256,11 +366,17 @@ export function renderHelp(lang: Lang): string {
   const tail = lang === 'ko'
     ? [
       '',
+      // [API-05] 종료코드 규약은 **문서화돼야 계약이다.** 예전에는 어느 문서에도 없었고,
+      // 그래서 CI 가 「판정이 아니오」와 「명령이 못 돌았다」를 구분할 수 없었다.
+      '종료코드: 0 성공/판정 예 · 1 사용법·환경 오류 · 2 판정이 아니오(verdict NO-GO ·',
+      '          doctor 진단 실패 · gate verify 드리프트 · evidence check 미달)',
       `자세히: harness <명령> --help   ·   버전: harness --version`,
       '언어: .harness/config.yaml 에 `lang: ko` 또는 환경변수 HARNESS_LANG=ko',
     ]
     : [
       '',
+      'Exit codes: 0 success · 1 usage or environment error · 2 the verdict is no',
+      '            (ship verdict NO-GO · doctor found problems · gate verify drift)',
       'Details: harness <command> --help   ·   Version: harness --version',
       'Language: set `lang: ko` in .harness/config.yaml, or HARNESS_LANG=ko',
     ];
@@ -303,7 +419,11 @@ export function renderGroupHelp(g: CommandGroup, lang: Lang): string {
       summary: pick(s.summary, lang),
     }))));
   }
-  if (g.note) out.push('', pick(g.note, lang));
+  // [UX-01] note 도 접는다 — `tokens --help` 의 토큰 문서 힌트가 231자 한 줄이었다.
+  // 단 **코드 예시는 접지 않는다**: note 안에는 JSON 골격이 들어 있고, 낱말 단위로 접으면
+  // 그 예시가 통째로 뭉개진다(회귀 테스트 `tokens.test.ts` UTIL-B 가 잡았다 — 도움말이
+  // 인쇄하는 골격이 실제 스키마와 같아야 한다는 계약이다).
+  if (g.note) out.push('', ...foldNote(pick(g.note, lang), wrapWidth()));
   return out.join('\n');
 }
 

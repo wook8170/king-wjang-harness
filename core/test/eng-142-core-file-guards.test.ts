@@ -17,21 +17,21 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { handleHook } from '../src/hook';
 import { initHarness, readState, writeState } from '../src/state';
-import { POLICY_FILES } from '../src/policy';
+import { POLICY_FILES, STATE_FILES } from '../src/policy';
 import type { Phase } from '../src/types';
 
 /**
- * 보호 대상 목록은 `hook.ts` 안에 있어 import 할 수 없다 — **소스에서 그대로 읽는다.**
- * 목록을 손으로 옮겨 적으면 그 사본이 낡는 순간 검사가 거짓으로 초록이 된다(이 리포가
- * [QUAL-115] 로 물린 「사본이 원본과 갈린다」와 같은 부류).
+ * [LOGIC-02] **목록을 소스에서 긁던 것을 그만두고 import 한다.**
+ *
+ * 예전에는 `hook.ts` 안의 리터럴 배열을 정규식으로 읽었다 — 그때는 그것이 유일한 정의처였다.
+ * 그런데 정의를 `policy.ts` 로 옮기자(같은 목록이 `--out` 경로에도 필요해졌다) 이 스크레이프가
+ * **조용히 빈 목록**을 냈고, 「빈 집합을 통과시키지 않는다」 검사만이 그것을 잡았다.
+ *
+ * 소스를 긁는 것은 사본을 손으로 옮겨 적는 것보다는 낫지만, **정의가 움직이면 여전히 침묵으로
+ * 깨진다.** 진짜 정본을 import 하면 그 실패 모드 자체가 없어진다 — 목록이 줄면 아래 전수 대조가
+ * 즉시 빨강이고, 목록이 늘면 보호가 붙기 전까지 빨강이다.
  */
-function stateFilesFromSource(): string[] {
-  const src = fs.readFileSync(path.resolve(__dirname, '../src/hook.ts'), 'utf8');
-  const body = src.slice(src.indexOf('const STATE_FILES = ['));
-  return [...body.slice(0, body.indexOf('];')).matchAll(/'([^']+)'/g)].map(m => m[1]);
-}
-
-const PROTECTED = [...stateFilesFromSource(), ...POLICY_FILES];
+const PROTECTED = [...STATE_FILES, ...POLICY_FILES];
 
 const sandbox = (phase: Phase): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-eng142-'));

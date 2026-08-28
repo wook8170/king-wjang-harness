@@ -1,0 +1,196 @@
+### ax10 future-schema data met by current CLI — 2026-08-27T14:44:01Z
+## seed: state.json schemaVersion 1 -> 2 (simulating a newer harness having written it)
+{"schemaVersion":2,"phase":"P4","activeWave":null,"gates":{},"backtrack":null,"updatedAt":"2026-08-27T14:43:23.330Z","futureField":{"what":"a field this build never heard of"}}
+
+## harness status (does it refuse? warn? or read it silently?)
+{
+  "schemaVersion": 2,
+  "phase": "P4",
+  "activeWave": null,
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:43:23.330Z",
+  "futureField": {
+    "what": "a field this build never heard of"
+  }
+}
+exit=0
+
+## harness doctor
+{
+  "ok": false,
+  "repaired": false,
+  "refused": false,
+  "issues": [
+    "phase mismatch: state=\"P4\", journal replay=\"P0\""
+  ],
+  "warnings": [
+    "state.json schemaVersion is 2, but this build only knows 1 — it was probably written by a newer harness. Upgrade, or the state may be misread."
+  ],
+  "notes": []
+}
+exit=1
+
+## a state-mutating command on future data: wave create
+wave-001
+exit=0
+## state.json after the write:
+{
+  "schemaVersion": 2,
+  "phase": "P4",
+  "activeWave": null,
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:43:23.330Z",
+  "futureField": {
+    "what": "a field this build never heard of"
+  }
+}
+
+======================================================================
+### ax10 version-skew on rollback: a journal carrying an event type the rolled-back build never heard of
+(v0.1.0 and v0.1.2 ship IDENTICAL EVENT_TYPES lists, so the skew is injected to exercise the same code path)
+Cannot move to P1 — 1 gate(s) before it are not approved: P0 (P0 is currently: pending). Start with the earliest: `harness gate submit P0` → `harness gate approve P0`. A phase change happens on 'artifact approval', never on 'work finished' (spec §2). Approving a later gate does not stand in for the ones before it
+-- baseline status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:22.306Z"
+}
+
+## append an event type from a hypothetical newer release
+-- doctor (current build, unknown type) --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [
+    "1 event(s) of unknown type (sprint-opened) — the replay result is untrustworthy (possible version skew)"
+  ],
+  "notes": []
+}
+exit=0
+-- doctor --repair --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [
+    "1 event(s) of unknown type (sprint-opened) — the replay result is untrustworthy (possible version skew)"
+  ],
+  "notes": []
+}
+exit=0
+-- status still fine? --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:22.306Z"
+}
+
+## the hazard combination: state.json lost AND the journal has unknown events (rollback + crash)
+-- status --
+.harness/ is here but state.json is missing — the state store is derived, so the event journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses while .harness/ exists
+exit=1
+-- doctor --repair (the prescription) --
+{
+  "ok": false,
+  "repaired": false,
+  "refused": true,
+  "issues": [
+    "state.json is missing — it must be rebuilt by replaying the journal"
+  ],
+  "warnings": [
+    "1 event(s) of unknown type (sprint-opened) — the replay result is untrustworthy (possible version skew)",
+    "State has diverged but the journal cannot be trusted, so repair is refused — find out why the journal is damaged first. To repair anyway, use --force"
+  ],
+  "notes": []
+}
+Repair refused — the journal cannot be trusted. Find out why, then force with --force.
+exit=1
+-- doctor --repair --force (what the message invites) --
+{
+  "ok": true,
+  "repaired": true,
+  "refused": false,
+  "issues": [
+    "state.json is missing — it must be rebuilt by replaying the journal"
+  ],
+  "remaining": [],
+  "warnings": [
+    "1 event(s) of unknown type (sprint-opened) — the replay result is untrustworthy (possible version skew)"
+  ],
+  "notes": []
+}
+exit=0
+-- resulting state vs the state before --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:23.377Z"
+}
+  (was: {"schemaVersion":1,"phase":"P0","activeWave":"wave-001","gates":{},"backtrack":null,"updatedAt":"2026-08-27T14:49:22.306Z"})
+
+======================================================================
+### the destructive-prescription probe: good state.json, UNREADABLE events.jsonl
+-- good state --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:24.272Z"
+}
+-- doctor with an unreadable journal --
+EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-destr/.harness/events.jsonl'
+exit=1
+-- doctor --repair --
+EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-destr/.harness/events.jsonl'
+exit=1
+-- doctor --repair --force  <-- exactly what the message tells the user to do --
+EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-destr/.harness/events.jsonl'
+exit=1
+-- state AFTER --force --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:24.272Z"
+}
+-- journal was intact all along: --
+  1 init
+  2 policy-pinned
+  3 node-upserted
+  4 wave-created
+  5 wave-activated
+-- can the state be recovered now that the journal is readable again? --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:49:24.272Z"
+}

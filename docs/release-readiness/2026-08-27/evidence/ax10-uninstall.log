@@ -1,0 +1,76 @@
+### ax10 UNINSTALL residue — 2026-08-27T14:58:54Z
+## before: fakehome size  99M
+## project /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj1 has .harness/:
+.runtime
+config.yaml
+design
+events.jsonl
+state.json
+waves
+
+## claude plugin uninstall
+✔ Successfully uninstalled plugin: king-wjang-harness (scope: user)
+exit=
+## plugin list after
+No plugins installed. Use `claude plugin install` to install a plugin.
+## marketplace list after
+Configured marketplaces:
+
+  ❯ king-wjang-harness
+    Source: Directory (/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg)
+
+
+## residue in HOME
+  plugins cache:  72M — /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/.claude-plugin
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/skills
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/profiles
+  settings.json:
+{
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {
+    "king-wjang-harness": {
+      "source": {
+        "source": "directory",
+        "path": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg"
+      }
+    }
+  }
+}
+  installed_plugins.json:
+{
+  "version": 2,
+  "plugins": {}
+}  known_marketplaces.json:
+{
+  "king-wjang-harness": {
+    "source": {
+      "source": "directory",
+      "path": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg"
+    },
+    "installLocation": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg",
+    "lastUpdated": "2026-08-27T14:56:17.453Z"
+  }
+}
+## residue in the PROJECT after uninstalling the plugin
+  .harness/ still there: .runtime config.yaml design events.jsonl state.json waves 
+  size:  20K
+  is it gitignored by anything the product installs? * !.gitignore  (scoped to .runtime/ only)
+  does a leftover .harness/ change behaviour for other tools? it is inert data; the enforcement lived in the now-removed hooks.
+  documented removal procedure in README: 0 mentions
+
+## marketplace remove
+✔ Successfully removed marketplace: king-wjang-harness
+## after marketplace remove — HOME residue
+ 72M	/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/known_marketplaces.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/installed_plugins.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/data
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/marketplaces
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness
+{
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {}
+}

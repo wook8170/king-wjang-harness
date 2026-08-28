@@ -1,0 +1,16 @@
+— 1단계: 루트 밖 원고 만들기(비대칭이 보이는 자리) —
+  deny   Write 로 루트 밖
+  allow  Bash 로 루트 밖
+— 2단계: 프로젝트 소스로 들여오기(위반이 완성되는 자리) —
+  deny   cp
+  deny   mv
+  deny   install
+  deny   cat 리다이렉트
+  deny   tee
+  deny   심링크 경유
+  deny   rsync
+  deny   dd
+  deny   python
+  deny   node
+
+들여오기 관통: 0/10 (전건 차단)

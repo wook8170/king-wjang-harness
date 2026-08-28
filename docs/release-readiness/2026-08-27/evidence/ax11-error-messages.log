@@ -1,0 +1,94 @@
+=== axis 11 (ops) — error-message "next action" survey (17 triggered, measured) ===
+All against a sandbox `harness init`-ed project (or a fresh non-init dir for #4), via
+`node bin/harness ...`. Verdict: does the message tell the reader what to do next?
+
+1. unknown command           $ harness frobnicate
+   "Unknown command: frobnicate\nExpected one of: init | status | doctor | phase | gate | wave |
+   node | trace | report | doc | adr | design | tokens | evidence | loop | ship | profile |
+   usage | backtrack | migrate\nRun `harness --help` for the full usage."          -> PASS
+
+2. unknown subcommand        $ harness wave frobnicate
+   "Unknown wave subcommand: frobnicate — expected one of: create | activate | update |
+   complete | list\nRun `harness wave --help` for details."                        -> PASS
+
+3. missing required text     $ harness wave update            (no active wave / no message)
+   "The turn log entry is empty — write what you did and what is next"             -> PASS
+
+4. uninitialized project     $ harness status   (no .harness/)
+   "No .harness/ here — run `harness init` first."                                 -> PASS
+
+5/6. unknown node subcommand $ harness node show / harness node show D-999
+   "Unknown node subcommand: show — expected one of: upsert | bump | list\nRun
+   `harness node --help` for details."                                             -> PASS
+
+7. gate submit, no artifacts $ harness gate submit P0
+   "No artifacts to review — name the documents with `harness gate submit P0 --paths <a,b>`.
+   A gate approves artifacts; it is not a declaration that work is done"           -> PASS
+
+8. gate status, nothing yet  $ harness gate status
+   "{}"                                                                            -> N/A (empty
+   JSON, not an error — acceptable for a status query with nothing to show)
+
+9. unknown ADR id            $ harness adr show ADR-999
+   "No such ADR: ADR-999"                                                          -> WEAK (states
+   the fact but no suggested next command, e.g. `harness adr list`) — LOW, not filed separately.
+
+10. unknown doc subcommand   $ harness doc show DOC-999
+   "Unknown doc subcommand: show — expected one of: upsert | url | submit | approve | revise |
+   stale | list\nRun `harness doc --help` for details."                            -> PASS
+
+11. unknown wave id          $ harness wave activate W-999
+   "No instruction sheet for wave W-999 (<path>/.harness/waves/W-999.md) — check the id, or
+   list them with `harness wave list`"                                             -> PASS
+
+12. undefined profile cmd    $ harness profile cmd deploy
+   "Profile generic has no 'deploy' command — set it in <path>/.harness/profile/commands.yaml
+   (project-local, always wins)"                                                   -> PASS
+
+13. missing defect id        $ harness ship defect add
+   "The defect id is empty — give it a name the ledger can call it by, like `SEC-01`" -> PASS
+
+14. evidence check no wave   $ harness evidence check
+   "Usage: harness evidence check <wave-id> (there is no active wave)"             -> PASS
+
+15. tokens lint missing file $ harness tokens lint nope.css
+   "Cannot read the file to lint: nope.css — check the path. A file that was not read is not
+   a file that is clean"                                                           -> PASS
+
+16. design inventory missing file   $ harness design inventory --from nope.html
+   "ENOENT: no such file or directory, open '<path>/proj/nope.html'"               -> ***FAIL***
+   Raw unwrapped Node.js error, no harness guidance, breaks the pattern every sibling command
+   (#15 above, and registry.ts:163/gate.ts:169/tokens.ts:322/ship.ts:134) uses. Root cause:
+   core/src/cli.ts:1202 does
+     `const inv = extractInventory(fs.readFileSync(path.resolve(root, from), 'utf8'));`
+   with no try/catch, unlike tokens.ts:322's equivalent read which IS wrapped. Filed as OPS-09.
+
+17. unknown design-ledger id  $ harness trace X-999
+   "Node X-999 is not in the design ledger — register it with `harness node upsert --id X-999
+   --title <title>`, or list known nodes with `harness node list`"                 -> PASS
+
+--- Deny-message survey (the hook's own "UI") ---
+P0 source-write deny (baseline, see ax11-hook-fail-open.log):
+   "Implementation code cannot be written in the design track (P0) — src/index.ts is blocked
+   because it matches the source paths this project's profile declares (profile generic,
+   source_globs: src/**, lib/**, app/**). No implementation before the P6 design approval.
+   Writable: documents, assets, configuration (`*.config.js|ts` included), and files **named**
+   as tests (...) — a `test/` directory alone is not enough. Finish the design artifacts
+   first."                                                                          -> PASS,
+   states exactly what's blocked, why, and what IS allowed instead.
+
+`phase set --force` from an agent's Bash call:
+   "`phase set --force` skips the gate check, so an agent cannot run it — phase changes go
+   through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or
+   recovery genuinely needs it, **the user must run it themselves** in their terminal:
+   `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`."                          -> PASS
+
+`gate approve` from an agent's Bash call:
+   "Approving a gate is the human's decision — an agent cannot run `harness gate approve`.
+   Submit the artifacts and let the review packet be read: `harness gate submit <P>
+   --evidence measured --paths <artifacts>`, then **the user approves** in their terminal with
+   `harness gate approve <P>`. Everything else on the gate is open to you: `harness gate
+   status`, `harness gate verify <P>`."                                             -> PASS
+
+Summary: 16/17 messages triggered give a clear, specific next action (one, #9 ADR-not-found, is
+borderline/LOW; one, #16 design inventory, is a genuine unwrapped-error defect -> OPS-09).

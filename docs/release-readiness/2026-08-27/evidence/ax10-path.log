@@ -1,0 +1,40 @@
+## is 'harness' on PATH after the documented plugin install?
+   harness: NOT on PATH
+
+## how do the skills invoke it?
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:30:**The CLI ships with the plugin and is not on your PATH.** It lives at `<plugin root>/bin/harness` —
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:31:the same path the plugin's own hook wiring uses (`${CLAUDE_PLUGIN_ROOT}/bin/harness`, see
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:35:export PATH="${CLAUDE_PLUGIN_ROOT}/bin:$PATH"   # then `harness ...` works as written below
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:38:Every `harness ...` line in this skill and in the phase skills assumes that. If `harness: command not
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:44:harness init                                     # creates .harness/ — the hooks go live from here
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:45:harness phase set P0                             # enter the design track
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:46:harness node upsert --id F-1 --title "feature"   # register a node in the design ledger
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:56:| `harness init` | Creates the `.harness/` state store |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:57:| `harness status` | Current state as JSON (tells you to init if it is not initialised) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:58:| `harness --help`, `harness <group> --help` | Command map, and the subcommands of one group |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:59:| `harness phase set <P0..P12>` | Phase transition (gate approval required; `--force` is locked and human-only) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:60:| `harness node upsert --id <id> --title <title> [--status draft\|approved\|stale] [--parent <id>] [--anchor <a>]` | Upsert a design-ledger node (a re-run preserves version and unspecified fields) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:61:| `harness node bump <id>` | Revise a node → version++, status=stale, and STALE propagates to referencing waves |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:62:| `harness wave create [--milestone <m>] [--goal <g>] [--refs <id,id>] [--accept <c,c>]` | Create a wave → **prints the wave id (wave-001…)** |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:63:| `harness wave activate <wave-id>` | Activate a wave (updates state.activeWave) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:64:| `harness wave update "<what you did, what is next>"` | Settle the turn log (an empty log is rejected) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:65:| `harness wave complete` | Complete the wave (a UX node reference requires visual evidence — see Pitfalls) |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:66:| `harness wave list` | Wave list as JSON |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:67:| `harness gate submit <P> --paths <a,b> [--evidence claimed\|code\|measured]` / `harness gate approve <P>` | Submit artifacts for review / **human** approval |
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/skills/king-wjang-harness/SKILL.md:68:| `harness backtrack <phase> --reason "<reason>"` / `harness backtrack clear` | Formally go back to design from the build/ship track / end the backtrack |
+
+## README on how to call the CLI after a plugin install
+158:./bin/harness --version
+285:- **Content that arrives from outside can carry an alias the command text never names.** A symlink inside an archive is in neither the command nor the filesystem at the moment of judgment, so the hook cannot see it. An earlier rule that refused writes onto freshly-created paths after an extract, clone or install was **removed**: one extra word defeated it (`mkdir h && tar -xf a.tar -C h && echo x > h/f`), and it blocked ordinary single commands (`git clone <url> y && echo x > y/f`). Closing this belongs to the filesystem layer, not the hook.
+286:- **Hard links that already exist are only checked against the core files.** Creating a new name for a protected file is refused, and an existing alias of `config.yaml`/`state.json`/`events.jsonl` is caught by inode. An alias of a *source* file made before the harness was installed is not — matching every source by inode would cost a directory walk on every write, and a slow verdict is a hook that times out, which is a hook that allows.
+
+## README lines 180-200 (command table intro)
+> Works identically in the terminal and in the Claude desktop app — same engine, same hooks.
+
+### Command reference
+
+| Command | What it does |
+|---|---|
+| `harness init` | Create the `.harness/` state store (activates the hooks here) |
+| `harness status` | Current state as JSON |
+| `harness phase set <P0..P12>` | Switch phase — **only an approved gate opens the next one** |

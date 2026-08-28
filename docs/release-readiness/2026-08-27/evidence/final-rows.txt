@@ -1,0 +1,7 @@
+| DET-01 | — | 09 | 악조건(load 14.4→27.4→35.6) 3회 반복에서 **1404 pass 완전 동일** · 58 파일 | verified | measured | `docs/release-readiness/2026-08-27/evidence/g1-g11-vitest-x3.log:2` | 축⑨ §DET-01 |
+| DET-02 | — | 09 | 38차가 고친 부하 민감 단언 2건이 실제 부하 창에서 버텼다 — 「고쳤다」가 「재측정했다」로 바뀐 지점 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:57` | 축⑨ §DET-02 |
+| DET-03 | — | 09 | 재현 가능 빌드가 **세 축에서 독립 확인** — 커밋된 산출물이 소스에서 재현된다 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:63` | 축⑨ §DET-03 · 축⑥·⑩·② 교차 |
+| DET-04 | — | 09 | 저장소가 오염된(자기 훅 통치) 비정상 상태에서도 1404 전건 통과 — 스위트가 활성화 상태에 의존하지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:69` | 축⑨ §DET-04 |
+| PERF-01 | — | 05 | 저널 120k줄/15MB 에서 **체감 정지 없음** — 저널 크기가 wall-clock 을 늘리지 않는다 (정성 관측, 정밀 수치 아님) | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-BIG.log:4` | 축⑤ §PERF-01 · G7 충족은 아님 |
+| PERF-02 | — | 05 | 반대 방향 실측 확보 — 훅이 꼬리에서 10초 예산을 넘긴다(축② API-04 · 축⑪ OPS-06 독립 2건). 재측정은 평균이 아니라 p99·최악 입력을 봐야 한다 | verified | measured | `docs/release-readiness/2026-08-27/05-perf.md:87` | 축⑤ §PERF-02 |
+| PERF-03 | — | 05 | **G7 미실시 — 결함이 아니라 측정 불가.** 창 오염(폭주 프로세스 357% CPU, load 17.2/10코어)으로 타이밍 게이트를 미뤘다. 목표치는 낮추지 않았다 | open | claimed | `docs/release-readiness/2026-08-27/05-perf.md:1` | — |

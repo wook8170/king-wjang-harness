@@ -1,0 +1,17 @@
+### ax10 clean-HOME end-to-end timing (fresh HOME, README steps, local marketplace source)
+  marketplace add : 4.81 s
+  plugin install  : 10.90 s
+  harness init    : 0.28 s
+  TOTAL           : 15.99 s
+  installed size  :  72M  (of which node_modules  68M)
+  .harness/ created: .runtime config.yaml design events.jsonl state.json waves 
+  harness --version: king-wjang-harness v0.1.2
+  hook fires in the new project:
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Implementati
+  hook is silent in a project WITHOUT .harness/:
+[exit=0] (empty above = silent)
+
+### repo working tree unchanged by this audit?
+ M progress.md
+?? .harness/
+?? docs/release-readiness/2026-08-27/

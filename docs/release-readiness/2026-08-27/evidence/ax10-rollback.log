@@ -1,0 +1,168 @@
+### ax10 ROLLBACK REHEARSAL — 2026-08-27T14:47:00Z
+release A (rollback target) = v0.1.0  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/old-010
+release B (bad release)     = HEAD v0.1.2 + injected defect  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/relB
+
+## 1. inject the defect into release B's committed bundle (core/dist/cli.js)
+injected at offset 725479
+-- B still boots? --
+king-wjang-harness v0.1.2
+exit=0
+
+## 2. user is on release A, does work
+.harness/ initialised — run `harness --help` to see the command map.
+NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human — allowlisting it lets an agent open gates on its own.
+C-1 created in the design ledger
+wave-001
+Active: wave-001
+Turn log recorded
+-- state after A --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:47:01.810Z"
+}
+
+## 3. user upgrades to release B (bad), keeps working — new data is created under B
+D-1 created in the design ledger
+Turn log recorded
+wave-002
+Turn log recorded
+-- status under B --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:47:01.810Z"
+}
+-- the defect bites: wave complete on B --
+TypeError: Cannot read properties of undefined (reading 'id')
+exit=1
+-- doctor on B --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+-- journal under B --
+      10
+
+## 4. ROLLBACK to release A  (plugin dir swapped back; .harness/ untouched — that IS the rollback)
+-- A --version --
+king-wjang-harness v0.1.0
+exit=0
+-- A status on B-era data --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:47:01.810Z"
+}
+exit=0
+-- A doctor on B-era data --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+exit=0
+-- A can still read the ledger --
+# Project hub
+
+Generated: 2026-08-27T14:47:04.170Z
+
+## Artifacts by phase
+
+No artifact is registered — there is nothing to index yet.
+
+## Gate status
+
+- Current phase: P0
+
+| Phase | Status | Evidence | Approved |
+|---|---|---|---|
+| P0 | pending | — | — |
+| P1 | pending | — | — |
+| P2 | pending | — | — |
+| P3 | pending | — | — |
+| P4 | pending | — | — |
+| P5 | pending | — | — |
+| P6 | pending | — | — |
+| P7 | pending | — | — |
+| P8 | pending | — | — |
+| P9 | pending | — | — |
+| P10 | pending | — | — |
+-- A: does the operation that B broke now work? --
+Wave completed
+exit=0
+-- A status after --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": null,
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:47:04.300Z"
+}
+
+## 5. data written under B survived the rollback?
+ledger.yaml:
+nodes:
+  - id: C-1
+    title: Concept from A
+    version: 1
+    status: draft
+  - id: D-1
+    title: Domain from B
+    version: 1
+    status: draft
+waves dir:
+wave-001.md
+wave-002.md
+events (      11 lines):
+  1 init
+  2 policy-pinned
+  3 node-upserted
+  4 wave-created
+  5 wave-activated
+  6 wave-turn-logged
+  7 node-upserted
+  8 wave-turn-logged
+  9 wave-created
+  10 wave-turn-logged
+  11 wave-completed
+prefix written under A unchanged?
+  A-era bytes: 636
+  A-era sha : 4028ada1867d111f9327b93b53322e88f55608343cb78510178c4b5688f10467
+  now prefix: 4028ada1867d111f9327b93b53322e88f55608343cb78510178c4b5688f10467
+
+======================================================================
+### ax10 ROLLBACK TARGET SAFETY — the only tag that exists is v0.1.0
+git tag -l          -> v0.1.0 
+git ls-remote --tags-> v0.1.0 only (edc224c, 2026-08-23)
+package.json version-> 0.1.2 ; CHANGELOG 0.1.1 and 0.1.2 are released but UNTAGGED
+CHANGELOG [0.1.2] fixes SEC-300: 'echo x >> .harness/events\.jsonl' defeated core/policy/source protection in every phase
+
+## does the only rollback target (v0.1.0) really carry that bypass? — drive the real hook
+.harness/ initialised — run `harness --help` to see the command map.
+--- command: "echo x >> .harness/events\.jsonl"
+   v0.1.2 (current): DENY
+   v0.1.0 (only tag): (no decision — ALLOWED) ""
+--- command: "echo x >> .harness/events.jsonl"
+   v0.1.2 (current): DENY
+   v0.1.0 (only tag): DENY
+--- command: "echo forged >> .har\"ness\"/events.jsonl"
+   v0.1.2 (current): DENY
+   v0.1.0 (only tag): (no decision — ALLOWED) ""

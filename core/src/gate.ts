@@ -882,6 +882,32 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
 
 /** canEnterPhase 통과 시에만 전환한다. 막힌 사유는 그대로 던져 사람이 다음 수를 알게 한다. */
 export function setPhaseViaGate(root: string, phase: Phase): void {
+  /**
+   * [LOGIC-01] **승인 뒤에 고친 산출물로 다음 페이즈에 들어갈 수 없다 — 전환 시점에 다시 본다.**
+   *
+   * 이 파일 머리가 선언한 계약(「승인 후 몰래 고친 문서로 다음 페이즈에 들어갈 수 없다 /
+   * 이후 불일치는 게이트 자동 무효화」)이 **설계 트랙 전이에서 성립하지 않았다.**
+   * `canEnterPhase` 는 `gates[p].status === 'approved'` 만 보고 해시를 재검증하지 않았고,
+   * `invalidateStaleGates` 는 **수동 `harness gate sweep` 한 곳에만** 배선돼 있었다.
+   *
+   * 그래서 실측으로 이렇게 됐다: 사람이 내용 X 를 승인 → 에이전트가 디스크를 Y 로 바꿈
+   * (설계 영역 `docs/` 는 에이전트가 정당하게 쓰는 곳이다) → `phase set P1` 이 exit 0.
+   * `gate verify` 는 드리프트를 정확히 탐지하는데도 **아무도 그것을 부르지 않았다.**
+   *
+   * **판정(`canEnterPhase`)이 아니라 변이(여기)에 둔다.** 판정은 순수해야 훅과 CLI 가 같은
+   * 규칙을 읽고도 각자 다른 시점에 쓸 수 있다 — `invalidateStaleGates` 는 저널에 쓰므로
+   * 판정 안에 두면 그 분리가 깨진다.
+   */
+  /**
+   * **앞으로 갈 때만 본다.** 역행(`backtrack` 이 연 뒤로 가기)의 목적이 바로 「드리프트된
+   * 산출물을 고치러 가는 것」이다. 뒤로 가는 길에서 드리프트를 이유로 막으면 **고치러 갈 수
+   * 없게 되고**, 사용자는 그 자리에 갇힌다 — 제품이 스스로 인쇄하는 안내
+   * (「돌아간 뒤, 설계 산출물을 고치고 무효가 된 게이트를 다시 제출하라」)와도 정면으로 어긋난다.
+   * 회귀 테스트 `med-3j-residuals.test.ts` [UTIL-189] 가 이것을 잡았다.
+   */
+  const cur = PHASES.indexOf(readState(root).phase);
+  const to = PHASES.indexOf(phase);
+  if (to > cur) invalidateStaleGates(root);
   const verdict = canEnterPhase(root, phase);
   if (!verdict.ok) throw new Error(verdict.reason);
   appendEvent(root, 'phase-set', { phase, via: 'gate' }); // 순서 계약: 저널 먼저

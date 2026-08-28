@@ -17,11 +17,12 @@ import {
 } from './paths';
 import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
 import { tr } from './tr';
+import { readWave } from './wave';
 import type { Msg } from './i18n';
 import { readState, writeState, defaultState } from './state';
-import { inspectConfig } from './config';
+import { inspectConfig, KNOWN_CONFIG_KEYS } from './config';
 import { computePolicyHash, pinnedPolicy, pinPolicy } from './policy';
-import type { HarnessState } from './types';
+import type { HarnessEvent, HarnessState } from './types';
 
 export interface DoctorReport {
   /**
@@ -82,6 +83,35 @@ function sweepOrphanTmp(root: string): number {
   return swept;
 }
 
+/**
+ * [OPS-04] **`.harness/` 에 지금 쓸 수 있는가** — 내용만 읽어서는 알 수 없는 것.
+ *
+ * 예전 doctor 는 전부 `readdirSync`/`readFileSync`/`existsSync` 였다. 그래서 `.harness/` 가
+ * 읽기전용이 된 프로젝트에서 `{"ok":true,"issues":[]}` 를 냈다 — 진단이 가장 필요한 순간에
+ * 초록불이다. 쓰기 불능은 이 제품에서 단순 고장이 아니라 **강제가 꺼진 상태**다: 활동
+ * 마커(runtime.ts OPS-03)도, 훅 실패 로그도, 게이트·웨이브 이벤트도 전부 이 아래에 쓴다.
+ *
+ * 없는 디렉토리는 만들지 않는다 — `doctor` 는 「아무것도 바꾸지 않는 진단」이고, 신규 클론의
+ * `.runtime/` 부재는 훅이 첫 활동에 만드는 정상 상태다(쓰기 불능이 아니다).
+ */
+function unwritableDirs(root: string): string[] {
+  const bad: string[] = [];
+  for (const dir of [harnessDir(root), runtimeDir(root)]) {
+    if (!fs.existsSync(dir)) continue;
+    // 이름은 sweepOrphanTmp 의 규칙(`.tmp-<pid>`)을 따른다 — 쓰기와 삭제 사이에 프로세스가
+    // 죽어 잔해가 남아도 `.harness/` 쪽은 다음 doctor 가 이미 있는 손으로 치운다.
+    // 새 청소 규칙을 만들지 않는다(`.runtime/` 은 gitignore 된 세션 스크래치라 그대로 둔다).
+    const probe = path.join(dir, `write-probe.tmp-${process.pid}`);
+    try {
+      fs.writeFileSync(probe, '');
+      fs.rmSync(probe);
+    } catch {
+      bad.push(dir);
+    }
+  }
+  return bad;
+}
+
 function countHookErrors(root: string): number {
   const p = path.join(runtimeDir(root), 'hook-errors.log');
   if (!fs.existsSync(p)) return 0;
@@ -102,9 +132,60 @@ export function runDoctor(
   const warnings: string[] = [];
   const notes: string[] = [];
 
+  // 0. 쓰기 가능 여부 — 이것이 아니면 아래 진단 전부가 「기록되지 않는 상태」의 사진이다.
+  //    비간섭: `.harness/` 가 없으면 손대지 않는다(하네스 미사용 프로젝트).
+  //
+  //    **왜 warning 이 아니라 issue 인가.** 이 파일 머리말의 분류는 「issues = 복구 대상」이고
+  //    쓰기 불능은 재생으로 못 고친다. 그래도 issue 로 올리는 이유는, warnings 가 ok 를
+  //    내리지 않기 때문이다 — 정책 드리프트처럼 **정당할 수 있는** 상태와 달리 쓰기 불능은
+  //    정당한 정상 상태가 아니고, 바로 이 상태에서 초록불을 내는 것이 OPS-04 의 결함 자체였다.
+  //    `--repair` 는 이 issue 를 고치려다 실패하는데, 그 실패도 이제 처방이 붙은 문장이다
+  //    (OPS-05, state.ts 의 rethrowWriteFailure).
+  if (fs.existsSync(harnessDir(root))) {
+    const unwritable = unwritableDirs(root);
+    if (unwritable.length > 0) {
+      issues.push(t({
+        en: `cannot write to ${unwritable.join(', ')} — the harness records everything there, so the `
+          + 'activity marker, the hook error log and every gate/wave event are being dropped silently, '
+          + 'and the enforcement that depends on the marker (the turn-log settlement guard at session end) '
+          + `is off. Fix the permissions (\`chmod u+w ${unwritable[0]}\`) or remount the volume `
+          + 'read-write, then run `harness doctor` again.',
+        ko: `${unwritable.join(', ')} 에 쓸 수 없다 — 하네스는 모든 것을 그 아래에 기록하므로 `
+          + '활동 마커·훅 오류 로그·게이트/웨이브 이벤트가 전부 조용히 유실되고, 마커에 기대는 '
+          + '강제(세션 종료 시 턴 로그 정산 가드)가 꺼진다. '
+          + `권한을 고치거나(\`chmod u+w ${unwritable[0]}\`) 볼륨을 쓰기 가능으로 다시 마운트한 뒤 `
+          + '`harness doctor` 를 다시 돌려라.',
+      }));
+    }
+  }
+
   // 1. 저널 재생
   const journalExists = fs.existsSync(eventsPath(root));
-  const { events, corruptLines } = readJournal(root);
+  /**
+   * [USE-01] **저널을 못 읽는 것도 진단 결과다 — 진단기의 크래시가 아니라.**
+   *
+   * `readJournal` 이 가드 없이 1단계에 있어서, `events.jsonl` 의 권한이 사라진 운영 사고에서
+   * `harness doctor` 가 raw EACCES + exit 1 로 죽었다. README 가 그 사고의 **첫 명령**으로
+   * 지목하는 도구가 정작 그 사고를 보고하지 못했고, JSON 계약(ok/issues/warnings)까지 깨져
+   * 이 출력을 파싱하는 쪽(readiness-auditor·스크립트)이 빈 stdout 으로 함께 실패했다.
+   * 바로 아래 state.json 처리는 같은 부류를 이미 구조화된 issue 로 바꾸고 있었다 — 모양을 맞춘다.
+   */
+  let events: HarnessEvent[] = [];
+  let corruptLines = 0;
+  let journalReadable = true;
+  try {
+    ({ events, corruptLines } = readJournal(root));
+  } catch (e) {
+    journalReadable = false;
+    issues.push(t({
+      en: `events.jsonl cannot be read (${(e as Error).message}) — the journal is the source of truth, `
+        + 'so there is nothing to check the state against. Restore read access to the file '
+        + `(\`chmod u+r ${eventsPath(root)}\`), then run \`harness doctor\` again.`,
+      ko: `events.jsonl 을 읽을 수 없다 (${(e as Error).message}) — 저널이 진실의 원천이라 `
+        + '상태를 대조할 근거가 없다. 파일 읽기 권한을 복구한 뒤'
+        + `(\`chmod u+r ${eventsPath(root)}\`) \`harness doctor\` 를 다시 돌려라.`,
+    }));
+  }
   const replayed = replayState(events);
 
   // 2. state 읽기
@@ -126,6 +207,8 @@ export function runDoctor(
 
   // 3. 저널 건강 → warnings + 재생 신뢰도
   let trustworthy = true;
+  // 못 읽은 저널의 재생 결과는 «빈 저널»과 구별되지 않는다 — 그것으로 복구하면 state 를 지운다.
+  if (!journalReadable) trustworthy = false;
   if (!journalExists) {
     warnings.push(t({
       en: 'events.jsonl is missing — there is no evidence to replay',
@@ -187,6 +270,40 @@ export function runDoctor(
           + '정말 유실이면 `harness doctor --repair` 로 activeWave 를 정산(null)하라',
       }),
     );
+  } else if (effective.activeWave) {
+    /**
+     * [LOGIC-02] **있는데 깨진 지시서는 부재보다 나쁘다 — 아무도 안 봤다.**
+     *
+     * 웨이브 지시서는 이 제품이 스스로 밝힌 **저널·git 백업이 없는 유일한 파일**이고
+     * (`wave.ts` 머리), `.harness/` 아래는 README 가 「언제나 쓸 수 있다」고 광고하므로
+     * 에이전트가 `Write` 로 통째로 덮을 수 있다. 그러면 턴 로그·완료기준·design_refs 가
+     * 복구 불가로 사라지고 웨이브는 **완료 불능**이 된다(`activate` 가 「Malformed wave file」로 죽는다).
+     *
+     * 그런데 `doctor` 는 **부재만** 봤다 — 파일이 있으면 통과였다. 즉 가장 조용한 데이터
+     * 손실 경로가 진단의 사각이었다.
+     *
+     * **쓰기를 막지 않는다.** 막으면 광고(`.harness/` 는 언제나 쓸 수 있다)를 함께 고쳐야 하고,
+     * 그건 사람이 정할 일이다. 대신 **손실을 관측 가능하게** 만든다 — 부재와 같은 처방
+     * (`--repair` 로 activeWave 정산)이 그대로 듣는다.
+     */
+    try {
+      readWave(root, effective.activeWave);
+    } catch (e) {
+      issues.push(
+        tr(root, {
+          en: `The wave file for activeWave ${effective.activeWave} exists but cannot be parsed `
+            + `(${(e as Error).message}) — a wave sheet has no journal or git backup, so an overwrite `
+            + 'loses its turn log and acceptance criteria for good. Restore the file from your editor '
+            + 'or VCS if you can; otherwise settle activeWave to null with `harness doctor --repair` '
+            + 'and open a new wave.',
+          ko: `activeWave ${effective.activeWave} 의 웨이브 파일이 있지만 해석할 수 없다 `
+            + `(${(e as Error).message}) — 웨이브 지시서는 저널·git 백업이 없는 유일한 파일이라 `
+            + '덮어쓰면 턴 로그와 완료기준이 영구히 사라진다. 편집기나 VCS 로 복원할 수 있으면 '
+            + '그것이 우선이고, 아니면 `harness doctor --repair` 로 activeWave 를 정산(null)한 뒤 '
+            + '새 웨이브를 열어라.',
+        }),
+      );
+    }
   }
 
   // 5b. 스키마 버전 — 미래 버전이 쓴 state 를 구 코드가 조용히 읽으면 다운그레이드가
@@ -210,10 +327,41 @@ export function runDoctor(
 
   // [UX-151] 6b. 깨진 config 는 조용히 기본값으로 폴백한다(훅 무해 계약) — 그 사실을 여기서 알린다.
   //     사용자가 적어 둔 정책이 안 걸린 채 도는 것보다, 안 걸린 줄 모르는 것이 나쁘다.
-  for (const problem of inspectConfig(root).problems) {
+  const cfg = inspectConfig(root);
+  for (const problem of cfg.problems) {
     warnings.push(t({
       en: `config could not be parsed, so defaults are in effect — ${problem}`,
       ko: `config 를 해석할 수 없어 기본값으로 동작 중이다 — ${problem}`,
+    }));
+  }
+
+  // [API-03] 6c. 미지 키 = **사용자가 적어 둔 차단이 존재하지 않는 상태.**
+  //
+  //   무엇이 깨져 있었나: `design_bloked_bash`(오타) 를 적으면 그 목록은 조용히 버려지고
+  //   기본값이 돌았다. 훅은 사용자가 막으려던 명령을 통과시키는데, 유일한 신호는 정책
+  //   드리프트 경고 한 줄(「정당한 변경일 수 있다」)뿐이라 **안내가 오히려 안심시켰다.**
+  //
+  //   **왜 warning 이 아니라 issue(ok:false) 인가.** 이 파일 머리말의 분류는 「issues = 재생
+  //   복구 대상」이고 미지 키는 재생으로 못 고친다 — 그래도 issue 로 올린다. 판단 근거는
+  //   OPS-04(쓰기 불능)에서 이미 쓴 것과 같다: **정당할 수 있는 상태가 아니다.**
+  //   정책 드리프트는 사람이 의도적으로 바꾼 결과일 수 있어 영구 red 가 경보를 죽이지만,
+  //   미지 키는 오타이거나 다른 버전의 잔재이며 두 경우 다 「이 파일에 효과 0 인 줄이 있다」로
+  //   똑같이 참이다. 그리고 이 파일은 **훅이 무엇을 막을지 정하는 판정의 입력**이다 —
+  //   바로 그 상태에서 초록불을 내는 것이 API-03 결함 자체였다. 복구는 하지 않는다:
+  //   doctor 가 사용자의 config 를 고쳐 쓰면 SEC-69 가 남긴 「사람의 탈출구」를 도로 뺏는다.
+  //   red 는 사용자가 한 줄 고치면 즉시 풀린다(정책 드리프트처럼 재고정 의식이 필요 없다).
+  if (cfg.unknownKeys.length > 0) {
+    const bad = cfg.unknownKeys.map((k) => `"${k}"`).join(', ');
+    const known = [...KNOWN_CONFIG_KEYS].sort().join(', ');
+    issues.push(t({
+      en: `${cfg.path} has ${cfg.unknownKeys.length} key(s) this build does not read: ${bad} — they are `
+        + 'ignored, so the default is in effect and whatever you meant to enforce with them is not '
+        + 'enforced. Fix the spelling or delete the key(s); the keys this build reads are: '
+        + `${known}. (doctor cannot repair this — the config file is yours to edit.)`,
+      ko: `${cfg.path} 에 이 빌드가 읽지 않는 키가 ${cfg.unknownKeys.length}개 있다: ${bad} — `
+        + '무시되므로 기본값이 돌고 있고, 그 키로 걸려던 강제는 걸려 있지 않다. '
+        + `철자를 고치거나 그 키를 지워라. 이 빌드가 읽는 키는: ${known}. `
+        + '(doctor 는 이것을 복구하지 않는다 — config 파일은 사람이 고치는 것이다.)',
     }));
   }
 
@@ -239,7 +387,11 @@ export function runDoctor(
   //   그리고 정책 변경은 정당할 수 있다. 목표는 「금지」가 아니라 「보이게」다.
   //
   //   비간섭: `.harness/` 가 없으면 손대지 않는다(하네스 미사용 프로젝트에 파일을 만들지 않는다).
-  if (fs.existsSync(harnessDir(root))) {
+  //   [USE-01] 이 절 전체를 감싸는 이유: `pinnedPolicy` 는 베이스라인을 **저널에서** 읽는다
+  //   (`policy.ts` → `readEvents`). 그래서 events.jsonl 을 못 읽으면 위 1단계를 가드해 놓아도
+  //   진단이 여기서 다시 죽었다 — 같은 사고에 가드가 두 곳 필요했던 것이다. 정책 절 하나가
+  //   진단 전체를 못 내리게 만들 이유는 없다: 못 봤다는 사실만 남기고 나머지 보고는 낸다.
+  if (fs.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, 'accept');
       notes.push(
@@ -287,6 +439,13 @@ export function runDoctor(
           + '정당한 변경일 수 있다 — 내용을 확인한 뒤 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 재고정하라(env 접두는 사람의 손이다 — 에이전트는 실행할 수 없다)',
       }));
     }
+  } catch (e) {
+    warnings.push(t({
+      en: `the policy baseline could not be checked (${(e as Error).message}) — a change to the files `
+        + 'that decide what the hook blocks would not be visible right now. Fix the problem above first.',
+      ko: `정책 베이스라인을 확인할 수 없었다 (${(e as Error).message}) — 훅이 무엇을 막을지 정하는 `
+        + '파일이 바뀌어도 지금은 보이지 않는다. 위의 문제를 먼저 해결하라.',
+    }));
   }
 
   // 8. repair — 고칠 발산이 있을 때만 움직인다. 저널이 손상이어도 발산이 없으면 할 일이 없다.

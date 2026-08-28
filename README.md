@@ -118,7 +118,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1404 passing** (58 files) — 17 are repo-only checks that skip in the published package (1364 there) |
+| Test suite | **1490 passing** (63 files) — 17 are repo-only checks that skip in the published package (1450 there) |
 | Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -195,6 +195,18 @@ Your active role is at the **decision points**: approve the design, decide when 
 
 `harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
 
+**Exit codes.** A release script needs to tell "the product is not ready" apart from "the command
+did not run at all" — the two used to share exit `1`.
+
+| Code | Meaning |
+|---|---|
+| `0` | Success — or the verdict is yes |
+| `1` | Usage or environment error (unknown subcommand, no `.harness/` here, missing argument) |
+| `2` | **The verdict is no** — `ship verdict` NO-GO · `doctor` found problems · `gate verify` drift · `evidence check` short |
+
+Anything non-zero still fails a `cmd || exit 1` script; what changed is that the two cases are now
+distinguishable.
+
 ---
 
 ### MCP tools — the same engine, without the shell
@@ -238,7 +250,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1404 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1490 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -258,7 +270,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1404 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1490 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and

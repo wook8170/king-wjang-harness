@@ -1,0 +1,74 @@
+### ax10 REAL plugin install path (fake HOME + fake CLAUDE_CONFIG_DIR, local source — no network) — 2026-08-27T14:56:11Z
+HOME=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome  CLAUDE_CONFIG_DIR=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude
+
+## claude plugin validate on the extracted deployment package
+Validating marketplace manifest: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg/.claude-plugin/marketplace.json
+
+✔ Validation passed
+exit=
+
+## README.md:147  claude plugin marketplace add <repo>   (local dir instead of wook8170/king-wjang-harness)
+Adding marketplace…✔ Successfully added marketplace: king-wjang-harness (declared in user settings)
+exit=
+
+## marketplace list
+Configured marketplaces:
+
+  ❯ king-wjang-harness
+    Source: Directory (/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg)
+
+
+## README.md:148  claude plugin install king-wjang-harness@king-wjang-harness
+Installing plugin "king-wjang-harness@king-wjang-harness"...✔ Successfully installed plugin: king-wjang-harness@king-wjang-harness (scope: user)
+exit=
+
+## plugin list
+Installed plugins:
+
+  ❯ king-wjang-harness@king-wjang-harness
+    Version: 0.1.2
+    Scope: user
+    Status: ✔ enabled
+
+
+## what landed in the fake HOME
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/settings.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/.claude.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/backups
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_logs
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_update-notifier-last-checked
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/known_marketplaces.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/installed_plugins.json
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/marketplaces
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/backups/.claude.json.backup.1787842575886
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_logs/2026-08-27T14_56_20_694Z-debug-0.log
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/content-v2
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/tmp
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/content-v2/sha512
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/0d
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/95
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/59
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/57
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/3b
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/03
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/04
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/6a
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/32
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/69
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/3c
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/51
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/60
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/d9
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/ac
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/ad
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/be
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/e2
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.npm/_cacache/index-v5/f3

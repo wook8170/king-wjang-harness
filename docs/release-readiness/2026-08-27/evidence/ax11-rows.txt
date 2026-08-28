@@ -1,0 +1,16 @@
+| OPS-01 | BLOCKER | 11 | 저널 손상이 state 파일만 멀쩡하면 **사용자 인터페이스 어디에도 안 보인다** — 배너·deny 사유·Stop 가드 전부 침묵. 스스로 `doctor` 를 돌려야만 안다 | open | measured | `core/src/hook.ts:296` | — |
+| OPS-02 | BLOCKER | 11 | `core/dist/cli.js` 부재 시 훅 경로가 완전 침묵(exit 0·stdout 0바이트) — **강제가 조용히 꺼진다**. 축⑩ SHIP-03 과 동일 결함(HIGH↔BLOCKER 불일치, 상향 채택) | open | measured | `docs/release-readiness/2026-08-27/evidence/ax11-hook-fail-open.log:1` | — |
+| OPS-03 | HIGH | 11 | 활동 마커 기록이 완전 침묵 실패하고, 그 결과 Stop 가드의 「턴 로그 정산」 강제가 조용히 우회된다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:65` | — |
+| OPS-04 | MED | 11 | `doctor` 가 활성화 디렉터리의 쓰기 가능 여부를 전혀 점검하지 않는다 — 읽기전용 상태에서 `ok:true` | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:71` | — |
+| OPS-05 | MED | 11 | 읽기전용 상태에서 `doctor --repair` 가 raw EACCES 를 그대로 노출한다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:77` | — |
+| OPS-06 | HIGH | 11 | 거대 저널 + 손상된 상태 파일 조합이 실측 10초 훅 타임아웃을 넘긴다 — README 의 「bounded」 주장이 실측 규모에서 깨진다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:83` | — |
+| OPS-07 | MED | 11 | 「최근에 무엇이 막혔는지」 되짚어 볼 CLI 명령이 없다 — deny 결정이 저널에 전혀 남지 않는다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:89` | — |
+| OPS-08 | HIGH | 11 | 비밀문자열이 마스킹 없이 저널에 그대로 남고, 활성화 디렉터리가 기본 gitignore 되지 않는다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:95` | — |
+| OPS-09 | MED | 11 | `design inventory --from <없는 파일>` 이 raw ENOENT 를 그대로 유출한다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:101` | — |
+| OPS-10 | — | 11 | 오류 메시지 17건 중 16건이 「다음 행동」을 명확히 제시 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:109` | 축⑪ §OPS-10 |
+| OPS-11 | — | 11 | `doctor` 가 저널 손상·state 발산을 정확히 잡는다 (쓰기 가능 상태에서) | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:112` | 축⑪ §OPS-11 |
+| OPS-12 | — | 11 | 훅 200연속 호출에서 FD 누수·좀비 프로세스 없음 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:115` | 축⑪ §OPS-12 |
+| OPS-13 | — | 11 | MCP 서버의 파일 워처가 1회성으로 정상 정리된다 | verified | code | `docs/release-readiness/2026-08-27/11-ops.md:118` | 축⑪ §OPS-13 |
+| OPS-14 | — | 11 | 저널 대다수 이벤트 타입은 자유 텍스트를 담지 않는다 — OPS-08 예외를 빼면 구조적으로 안전 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:121` | 축⑪ §OPS-14 |
+| OPS-15 | — | 11 | `doctor --repair` 의 「활성 웨이브 지시서 유실」 복구가 CLI 단독 완결되도록 구현됨 | verified | code | `docs/release-readiness/2026-08-27/11-ops.md:124` | 축⑪ §OPS-15 · 라이브 E2E 는 확인 불가 |
+| OPS-16 | — | 11 | 훅이 아닌 일반 CLI 는 `core/dist` 부재 시 침묵하지 않는다 (exit 1 + 안내) | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:127` | 축⑪ §OPS-16 |

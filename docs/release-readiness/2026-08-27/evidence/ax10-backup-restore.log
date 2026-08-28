@@ -1,0 +1,349 @@
+### ax10 backup / restore to a DIFFERENT path — 2026-08-27T14:50:50Z
+
+## 1. build a project with real content
+C-1 created in the design ledger
+UX-1 created in the design ledger
+wave-001
+Active: wave-001
+Turn log recorded
+Unknown flag: --title (that flag belongs to a different command group). An unknown flag is never applied — accepting it silently would record something other than what you asked for. Run `harness doc --help` to see what this group takes.
+Invalid evidence grade: docs/spec.md (one of claimed, code, measured)
+-- source status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:50:53.333Z"
+}
+
+## 2. grep the state store for ABSOLUTE PATHS (these break a restore elsewhere)
+-- occurrences of the source project path inside .harness/ --
+   (matches: 0)
+-- any other absolute path (/Users, /Volumes, /private, /home) --
+   (matches: 0)
+
+## 3. back up the whole .harness/ and restore it under a DIFFERENT path
+  backup size: 1749 bytes
+  backup took  0.073 s
+  restore took 0.069 s
+  total        0.142 s
+
+## 4. does the restored copy work at the new path?
+-- status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:50:53.333Z"
+}
+  exit=0
+-- doctor --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+  exit=0
+-- report hub (head) --
+# Project hub
+
+Generated: 2026-08-27T14:50:55.985Z
+
+## Artifacts by phase
+
+No artifact is registered — there is nothing to index yet.
+
+-- trace C-1 --
+{
+  "node": {
+    "id": "C-1",
+    "title": "Concept",
+    "version": 1,
+    "status": "draft"
+  },
+  "waves": [
+    {
+      "id": "wave-001",
+      "milestone": "(unspecified)",
+      "design_refs": [
+-- continue working: wave update --
+Turn log recorded
+  exit=0
+-- hook still enforces at the new path --
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Implementation code cannot be written in the design 
+  exit=0
+
+## 5. content equality source vs restored (before the extra wave update)
+diff -r /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk/.harness/.runtime/last-turn /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk-restored/.harness/.runtime/last-turn
+1c1
+< 2026-08-27T14:50:54.138Z
+\ No newline at end of file
+---
+> 2026-08-27T14:50:56.374Z
+\ No newline at end of file
+diff -r /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk/.harness/events.jsonl /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk-restored/.harness/events.jsonl
+7a8
+> {"ts":"2026-08-27T14:50:56.373Z","type":"wave-turn-logged","data":{"id":"wave-001"}}
+diff -r /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk/.harness/waves/wave-001.md /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk-restored/.harness/waves/wave-001.md
+17a18
+> - [2026-08-27T14:50:56.364Z] restored / continue
+
+======================================================================
+## 6. do the path-carrying commands (doc / design / evidence / deployment) persist absolute paths?
+-- doc add --
+harness doc — Document registry — the artifacts a gate reviews.
+
+Subcommands:
+  upsert --id <DOC-x> --path <p> --phase <P> [--refs <ids>] [--url <url>]
+                                  Register or update a document. --refs links it to ledger nodes (RTM traceability).
+  url <DOC-x> <artifact-url>      Attach a published artifact URL to a document.
+  submit <DOC-x>                  Submit a document for review (pins its hash).
+  approve <DOC-x>                 Approve a submitted document.
+  revise <DOC-x> [--path <p>]     Revise an approved document (supersedes the old version).
+  stale                           List approved documents whose content no longer matches the pinned hash.
+  list                            Print the whole registry as JSON.
+-- design --help --
+harness design — Claude Design canvas link — UX nodes, sync and baselines.
+
+Subcommands:
+  link --ux <UX-x> --url <canvas-url> [--artboard <name>]
+                                  Link a UX node to a canvas artboard.
+  sync <UX-x> --from <file>       Sync fetched canvas content into the ledger.
+  inventory --from <file>         Extract a component inventory from canvas content.
+  baseline <UX-x> --png <file>    Record a baseline screenshot for a UX node.
+  html <UX-x>                     Render the linked artboard as standalone HTML.
+  list                            Print all canvas links as JSON.
+-- evidence? --
+  status          Print current phase, active wave, gates and backtrack as JSON.
+  doctor          Diagnose state vs journal and policy drift; --repair replays state, --accept-policy re-pins the policy baseline (needs HARNESS_ACCEPT_POLICY=1 — humans only).
+  phase <sub>     Move to a phase. Only an approved gate opens the next phase.
+  gate <sub>      Phase gates — submit artifacts, then a human approves.
+  wave <sub>      Waves — the unit of build work, with a written instruction sheet.
+  node <sub>      Design ledger nodes — the things waves are allowed to implement.
+  trace           Trace a design node to the waves and documents that reference it.
+  report <sub>    Rendered views over the ledger, registry and gates.
+  doc <sub>       Document registry — the artifacts a gate reviews.
+  adr <sub>       Architecture decision records tied to phase gates.
+  design <sub>    Claude Design canvas link — UX nodes, sync and baselines.
+  tokens <sub>    Design tokens — generate, lint raw values, swap themes.
+  evidence <sub>  Visual evidence for UX waves — spec, check and packet.
+  loop <sub>      Wave execution loop — next work, attempts, briefs, escalation.
+  ship <sub>      Ship track — defect ledger, deployments, final verdict.
+  profile <sub>   Stack profile — what "build", "test", "deploy" mean here.
+  usage <sub>     Usage tier guidance for long sessions.
+  backtrack       Officially go back to an earlier phase (the only way to edit approved design).
+  migrate         Detect hand-rolled hooks/skills that would double-fire with the harness.
+
+Details: harness <command> --help   ·   Version: harness --version
+Language: set `lang: ko` in .harness/config.yaml, or HARNESS_LANG=ko
+
+-- exercise every path-carrying command with an ABSOLUTE path argument --
+DOC-1 created → /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk2/docs/spec.md
+Next: publish it as a claude.ai artifact, then `harness doc url DOC-1 <url>`
+UX-1 ↔ https://claude.ai/artifact/abc
+Baseline recorded for UX-1: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk2/shot.png
+Unknown flag: --url (that flag belongs to a different command group). An unknown flag is never applied — accepting it silently would record something other than what you asked for. Run `harness ship --help` to see what this group takes.
+harness ship — Ship track — defect ledger, deployments, final verdict.
+
+Subcommands:
+  defect add --id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>
+                                  Add a defect to the ledger. Findings without evidence are refused.
+  defect update <id> --status <open|fixed|verified|deferred> [--defer-reason <why>] [--evidence <e>]
+                                  Change a defect’s status.
+  defect list                     Print the defect ledger as JSON.
+  deploy --env <env> --version <v> --sha <commit> [--evidence <e>]
+                                  Record a deployment.
+  deployments                     Print deployment history as JSON.
+  verdict                         Final go/no-go. Never passes without measured evidence.
+
+-- absolute paths persisted into .harness/ now? --
+<PROJ>/.harness/design/registry.yaml:4:    path: <PROJ>/docs/spec.md
+   (matches: 1)
+-- any /Users /Volumes /private /home /tmp absolute path anywhere in .harness/ --
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk2/docs/spec.md
+   (matches: 1)
+-- doc registry contents --
+{
+  "docs": [
+    {
+      "id": "DOC-1",
+      "phase": "P0",
+      "path": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk2/docs/spec.md",
+      "version": 1,
+      "status": "draft",
+      "linkedNodes": []
+    }
+  ]
+}
+-- design list --
+[
+  {
+    "uxNodeId": "UX-1",
+    "url": "https://claude.ai/artifact/abc",
+    "artboard": "Screen"
+  }
+]
+
+-- where did 'design baseline' put the png reference? --
+<PROJ>/.harness/design/canvas.yaml:5:baselines:
+<PROJ>/.harness/design/canvas.yaml:7:    path: shot.png
+<PROJ>/.harness/events.jsonl:6:{"ts":"2026-08-27T14:51:32.900Z","type":"baseline-recorded","data":{"uxNodeId":"UX-1","path":"shot.png"}}
+
+======================================================================
+## 7. MEASURED consequence: back up this project and restore it at a DIFFERENT path
+-- restored tree --
+.
+./.harness
+./.harness/.runtime
+./.harness/config.yaml
+./.harness/design
+./.harness/events.jsonl
+./.harness/evidence
+./.harness/state.json
+./.harness/waves
+./docs
+./docs/spec.md
+./shot.png
+-- doc list at the new path (note the stored path) --
+      "path": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-bk2/docs/spec.md",
+-- doc submit DOC-1 (pins the content hash — needs to read the file) --
+Document DOC-1 has no artifact URL — a document that only exists locally cannot go to a gate (req 16). Publish it as a claude.ai artifact, then register the URL: `harness doc url DOC-1 <https://claude.ai/...>`
+  exit=1
+-- doc stale --
+No approved documents have drifted
+  exit=0
+-- report rtm --
+# Requirements Traceability Matrix (RTM)
+
+Generated: 2026-08-27T14:52:01.287Z
+
+The ledger has no F- node — no requirement is registered to trace.
+
+## Gaps
+
+- the ledger has no requirement (F-) node to trace — the RTM guarantees nothing yet
+
+
+## 8. the same break WITHOUT moving: delete the original project dir, keep only the copy
+   (this is what a teammate cloning the repo sees — the absolute path is one machine's)
+-- doc submit at the new path while the recorded absolute path no longer exists --
+Document DOC-1 has no artifact URL — a document that only exists locally cannot go to a gate (req 16). Publish it as a claude.ai artifact, then register the URL: `harness doc url DOC-1 <https://claude.ai/...>`
+  exit=1
+-- doc stale --
+No approved documents have drifted
+  exit=0
+
+## 9. control: the same flow with a RELATIVE --path
+DOC-1 created → docs/spec.md
+Next: publish it as a claude.ai artifact, then `harness doc url DOC-1 <url>`
+Document DOC-1 has no artifact URL — a document that only exists locally cannot go to a gate (req 16). Publish it as a claude.ai artifact, then register the URL: `harness doc url DOC-1 <https://claude.ai/...>`
+-- at the new path: doc stale --
+No approved documents have drifted
+  exit=0
+-- at the new path: doc approve --
+Document DOC-1 is not submitted (currently draft) — submit it first
+  exit=1
+
+======================================================================
+## 10. FULL doc lifecycle with an ABSOLUTE --path, then restore elsewhere
+DOC-1 created → /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/docs/spec.md
+DOC-1 → https://claude.ai/public/artifacts/abc
+Cannot read the file for document DOC-1: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/docs/spec.md (/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/docs/spec.md) — create the file, or fix the registry path, then try again
+Document DOC-1 is not submitted (currently draft) — submit it first
+-- doc stale in place (file unchanged) --
+No approved documents have drifted
+-- change the file, doc stale should now flag drift --
+No approved documents have drifted
+   ^ the staleness check works when the path resolves
+
+-- now restore the SAME project at a different path (teammate clone / machine move) --
+-- doc list at the new path --
+      "path": "/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/docs/spec.md",
+      "status": "draft",
+-- doc stale at the new path (the file it pinned is unreachable; the local copy DID drift) --
+No approved documents have drifted
+  exit=0
+-- report packet / hub --
+# Review packet — P0
+
+Generated: 2026-08-27T14:52:30.241Z
+
+## Artifacts (1)
+
+### DOC-1 v1 — draft
+- Path: `/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/proj-abs/docs/spec.md`
+- Artifact: https://claude.ai/public/artifacts/abc
+- Linked nodes: none
+
+## Design ledger nodes
+
+no ledger node is linked — there is no way to trace which design these artifacts cover.
+
+## Gate status
+
+- Status: pending — not submitted yet
+
+## What was submitted to this gate
+-- gate submit P0 --
+No artifacts to review — name the documents with `harness gate submit P0 --paths <a,b>`. A gate approves artifacts; it is not a declaration that work is done
+  exit=0
+-- doctor --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+  exit=0
+
+======================================================================
+## 11. approved-document staleness when the pinned file goes MISSING (relative path, correct usage)
+DOC-1 created → docs/spec.md
+DOC-1 → https://claude.ai/public/artifacts/abc
+DOC-1 v1 submitted
+DOC-1 v1 approved
+-- baseline: doc stale (unchanged) --
+No approved documents have drifted
+-- edit the file: doc stale must flag drift --
+DOC-1 v1
+  exit=0
+-- DELETE the file: what does doc stale say? --
+DOC-1 v1
+  exit=0
+-- report packet P0 with the artifact gone --
+# Review packet — P0
+
+Generated: 2026-08-27T14:52:57.724Z
+
+## Artifacts (1)
+
+### DOC-1 v1 — approved
+- Path: `docs/spec.md`
+- Artifact: https://claude.ai/public/artifacts/abc
+- Linked nodes: none
+
+## Design ledger nodes
+
+no ledger node is linked — there is no way to trace which design these artifacts cover.
+
+## Gate status
+
+- Status: pending — not submitted yet
+-- doctor with the approved artifact gone --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}

@@ -1,0 +1,191 @@
+# ax04-P3 — 웨이브 구동 개발자: 설계 게이트 통과 → 빌드 트랙 완주 — 23:47
+
+=== P0 gate ===
+
+$ H gate submit P0 --paths docs/P0.md
+P0 submitted — hash b20899d4483f · evidence claimed
+Review packet: .harness/packets/P0.md
+Note: no document is registered for P0, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P0` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P0`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P0
+P0 approved — 2026-08-27T14:47:09.365Z · evidence claimed
+[exit=0]
+
+$ H phase set P1
+Phase → P1
+[exit=0]
+
+=== P1 gate ===
+
+$ H gate submit P1 --paths docs/P1.md
+P1 submitted — hash a343c278ab65 · evidence claimed
+Review packet: .harness/packets/P1.md
+Note: no document is registered for P1, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P1` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P1`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P1
+P1 approved — 2026-08-27T14:47:09.895Z · evidence claimed
+[exit=0]
+
+$ H phase set P2
+Phase → P2
+[exit=0]
+
+=== P2 gate ===
+
+$ H gate submit P2 --paths docs/P2.md
+P2 submitted — hash 91d073987e57 · evidence claimed
+Review packet: .harness/packets/P2.md
+Note: no document is registered for P2, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P2` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P2`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P2
+P2 approved — 2026-08-27T14:47:10.510Z · evidence claimed
+[exit=0]
+
+$ H phase set P3
+Phase → P3
+[exit=0]
+
+=== P3 gate ===
+
+$ H gate submit P3 --paths docs/P3.md
+P3 submitted — hash 4f75446f54f2 · evidence claimed
+Review packet: .harness/packets/P3.md
+Note: no document is registered for P3, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P3` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P3`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P3
+P3 approved — 2026-08-27T14:47:11.167Z · evidence claimed
+[exit=0]
+
+$ H phase set P4
+Phase → P4
+[exit=0]
+
+=== P4 gate ===
+
+$ H gate submit P4 --paths docs/P4.md
+P4 submitted — hash d220bab7cea9 · evidence claimed
+Review packet: .harness/packets/P4.md
+Note: no document is registered for P4, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P4` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P4`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P4
+P4 approved — 2026-08-27T14:47:11.747Z · evidence claimed
+[exit=0]
+
+$ H phase set P5
+Phase → P5
+[exit=0]
+
+=== P5 gate ===
+
+$ H gate submit P5 --paths docs/P5.md
+P5 submitted — hash b3625a306741 · evidence claimed
+Review packet: .harness/packets/P5.md
+Note: no document is registered for P5, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P5` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P5`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P5
+P5 approved — 2026-08-27T14:47:12.352Z · evidence claimed
+[exit=0]
+
+$ H phase set P6
+Phase → P6
+[exit=0]
+
+=== P6 gate ===
+
+$ H gate submit P6 --paths docs/P6.md
+P6 submitted — hash ef18fd74c287 · evidence claimed
+Review packet: .harness/packets/P6.md
+Note: no document is registered for P6, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P6` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P6`.
+[exit=0]
+
+$ HARNESS_APPROVE_NO_TTY=1 H gate approve P6
+P6 approved — 2026-08-27T14:47:12.998Z · evidence claimed
+[exit=0]
+
+$ H phase set P7
+Phase → P7
+[exit=0]
+
+=== 최종 상태 ===
+
+$ H status | python3 -c 'import sys,json;d=json.load(sys.stdin);print("phase",d["phase"]); print("gates", {k:v["status"] for k,v in d["gates"].items()})'
+phase P7
+gates {'P0': 'approved', 'P1': 'approved', 'P2': 'approved', 'P3': 'approved', 'P4': 'approved', 'P5': 'approved', 'P6': 'approved'}
+[exit=0]
+
+### 빌드 트랙: P8 로 이동, 웨이브 생성
+
+$ H phase set P8
+Cannot move to P8 — 1 gate(s) before it are not approved: P7 (P7 is currently: pending). Start with the earliest: `harness gate submit P7` → `harness gate approve P7`. A phase change happens on 'artifact approval', never on 'work finished' (spec §2). Approving a later gate does not stand in for the ones before it
+[exit=1]
+
+$ H node upsert --id F-1 --title 'create task feature'
+F-1 created in the design ledger
+[exit=0]
+
+$ H wave create --goal 'implement create-task' --refs F-1 --accept 'writes src'
+wave-001
+[exit=0]
+activeWave after create: ''
+
+$ H wave activate 
+Missing argument — usage: harness wave activate <wave-id>
+[exit=1]
+
+$ H status | python3 -c 'import sys,json;d=json.load(sys.stdin);print("phase",d["phase"],"wave",d["activeWave"])'
+phase P7 wave None
+[exit=0]
+
+### 소스 쓰기가 이제 허용되는가 (빌드 트랙)
+[BT01 Write src/app.ts]
+  → exit=0 ALLOW(silent)
+[BT02 Bash printf>src/x.ts]
+  → exit=0 ALLOW(silent)
+[BT03 state.json still blocked?]
+  → exit=0 DENY: .harness/state.json can only be changed by harness commands — editing it by hand desynchronises the journal from the state.
+[BT04 config.yaml still blocked?]
+  → exit=0 DENY: .harness/config.yaml decides what this hook blocks, so an agent cannot write it — otherwise the harness could disarm itself in one
+
+### Stop 가드 — 미정산 block → 정산 → pass (세션이 끝날 수 있는가)
+
+$ H wave activate wave-001
+Active: wave-001
+[exit=0]
+
+$ H status | python3 -c 'import sys,json;d=json.load(sys.stdin);print("wave",d["activeWave"])'
+wave wave-001
+[exit=0]
+
+[S0] 활동 전 Stop — 활동 없으면 통과해야(빈 턴은 막지 않음)
+  → exit=0 ALLOW(silent)
+
+[S1] PostToolUse 로 실제 작업(소스 쓰기) 활동 기록
+  → post: exit=0 ALLOW(silent)
+
+[S2] 미정산 Stop — BLOCK 되어야(활동 있는데 턴 로그 미갱신)
+  → exit=0 BLOCK: The turn log for active wave wave-001 has not been updated since the last work. Settle it with `harness wave update "<what you did
+
+[S3] 같은 조건 Stop 재호출 — 무한 루프 여부(계속 BLOCK 이지만 stop_hook_active=true 시 흡수?)
+  → stop_hook_active=true: exit=0 ALLOW(silent)
+
+[S4] wave update 로 정산
+
+$ H wave update 'wrote src/app.ts create-task; next: tests'
+Turn log recorded
+[exit=0]
+
+[S5] 정산 후 Stop — 통과해야(세션 종료 가능)
+  → exit=0 ALLOW(silent)

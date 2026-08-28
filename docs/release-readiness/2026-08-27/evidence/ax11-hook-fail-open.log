@@ -1,0 +1,75 @@
+=== axis 11 (ops) — hook fail-open / silent-disable probes ===
+All runs against a sandbox copy of the repo + a throwaway `harness init`-ed project,
+never against the real working tree. Repro commands use literal paths (no shell vars)
+so they can be pasted as-is.
+
+--- Probe 1: delete core/dist/cli.js, then fire the PreToolUse hook for a P0-blocked write ---
+$ mv core/dist/cli.js core/dist/cli.js.bak
+$ CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < payload.json
+exit=0
+stdout: <empty, 0 bytes>
+stderr: "king-wjang-harness: no build in core/dist — run `npm install` (prepare) or `npm run prepare` to build it."
+$ mv core/dist/cli.js.bak core/dist/cli.js   # restore
+
+Baseline (dist present) for the SAME payload, for contrast:
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Implementation code cannot be written in the design track (P0) — src/index.ts is blocked ... Finish the design artifacts first."}}
+
+Conclusion: with dist missing, PreToolUse emits no hookSpecificOutput/permissionDecision at
+all (not even an explicit "allow" — just nothing) and exits 0. Per hooks.json's contract
+(deny is only communicated via that JSON on stdout), an empty stdout + exit 0 is indistinguishable
+from "no opinion" and the tool call proceeds unblocked. The only signal is one stderr line that
+does not say "protection is currently off" — it reads like a generic install-incomplete notice.
+This is bin/harness's own documented "do-no-harm" contract (bin/harness:2-5): hook path is silent
+by design when core/dist is missing. All 4 hook events (session-start/pre-tool/post-tool/stop) share
+this exact code path (bin/harness:6-12), so this is not pre-tool-specific.
+
+For contrast, an ORDINARY (non-hook) command surfaces this loudly:
+$ mv core/dist/cli.js core/dist/cli.js.bak
+$ node bin/harness doctor
+exit=1
+stderr: "king-wjang-harness: no build in core/dist — run `npm install` (prepare) or `npm run prepare` to build it."
+$ mv core/dist/cli.js.bak core/dist/cli.js
+
+--- Probe 2: make .harness/ read-only, PreToolUse still functions (read-only judging works) ---
+$ chmod -R 555 .harness
+$ CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < payload.json
+exit=0
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Implementation code cannot be written in the design track (P0) ..."}}
+-> the write-blocking judgement itself still works under a read-only .harness/ (it only needs
+   to READ config/state, not write). See ax11-doctor-blindspots.log for what silently breaks
+   instead (activity-marker tracking / stop-guard).
+
+--- Probe 3: corrupt events.jsonl mid-line while state.json stays valid/parseable ---
+$ cp .harness/events.jsonl .harness/events.jsonl.orig
+$ { head -c 30 .harness/events.jsonl.orig; echo "not json garbage {{{"; } > .harness/events.jsonl
+$ cat .harness/events.jsonl
+{"ts":"2026-08-27T14:44:43.380not json garbage {{{
+
+$ node bin/harness doctor
+{
+  "ok": true,
+  "warnings": ["1 line(s) of events.jsonl are corrupt — the replay is incomplete", ...],
+  ...
+}
+-> doctor DOES detect this (as expected — see ax11-doctor-blindspots.log for what it misses).
+
+$ CLAUDE_PROJECT_DIR=<proj> node bin/harness hook session-start < ss-payload.json
+stdout: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"[king-wjang-harness] phase: P0 | active wave: none\nDesign track — writing implementation code ... Next: `harness status` ...  (Silence this with `remote_control: false` in `.harness/config.yaml`.)"}}
+-> grep -io "corrupt\|손상\|doctor" on this output: NO MATCH. Zero mention of the corrupted
+   journal anywhere in the session-start banner (the one thing that unconditionally fires at
+   the top of every session and is meant to orient the user/agent).
+
+$ CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < payload.json
+stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Implementation code cannot be written in the design track (P0) ..."}}
+-> deny reason also carries NO "[state damaged ...]" tag (compare core/src/hook.ts:645-649's
+   `deny()` tag mechanism, which only fires when the local `degraded` variable is non-null).
+
+Root cause (code, core/src/hook.ts:296-317): `degraded` is only ever assigned inside the
+`catch` block that fires when `readState(root)` throws or its shape is invalid (i.e. when
+state.json ITSELF is broken). If state.json parses fine, the `try` branch succeeds and
+`degraded` stays `null` for the rest of this hook call — regardless of how corrupt
+events.jsonl is. `degradedNote`/the deny `tag` are only ever populated from that same
+`degraded` variable (core/src/hook.ts:360-, :645-649, :2401), so a corrupt journal with an
+intact state.json is invisible through every interactive surface (session-start banner,
+pre-tool deny reason, stop-guard note) — the ONLY way to learn about it is to proactively
+run `harness doctor`, which nothing prompts the user to do.

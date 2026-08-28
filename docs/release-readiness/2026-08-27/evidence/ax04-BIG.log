@@ -1,0 +1,17 @@
+# ax04-BIG — 저널 100k+ 줄: 정상경로(state.json 유효) vs 열화경로(재생) 체감 정지 — 23:52
+저널:   120027 줄 ·  15M
+
+## 정상 경로 — state.json 유효. 훅은 저널을 재생하지 않아야(state.json 만 읽음)
+  pre-tool(정상): 5회 2690ms → 호출당 538ms
+  session-start(정상): 5회 3080ms → 호출당 616ms
+
+## 열화 경로 — state.json 삭제 → 매 훅이 12만줄 재생 (README: +17.7ms in-proc, 그러나 wall-clock 체감?)
+  pre-tool(재생): 5회 2355ms → 호출당 471ms
+  session-start(재생): 5회 2486ms → 호출당 497ms
+  단일 pre-tool(재생) wall-clock: 613ms
+
+## 절대 지연 귀속 — node 부트 플로어 vs 저널 (환경/볼륨 확인)
+  bare node -e 0 ×5: 2041ms → 408ms/call
+  node + require(594KB bundle) ×5: 2993ms → 599ms/call
+  sh-gate only (비하네스 프로젝트, node 미기동) ×5: 393ms → 79ms/call
+  repo 볼륨: /dev/disk3s5 /System/Volumes/Data

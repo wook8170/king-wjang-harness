@@ -1,0 +1,199 @@
+### ax10 upgrade: v0.1.0 (commit 8744078, 2026-08-23) data -> current HEAD CLI (v0.1.2)
+date 2026-08-27T14:44:59Z
+
+## A. init + populate with the OLD CLI (v0.1.0)
+.harness/ initialised — run `harness --help` to see the command map.
+NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human — allowlisting it lets an agent open gates on its own.
+C-1 created in the design ledger
+D-1 created in the design ledger
+Unknown flag: --kind (did you mean --id?). An unknown flag is never applied — accepting it silently would record something other than what you asked for. Run `harness doc --help` to see what this group takes.
+wave-001
+Active: wave-001
+Turn log recorded
+-- old status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:45:02.857Z"
+}
+-- old doctor --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+
+## B. journal snapshot written by the OLD CLI
+events:        7 lines
+kinds:
+    init
+    policy-pinned
+    node-upserted
+    node-upserted
+    wave-created
+    wave-activated
+    wave-turn-logged
+events.jsonl sha256=2498833170975d91272b020021c6355a1b83ad024a676533b1bfb4696bcc4462
+
+## C. open the SAME directory with the CURRENT CLI (no migration command run)
+-- new status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:45:02.857Z"
+}
+-- new doctor --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": []
+}
+-- new report ledger --
+Unknown report subcommand: ledger — expected one of: packet | rtm | hub
+Run `harness report --help` for details.
+-- new wave update (mutate) --
+Turn log recorded
+-- new status after mutate --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:45:02.857Z"
+}
+
+## D. data preservation: old events still present?
+events now:        8 lines
+prefix identical to old journal? 
+2498833170975d91272b020021c6355a1b83ad024a676533b1bfb4696bcc4462
+  (old sha: 2498833170975d91272b020021c6355a1b83ad024a676533b1bfb4696bcc4462)
+-- ledger.yaml --
+nodes:
+  - id: C-1
+    title: Concept one
+    version: 1
+    status: draft
+  - id: D-1
+    title: Domain one
+    version: 1
+    status: draft
+-- config.yaml --
+profile: generic
+remote_control: true
+terse: false
+
+======================================================================
+### ax10 upgrade #2: v0.0.1 (commit 8d261d3, 2026-08-20, 7 days / 300 commits older) -> current
+
+## A. init + populate with the v0.0.1 CLI
+.harness/ 초기화 완료
+C-1
+wave-001
+활성: wave-001
+턴 로그 기록
+-- old status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:45:40.651Z"
+}
+-- old events --
+{"ts":"2026-08-27T14:45:39.357Z","type":"init","data":{}}
+{"ts":"2026-08-27T14:45:39.559Z","type":"node-upserted","data":{"id":"C-1"}}
+{"ts":"2026-08-27T14:45:40.160Z","type":"wave-created","data":{"id":"wave-001","milestone":"(미지정)","design_refs":["C-1"]}}
+{"ts":"2026-08-27T14:45:40.649Z","type":"wave-activated","data":{"id":"wave-001"}}
+{"ts":"2026-08-27T14:45:41.502Z","type":"wave-turn-logged","data":{"id":"wave-001"}}
+-- old config.yaml --
+profile: generic
+remote_control: true
+terse: false
+-- old .harness tree --
+.harness
+.harness/.runtime
+.harness/.runtime/.gitignore
+.harness/.runtime/last-turn
+.harness/config.yaml
+.harness/design
+.harness/design/ledger.yaml
+.harness/events.jsonl
+.harness/state.json
+.harness/waves
+.harness/waves/wave-001.md
+
+## B. open with CURRENT CLI
+-- new status --
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": "wave-001",
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:45:40.651Z"
+}
+-- new doctor --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": [
+    "the policy baseline is not pinned yet — pin it with `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` so that later changes to the policy files become visible"
+  ]
+}
+-- new wave update --
+Turn log recorded
+-- new wave complete --
+Wave completed
+-- new doctor again --
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [],
+  "notes": [
+    "the policy baseline is not pinned yet — pin it with `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` so that later changes to the policy files become visible"
+  ]
+}
+
+## C. preservation
+old journal sha: 21cdbf4ff2aa0439d1d5f38b31f4372563c7c01b504564b0139026dbbcc0e198
+head: illegal byte count -- 0
+prefix now:      
+events now: 7
+  1 init
+  2 node-upserted
+  3 wave-created
+  4 wave-activated
+  5 wave-turn-logged
+  6 wave-turn-logged
+  7 wave-completed
+-- .harness tree after --
+.harness
+.harness/.runtime
+.harness/.runtime/.gitignore
+.harness/.runtime/last-turn
+.harness/config.yaml
+.harness/design
+.harness/design/ledger.yaml
+.harness/events.jsonl
+.harness/state.json
+.harness/waves
+.harness/waves/wave-001.md

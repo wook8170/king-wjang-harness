@@ -1,0 +1,123 @@
+### ax10 deploy-artifact integrity — 2026-08-27T14:49:57Z
+
+## committed dist (from git archive HEAD)
+eadb7c0426372cea6d5136131bf36909fed8ea9958b6078044114054c11f6832  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg/core/dist/cli.js
+fba8991f0d59f3c943318089c831b3f8ff7b38fe4a22a40ec09e5f295a557987  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg/core/dist/mcp.js
+
+## rebuild from the committed sources in a sandbox copy (node_modules symlinked from the repo)
+CLI Building entry: {"cli":"core/src/cli.ts","mcp":"core/src/mcp.ts"}
+CLI Using tsconfig: tsconfig.json
+CLI tsup v8.5.1
+CLI Using tsup config: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/buildcheck/tsup.config.ts
+CLI Target: node18
+CLI Cleaning output folder
+CJS Build start
+CJS core/dist/cli.js 718.63 KB
+CJS core/dist/mcp.js 385.25 KB
+CJS ⚡️ Build success in 110ms
+
+## rebuilt dist
+00fd988e7af0c1b4459cf9ee724a865c416ad00dc4040dba52a0904b37c855e3  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/buildcheck/core/dist/cli.js
+5fa08fa182421cf63625a5262d3349a98ba91e9bc841526f1fda0c2da8f1a49b  /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/buildcheck/core/dist/mcp.js
+
+## byte-diff committed vs rebuilt
+  cli.js: DIFFERS  (committed 730498 bytes vs rebuilt 740578 bytes)
+  first differing byte: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg/core/dist/cli.js /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/buildcheck/core/dist/cli.js differ: char 1559, line 33
+49c49
+< // node_modules/yaml/dist/nodes/identity.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/nodes/identity.js
+51c51
+<   "node_modules/yaml/dist/nodes/identity.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/nodes/identity.js"(exports2) {
+142c142
+< // node_modules/yaml/dist/visit.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/visit.js
+144c144
+<   "node_modules/yaml/dist/visit.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/visit.js"(exports2) {
+376c376
+< // node_modules/yaml/dist/doc/directives.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/directives.js
+378c378
+<   "node_modules/yaml/dist/doc/directives.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/directives.js"(exports2) {
+623c623
+< // node_modules/yaml/dist/doc/anchors.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/anchors.js
+625c625
+<   "node_modules/yaml/dist/doc/anchors.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/anchors.js"(exports2) {
+727c727
+< // node_modules/yaml/dist/doc/applyReviver.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/applyReviver.js
+729c729
+<   "node_modules/yaml/dist/doc/applyReviver.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/applyReviver.js"(exports2) {
+  mcp.js: DIFFERS  (committed 385532 bytes vs rebuilt 395612 bytes)
+  first differing byte: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg/core/dist/mcp.js /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/buildcheck/core/dist/mcp.js differ: char 1559, line 33
+49c49
+< // node_modules/yaml/dist/nodes/identity.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/nodes/identity.js
+51c51
+<   "node_modules/yaml/dist/nodes/identity.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/nodes/identity.js"(exports2) {
+142c142
+< // node_modules/yaml/dist/visit.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/visit.js
+144c144
+<   "node_modules/yaml/dist/visit.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/visit.js"(exports2) {
+376c376
+< // node_modules/yaml/dist/doc/directives.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/directives.js
+378c378
+<   "node_modules/yaml/dist/doc/directives.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/directives.js"(exports2) {
+623c623
+< // node_modules/yaml/dist/doc/anchors.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/anchors.js
+625c625
+<   "node_modules/yaml/dist/doc/anchors.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/anchors.js"(exports2) {
+727c727
+< // node_modules/yaml/dist/doc/applyReviver.js
+---
+> // ../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/applyReviver.js
+729c729
+<   "node_modules/yaml/dist/doc/applyReviver.js"(exports2) {
+---
+>   "../../../../../../../../Volumes/WorkSpace/0200_Dev/king-wjang-harness/node_modules/yaml/dist/doc/applyReviver.js"(exports2) {
+
+======================================================================
+## RETRY with a REAL node_modules copy (the first attempt symlinked it, which changed esbuild's module paths)
+CLI Target: node18
+CLI Cleaning output folder
+CJS Build start
+CJS core/dist/mcp.js 375.41 KB
+CJS core/dist/cli.js 708.78 KB
+CJS ⚡️ Build success in 146ms
+
+  committed: eadb7c0426372cea6d5136131bf36909fed8ea9958b6078044114054c11f6832  cli.js
+  rebuilt  : eadb7c0426372cea6d5136131bf36909fed8ea9958b6078044114054c11f6832  cli.js
+  => cli.js IDENTICAL — the shipped bundle is exactly what the committed sources build
+  committed: fba8991f0d59f3c943318089c831b3f8ff7b38fe4a22a40ec09e5f295a557987  mcp.js
+  rebuilt  : fba8991f0d59f3c943318089c831b3f8ff7b38fe4a22a40ec09e5f295a557987  mcp.js
+  => mcp.js IDENTICAL — the shipped bundle is exactly what the committed sources build

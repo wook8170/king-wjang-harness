@@ -1,0 +1,5 @@
+### LOGIC: harness command overwrites append-only journal (direct CLI, no hook)
+assertOutputAllowed (cli.ts:331) checks inside-root + source-path-in-design-track only; NOT CORE_FILES.
+Direct CLI run destroyed the journal; symlink also. Hook blocks agent path via realpath basename match.
+--- evidence spec --out .harness/events.jsonl (p1): exit 0, journal replaced with spec text, doctor ok:true
+--- symlink .harness/notes.jsonl -> events.jsonl (p2): direct CLI overwrote journal 3->29 lines, exit 0

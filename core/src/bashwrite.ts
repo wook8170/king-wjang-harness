@@ -264,6 +264,69 @@ function envChdirOf(tokens: string[]): string | undefined {
   return undefined;
 }
 
+/**
+ * [OVERBLOCK-2] **stdin 을 데이터로만 먹는 도구.** 이들에게 준 heredoc 본문은 **명령이 아니라
+ * 자료**다. 화이트리스트로 두는 이유: 모르는 이름을 데이터 소비자로 가정하면 `sh <<EOF` 같은
+ * 실행 경로가 스캔에서 빠진다. **여기 없는 이름은 덮지 않는다**(기존 동작 유지 = 우회 없음).
+ */
+const HEREDOC_DATA_SINKS = new Set([
+  'cat', 'tee', 'grep', 'egrep', 'fgrep', 'rg', 'sort', 'uniq', 'head', 'tail', 'wc',
+  'cut', 'tr', 'column', 'nl', 'jq', 'yq', 'less', 'more', 'diff', 'cmp', 'base64',
+  'shasum', 'md5', 'md5sum', 'sha256sum', 'mail', 'sendmail', 'psql', 'mysql', 'sqlite3',
+]);
+
+/**
+ * [OVERBLOCK-1] **스캔 전에 「명령이 아닌 구간」을 같은 길이의 공백으로 덮는다.**
+ *
+ * 길이를 보존하는 이유: 리다이렉트 위치(`m.index`)로 그 자리의 가상 cwd 를 찾으므로
+ * (`cwdAt`), 길이가 달라지면 **cd 추적이 통째로 어긋난다.**
+ *
+ * 두 구간을 덮는다.
+ *
+ * ① **fd 복제 리다이렉트**(`2>&1`·`1>&2`·`>&-`). 파일을 쓰지 않는데 `&` 가 세그먼트 분해
+ *    기준이라 `2>&1` 이 `… 2>` 와 **`1`** 두 조각으로 갈렸다. 뒤 조각의 머리 `1` 이
+ *    「모르는 명령」으로 분류돼 `mutating` 을 세우고, 그러면 언급 안전망이 발화해
+ *    **순수 조회가 거부됐다** — `cat src/app.ts 2>&1` 이 실측으로 deny 됐고, 사유는
+ *    「소스를 쓸 수 없다」였다(읽으려 했을 뿐이다). `2>/dev/null` 은 `&` 가 없어 통과했으니
+ *    **명령도 리다이렉트 여부도 아니고 `&` 한 글자가 판정을 뒤집었다.**
+ *    `redirectTargets` 는 이미 fd 복제를 대상에서 빼고 있었다 — 새던 곳은 **분해**였다.
+ *
+ * ② **데이터 싱크에 먹이는 따옴표 heredoc 본문**(`cat > note.md <<'E' … E`). 본문은 자료지
+ *    명령이 아닌데 개행이 분해 기준이라 산문 한 줄이 세그먼트가 됐고, 첫 낱말이 「모르는
+ *    명령」이 돼 같은 경로로 거부됐다 — **문서에 코어 경로를 「언급」만 해도 막혔다.**
+ *    안전을 위해 두 겹으로 좁힌다: 소비 명령이 `HEREDOC_DATA_SINKS` 에 있고, **구분자가
+ *    따옴표로 닫힌**(`<<'E'`·`<<"E"`) 경우만. 따옴표가 없으면 셸이 본문에서 `$(…)` 를
+ *    실행하므로 그대로 본다.
+ */
+function maskNonCommandText(cmd: string): string {
+  const buf = cmd.split('');
+  const blank = (from: number, to: number): void => {
+    for (let i = from; i < to && i < buf.length; i++) if (buf[i] !== '\n') buf[i] = ' ';
+  };
+
+  // ① fd 복제 — `2>&1` · `>&2` · `2>&-` · `<&3`
+  const fd = /(\d*)([<>])&(\d+|-)/g;
+  let m: RegExpExecArray | null;
+  while ((m = fd.exec(cmd)) !== null) blank(m.index, m.index + m[0].length);
+
+  // ② 따옴표 heredoc 본문 (데이터 싱크에 먹이는 것만)
+  const here = /<<-?\s*(['"])([A-Za-z_][\w-]*)\1/g;
+  while ((m = here.exec(cmd)) !== null) {
+    const lineStart = cmd.lastIndexOf('\n', m.index) + 1;
+    const head = commandName(tokenize(cmd.slice(lineStart, m.index))).name;
+    if (!HEREDOC_DATA_SINKS.has(head)) continue;      // 셸·인터프리터·미지 이름은 그대로 본다
+    const bodyStart = cmd.indexOf('\n', m.index);
+    if (bodyStart === -1) continue;
+    const delim = m[2];
+    // 본문은 「구분자만 있는 줄」까지다. 못 찾으면 명령 끝까지.
+    const term = new RegExp(`^[ \\t]*${delim}[ \\t]*$`, 'm');
+    const rest = cmd.slice(bodyStart + 1);
+    const hit = term.exec(rest);
+    blank(bodyStart + 1, hit ? bodyStart + 1 + hit.index : cmd.length);
+  }
+  return buf.join('');
+}
+
 /** 세그먼트를 **위치와 함께** 끊는다 — 리다이렉트는 원문 위치로 자기 cwd 를 찾아야 한다. */
 /**
  * [COST-293] **토큰은 한 번만 만든다.** 세그먼트마다 `tokenize` 를 다시 부르면 깊은 cwd 에서
@@ -895,6 +958,16 @@ const READ_ONLY_HEADS = [
   'true', 'false', ':', 'test', '[', '[[', ']]', 'sleep', 'wait',
   'break', 'continue', 'shift', 'return', 'exit', 'set', 'unset', 'export', 'readonly',
   'local', 'popd', 'dirs', 'jobs', 'umask', 'ulimit', 'times', 'help',
+  /**
+   * [OVERBLOCK-1] **`cd`·`pushd` 는 파일을 쓰지 않는다.** `popd` 만 들어 있어서 `cd x && cat f`
+   * 의 앞 조각이 명령 전체를 `mutating` 으로 만들었고, 그러면 [EFF-289] 가 `test`·`true` 에서
+   * 고친 바로 그 증상이 되살아났다 — **언급 안전망이 발화해 순수 조회가 「쓸 수 없다」는 사유로
+   * 거부된다.** `cd $D && cat src/app.ts` 가 실측으로 거부됐다(사유까지 사실과 달랐다).
+   *
+   * cwd 추적은 여기와 **무관하다** — `segmentsWithIndex` 가 별도로 `cd` 를 따라간다. 즉 이 목록에
+   * 넣어도 `cd .harness && echo x > config.yaml` 의 해소는 그대로다(그 세그먼트는 `>` 로 변형).
+   */
+  'cd', 'pushd',
 ];
 
 /**
@@ -1191,7 +1264,9 @@ function underDir(dir: string, sources: readonly string[]): string[] {
 export function scanBashWrites(rawCmd: string, env: Record<string, string | undefined> = {}): BashWriteScan {
   // [SEC-300] 줄이음(`\`+개행)을 세그먼트 분해 전에 접는다 — 셸이 지우는 것을 훅도 지운다.
   // [SEC-216] 볼 수 있는 대입은 먼저 편다 — 그래야 남는 것이 진짜 신호가 된다.
-  const cmd = expandStaticVars(foldLineContinuations(rawCmd), env);
+  // [OVERBLOCK-1] 명령이 아닌 구간(fd 복제·데이터 싱크 heredoc 본문)을 **길이 그대로** 덮은
+  // 뒤에 스캔한다. 분해·리다이렉트 추출·언급 안전망이 전부 이 문자열을 본다.
+  const cmd = maskNonCommandText(expandStaticVars(foldLineContinuations(rawCmd), env));
   const targets: string[] = [];
   /**
    * [SEC-268] 별칭 맵 — 이 명령 안에서 «곧 생길» 이름과 그것이 가리킬 원본.

@@ -1,0 +1,16 @@
+| 대상 | 표면 | 판정 | 사유(발췌) |
+|---|---|---|---|
+| 루트 밖 | Write 도구 | **deny** | Paths outside the project root cannot be written in the design track: /var/folde |
+| 루트 밖 | Bash heredoc | **allow** |  |
+| 루트 밖 | Bash 단순 리다이렉트 | **allow** |  |
+| 루트 밖 | Bash tee | **allow** |  |
+| 루트 안 소스 | Write 도구 | **deny** | Implementation code cannot be written in the design track (P0) — src/app.ts is b |
+| 루트 안 소스 | Bash heredoc | **deny** | Implementation code cannot be written in the design track (P0) — src/app.ts is b |
+| 루트 안 소스 | Bash heredoc(절대경로) | **deny** | Implementation code cannot be written in the design track (P0) — /var/folders/ff |
+| 루트 안 코어 | Bash heredoc(저널) | **deny** | .harness/events.jsonl can only be changed by harness commands — editing it by ha |
+| 루트 안 문서 | Bash heredoc | **allow** |  |
+
+— 판정 —
+루트 밖: Write=deny · Bash heredoc=allow · Bash 리다이렉트=allow
+루트 «안» 보호 관통: 0건 (전건 차단)
+루트 안 문서(허용되어야 함): allow

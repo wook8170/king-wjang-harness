@@ -311,6 +311,32 @@ export function extractInventory(fetchedContent: string): ComponentInventory {
   }
 }
 
+/**
+ * [OPS-09] `design inventory --from <파일>` 이 raw ENOENT 를 그대로 유출했다 —
+ * `ENOENT: no such file or directory, open '<...>/nope.html'` 하나만 남고, 사람은 원인을
+ * 스스로 추론해야 했다. 자매 명령(`tokens lint`·`wave activate`·`gate`)이 지키는
+ * 「다음 행동이 있는 메시지」 규율에서 이 하나만 빠져 있었다.
+ *
+ * 그리고 이 실수가 흔한 이유가 따로 있다: 이 모듈은 네트워크를 타지 않으므로(머리말 참조)
+ * 캔버스 본문은 **에이전트가 받아 파일로 떨궈 주는 것**이다. 그 한 단계를 건너뛰면 정확히
+ * 이 오류가 난다 — 그러니 처방은 「파일을 확인하라」가 아니라 그 단계 자체여야 한다.
+ */
+export function readCanvasContent(root: string, from: string): string {
+  const p = path.resolve(root, from);
+  try {
+    return fs.readFileSync(p, 'utf8');
+  } catch (e) {
+    throw new Error(tr(root, {
+      en: `Cannot read the canvas content file: ${p} (${(e as Error).message}) — this command does not `
+        + 'fetch the canvas itself; it reads a file you saved first. Fetch the artboard with WebFetch, '
+        + 'write the body to a file, then point `--from` at that path.',
+      ko: `캔버스 내용 파일을 읽을 수 없다: ${p} (${(e as Error).message}) — 이 명령은 캔버스를 직접 `
+        + '받아오지 않는다. 먼저 저장해 둔 파일을 읽는다: 아트보드를 WebFetch 로 받아 본문을 파일로 '
+        + '저장한 뒤 그 경로를 `--from` 에 주라.',
+    }));
+  }
+}
+
 /** 루트 안이면 루트 상대 posix 경로, 밖이면 null. */
 function relFromRoot(root: string, abs: string): string | null {
   const rel = path.relative(root, abs);

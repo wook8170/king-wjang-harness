@@ -1,0 +1,54 @@
+=== axis 11 (ops) — unbounded journal growth vs. the 10s hook timeout ===
+Single ad-hoc timing probes (NOT `npm run bench:hook`, which is axis 5's/orchestrator's job).
+Purpose: check README.md:297's claim that journal replay cost is "bounded" ("100k events /
+15 MB (decades of use)... +17.7ms p95 in-process (+24.7ms wall-clock)").
+
+--- Setup ---
+$ node bin/harness init   (fresh sandbox project "proj-bigjournal")
+$ python3 -c "append N synthetic 'node-upserted' JSON lines to .harness/events.jsonl"
+
+Case A — state.json intact, journal = 800,002 lines (70,289,150 bytes):
+$ time (CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < docs-write-payload.json > out.json)
+0.14s user 0.02s system 73% cpu  0.219s total
+(pre-tool never reads the journal at all when state.json is valid — see core/src/hook.ts:296-317:
+ the journal is only read inside the `catch` branch triggered by a broken state.json. Confirmed
+ by grep: no `readEvents`/`readJournal*` call anywhere in hook.ts's pre-tool/post-tool/stop path
+ outside that one catch block.)
+
+Case B — same 800,002-line journal, but state.json DELETED (forces the degraded/replay path):
+$ rm .harness/state.json
+$ time (CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < docs-write-payload.json > out.json)
+0.56s user 0.20s system 63% cpu  1.197s total
+
+Case C — journal grown to 6,000,002 lines (531,978,040 bytes = 532MB), state.json still absent:
+$ python3 -c "append another 5,200,000 lines"
+$ time (CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < docs-write-payload.json > out.json)
+3.27s user 2.23s system 44% cpu  12.395s total   <-- EXCEEDS hooks.json's configured 10s timeout
+exit=0, stdout empty (this specific write target, docs/x.md, is allow-by-profile so no deny
+JSON was expected regardless of timing)
+
+--- Interpretation ---
+This reproduces the scenario from the brief precisely: a big-enough journal, COMBINED with the
+degraded/self-healing replay path (state.json needs reconstruction), produces a single hook
+call that runs past the hook's own configured timeout. Per Claude Code's PreToolUse hook
+contract, a hook that is killed on timeout produces no permissionDecision — functionally the
+same fail-open outcome as ax11-hook-fail-open.log's Probe 1 (core/dist deleted), except this
+one is triggered by ordinary data growth rather than a broken install, and the trigger
+condition (state.json damage + a large journal) is exactly what `doctor --repair`'s own
+self-healing path is supposed to handle — i.e. the failure mode appears precisely when
+integrity-checking is most needed.
+
+README.md:297 states the cost of having no compaction command is "bounded... 100k events / 15
+MB (decades of use)... only while the state store is degraded — `doctor --repair` ends it."
+60x that baseline (6M events / 532MB) is not a many-decades scenario for a busy, long-lived,
+heavily automated project (e.g. `loop attempt`/`wave-attempt` events fire on every wave-loop
+iteration, core/src/loop.ts:214) — and at that scale the "bounded" cost is no longer a few
+milliseconds, it is a full hook timeout / enforcement outage.
+
+No line-count/byte-size cap or rotation exists anywhere in core/src/events.ts (grep for
+MAX/rotate/rotation/truncat/compact/archive returned nothing), and `doctor` never warns
+proactively as journal size approaches this danger zone (doctor.ts's checks are entirely
+content-based — corrupt lines, unknown types, divergence — never a size/line-count threshold).
+
+Cleanup: the 532MB synthetic journal was deleted after this probe (sandbox only, never touched
+the real repository's own .harness/).

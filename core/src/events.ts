@@ -7,7 +7,7 @@
  */
 import * as fs from 'node:fs';
 import { eventsPath } from './paths';
-import { defaultState, readState } from './state';
+import { defaultState, readState, rethrowWriteFailure } from './state';
 import { isPhase, isEvidenceGrade } from './types';
 import type { HarnessEvent, HarnessState } from './types';
 
@@ -46,11 +46,87 @@ export type EventType = (typeof EVENT_TYPES)[number];
 /** doctor가 아는 이벤트 타입. 위 목록에서 파생된다 — 두 벌로 두지 않는다. */
 export const KNOWN_EVENT_TYPES: ReadonlySet<string> = new Set(EVENT_TYPES);
 
+/** 가린 자리에 남기는 표식. 「무엇이 지워졌는지」가 보여야 감사 기록으로 남는다. */
+const MASK = '***MASKED***';
+
+/**
+ * [OPS-08] **저널은 append-only 이고, 이 제품의 지속성 메커니즘은 사실상 git 커밋이다.**
+ *
+ * 무엇이 깨져 있었나: `harness loop critical raise --detail "... sk-FAKE-SECRET-abc123XYZ"` 를
+ * 실행하면 그 문자열이 `.harness/events.jsonl` 에 **바이트 그대로** 영구 보존됐다. 사람이나
+ * 에이전트가 "API 키가 새고 있다"를 설명하려다 실제 자격증명을 붙여넣는 것은 흔한 일이고,
+ * 그러면 이 제품이 자기 README 에서 gitleaks 로 자랑하는 바로 그 사고를 사용자 저장소에
+ * 이식하는 셈이었다.
+ *
+ * **왜 여기(appendEvent)인가.** 저널로 들어가는 유일한 문이다. 호출부마다 마스킹을 흩으면
+ * 새 이벤트 타입이 생길 때마다 빠지고, 이 저장소가 반복해 물린 「두 벌 중 느슨한 쪽이 정본」이
+ * 된다. `--detail`·`--rationale` 만 고르지 않고 **값의 모양**으로 판단하는 이유도 같다 —
+ * 자유 텍스트 키 이름 목록은 새 필드가 생기는 순간 낡는다.
+ *
+ * **오탐이 곧 결함이다.** 정상 텍스트를 뭉개면 감사 기록의 가치가 사라지므로, 패턴은 그 자체로
+ * 자격증명임이 분명한 접두형(발급자가 정한 prefix)과 **문맥이 붙은 대입형**만 쓴다.
+ * 특히 「긴 hex/base64」 단독 패턴은 넣지 않는다 — 이 저널의 `artifactHash`·`policyHash` 가
+ * 정확히 그 모양이라, 넣는 순간 구조화된 필드를 스스로 파괴한다.
+ * 놓치는 것(예: `password: hunter2` 처럼 짧고 문맥 없는 값)은 의도한 절충이다.
+ */
+const SECRET_RULES: ReadonlyArray<{ re: RegExp; to: string }> = [
+  // PEM 개인키 블록 — 헤더만 남기고 본문을 통째로. 닫힘/열림 두 경우를 모두 본다.
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]*?(-----END [A-Z0-9 ]*PRIVATE KEY-----)/g, to: `$1${MASK}$2` },
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]+/g, to: `$1${MASK}` },
+  // 발급자 접두형 — 접두는 남긴다(무엇이 샜는지가 대응의 첫 정보다).
+  { re: /\b(sk-)[A-Za-z0-9_-]{16,}/g, to: `$1${MASK}` },
+  { re: /\b(gh[pousr]_)[A-Za-z0-9]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(github_pat_)[A-Za-z0-9_]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, to: `$1${MASK}` },
+  { re: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, to: `$1${MASK}` },
+  // `Bearer <토큰>` — 뒤가 12자 이상일 때만. "Bearer of bad news" 같은 산문은 걸리지 않는다.
+  { re: /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/g, to: `$1${MASK}` },
+  // 대입형. 앞의 `\b` 를 일부러 두지 않는다 — `aws_secret_access_key=` 처럼 밑줄로 이어 붙인
+  // 실제 형태를 놓치기 때문이다. 값은 12자 이상만 본다(짧은 영어 단어를 뭉개지 않으려고).
+  {
+    re: /((?:api[-_]?key|apikey|access[-_]?key|secret[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?token|refresh[-_]?token|secret|password|passwd)["']?\s*[:=]\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi,
+    to: `$1${MASK}`,
+  },
+  // 맨 `token` 은 **`=` 일 때만** 본다. `vercel deploy --token=…` 류가 `deployment-recorded` 로
+  // 저널에 들어오기 때문이다. `token:` 을 제외하는 이유는 이 제품이 디자인 **토큰**을 온종일
+  // 말하기 때문 — `token: color-bg-primary` 를 뭉개면 그게 바로 오탐이다.
+  { re: /(\btoken["']?\s*=\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi, to: `$1${MASK}` },
+];
+
+/** 문자열 하나에서 비밀로 보이는 것만 가린다. 나머지 문장은 그대로 남는다. */
+export function maskSecrets(text: string): string {
+  let out = text;
+  for (const { re, to } of SECRET_RULES) out = out.replace(re, to);
+  return out;
+}
+
+/**
+ * `data` 를 **복제하면서** 문자열만 마스킹한다. 호출부 객체를 건드리지 않는 이유: 저널에
+ * 남는 것과 화면에 돌려주는 것은 다른 문제이고, 부작용으로 남의 객체를 바꾸면 그 사실을
+ * 추적할 방법이 없다. 깊이 상한은 순환 참조 방어(저널 값은 원래 얕다).
+ */
+function maskDeep(v: unknown, depth = 0): unknown {
+  if (typeof v === 'string') return maskSecrets(v);
+  if (v === null || typeof v !== 'object' || depth >= 8) return v;
+  if (Array.isArray(v)) return v.map((x) => maskDeep(x, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) out[k] = maskDeep(x, depth + 1);
+  return out;
+}
+
 export function appendEvent(
   root: string, type: EventType, data: Record<string, unknown>,
 ): HarnessEvent {
-  const ev: HarnessEvent = { ts: new Date().toISOString(), type, data };
-  fs.appendFileSync(eventsPath(root), JSON.stringify(ev) + '\n');
+  const ev: HarnessEvent = {
+    ts: new Date().toISOString(), type, data: maskDeep(data) as Record<string, unknown>,
+  };
+  // [OPS-05] 저널 append 도 state 저장과 같은 처방을 낸다 — 순서 계약상 이쪽이 **먼저** 실패하므로
+  // 여기만 raw errno 를 흘리면 사람이 보는 첫 오류가 그것이 된다.
+  try {
+    fs.appendFileSync(eventsPath(root), JSON.stringify(ev) + '\n');
+  } catch (e) {
+    rethrowWriteFailure(root, e, eventsPath(root));
+  }
   return ev;
 }
 

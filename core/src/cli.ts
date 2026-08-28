@@ -41,9 +41,10 @@ import {
 import {
   linkCanvas, syncCanvas, extractInventory, recordBaseline,
   generateSourceOfTruthHtml, listCanvasLinks,
+  readCanvasContent,
 } from './design';
 import { loadProfile, inspectProfile, commandFor, localProfileDir, isSourcePath, isSourceTree } from './profile';
-import { pinPolicy } from './policy';
+import { pinPolicy, OWNED_FILES } from './policy';
 import {
   generatePlaywrightSpec, specFileNameFor, validateEvidence, buildComparisonPacket,
 } from './evidence';
@@ -239,14 +240,32 @@ function readAllStdin(): string | null {
    * 읽는다 — 진전이 있으므로 시간 상한이 매번 초기화되기 때문이다.
    *
    * [COST-261] 값은 **훅 타임아웃에서 역산했다.** 예전 상한(32MB)은 「읽기」만 보고 정한
-   * 숫자였는데, 읽은 뒤에는 **판정**이 따라온다 — 실측으로 판정 비용은 1MB 당 약 1초라
-   * 12MB 페이로드가 e2e 12.9초로 **10초 타임아웃을 넘겼다**. 상한이 타임아웃보다 크면
-   * 그 사이 구간은 「거부」가 아니라 **fail-open** 이 된다. 4MB 는 실측 약 4초로 여유 2.5배다.
+   * 숫자였는데, 읽은 뒤에는 **판정**이 따라온다 — 상한이 타임아웃보다 크면 그 사이 구간은
+   * 「거부」가 아니라 **fail-open** 이 된다.
+   *
+   * [API-04] **그 역산이 낡아 있었다.** 근거였던 「1MB 당 약 1초」는 이후 판정 규칙이 늘면서
+   * 더는 사실이 아니다. 출하 검증이 1.03MB 명령에서 **10.1~12.8초**(3회)를 실측했다 — 즉
+   * 4MB 상한 아래 구간이 통째로 fail-open 이었다. 상한이 「거부」로 보이지만 실제로는
+   * **타임아웃 → 무판정 → 통과**가 되는 구간을 만들고 있었다.
+   *
+   * 새 값도 **추측이 아니라 실측**에서 나왔다(`evidence/api04-cap.md`, 가장 비싼 명령 형태
+   * `cd … > …` 반복, 부하 창 — 상한 검사라 부하는 비관적 방향이다):
+   *
+   * | 페이로드 | e2e(최소) | 10초 대비 여유 |
+   * |---|---|---|
+   * | 0.26MB | 1.3s | 7.6배 |
+   * | 0.53MB | 2.4s | 4.2배 |
+   * | **1.09MB** | **4.4s** | **2.3배** |
+   * | 2.23MB | 8.0s | 1.2배 ← 예산에 붙는다 |
+   *
+   * 1MB 를 고른다: 원 역산이 쓴 기준(여유 ~2.5배)을 **부하 창에서도** 지키는 가장 큰 값이다.
+   * 유휴에서는 여유가 더 크다. 그리고 이 값이 다시 낡지 않도록 **회귀 테스트가 상한에서의
+   * e2e 를 매번 다시 잰다** — 숫자를 주석에 적어 두는 것만으로는 또 낡는다(이 결함이 그 증거다).
    *
    * 넘으면 통과가 아니라 **거부**다(위 [SEC-233] 의 태도) — 읽지 못한 것도, 읽었지만 제때
    * 판정할 수 없는 것도, 통과시킬 근거가 아니다.
    */
-  const MAX_BYTES = 4 * 1024 * 1024;
+  const MAX_BYTES = 1024 * 1024;
   const buf = Buffer.alloc(CHUNK);
   const chunks: Buffer[] = [];
   let waited = 0;
@@ -328,6 +347,26 @@ const csv = (v: string | undefined): string[] =>
  * `targets` 는 실제로 착지하는 경로들이다 — 디렉토리를 받아 여러 파일을 내는 명령이 있어
  * 「받은 경로」와 「착지하는 경로」가 다르다.
  */
+/**
+ * [API-05] **「판정이 아니오」와 「명령이 아예 못 돌았다」를 종료코드로 가른다.**
+ *
+ * 예전에는 둘 다 `1` 이었다. `harness ship verdict` 는 출하 게이트라 CI 가
+ * `harness ship verdict || exit 1` 로 쓰는 것이 정상 사용인데, **엉뚱한 디렉토리에서
+ * 실행했거나 하위명령을 오타 냈을 때도 정확히 같은 exit 1** 이 나왔다. 스크립트는 「제품이
+ * 준비되지 않았다」와 「명령이 돌지 않았다」를 구분할 수 없고, 후자를 전자로 읽으면
+ * **릴리스가 멈춘 이유를 오해**한다. 반대로 실패를 무시하게 짜 두면 진짜 NO-GO 도 무시된다.
+ *
+ * 규약은 세 구간이다:
+ *   `0` 성공 / 판정이 「예」
+ *   `1` 사용법·환경 오류 (하위명령 오타 · `.harness/` 없음 · 인자 누락 · 내부 예외)
+ *   `2` **판정이 「아니오」** (`ship verdict` NO-GO · `doctor` 진단 실패 · `gate verify` 드리프트 ·
+ *       `evidence check` 미달)
+ *
+ * 어느 쪽이든 0 이 아니므로 `|| exit 1` 식의 기존 스크립트는 그대로 동작한다 — 바뀌는 것은
+ * **구분할 수 있게 된 것**뿐이다. 이 표는 `harness --help` 꼬리와 README 에도 적는다.
+ */
+const EXIT_VERDICT_NO = 2;
+
 function assertOutputAllowed(
   root: string,
   out: string,
@@ -342,6 +381,30 @@ function assertOutputAllowed(
       + 'A harness command is not a way around the write rules the hook applies.',
       `${what.ko} 프로젝트 안에 떨어져야 한다 — \`${out}\` 는 루트 밖이다. `
       + 'harness 명령은 훅이 적용하는 쓰기 규칙을 피해 가는 길이 아니다.'));
+  }
+  /**
+   * [LOGIC-02] **하네스 명령은 하네스 소유 파일을 덮는 길이 아니다.**
+   *
+   * 이 검사가 없어서 `harness evidence spec … --out .harness/events.jsonl` 이 exit 0 으로
+   * **정본 저널을 생성 스펙 텍스트로 교체**했고, 그 뒤 `harness doctor` 는 `ok: true` 라고
+   * 답했다. `tokens gen/swap --out`·`evidence packet --out` 도 같은 무가드 경로였다.
+   * README 가 「`events.jsonl` 은 append-only — 아무것도 지워지지 않는 유일한 곳」이라
+   * 선언한 것과 정면으로 배치된다.
+   *
+   * **페이즈보다 위에 둔다.** 아래 소스 경로 검사는 설계 트랙에서만 도는데, 소유 파일 보호는
+   * 어느 페이즈에서도 풀리면 안 된다 — 훅이 그렇게 하고 있고, 두 표면이 갈리면
+   * 느슨한 쪽이 정본이 된다([OPS-76] 이 정책 파일에서 내린 것과 같은 판단).
+   */
+  for (const t of targets) {
+    const rel = path.relative(root, path.resolve(root, t));
+    if (OWNED_FILES.includes(rel)) {
+      throw new Error(L(
+        `${what.en} would overwrite \`${rel}\`, which only harness commands may change — `
+        + 'the journal is the audit trail and the state store is derived from it. '
+        + 'Choose a different --out path.',
+        `${what.ko} \`${rel}\` 를 덮게 된다 — 이 파일은 harness 명령으로만 바뀐다. `
+        + '저널은 감사 기록이고 상태 저장소는 그것에서 파생된다. --out 경로를 다른 곳으로 잡아라.'));
+    }
   }
   const phase = readState(root).phase;
   if (!(DESIGN_PHASES as readonly string[]).includes(phase)) return;
@@ -607,6 +670,30 @@ export function run(argv: string[], root: string): number {
         // 어긋나는 것은 전부 사후 변경이고, doctor 가 그것을 보고한다.
         pinPolicy(root, 'init');
         console.log(L('.harness/ initialised — run `harness --help` to see the command map.', '.harness/ 초기화 완료 — `harness --help` 로 명령 지도를 볼 수 있다.'));
+        /**
+         * [OPS-08] **저널은 git 에 들어간다 — 그 사실을 한 번은 말해야 한다.**
+         *
+         * 이 제품이 광고하는 「머신을 넘어 살아남는 상태」의 실제 메커니즘은 git 커밋이고,
+         * `.harness/` 는 기본적으로 gitignore 되지 않는다. 자유 텍스트를 받는 필드
+         * (`--detail`·ADR rationale)는 이제 흔한 비밀 패턴을 마스킹하지만, 마스킹은
+         * **미탐을 남기는 절충**이다(짧거나 문맥이 약한 값은 못 잡는다). 그러니 사용자가
+         * 「이 디렉토리는 커밋된다」를 알고 시작해야 한다 — 안내 없이 기본값으로 두면
+         * 이 제품이 자기 README 에서 gitleaks 로 자랑하는 사고를 사용자 저장소에 이식한다.
+         *
+         * 파일을 만들거나 사용자의 `.gitignore` 를 고치지는 않는다 — 저널을 팀과 공유하는
+         * 것이 정상 사용이고, 어느 쪽을 택할지는 사람이 정한다.
+         */
+        console.log(L(
+          'NOTE: `.harness/` is not gitignored — the event journal is the audit trail and teams '
+          + 'usually commit it. Free-text fields are masked for common secret shapes, but masking '
+          + 'errs toward missing things rather than mangling records: keep credentials out of '
+          + '`--detail`/rationale text, or add `.harness/` to .gitignore if you would rather keep '
+          + 'the trail local.',
+          '참고: `.harness/` 는 gitignore 되지 않는다 — 이벤트 저널이 감사 기록이라 팀이 대개 '
+          + '커밋한다. 자유 텍스트 필드는 흔한 비밀 형태를 마스킹하지만, 마스킹은 기록을 '
+          + '뭉개는 쪽보다 **놓치는 쪽**을 택한 절충이다: `--detail`·rationale 에 자격증명을 '
+          + '넣지 마라. 이력을 로컬에만 두고 싶으면 `.gitignore` 에 `.harness/` 를 더해라.',
+        ));
         // 스펙 §12(알려진 한계) 가 "init 시 경고 고지"를 명시한다. 승인 장치는 권한 다이얼로그에
         // 의존하므로, 사용자가 `harness gate approve` 를 allowlist 에 넣으면 「최종 클릭은 사람」
         // (§4-3)이 통째로 무력화된다. 이것은 코드로 막을 수 없는 한계라 **처음에 말하는 것**이
@@ -659,7 +746,7 @@ export function run(argv: string[], root: string): number {
           console.error(L('Repair refused — the journal cannot be trusted. Find out why, then force with --force.', '복구 거부됨 — 저널 신뢰 불가. 원인 확인 후 --force 로 강제할 수 있다.'));
           return 1;
         }
-        return r.ok || r.repaired ? 0 : 1;
+        return r.ok || r.repaired ? 0 : EXIT_VERDICT_NO;
       }
 
       case 'phase': {
@@ -824,7 +911,7 @@ export function run(argv: string[], root: string): number {
             const phase = requirePhase(rest[0], 'harness gate verify', lang);
             const v = verifyGate(root, phase);
             console.log(JSON.stringify(v, null, 2));
-            return v.ok ? 0 : 1;
+            return v.ok ? 0 : EXIT_VERDICT_NO;
           }
           case 'sweep': {
             const flipped = invalidateStaleGates(root);
@@ -929,7 +1016,7 @@ export function run(argv: string[], root: string): number {
             const v = shipVerdict(root);
             console.log(v.ok ? L('GO', '출하 가능(GO)') : L('NO-GO', '출하 불가(NO-GO)'));
             if (v.reasons.length > 0) console.log(v.reasons.map(r => `  - ${r}`).join('\n'));
-            return v.ok ? 0 : 1;
+            return v.ok ? 0 : EXIT_VERDICT_NO;
           }
           case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
           default: throw new Error(unknownSub('ship', sub, lang));
@@ -1054,7 +1141,7 @@ export function run(argv: string[], root: string): number {
             if (!waveId) throw new Error(L('Usage: harness evidence check <wave-id> (there is no active wave)', '사용법: harness evidence check <wave-id> (활성 웨이브가 없다)'));
             const r = validateEvidence(root, waveId);
             console.log(JSON.stringify(r, null, 2));
-            return r.ok ? 0 : 1;
+            return r.ok ? 0 : EXIT_VERDICT_NO;
           }
           case 'packet': {
             const uxNodeId = flag(args, 'ux');
@@ -1199,7 +1286,9 @@ export function run(argv: string[], root: string): number {
           case 'inventory': {
             const from = flag(args, 'from');
             if (!from) throw new Error(L('Usage: harness design inventory --from <canvas-content-file>', '사용법: harness design inventory --from <캔버스 내용 파일>'));
-            const inv = extractInventory(fs.readFileSync(path.resolve(root, from), 'utf8'));
+            // [OPS-09] raw ENOENT 를 그대로 내보내지 않는다 — 다른 명령이 전부 세공된 에러를
+            // 내는데 여기만 원시 errno 라 사람이 「도구가 깨졌다」로 읽는다.
+            const inv = extractInventory(readCanvasContent(root, from));
             console.log(JSON.stringify(inv, null, 2));
             /**
              * [USE-252] **빈 결과는 성공처럼 보인다.** `{"components":[],"total":0}` 만 찍고 exit 0

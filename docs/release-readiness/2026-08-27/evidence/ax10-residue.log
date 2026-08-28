@@ -1,0 +1,75 @@
+
+======================================================================
+## 13. does the harness write ANYTHING outside the project? (uninstall residue)
+-- homedir()/HOME/~/.claude references in shipped runtime code --
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:5: * **이 모듈은 절대 아무것도 고치지 않는다.** 사용자의 `~/.claude/` 는 하네스 프로젝트 밖이고,
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:15: * `homeDir` 는 항상 인자다 — 이 파일에 `os.homedir()` 는 없다(테스트가 임시 홈을 겨눈다).
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:117:      en: `${tools.length} legacy hook(s) detected — this is advice only; the harness never touches your ~/.claude/.`,
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:118:      ko: `기존 자작 훅 ${tools.length}건 감지 — 아래는 안내이며 하네스는 사용자의 ~/.claude/ 를 건드리지 않는다.`,
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:133:    en: 'Hook registrations live in ~/.claude/settings.json. Start a new session after editing it.',
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/migrate.ts:134:    ko: '훅 등록은 ~/.claude/settings.json 에 있다. 편집 후 세션을 새로 시작해야 반영된다.',
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/usage.ts:16: *  - macOS 알림(osascript) 발송, launchd 잡, 사용자 `~/.claude/` 변경.
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/cli.ts:963:        // 사용자의 ~/.claude 를 절대 건드리지 않는다 — 탐지하고 안내만 한다.
+/Volumes/WorkSpace/0200_Dev/king-wjang-harness/core/src/cli.ts:964:        const home = flag([sub, ...rest], 'home') ?? process.env.HOME ?? '';
+-- distinct write targets in core/src --
+adr.ts:101:writeFileSync(tmp
+adr.ts:99:mkdirSync(path.dirname(target
+cli.ts:1047:mkdirSync(path.dirname(path.resolve(root
+cli.ts:1048:writeFileSync(path.resolve(root
+cli.ts:1080:writeFileSync(path.resolve(root
+cli.ts:1235:writeFileSync(path.resolve(root
+cli.ts:1258:mkdirSync(path.resolve(root
+cli.ts:1260:writeFileSync(path.resolve(root
+cli.ts:1306:writeFileSync(path.resolve(root
+cli.ts:208:mkdirSync(runtimeDir(root
+cli.ts:209:appendFileSync(
+cli.ts:750:mkdirSync(packetsDir(root
+cli.ts:752:writeFileSync(packet
+design.ts:110:mkdirSync(path.dirname(target
+design.ts:112:writeFileSync(tmp
+events.ts:53:appendFileSync(eventsPath(root
+gate.ts:742:mkdirSync(packetsDir(root
+gate.ts:743:appendFileSync(
+hook.ts:350:mkdirSync(dir
+hook.ts:351:appendFileSync(
+ledger.ts:24:writeFileSync(tmp
+mcp.ts:368:mkdirSync(packetsDir(root
+mcp.ts:370:writeFileSync(packet
+registry.ts:95:writeFileSync(tmp
+runtime.ts:13:mkdirSync(runtimeDir(root
+runtime.ts:14:writeFileSync(f(root
+runtime.ts:8:mkdirSync(runtimeDir(root
+runtime.ts:9:writeFileSync(f(root
+ship.ts:119:mkdirSync(path.dirname(target
+ship.ts:121:writeFileSync(tmp
+state.ts:101:writeFileSync(path.join(runtimeDir(root
+state.ts:102:writeFileSync(ledgerPath(root
+state.ts:103:writeFileSync(configPath(root
+state.ts:108:writeFileSync(eventsPath(root
+state.ts:110:writeFileSync(tmp
+state.ts:86:writeFileSync(tmp
+state.ts:96:mkdirSync(d
+tokens.ts:332:mkdirSync(path.dirname(target
+tokens.ts:334:writeFileSync(tmp
+usage.ts:128:mkdirSync(runtimeDir(root
+
+-- fakehome after every test in this audit --
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome
+   entries: 1
+
+-- is removal documented? --
+   README.md   uninstall|plugin remove|marketplace remove: 0
+   README.ko.md 제거|삭제|uninstall               : 0
+   CHANGELOG uninstall                          : 0
+   skills/ uninstall                            : 0
+-- repo .gitignore --
+node_modules/
+.omc/
+.claude/terse-mode.state
+-- what init writes as .harness/.runtime/.gitignore --
+*
+!.gitignore
+
+## 14. claude CLI availability (for the real marketplace path)
+   claude: /Users/wjang/.local/bin/claude
+2.1.245 (Claude Code)

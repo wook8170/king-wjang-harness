@@ -1,0 +1,101 @@
+# ax04-P4 — 사고친 운영자: 저널 손상 → 훅/CLI 반응 → doctor 진단·복구 — 23:49
+
+저널 원본:       27 줄 · state.json     1985 바이트
+
+=== A. state.json 삭제 (파생 캐시 소실 — 저널 재생 폴백) ===
+[A1 hook pre-tool 안 죽는가]  → exit=0 ALLOW(silent)
+
+$ H status | python3 -c 'import sys,json;d=json.load(sys.stdin);print("phase",d["phase"],"wave",d["activeWave"])'
+.harness/ is here but state.json is missing — the state store is derived, so the event journal can rebuild it. Run `harness doctor --repair`. Do not run `harness init`: it refuses while .harness/ exists
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+           ^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+[exit=1]
+
+$ H doctor | python3 -c 'import sys,json;d=json.load(sys.stdin);print({k:d.get(k) for k in ["ok","repaired","issues","warnings","notes"]})'
+{'ok': False, 'repaired': False, 'issues': ['state.json is missing — it must be rebuilt by replaying the journal'], 'warnings': [], 'notes': []}
+[exit=0]
+  (state.json 재생성됐나: no)
+
+=== B. state.json 깨진 JSON (형태 불량) ===
+[B1 session-start 안 죽는가]  → exit=0 OUT:{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"[kin
+
+$ H doctor --repair | python3 -c 'import sys,json;d=json.load(sys.stdin);print({k:d.get(k) for k in ["ok","repaired","issues","warnings"]})'
+{'ok': True, 'repaired': True, 'issues': ['state.json is damaged — cannot parse'], 'warnings': []}
+[exit=0]
+
+$ H status | python3 -c 'import sys,json;print("phase",json.load(sys.stdin)["phase"])'
+phase P7
+[exit=0]
+
+=== C. 저널 마지막 줄 잘림 (append 중 크래시/디스크풀) ===
+[C1 hook 안 죽는가]  → exit=0 OUT:{"hookSpecificOutput":{"hookEventName":"SessionStart","addi
+
+$ H doctor | python3 -c 'import sys,json;d=json.load(sys.stdin);print({k:d.get(k) for k in ["ok","issues","warnings","notes"]})'
+{'ok': True, 'issues': [], 'warnings': ['1 line(s) of events.jsonl are corrupt — the replay is incomplete'], 'notes': []}
+[exit=0]
+
+=== D. 저널 중간 줄 깨짐 (corruptLines 카운트) ===
+[D1 pre-tool 안 죽는가]  → exit=0 ALLOW(silent)
+
+$ H doctor | python3 -c 'import sys,json;d=json.load(sys.stdin);print({k:d.get(k) for k in ["ok","issues","warnings","notes"]})'
+{'ok': True, 'issues': [], 'warnings': ['1 line(s) of events.jsonl are corrupt — the replay is incomplete'], 'notes': []}
+[exit=0]
+
+$ H doctor --repair | python3 -c 'import sys,json;d=json.load(sys.stdin);print({k:d.get(k) for k in ["ok","repaired","issues"]})'
+{'ok': True, 'repaired': False, 'issues': []}
+[exit=0]
+
+=== E. events.jsonl 읽기 권한 제거 (chmod 000) ===
+[E1 hook 세션 안 죽는가]  → exit=0 OUT:{"hookSpecificOutput":{"hookEventName":"SessionStart","addi
+[E2 pre-tool 강제 유지되나 (state.json 이 있으면 소스차단 계속)]  → exit=0 DENY: .harness/events.jsonl can only be changed by harness commands — editing it by hand desynchronises the journal from the state.
+
+$ H doctor 2>&1 | head -c 300
+EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p4/.harness/events.jsonl'
+[exit=0]
+
+  (권한 복구 후 정상? ok)
+
+=== D 후속: 중간 손상 줄이 doctor --repair 로 지워지는가 (append-only 무압축 설계) ===
+-- repair 전:
+   {'ok': True, 'issues': [], 'warnings': ['1 line(s) of events.jsonl are corrupt — the replay is incomplete']}
+-- repair 후 (같은 warning 이 남는가?):
+   {'ok': True, 'issues': [], 'warnings': ['1 line(s) of events.jsonl are corrupt — the replay is incomplete']}
+  → 결론: 중간 손상 줄은 무압축 설계상 CLI 로 못 지운다(경고 영속). 저널 자체는 복구 명령 없음.
+
+=== E 정밀: journal 읽기불가 시 doctor 가 진단인가 raw crash 인가 ===
+$ harness doctor  (stdout/stderr 분리, exit 코드)
+  exit=1
+  stdout: 
+  stderr: EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p4/.harness/events.jsonl'
+$ harness doctor --repair  (권한 문제에서 복구 시도)
+  exit=1  stdout:  stderr:EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/pro
+$ harness status  (읽기불가 저널 + 유효 state.json)
+  exit=0  stdout(첫줄):{  stderr:
+
+=== F. 최악: state.json 깨짐 + events.jsonl 읽기불가 동시 (훅이 세션을 죽이는가?) ===
+  [session-start] exit=0  stdout=       0B  stderr=
+  [pre-tool] exit=0  stdout=       0B  stderr=
+  [post-tool] exit=0  stdout=       0B  stderr=
+  [stop] exit=0  stdout=       0B  stderr=
+  → 훅이 exit 0 이면 세션은 살아 있다(무해 불변식). fail-open 흔적:
+  hook-errors.log:     2026-08-27T14:51:46.342Z post-tool Error: EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p4/.harness/events.jsonl'
+    2026-08-27T14:51:46.973Z stop Error: EACCES: permission denied, open '/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p4/.harness/events.jsonl'
+
+=== G. 디스크풀 흉내: .harness 를 읽기전용으로 만들고 CLI 쓰기 시도 ===
+$ harness wave update (쓰기 필요) — 읽기전용 디렉토리
+  exit=0  stdout:Turn log recorded  stderr:
+$ hook pre-tool — 읽기전용 .harness 에서 세션 생존?
+  hook exit=0 stdout=       0B
+  (권한 복구 후 정상? ok)

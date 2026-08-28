@@ -7547,6 +7547,62 @@ function envChdirOf(tokens) {
   }
   return void 0;
 }
+var HEREDOC_DATA_SINKS = /* @__PURE__ */ new Set([
+  "cat",
+  "tee",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "sort",
+  "uniq",
+  "head",
+  "tail",
+  "wc",
+  "cut",
+  "tr",
+  "column",
+  "nl",
+  "jq",
+  "yq",
+  "less",
+  "more",
+  "diff",
+  "cmp",
+  "base64",
+  "shasum",
+  "md5",
+  "md5sum",
+  "sha256sum",
+  "mail",
+  "sendmail",
+  "psql",
+  "mysql",
+  "sqlite3"
+]);
+function maskNonCommandText(cmd) {
+  const buf = cmd.split("");
+  const blank2 = (from, to) => {
+    for (let i = from; i < to && i < buf.length; i++) if (buf[i] !== "\n") buf[i] = " ";
+  };
+  const fd = /(\d*)([<>])&(\d+|-)/g;
+  let m;
+  while ((m = fd.exec(cmd)) !== null) blank2(m.index, m.index + m[0].length);
+  const here = /<<-?\s*(['"])([A-Za-z_][\w-]*)\1/g;
+  while ((m = here.exec(cmd)) !== null) {
+    const lineStart = cmd.lastIndexOf("\n", m.index) + 1;
+    const head = commandName(tokenize(cmd.slice(lineStart, m.index))).name;
+    if (!HEREDOC_DATA_SINKS.has(head)) continue;
+    const bodyStart = cmd.indexOf("\n", m.index);
+    if (bodyStart === -1) continue;
+    const delim = m[2];
+    const term = new RegExp(`^[ \\t]*${delim}[ \\t]*$`, "m");
+    const rest = cmd.slice(bodyStart + 1);
+    const hit = term.exec(rest);
+    blank2(bodyStart + 1, hit ? bodyStart + 1 + hit.index : cmd.length);
+  }
+  return buf.join("");
+}
 function segmentsWithIndex(cmd) {
   const out = [];
   let last = 0;
@@ -8067,7 +8123,18 @@ var READ_ONLY_HEADS = [
   "umask",
   "ulimit",
   "times",
-  "help"
+  "help",
+  /**
+   * [OVERBLOCK-1] **`cd`·`pushd` 는 파일을 쓰지 않는다.** `popd` 만 들어 있어서 `cd x && cat f`
+   * 의 앞 조각이 명령 전체를 `mutating` 으로 만들었고, 그러면 [EFF-289] 가 `test`·`true` 에서
+   * 고친 바로 그 증상이 되살아났다 — **언급 안전망이 발화해 순수 조회가 「쓸 수 없다」는 사유로
+   * 거부된다.** `cd $D && cat src/app.ts` 가 실측으로 거부됐다(사유까지 사실과 달랐다).
+   *
+   * cwd 추적은 여기와 **무관하다** — `segmentsWithIndex` 가 별도로 `cd` 를 따라간다. 즉 이 목록에
+   * 넣어도 `cd .harness && echo x > config.yaml` 의 해소는 그대로다(그 세그먼트는 `>` 로 변형).
+   */
+  "cd",
+  "pushd"
 ];
 var CONDITIONAL_WRITERS = {
   // [SEC-286] 롱폼도 같은 일을 한다 — `sed --in-place=.bak` 은 `-i` 로 시작하지 않아
@@ -8231,7 +8298,7 @@ function underDir(dir, sources) {
   return [dir, ...sources.map((sourcePath) => `${base}/${sourcePath.split("/").pop() ?? sourcePath}`)];
 }
 function scanBashWrites(rawCmd, env = {}) {
-  const cmd = expandStaticVars(foldLineContinuations(rawCmd), env);
+  const cmd = maskNonCommandText(expandStaticVars(foldLineContinuations(rawCmd), env));
   const targets = [];
   const aliases = [];
   const placed = [];
@@ -8805,17 +8872,23 @@ function parseConfig(p) {
     block_raw_values: raw.block_raw_values === true
   };
 }
+var KNOWN_CONFIG_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
 function inspectConfig(root) {
   const p = configPath(root);
-  if (!fs2.existsSync(p)) return { problems: [] };
+  if (!fs2.existsSync(p)) return { problems: [], unknownKeys: [], path: p };
   try {
     const parsed = YAML.parse(fs2.readFileSync(p, "utf8"));
     if (parsed !== null && parsed !== void 0 && typeof parsed !== "object") {
-      return { problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`] };
+      return {
+        problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`],
+        unknownKeys: [],
+        path: p
+      };
     }
-    return { problems: [] };
+    const unknownKeys = parsed && !Array.isArray(parsed) ? Object.keys(parsed).filter((k) => !KNOWN_CONFIG_KEYS.has(k)) : [];
+    return { problems: [], unknownKeys, path: p };
   } catch (e) {
-    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`] };
+    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`], unknownKeys: [], path: p };
   }
 }
 
@@ -8837,9 +8910,10 @@ function tr(root, m) {
 }
 
 // core/src/state.ts
+var SCHEMA_VERSION = 1;
 function defaultState() {
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     phase: "P0",
     activeWave: null,
     gates: {},
@@ -8854,9 +8928,22 @@ function hasHarness(root) {
   return fs3.existsSync(harnessDir(root));
 }
 function readState(root) {
+  let future = null;
   try {
-    return JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
+    const parsed = JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
+    const v = parsed.schemaVersion;
+    if (typeof v === "number" && v > SCHEMA_VERSION) {
+      future = v;
+    }
+    if (future === null) return parsed;
+    throw new Error("");
   } catch (e) {
+    if (future !== null) {
+      throw new Error(tr(root, {
+        en: `state.json was written by a newer harness (schemaVersion ${future}); this build only knows ${SCHEMA_VERSION}. Reading it would silently misinterpret gates and waves, and writing over it would lose what the newer build recorded. Upgrade the harness, or move \`.harness/\` aside and start fresh.`,
+        ko: `state.json \uC774 \uB354 \uC0C8 \uBC84\uC804\uC758 \uD558\uB124\uC2A4\uAC00 \uC4F4 \uAC83\uC774\uB2E4(schemaVersion ${future}). \uC774 \uBE4C\uB4DC\uB294 ${SCHEMA_VERSION} \uAE4C\uC9C0\uB9CC \uC548\uB2E4. \uADF8\uB300\uB85C \uC77D\uC73C\uBA74 \uAC8C\uC774\uD2B8\xB7\uC6E8\uC774\uBE0C\uB97C \uC870\uC6A9\uD788 \uC624\uB3C5\uD558\uACE0, \uADF8 \uC704\uC5D0 \uC4F0\uBA74 \uC0C8 \uBE4C\uB4DC\uAC00 \uAE30\uB85D\uD55C \uAC83\uC744 \uC783\uB294\uB2E4. \uD558\uB124\uC2A4\uB97C \uC5C5\uADF8\uB808\uC774\uB4DC\uD558\uAC70\uB098, \`.harness/\` \uB97C \uC606\uC73C\uB85C \uCE58\uC6B0\uACE0 \uC0C8\uB85C \uC2DC\uC791\uD558\uB77C.`
+      }));
+    }
     if (isInitialized(root)) {
       throw new Error(tr(root, {
         en: `state.json is damaged and could not be parsed (${e.message}) \u2014 the state store is derived, so the event journal can rebuild it: run \`harness doctor --repair\`. \`harness doctor\` alone reports what it finds without changing anything.`,
@@ -8872,12 +8959,26 @@ function readState(root) {
     throw e;
   }
 }
+var WRITE_DENIED = /* @__PURE__ */ new Set(["EACCES", "EPERM", "EROFS"]);
+function rethrowWriteFailure(root, e, target) {
+  const code = e.code;
+  if (!code || !WRITE_DENIED.has(code)) throw e;
+  const dir = path2.dirname(target);
+  throw new Error(tr(root, {
+    en: `Cannot write to ${dir} (${code}) \u2014 the harness keeps its state and journal there, so nothing can be recorded while this lasts: gate approvals, wave history and the activity marker are all dropped. Check the directory permissions (\`chmod u+w ${dir}\`) or whether the volume is mounted read-only, then run \`harness doctor\`. Original error: ${e.message}`,
+    ko: `${dir} \uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 (${code}) \u2014 \uD558\uB124\uC2A4\uB294 \uC0C1\uD0DC\uC640 \uC800\uB110\uC744 \uADF8 \uC544\uB798\uC5D0 \uAE30\uB85D\uD558\uBBC0\uB85C \uC774 \uC0C1\uD0DC\uAC00 \uACC4\uC18D\uB418\uB294 \uB3D9\uC548 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4: \uAC8C\uC774\uD2B8 \uC2B9\uC778\xB7\uC6E8\uC774\uBE0C \uC774\uB825\xB7\uD65C\uB3D9 \uB9C8\uCEE4\uAC00 \uC804\uBD80 \uC720\uC2E4\uB41C\uB2E4. \uB514\uB809\uD1A0\uB9AC \uAD8C\uD55C\uC744 \uD655\uC778\uD558\uAC70\uB098(\`chmod u+w ${dir}\`) \uBCFC\uB968\uC774 \uC77D\uAE30\uC804\uC6A9\uC73C\uB85C \uB9C8\uC6B4\uD2B8\uB410\uB294\uC9C0 \uBCF4\uB77C. \uADF8 \uB4A4 \`harness doctor\` \uB97C \uB3CC\uB824\uB77C. \uC6D0\uBCF8 \uC624\uB958: ${e.message}`
+  }));
+}
 function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs3.renameSync(tmp, target);
+  try {
+    fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+    fs3.renameSync(tmp, target);
+  } catch (e) {
+    rethrowWriteFailure(root, e, target);
+  }
 }
 function initHarness(root) {
   if (fs3.existsSync(harnessDir(root))) throw new Error(tr(root, { en: `.harness/ is already initialised: ${harnessDir(root)}`, ko: `.harness/ \uAC00 \uC774\uBBF8 \uCD08\uAE30\uD654\uB418\uC5B4 \uC788\uB2E4: ${harnessDir(root)}` }));
@@ -8969,9 +9070,54 @@ var EVENT_TYPES = [
   "policy-pinned"
 ];
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
+var MASK = "***MASKED***";
+var SECRET_RULES = [
+  // PEM 개인키 블록 — 헤더만 남기고 본문을 통째로. 닫힘/열림 두 경우를 모두 본다.
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]*?(-----END [A-Z0-9 ]*PRIVATE KEY-----)/g, to: `$1${MASK}$2` },
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]+/g, to: `$1${MASK}` },
+  // 발급자 접두형 — 접두는 남긴다(무엇이 샜는지가 대응의 첫 정보다).
+  { re: /\b(sk-)[A-Za-z0-9_-]{16,}/g, to: `$1${MASK}` },
+  { re: /\b(gh[pousr]_)[A-Za-z0-9]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(github_pat_)[A-Za-z0-9_]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, to: `$1${MASK}` },
+  { re: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, to: `$1${MASK}` },
+  // `Bearer <토큰>` — 뒤가 12자 이상일 때만. "Bearer of bad news" 같은 산문은 걸리지 않는다.
+  { re: /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/g, to: `$1${MASK}` },
+  // 대입형. 앞의 `\b` 를 일부러 두지 않는다 — `aws_secret_access_key=` 처럼 밑줄로 이어 붙인
+  // 실제 형태를 놓치기 때문이다. 값은 12자 이상만 본다(짧은 영어 단어를 뭉개지 않으려고).
+  {
+    re: /((?:api[-_]?key|apikey|access[-_]?key|secret[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?token|refresh[-_]?token|secret|password|passwd)["']?\s*[:=]\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi,
+    to: `$1${MASK}`
+  },
+  // 맨 `token` 은 **`=` 일 때만** 본다. `vercel deploy --token=…` 류가 `deployment-recorded` 로
+  // 저널에 들어오기 때문이다. `token:` 을 제외하는 이유는 이 제품이 디자인 **토큰**을 온종일
+  // 말하기 때문 — `token: color-bg-primary` 를 뭉개면 그게 바로 오탐이다.
+  { re: /(\btoken["']?\s*=\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi, to: `$1${MASK}` }
+];
+function maskSecrets(text) {
+  let out = text;
+  for (const { re, to } of SECRET_RULES) out = out.replace(re, to);
+  return out;
+}
+function maskDeep(v, depth = 0) {
+  if (typeof v === "string") return maskSecrets(v);
+  if (v === null || typeof v !== "object" || depth >= 8) return v;
+  if (Array.isArray(v)) return v.map((x) => maskDeep(x, depth + 1));
+  const out = {};
+  for (const [k, x] of Object.entries(v)) out[k] = maskDeep(x, depth + 1);
+  return out;
+}
 function appendEvent(root, type, data) {
-  const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  const ev = {
+    ts: (/* @__PURE__ */ new Date()).toISOString(),
+    type,
+    data: maskDeep(data)
+  };
+  try {
+    fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  } catch (e) {
+    rethrowWriteFailure(root, e, eventsPath(root));
+  }
   return ev;
 }
 function readJournal(root) {
@@ -9258,8 +9404,22 @@ var fs6 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
 var f = (root, name) => path4.join(runtimeDir(root), name);
 function noteActivity(root) {
-  fs6.mkdirSync(runtimeDir(root), { recursive: true });
-  fs6.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
+  try {
+    fs6.mkdirSync(runtimeDir(root), { recursive: true });
+    fs6.writeFileSync(f(root, "last-activity"), (/* @__PURE__ */ new Date()).toISOString());
+  } catch (e) {
+    noteMarkerFailure(root, "last-activity", e);
+  }
+}
+function noteMarkerFailure(root, marker, err) {
+  try {
+    fs6.appendFileSync(
+      path4.join(runtimeDir(root), "hook-errors.log"),
+      `${(/* @__PURE__ */ new Date()).toISOString()} activity-marker ${marker} ${String(err)}
+`
+    );
+  } catch {
+  }
 }
 function noteTurnLogged(root) {
   fs6.mkdirSync(runtimeDir(root), { recursive: true });
@@ -9317,7 +9477,8 @@ var TOKEN_DOC_SKELETON = `{
                   "lineHeight": { "normal": "1.5" } },
   "radius":     { "md": "8px" },
   "shadow":     { "md": "0 1px 2px rgba(0,0,0,.08)" },
-  "motion":     { "duration": { "fast": "120ms" }, "easing": { "standard": "cubic-bezier(.2,0,0,1)" } },
+  "motion":     { "duration": { "fast": "120ms" },
+                  "easing":   { "standard": "cubic-bezier(.2,0,0,1)" } },
   "breakpoint": { "md": "768px" }
 }`;
 var TOKEN_DOC_SHAPE_HINT = "schemaVersion: 1 \xB7 color.<name> = { light, dark? } \xB7 space/radius/shadow/breakpoint = name \u2192 string \xB7 type = family/size/weight/lineHeight \xB7 motion = duration/easing. A value that is entirely `{other.token.path}` is an alias.";
@@ -9851,6 +10012,17 @@ function extractInventory(fetchedContent) {
     return { components, total: components.reduce((s, c) => s + c.count, 0) };
   } catch {
     return { components: [], total: 0 };
+  }
+}
+function readCanvasContent(root, from) {
+  const p = path6.resolve(root, from);
+  try {
+    return fs8.readFileSync(p, "utf8");
+  } catch (e) {
+    throw new Error(tr(root, {
+      en: `Cannot read the canvas content file: ${p} (${e.message}) \u2014 this command does not fetch the canvas itself; it reads a file you saved first. Fetch the artboard with WebFetch, write the body to a file, then point \`--from\` at that path.`,
+      ko: `\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${p} (${e.message}) \u2014 \uC774 \uBA85\uB839\uC740 \uCE94\uBC84\uC2A4\uB97C \uC9C1\uC811 \uBC1B\uC544\uC624\uC9C0 \uC54A\uB294\uB2E4. \uBA3C\uC800 \uC800\uC7A5\uD574 \uB454 \uD30C\uC77C\uC744 \uC77D\uB294\uB2E4: \uC544\uD2B8\uBCF4\uB4DC\uB97C WebFetch \uB85C \uBC1B\uC544 \uBCF8\uBB38\uC744 \uD30C\uC77C\uB85C \uC800\uC7A5\uD55C \uB4A4 \uADF8 \uACBD\uB85C\uB97C \`--from\` \uC5D0 \uC8FC\uB77C.`
+    }));
   }
 }
 function relFromRoot2(root, abs) {
@@ -10803,6 +10975,18 @@ function updateHashEntry(h, rel, content) {
 var fs11 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
+var STATE_FILES = [
+  ".harness/state.json",
+  ".harness/events.jsonl",
+  ".harness/design/ledger.yaml",
+  ".harness/design/registry.yaml",
+  ".harness/ship/defects.yaml",
+  ".harness/ship/deployments.yaml",
+  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
+  ".harness/.runtime/last-activity",
+  ".harness/.runtime/last-turn"
+];
+var OWNED_FILES = [...STATE_FILES, ...POLICY_FILES];
 var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
@@ -10904,6 +11088,20 @@ function sweepOrphanTmp(root) {
   }
   return swept;
 }
+function unwritableDirs(root) {
+  const bad = [];
+  for (const dir of [harnessDir(root), runtimeDir(root)]) {
+    if (!fs12.existsSync(dir)) continue;
+    const probe = path10.join(dir, `write-probe.tmp-${process.pid}`);
+    try {
+      fs12.writeFileSync(probe, "");
+      fs12.rmSync(probe);
+    } catch {
+      bad.push(dir);
+    }
+  }
+  return bad;
+}
 function countHookErrors(root) {
   const p = path10.join(runtimeDir(root), "hook-errors.log");
   if (!fs12.existsSync(p)) return 0;
@@ -10918,8 +11116,28 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
+  if (fs12.existsSync(harnessDir(root))) {
+    const unwritable = unwritableDirs(root);
+    if (unwritable.length > 0) {
+      issues.push(t({
+        en: `cannot write to ${unwritable.join(", ")} \u2014 the harness records everything there, so the activity marker, the hook error log and every gate/wave event are being dropped silently, and the enforcement that depends on the marker (the turn-log settlement guard at session end) is off. Fix the permissions (\`chmod u+w ${unwritable[0]}\`) or remount the volume read-write, then run \`harness doctor\` again.`,
+        ko: `${unwritable.join(", ")} \uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uD558\uB124\uC2A4\uB294 \uBAA8\uB4E0 \uAC83\uC744 \uADF8 \uC544\uB798\uC5D0 \uAE30\uB85D\uD558\uBBC0\uB85C \uD65C\uB3D9 \uB9C8\uCEE4\xB7\uD6C5 \uC624\uB958 \uB85C\uADF8\xB7\uAC8C\uC774\uD2B8/\uC6E8\uC774\uBE0C \uC774\uBCA4\uD2B8\uAC00 \uC804\uBD80 \uC870\uC6A9\uD788 \uC720\uC2E4\uB418\uACE0, \uB9C8\uCEE4\uC5D0 \uAE30\uB300\uB294 \uAC15\uC81C(\uC138\uC158 \uC885\uB8CC \uC2DC \uD134 \uB85C\uADF8 \uC815\uC0B0 \uAC00\uB4DC)\uAC00 \uAEBC\uC9C4\uB2E4. \uAD8C\uD55C\uC744 \uACE0\uCE58\uAC70\uB098(\`chmod u+w ${unwritable[0]}\`) \uBCFC\uB968\uC744 \uC4F0\uAE30 \uAC00\uB2A5\uC73C\uB85C \uB2E4\uC2DC \uB9C8\uC6B4\uD2B8\uD55C \uB4A4 \`harness doctor\` \uB97C \uB2E4\uC2DC \uB3CC\uB824\uB77C.`
+      }));
+    }
+  }
   const journalExists = fs12.existsSync(eventsPath(root));
-  const { events, corruptLines } = readJournal(root);
+  let events = [];
+  let corruptLines = 0;
+  let journalReadable = true;
+  try {
+    ({ events, corruptLines } = readJournal(root));
+  } catch (e) {
+    journalReadable = false;
+    issues.push(t({
+      en: `events.jsonl cannot be read (${e.message}) \u2014 the journal is the source of truth, so there is nothing to check the state against. Restore read access to the file (\`chmod u+r ${eventsPath(root)}\`), then run \`harness doctor\` again.`,
+      ko: `events.jsonl \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC800\uB110\uC774 \uC9C4\uC2E4\uC758 \uC6D0\uCC9C\uC774\uB77C \uC0C1\uD0DC\uB97C \uB300\uC870\uD560 \uADFC\uAC70\uAC00 \uC5C6\uB2E4. \uD30C\uC77C \uC77D\uAE30 \uAD8C\uD55C\uC744 \uBCF5\uAD6C\uD55C \uB4A4(\`chmod u+r ${eventsPath(root)}\`) \`harness doctor\` \uB97C \uB2E4\uC2DC \uB3CC\uB824\uB77C.`
+    }));
+  }
   const replayed = replayState(events);
   let current = null;
   if (!fs12.existsSync(statePath(root))) {
@@ -10937,6 +11155,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   let trustworthy = true;
+  if (!journalReadable) trustworthy = false;
   if (!journalExists) {
     warnings.push(t({
       en: "events.jsonl is missing \u2014 there is no evidence to replay",
@@ -10987,6 +11206,17 @@ function runDoctor(root, opts = {}) {
         ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
       })
     );
+  } else if (effective.activeWave) {
+    try {
+      readWave(root, effective.activeWave);
+    } catch (e) {
+      issues.push(
+        tr(root, {
+          en: `The wave file for activeWave ${effective.activeWave} exists but cannot be parsed (${e.message}) \u2014 a wave sheet has no journal or git backup, so an overwrite loses its turn log and acceptance criteria for good. Restore the file from your editor or VCS if you can; otherwise settle activeWave to null with \`harness doctor --repair\` and open a new wave.`,
+          ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C\uC774 \uC788\uC9C0\uB9CC \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB294 \uC800\uB110\xB7git \uBC31\uC5C5\uC774 \uC5C6\uB294 \uC720\uC77C\uD55C \uD30C\uC77C\uC774\uB77C \uB36E\uC5B4\uC4F0\uBA74 \uD134 \uB85C\uADF8\uC640 \uC644\uB8CC\uAE30\uC900\uC774 \uC601\uAD6C\uD788 \uC0AC\uB77C\uC9C4\uB2E4. \uD3B8\uC9D1\uAE30\uB098 VCS \uB85C \uBCF5\uC6D0\uD560 \uC218 \uC788\uC73C\uBA74 \uADF8\uAC83\uC774 \uC6B0\uC120\uC774\uACE0, \uC544\uB2C8\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD55C \uB4A4 \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uC5F4\uC5B4\uB77C.`
+        })
+      );
+    }
   }
   if (current && current.schemaVersion !== 1) {
     warnings.push(
@@ -11000,10 +11230,19 @@ function runDoctor(root, opts = {}) {
   if (swept > 0) {
     notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC` }));
   }
-  for (const problem of inspectConfig(root).problems) {
+  const cfg = inspectConfig(root);
+  for (const problem of cfg.problems) {
     warnings.push(t({
       en: `config could not be parsed, so defaults are in effect \u2014 ${problem}`,
       ko: `config \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uC5B4 \uAE30\uBCF8\uAC12\uC73C\uB85C \uB3D9\uC791 \uC911\uC774\uB2E4 \u2014 ${problem}`
+    }));
+  }
+  if (cfg.unknownKeys.length > 0) {
+    const bad = cfg.unknownKeys.map((k) => `"${k}"`).join(", ");
+    const known = [...KNOWN_CONFIG_KEYS].sort().join(", ");
+    issues.push(t({
+      en: `${cfg.path} has ${cfg.unknownKeys.length} key(s) this build does not read: ${bad} \u2014 they are ignored, so the default is in effect and whatever you meant to enforce with them is not enforced. Fix the spelling or delete the key(s); the keys this build reads are: ${known}. (doctor cannot repair this \u2014 the config file is yours to edit.)`,
+      ko: `${cfg.path} \uC5D0 \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uC9C0 \uC54A\uB294 \uD0A4\uAC00 ${cfg.unknownKeys.length}\uAC1C \uC788\uB2E4: ${bad} \u2014 \uBB34\uC2DC\uB418\uBBC0\uB85C \uAE30\uBCF8\uAC12\uC774 \uB3CC\uACE0 \uC788\uACE0, \uADF8 \uD0A4\uB85C \uAC78\uB824\uB358 \uAC15\uC81C\uB294 \uAC78\uB824 \uC788\uC9C0 \uC54A\uB2E4. \uCCA0\uC790\uB97C \uACE0\uCE58\uAC70\uB098 \uADF8 \uD0A4\uB97C \uC9C0\uC6CC\uB77C. \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uB294 \uD0A4\uB294: ${known}. (doctor \uB294 \uC774\uAC83\uC744 \uBCF5\uAD6C\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 config \uD30C\uC77C\uC740 \uC0AC\uB78C\uC774 \uACE0\uCE58\uB294 \uAC83\uC774\uB2E4.)`
     }));
   }
   const hookErrors = countHookErrors(root);
@@ -11014,7 +11253,7 @@ function runDoctor(root, opts = {}) {
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs12.existsSync(harnessDir(root))) {
+  if (fs12.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -11046,6 +11285,11 @@ function runDoctor(root, opts = {}) {
         ko: `\uC815\uCC45 \uD30C\uC77C\uC774 \uACE0\uC815\uB41C \uBCA0\uC774\uC2A4\uB77C\uC778\uACFC \uB2E4\uB974\uB2E4 \u2014 \uACE0\uC815 ${pinned.hash.slice(0, 12)} (${pinned.ts}) \u2260 \uD604\uC7AC ${current2.hash.slice(0, 12)}` + (delta ? ` [${delta}]` : "") + `. \uB300\uC0C1: ${current2.files.join(", ") || "\uC5C6\uC74C"}. \uC774 \uD30C\uC77C\uB4E4\uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uBBC0\uB85C, \uC5EC\uAE30\uAC00 \uBC14\uB00C\uBA74 \uAC15\uC81C \uC790\uCCB4\uAC00 \uBC14\uB010 \uAC83\uC774\uB2E4. \uC815\uB2F9\uD55C \uBCC0\uACBD\uC77C \uC218 \uC788\uB2E4 \u2014 \uB0B4\uC6A9\uC744 \uD655\uC778\uD55C \uB4A4 \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\` \uB85C \uC7AC\uACE0\uC815\uD558\uB77C(env \uC811\uB450\uB294 \uC0AC\uB78C\uC758 \uC190\uC774\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4)`
       }));
     }
+  } catch (e) {
+    warnings.push(t({
+      en: `the policy baseline could not be checked (${e.message}) \u2014 a change to the files that decide what the hook blocks would not be visible right now. Fix the problem above first.`,
+      ko: `\uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uD655\uC778\uD560 \uC218 \uC5C6\uC5C8\uB2E4 (${e.message}) \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC774 \uBC14\uB00C\uC5B4\uB3C4 \uC9C0\uAE08\uC740 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4. \uC704\uC758 \uBB38\uC81C\uB97C \uBA3C\uC800 \uD574\uACB0\uD558\uB77C.`
+    }));
   }
   let repaired = false;
   let refused = false;
@@ -11256,7 +11500,7 @@ function raiseCritical(root, opts) {
   if (opts.waveId) data.id = opts.waveId;
   if (opts.attempts !== void 0) data.attempts = opts.attempts;
   const ev = appendEvent(root, "critical-raised", data);
-  return toCriticalEvent(ev.ts, data);
+  return toCriticalEvent(ev.ts, ev.data);
 }
 function clearCritical(root, waveId) {
   appendEvent(root, "critical-cleared", waveId ? { id: waveId } : {});
@@ -12307,6 +12551,9 @@ function canEnterPhase(root, phase) {
   };
 }
 function setPhaseViaGate(root, phase) {
+  const cur = PHASES.indexOf(readState(root).phase);
+  const to = PHASES.indexOf(phase);
+  if (to > cur) invalidateStaleGates(root);
   const verdict = canEnterPhase(root, phase);
   if (!verdict.ok) throw new Error(verdict.reason);
   appendEvent(root, "phase-set", { phase, via: "gate" });
@@ -13457,10 +13704,78 @@ ${TOKEN_DOC_SKELETON}`
   { name: "migrate", summary: M("Detect hand-rolled hooks/skills that would double-fire with the harness.", "\uD558\uB124\uC2A4\uC640 \uC774\uC911 \uBC1C\uD654\uD560 \uC790\uC791 \uD6C5\xB7\uC2A4\uD0AC\uC744 \uAC10\uC9C0\uD55C\uB2E4.") }
 ];
 var MAX_LEFT = 30;
+var WRAP_MIN = 60;
+var WRAP_MAX = 120;
+var WRAP_FIXED = 100;
+function wrapWidth() {
+  const env = Number(process.env.COLUMNS);
+  const c = Number.isFinite(env) && env > 0 ? env : process.stdout.isTTY ? process.stdout.columns : void 0;
+  if (typeof c !== "number" || !Number.isFinite(c)) return WRAP_FIXED;
+  return Math.max(WRAP_MIN, Math.min(WRAP_MAX, c));
+}
+function displayWidth(s) {
+  let w = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const wide = c >= 4352 && c <= 4447 || c >= 11904 && c <= 42191 || c >= 44032 && c <= 55203 || c >= 63744 && c <= 64255 || c >= 65072 && c <= 65135 || c >= 65280 && c <= 65376 || c >= 65504 && c <= 65510 || c >= 127744 && c <= 129535;
+    w += wide ? 2 : 1;
+  }
+  return w;
+}
+function splitLongWord(word, width) {
+  if (displayWidth(word) <= width) return [word];
+  const pieces = [];
+  let cur = "";
+  for (const part of word.split(/(?<=[|,/·、;])/)) {
+    if (cur === "") cur = part;
+    else if (displayWidth(cur) + displayWidth(part) <= width) cur += part;
+    else {
+      pieces.push(cur);
+      cur = part;
+    }
+  }
+  if (cur !== "") pieces.push(cur);
+  return pieces;
+}
+function foldWords(text, width) {
+  const out = [];
+  let line = "";
+  const push = () => {
+    if (line !== "") {
+      out.push(line);
+      line = "";
+    }
+  };
+  for (const raw of text.split(" ")) {
+    for (const word of splitLongWord(raw, width)) {
+      if (line === "") line = word;
+      else if (displayWidth(line) + 1 + displayWidth(word) <= width) line += ` ${word}`;
+      else {
+        push();
+        line = word;
+      }
+    }
+  }
+  push();
+  return out.length > 0 ? out : [""];
+}
+function foldNote(text, width) {
+  return text.split("\n").flatMap((line) => /^\s/.test(line) || /[{}[\]]/.test(line) || /"\s*:/.test(line) ? [line] : foldWords(line, width));
+}
 function table(rows) {
   const width = Math.min(MAX_LEFT, Math.max(...rows.map((r) => r.left.length), 0));
-  return rows.map((r) => r.left.length > width ? `  ${r.left}
-  ${" ".repeat(width)}  ${r.summary}` : `  ${r.left.padEnd(width)}  ${r.summary}`);
+  const indent = 2 + width + 2;
+  const room = Math.max(1, wrapWidth() - indent);
+  return rows.map((r) => {
+    const folded = foldWords(r.summary, room);
+    const cont = folded.slice(1).map((l) => `${" ".repeat(indent)}${l}`);
+    if (r.left.length > width) {
+      const left = foldWords(r.left, Math.max(1, wrapWidth() - 2));
+      const leftLines = [`  ${left[0]}`, ...left.slice(1).map((l) => `      ${l}`)];
+      return [...leftLines, `${" ".repeat(indent)}${folded[0]}`, ...cont].join("\n");
+    }
+    return [`  ${r.left.padEnd(width)}  ${folded[0]}`, ...cont].join("\n");
+  });
 }
 function renderHelp(lang) {
   const head = lang === "ko" ? [
@@ -13488,10 +13803,16 @@ function renderHelp(lang) {
   })));
   const tail = lang === "ko" ? [
     "",
+    // [API-05] 종료코드 규약은 **문서화돼야 계약이다.** 예전에는 어느 문서에도 없었고,
+    // 그래서 CI 가 「판정이 아니오」와 「명령이 못 돌았다」를 구분할 수 없었다.
+    "\uC885\uB8CC\uCF54\uB4DC: 0 \uC131\uACF5/\uD310\uC815 \uC608 \xB7 1 \uC0AC\uC6A9\uBC95\xB7\uD658\uACBD \uC624\uB958 \xB7 2 \uD310\uC815\uC774 \uC544\uB2C8\uC624(verdict NO-GO \xB7",
+    "          doctor \uC9C4\uB2E8 \uC2E4\uD328 \xB7 gate verify \uB4DC\uB9AC\uD504\uD2B8 \xB7 evidence check \uBBF8\uB2EC)",
     `\uC790\uC138\uD788: harness <\uBA85\uB839> --help   \xB7   \uBC84\uC804: harness --version`,
     "\uC5B8\uC5B4: .harness/config.yaml \uC5D0 `lang: ko` \uB610\uB294 \uD658\uACBD\uBCC0\uC218 HARNESS_LANG=ko"
   ] : [
     "",
+    "Exit codes: 0 success \xB7 1 usage or environment error \xB7 2 the verdict is no",
+    "            (ship verdict NO-GO \xB7 doctor found problems \xB7 gate verify drift)",
     "Details: harness <command> --help   \xB7   Version: harness --version",
     "Language: set `lang: ko` in .harness/config.yaml, or HARNESS_LANG=ko"
   ];
@@ -13519,7 +13840,7 @@ function renderGroupHelp(g, lang) {
       summary: pick(s.summary, lang)
     }))));
   }
-  if (g.note) out.push("", pick(g.note, lang));
+  if (g.note) out.push("", ...foldNote(pick(g.note, lang), wrapWidth()));
   return out.join("\n");
 }
 function unknownSub(group, sub, lang) {
@@ -13810,7 +14131,7 @@ function floorProfile() {
     commands: { ...GENERIC_FLOOR.commands }
   };
 }
-function resolve5(root, name, lang = DEFAULT_LANG) {
+function resolve6(root, name, lang = DEFAULT_LANG) {
   const t = trFor5(lang);
   const problems = [];
   const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
@@ -13864,7 +14185,7 @@ function inspectProfile(root, name) {
   } catch {
   }
   try {
-    return resolve5(root, name, lang);
+    return resolve6(root, name, lang);
   } catch (e) {
     return {
       profile: floorProfile(),
@@ -13987,23 +14308,25 @@ function isSelfCall(cmd) {
   return false;
 }
 var NON_SHELL_INTERPRETERS = ["node", "nodejs", "deno", "bun"];
-var FORCE_ESCAPE_RE = /(^|[\s;&|`"'()])(\S*\/)?harness\b/;
 var CORE_INVOKE_RE = new RegExp(
   `(?:^|[\\s;&|\`"'()])(?:${[...NON_SHELL_INTERPRETERS, "npx", "bunx", "pnpx"].join("|")})\\b[^\\n;|&]*?core[\\\\/]dist[\\\\/](?:cli|mcp)\\.js`
 );
-var invokesHarness = (cmd) => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
-var STATE_FILES = [
-  ".harness/state.json",
-  ".harness/events.jsonl",
-  ".harness/design/ledger.yaml",
-  ".harness/design/registry.yaml",
-  ".harness/ship/defects.yaml",
-  ".harness/ship/deployments.yaml",
-  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
-  ".harness/.runtime/last-activity",
-  ".harness/.runtime/last-turn"
-];
-var CORE_FILES = [...STATE_FILES, ...POLICY_FILES];
+var HARNESS_HEAD_RE = /^[`'"\s(]*(?:\S*[\\/])?(?:harness|cli\.js|mcp\.js)\b/;
+var hilCache = null;
+function harnessInvokingLines(cmd) {
+  if (hilCache !== null && hilCache.cmd === cmd) return hilCache.lines;
+  const lines = commandLines(cmd);
+  for (const m of cmd.matchAll(/`([^`]*)`/g)) lines.push(...commandLines(m[1]));
+  for (const m of cmd.matchAll(/\$\(([^()]*)\)/g)) lines.push(...commandLines(m[1]));
+  const hit = lines.filter((l) => HARNESS_HEAD_RE.test(l) || CORE_INVOKE_RE.test(l.replace(/^[`'"\s(]+/, "")));
+  hilCache = { cmd, lines: hit };
+  return hit;
+}
+function runsHarnessWith(cmd, ...needles) {
+  return harnessInvokingLines(cmd).some((l) => needles.every((re) => re.test(l)));
+}
+var STATE_FILES2 = STATE_FILES;
+var CORE_FILES = [...STATE_FILES2, ...POLICY_FILES];
 var OWNED_BASENAMES = new Set(CORE_FILES.map((f2) => f2.split("/").pop() ?? ""));
 var TURN_LOG_HEADING = /^## (?:Turn log|턴 로그)[ \t]*$/m;
 var EXCERPT_OPEN = {
@@ -14012,6 +14335,7 @@ var EXCERPT_OPEN = {
 };
 var EXCERPT_CLOSE = { en: "--- end of quote ---", ko: "--- \uBC1C\uCDCC \uB05D ---" };
 var excerptNonce = contentNonce;
+var REPLAY_MAX_BYTES = 128 * 1024 * 1024;
 function isHarnessStateShape(s) {
   if (typeof s !== "object" || s === null || Array.isArray(s)) return false;
   const o = s;
@@ -14028,9 +14352,29 @@ function handleHook(root, event, input) {
       if (!isHarnessStateShape(parsed)) throw new Error("state.json shape is damaged: not a HarnessState");
       state = parsed;
     } catch {
-      const journal = readJournalForReplay(root);
-      state = replayState(journal.events);
-      degraded = { corruptLines: journal.corruptLines };
+      let size = 0;
+      try {
+        size = fs20.statSync(eventsPath(root)).size;
+      } catch {
+        size = 0;
+      }
+      if (size > REPLAY_MAX_BYTES) {
+        state = defaultState();
+        degraded = { corruptLines: 0, stateDamaged: true, replaySkippedBytes: size };
+      } else {
+        const journal = readJournalForReplay(root);
+        state = replayState(journal.events);
+        degraded = { corruptLines: journal.corruptLines, stateDamaged: true };
+      }
+    }
+    if (degraded === null && event === "session-start") {
+      try {
+        const journal = readJournalForReplay(root);
+        if (journal.corruptLines > 0) {
+          degraded = { corruptLines: journal.corruptLines, stateDamaged: false };
+        }
+      } catch {
+      }
     }
     const config = loadConfig(root);
     switch (event) {
@@ -14065,6 +14409,13 @@ function logHookError(root, event, err) {
   }
 }
 function degradedNote(d, lang) {
+  if (d.replaySkippedBytes !== void 0) {
+    const mb = Math.round(d.replaySkippedBytes / (1024 * 1024));
+    return lang === "ko" ? `\u26A0 state.json \uC774 \uC190\uC0C1\uB410\uACE0 \uC800\uB110\uC774 ${mb}MB \uB77C \uD6C5 \uC608\uC0B0(10\uCD08) \uC548\uC5D0 \uC7AC\uC0DD\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988\uB97C \uBAA8\uB974\uBBC0\uB85C **\uAC00\uC7A5 \uC81C\uD55C\uC801\uC778 \uC0C1\uD0DC\uB85C** \uD310\uC815 \uC911\uC774\uB2E4(\uD1B5\uACFC\uC2DC\uD0A4\uC9C0 \uC54A\uB294\uB2E4). \uC77D\uAE30\uC640 harness \uBA85\uB839\uC740 \uC5F4\uB824 \uC788\uB2E4: \`harness doctor --repair\` \uB97C \uD55C \uBC88 \uC2E4\uD589\uD558\uBA74 state.json \uC774 \uBCF5\uAD6C\uB418\uACE0 \uBE60\uB978 \uACBD\uB85C\uB85C \uB3CC\uC544\uC628\uB2E4.` : `\u26A0 state.json is damaged and the journal is ${mb}MB \u2014 too large to replay inside the hook's 10s budget. The phase is unknown, so judgement falls back to the **most restrictive** state rather than letting calls through. Reads and harness commands still work: run \`harness doctor --repair\` once to rebuild state.json and return to the fast path.`;
+  }
+  if (!d.stateDamaged) {
+    return lang === "ko" ? `\u26A0 \uC800\uB110 ${d.corruptLines}\uC904 \uC190\uC0C1 \u2014 state \uB294 \uC815\uC0C1\uC774\uB77C \uD310\uC815\uC740 \uC720\uD6A8\uD558\uC9C0\uB9CC \uAC10\uC0AC \uC774\uB825\uC744 \uBBFF\uC744 \uC218 \uC5C6\uB2E4. \`harness doctor\` \uB85C \uD655\uC778\uD558\uB77C.` : `\u26A0 ${d.corruptLines} journal line(s) corrupt \u2014 state is intact so decisions still hold, but the audit history cannot be trusted. Run \`harness doctor\`.`;
+  }
   const base = pick({
     en: "\u26A0 state.json is damaged \u2014 running from journal replay. Run `harness doctor --repair`.",
     ko: "\u26A0 state.json \uC190\uC0C1 \uAC10\uC9C0 \u2014 \uC800\uB110 \uC7AC\uC0DD\uC73C\uB85C \uB3D9\uC791 \uC911. `harness doctor --repair` \uC2E4\uD589\uC744 \uAD8C\uC7A5\uD55C\uB2E4."
@@ -14613,8 +14964,8 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
-  const stateFile = [rel, realRel].find((r) => STATE_FILES.includes(r)) ?? STATE_FILES.find((sf) => spaces.some((r) => coversPath(r, sf)));
-  const namesFileDirectly = [rel, realRel].some((r) => STATE_FILES.includes(r));
+  const stateFile = [rel, realRel].find((r) => STATE_FILES2.includes(r)) ?? STATE_FILES2.find((sf) => spaces.some((r) => coversPath(r, sf)));
+  const namesFileDirectly = [rel, realRel].some((r) => STATE_FILES2.includes(r));
   const removesHarness = stateFile !== void 0 && !namesFileDirectly;
   if (stateFile) {
     return deny(
@@ -14940,19 +15291,19 @@ function preTool(root, state, config, input, degraded) {
         ), degraded, lang);
       }
     }
-    if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd) || invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd)) {
+    if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd) || runsHarnessWith(cmd, /\bphase\b/, /--force(?![\w-])/)) {
       return deny(L(
         "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.",
         "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
       ), degraded, lang);
     }
-    if (/HARNESS_APPROVE_NO_TTY/.test(cmd) || invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd)) {
+    if (/HARNESS_APPROVE_NO_TTY/.test(cmd) || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
       return deny(L(
         "Approving a gate is the human's decision \u2014 an agent cannot run `harness gate approve`. Submit the artifacts and let the review packet be read: `harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** in their terminal with `harness gate approve <P>`. Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.",
         "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 `harness gate approve` \uB97C \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD574 \uB9AC\uBDF0 \uD328\uD0B7\uC774 \uC77D\uD788\uAC8C \uD558\uB77C: `harness gate submit <P> --evidence measured --paths <\uC0B0\uCD9C\uBB3C>`. \uADF8 \uB2E4\uC74C **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811** \uD130\uBBF8\uB110\uC5D0\uC11C `harness gate approve <P>` \uB85C \uC2B9\uC778\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`."
       ), degraded, lang);
     }
-    if (/HARNESS_ACCEPT_POLICY/.test(cmd) || invokesHarness(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd)) {
+    if (/HARNESS_ACCEPT_POLICY/.test(cmd) || runsHarnessWith(cmd, /\bdoctor\b/, /--accept-policy(?![\w-])/)) {
       return deny(L(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing the diff: `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`. Diagnosis is open to you: `harness doctor` reports the drift.',
         "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
@@ -15609,7 +15960,7 @@ function readAllStdin() {
   const WAIT_MS = 2;
   const IDLE_MS = 200;
   const DRAIN_MS = 2e3;
-  const MAX_BYTES = 4 * 1024 * 1024;
+  const MAX_BYTES = 1024 * 1024;
   const buf = Buffer.alloc(CHUNK);
   const chunks = [];
   let waited = 0;
@@ -15649,6 +16000,7 @@ function readAllStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 var csv = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+var EXIT_VERDICT_NO = 2;
 function assertOutputAllowed(root, out, targets, lang, what) {
   const L = (en, ko) => pick({ en, ko }, lang);
   if (!isInsideRoot(root, out)) {
@@ -15656,6 +16008,15 @@ function assertOutputAllowed(root, out, targets, lang, what) {
       `${what.en} must land inside the project \u2014 \`${out}\` is outside it. A harness command is not a way around the write rules the hook applies.`,
       `${what.ko} \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uB5A8\uC5B4\uC838\uC57C \uD55C\uB2E4 \u2014 \`${out}\` \uB294 \uB8E8\uD2B8 \uBC16\uC774\uB2E4. harness \uBA85\uB839\uC740 \uD6C5\uC774 \uC801\uC6A9\uD558\uB294 \uC4F0\uAE30 \uADDC\uCE59\uC744 \uD53C\uD574 \uAC00\uB294 \uAE38\uC774 \uC544\uB2C8\uB2E4.`
     ));
+  }
+  for (const t of targets) {
+    const rel = path20.relative(root, path20.resolve(root, t));
+    if (OWNED_FILES.includes(rel)) {
+      throw new Error(L(
+        `${what.en} would overwrite \`${rel}\`, which only harness commands may change \u2014 the journal is the audit trail and the state store is derived from it. Choose a different --out path.`,
+        `${what.ko} \`${rel}\` \uB97C \uB36E\uAC8C \uB41C\uB2E4 \u2014 \uC774 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uB010\uB2E4. \uC800\uB110\uC740 \uAC10\uC0AC \uAE30\uB85D\uC774\uACE0 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uADF8\uAC83\uC5D0\uC11C \uD30C\uC0DD\uB41C\uB2E4. --out \uACBD\uB85C\uB97C \uB2E4\uB978 \uACF3\uC73C\uB85C \uC7A1\uC544\uB77C.`
+      ));
+    }
   }
   const phase = readState(root).phase;
   if (!DESIGN_PHASES.includes(phase)) return;
@@ -15811,6 +16172,10 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         appendEvent(root, "init", {});
         pinPolicy(root, "init");
         console.log(L(".harness/ initialised \u2014 run `harness --help` to see the command map.", ".harness/ \uCD08\uAE30\uD654 \uC644\uB8CC \u2014 `harness --help` \uB85C \uBA85\uB839 \uC9C0\uB3C4\uB97C \uBCFC \uC218 \uC788\uB2E4."));
+        console.log(L(
+          "NOTE: `.harness/` is not gitignored \u2014 the event journal is the audit trail and teams usually commit it. Free-text fields are masked for common secret shapes, but masking errs toward missing things rather than mangling records: keep credentials out of `--detail`/rationale text, or add `.harness/` to .gitignore if you would rather keep the trail local.",
+          "\uCC38\uACE0: `.harness/` \uB294 gitignore \uB418\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC800\uB110\uC774 \uAC10\uC0AC \uAE30\uB85D\uC774\uB77C \uD300\uC774 \uB300\uAC1C \uCEE4\uBC0B\uD55C\uB2E4. \uC790\uC720 \uD14D\uC2A4\uD2B8 \uD544\uB4DC\uB294 \uD754\uD55C \uBE44\uBC00 \uD615\uD0DC\uB97C \uB9C8\uC2A4\uD0B9\uD558\uC9C0\uB9CC, \uB9C8\uC2A4\uD0B9\uC740 \uAE30\uB85D\uC744 \uBB49\uAC1C\uB294 \uCABD\uBCF4\uB2E4 **\uB193\uCE58\uB294 \uCABD**\uC744 \uD0DD\uD55C \uC808\uCDA9\uC774\uB2E4: `--detail`\xB7rationale \uC5D0 \uC790\uACA9\uC99D\uBA85\uC744 \uB123\uC9C0 \uB9C8\uB77C. \uC774\uB825\uC744 \uB85C\uCEEC\uC5D0\uB9CC \uB450\uACE0 \uC2F6\uC73C\uBA74 `.gitignore` \uC5D0 `.harness/` \uB97C \uB354\uD574\uB77C."
+        ));
         console.error(L(
           "NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human \u2014 allowlisting it lets an agent open gates on its own.",
           "\uACE0\uC9C0: `harness gate approve` \uB97C \uAD8C\uD55C allowlist \uC5D0 \uB123\uC9C0 \uB9C8\uB77C. \uAC8C\uC774\uD2B8\uB294 \uAD8C\uD55C \uB2E4\uC774\uC5BC\uB85C\uADF8\uC5D0 \uAE30\uB300\uC5B4 \u300C\uC2B9\uC778\uC758 \uCD5C\uC885 \uD074\uB9AD\uC740 \uC0AC\uB78C\u300D\uC744 \uC9C0\uD0A8\uB2E4 \u2014 allowlist \uC5D0 \uB123\uC73C\uBA74 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2A4\uC2A4\uB85C \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC788\uB2E4."
@@ -15838,7 +16203,7 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
           console.error(L("Repair refused \u2014 the journal cannot be trusted. Find out why, then force with --force.", "\uBCF5\uAD6C \uAC70\uBD80\uB428 \u2014 \uC800\uB110 \uC2E0\uB8B0 \uBD88\uAC00. \uC6D0\uC778 \uD655\uC778 \uD6C4 --force \uB85C \uAC15\uC81C\uD560 \uC218 \uC788\uB2E4."));
           return 1;
         }
-        return r.ok || r.repaired ? 0 : 1;
+        return r.ok || r.repaired ? 0 : EXIT_VERDICT_NO;
       }
       case "phase": {
         if (sub !== "set") throw new Error(L("Usage: harness phase set <P0..P12>", "\uC0AC\uC6A9\uBC95: harness phase set <P0..P12>"));
@@ -15920,7 +16285,7 @@ Next: a human approves it in their terminal \u2014 \`harness gate approve ${phas
             const phase = requirePhase(rest[0], "harness gate verify", lang);
             const v = verifyGate(root, phase);
             console.log(JSON.stringify(v, null, 2));
-            return v.ok ? 0 : 1;
+            return v.ok ? 0 : EXIT_VERDICT_NO;
           }
           case "sweep": {
             const flipped = invalidateStaleGates(root);
@@ -16013,7 +16378,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const v = shipVerdict(root);
             console.log(v.ok ? L("GO", "\uCD9C\uD558 \uAC00\uB2A5(GO)") : L("NO-GO", "\uCD9C\uD558 \uBD88\uAC00(NO-GO)"));
             if (v.reasons.length > 0) console.log(v.reasons.map((r) => `  - ${r}`).join("\n"));
-            return v.ok ? 0 : 1;
+            return v.ok ? 0 : EXIT_VERDICT_NO;
           }
           case "checklist":
             console.log(renderReleaseChecklist(root));
@@ -16130,7 +16495,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             if (!waveId) throw new Error(L("Usage: harness evidence check <wave-id> (there is no active wave)", "\uC0AC\uC6A9\uBC95: harness evidence check <wave-id> (\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4)"));
             const r = validateEvidence(root, waveId);
             console.log(JSON.stringify(r, null, 2));
-            return r.ok ? 0 : 1;
+            return r.ok ? 0 : EXIT_VERDICT_NO;
           }
           case "packet": {
             const uxNodeId = flag(args, "ux");
@@ -16241,7 +16606,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           case "inventory": {
             const from = flag(args, "from");
             if (!from) throw new Error(L("Usage: harness design inventory --from <canvas-content-file>", "\uC0AC\uC6A9\uBC95: harness design inventory --from <\uCE94\uBC84\uC2A4 \uB0B4\uC6A9 \uD30C\uC77C>"));
-            const inv = extractInventory(fs23.readFileSync(path20.resolve(root, from), "utf8"));
+            const inv = extractInventory(readCanvasContent(root, from));
             console.log(JSON.stringify(inv, null, 2));
             if (inv.total === 0) {
               console.error(L(

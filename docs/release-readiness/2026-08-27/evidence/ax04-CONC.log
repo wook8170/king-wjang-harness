@@ -1,0 +1,10 @@
+# ax04-CONC — 동시 실행: 같은 저널에 병렬 append (인터리브/찢김/잠금) — 23:54
+append 전 저널 줄수:        2
+40개 프로세스 동시 기동 (각 node upsert → events.jsonl append)…
+append 후 저널 줄수:       42  (증가 40)
+  총 42줄 · 파싱실패 0줄 · 고유 N-id 이벤트 40개
+동시쓰기 후 doctor:
+   {'ok': True, 'issues': [], 'warnings': []}
+
+잠금 메커니즘 소스 확인:
+/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/core/src/events.ts:53:  fs.appendFileSync(eventsPath(root), JSON.stringify(ev) + '\n');

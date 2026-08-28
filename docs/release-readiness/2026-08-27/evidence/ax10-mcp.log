@@ -1,0 +1,15 @@
+## claude mcp list  (does the plugin's declared MCP server get wired?)
+Checking MCP server health…
+
+plugin:king-wjang-harness:harness: node /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg//mcp/server.js - ✔ Connected
+exit=0
+
+## in a NON-harness dir too
+Checking MCP server health…
+
+plugin:king-wjang-harness:harness: node /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/pkg//mcp/server.js - ✔ Connected
+
+## grep the claude CLI for plugin mcpServers support
+  (claude is a launcher, not the bundle)
+lrwxr-xr-x@ 1 wjang  staff  49 Aug 25 20:53 /Users/wjang/.local/bin/claude -> /Users/wjang/.local/share/claude/versions/2.1.245
+/Users/wjang/.local/bin/claude: Mach-O 64-bit executable arm64

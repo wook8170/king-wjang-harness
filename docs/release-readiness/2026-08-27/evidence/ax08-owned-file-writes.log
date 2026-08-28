@@ -1,0 +1,26 @@
+LOGIC-02: harness-owned/append-only files writable outside the harness contract (MEASURED)
+
+Two surfaces, both punctured.
+
+(A) Direct CLI (no hook). Core assertOutputAllowed (cli.ts:331) checks only inside-root plus
+    source-path-in-design-track; it has NO CORE_FILES check. So a harness command overwrites
+    owned files:
+    - harness evidence spec UX-1 --wave wave-001 --out .harness/events.jsonl  => exit 0,
+      journal replaced with generated spec text; harness doctor => ok:true, issues:0
+      (append-only journal erased, doctor blind).
+    - symlink .harness/notes.jsonl -> events.jsonl : direct CLI overwrote the journal too (3->29 lines).
+    Contradicts README:66 (".harness/events.jsonl is append-only") and README:297
+    ("no compaction command by choice ... the one place nothing may be erased").
+    The tokens gen/swap and evidence packet --out commands share the same unguarded core path.
+
+(B) Agent path (through the pre-tool hook). The hook STATE_FILES/CORE_FILES list (hook.ts ~200)
+    does NOT include wave instruction sheets, and the design-track allowlist (hook.ts:1488-1489)
+    passes anything under .harness/. Measured hook decisions (empty stdout = allow):
+    - Write file_path=.harness/waves/wave-001.md   => ALLOW (empty output, exit 0)
+    - Write file_path=src/app.ts (control)          => DENY (permissionDecision deny)
+    So an agent can clobber the ACTIVE wave sheet via a plain Write OR harness ... --out.
+    wave.ts:82-83 states the wave body is "the only file with NO journal and NO git backup".
+    Effect (measured, ax08/wf): evidence spec --out .harness/waves/wave-001.md grew the sheet
+    171->1395 bytes, destroyed the frontmatter; harness wave activate wave-001 =>
+    "Malformed wave file: no frontmatter". Turn log + acceptance criteria + design_refs lost,
+    unrecoverable; harness doctor does not flag a present-but-clobbered sheet (only missing).

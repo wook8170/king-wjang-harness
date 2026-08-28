@@ -44,6 +44,33 @@ import { appendEvent, readEvents } from './events';
  */
 export const POLICY_FILES: readonly string[] = ['.harness/config.yaml'];
 
+/**
+ * [LOGIC-02] **하네스가 스스로만 고쳐야 하는 상태 파일 — 정의는 여기 한 벌뿐이다.**
+ *
+ * 예전에는 이 목록이 `hook.ts` 안에만 살아 있었다. 그래서 **훅을 거치지 않는 표면**, 즉
+ * `harness … --out <경로>` 는 아무 가드 없이 이 파일들을 덮을 수 있었다:
+ * `harness evidence spec … --out .harness/events.jsonl` 이 exit 0 으로 **정본 저널을 생성
+ * 스펙 텍스트로 교체**했고, 그 뒤 `harness doctor` 는 `ok: true` 라고 답했다. 유일한 복구원이
+ * 사라지고 감사 추적이 침묵으로 소실된다.
+ *
+ * `[OPS-76]` 이 정책 파일에 대해 이미 같은 판단을 했다 — 「막는 목록」과 「감시하는 목록」이
+ * 갈리면 **느슨한 쪽이 정본이 된다.** 상태 파일도 같은 자리로 올린다.
+ */
+export const STATE_FILES: readonly string[] = [
+  '.harness/state.json',
+  '.harness/events.jsonl',
+  '.harness/design/ledger.yaml',
+  '.harness/design/registry.yaml',
+  '.harness/ship/defects.yaml',
+  '.harness/ship/deployments.yaml',
+  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
+  '.harness/.runtime/last-activity',
+  '.harness/.runtime/last-turn',
+];
+
+/** 상태 + 정책 — 「하네스 명령으로만 바뀐다」가 적용되는 전체 집합. */
+export const OWNED_FILES: readonly string[] = [...STATE_FILES, ...POLICY_FILES];
+
 /** 프로젝트 로컬 프로파일 디렉토리 — 번들 프로파일보다 우선하므로 정책과 같은 무게다. */
 export const POLICY_PREFIXES: readonly string[] = ['.harness/profile/'];
 

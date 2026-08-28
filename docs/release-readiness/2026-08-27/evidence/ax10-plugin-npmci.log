@@ -1,0 +1,110 @@
+## installed plugin cache contents
+total 480
+drwxr-xr-x@ 25 wjang  wheel    800 Aug 27 23:56 .
+drwxr-xr-x@  3 wjang  wheel     96 Aug 27 23:56 ..
+drwxr-xr-x@  4 wjang  wheel    128 Aug 27 23:56 .claude-plugin
+-rw-r--r--@  1 wjang  wheel   1061 Aug 27 23:56 .gitattributes
+-rw-r--r--@  1 wjang  wheel     45 Aug 27 23:56 .gitignore
+-rw-r--r--@  1 wjang  wheel   8699 Aug 27 23:56 CHANGELOG.md
+-rw-r--r--@  1 wjang  wheel   1075 Aug 27 23:56 LICENSE
+-rw-r--r--@  1 wjang  wheel  34294 Aug 27 23:56 README.ja.md
+-rw-r--r--@  1 wjang  wheel  28249 Aug 27 23:56 README.ko.md
+-rw-r--r--@  1 wjang  wheel  27253 Aug 27 23:56 README.md
+-rw-r--r--@  1 wjang  wheel  26621 Aug 27 23:56 README.zh.md
+drwxr-xr-x@  8 wjang  wheel    256 Aug 27 23:56 agents
+drwxr-xr-x@  4 wjang  wheel    128 Aug 27 23:56 bin
+drwxr-xr-x@  5 wjang  wheel    160 Aug 27 23:56 core
+drwxr-xr-x@  3 wjang  wheel     96 Aug 27 23:56 hooks
+drwxr-xr-x@  3 wjang  wheel     96 Aug 27 23:56 mcp
+drwxr-xr-x@ 77 wjang  wheel   2464 Aug 27 23:56 node_modules
+-rw-r--r--@  1 wjang  wheel  79793 Aug 27 23:56 package-lock.json
+-rw-r--r--@  1 wjang  wheel    736 Aug 27 23:56 package.json
+drwxr-xr-x@  4 wjang  wheel    128 Aug 27 23:56 profiles
+drwxr-xr-x@  3 wjang  wheel     96 Aug 27 23:56 scripts
+drwxr-xr-x@ 17 wjang  wheel    544 Aug 27 23:56 skills
+-rw-r--r--@  1 wjang  wheel    293 Aug 27 23:56 tsconfig.json
+-rw-r--r--@  1 wjang  wheel    699 Aug 27 23:56 tsup.config.ts
+-rw-r--r--@  1 wjang  wheel    177 Aug 27 23:56 vitest.config.ts
+
+## node_modules installed by 'npm ci --ignore-scripts' during plugin install?
+   YES — size:  69M, packages: 73
+@esbuild
+@jridgewell
+@napi-rs
+@rollup
+@types
+@vitest
+acorn
+any-promise
+assertion-error
+bundle-require
+cac
+chai
+check-error
+chokidar
+commander
+confbox
+consola
+debug
+deep-eql
+es-module-lexer
+
+## npm log tail — did npm ci succeed?
+594 silly ADD
+595 silly ADD
+596 silly ADD
+597 silly ADD
+598 silly ADD
+599 silly ADD
+600 silly ADD
+601 silly ADD
+602 silly ADD
+603 silly ADD node_modules/@esbuild/darwin-arm64
+604 silly ADD
+605 silly ADD
+606 silly ADD
+607 silly ADD
+608 verbose cwd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2
+609 verbose os Darwin 25.5.0
+610 verbose node v22.22.2
+611 verbose npm  v10.9.7
+612 notice
+612 notice New major version of npm available! 10.9.7 -> 12.0.2
+612 notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+612 notice To update run: npm install -g npm@12.0.2
+612 notice  { force: true, [Symbol(proc-log.meta)]: true }
+613 verbose exit 0
+614 info ok
+
+## MCP: plugin.json declares mcpServers, but 'plugin details' reported 'MCP servers (0)'
+{
+ "name": "king-wjang-harness",
+ "version": "0.1.2",
+ "description": "Hook and CLI harness that enforces design → build → ship process discipline. The event journal is the source of truth for phase, wave, and design-ledger state; PreToolUse/Stop hooks block source writes in the design track and unsettled session ends. Completely silent in projects without a .harness/ directory.",
+ "author": {
+  "name": "장욱"
+ },
+ "keywords": [
+  "workflow",
+  "hooks",
+  "process-discipline",
+  "design-track",
+  "harness"
+ ],
+ "mcpServers": {
+  "harness": {
+   "command": "node",
+   "args": [
+    "${CLAUDE_PLUGIN_ROOT}/mcp/server.js"
+   ]
+  }
+ }
+}
+   any .mcp.json at plugin root? ls: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2/.mcp.json: No such file or directory
+
+## hooks the installer sees
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" session-start", "timeout": 10 } ] }
+    ],

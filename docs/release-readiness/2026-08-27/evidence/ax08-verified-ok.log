@@ -1,0 +1,54 @@
+Verified/OK and other findings (MEASURED unless noted)
+
+- Concurrent append integrity: 6-8 processes x 20-50 appends, event lines 8KB and 512KB
+  (>PIPE_BUF, forcing multi-syscall writes). Result: 0 JSON-parse failures, 0 interleaved/
+  mixed-tag lines. appendFileSync (O_APPEND) is atomic on macOS APFS for regular-file appends.
+
+- Partial-failure / mutation-order contract (events.ts:1-7): appended a phase-set(P1) by hand
+  WITHOUT writeState => doctor reports issue "phase mismatch state=P0 replay=P1"; doctor --repair
+  rebuilds state to P1 (ok:true). Reverse (state=P1 ahead, journal truncated to 0) => doctor
+  issue + "suspect truncation" warning; doctor --repair REFUSES ("journal cannot be trusted"),
+  preserving the P1 progress. Fails safe in both directions.
+
+- State machine: skip P0->P8, enter P1 without approving P0, backward P3->P1 without backtrack,
+  wave complete with none active, activate wave-999, re-complete a done wave, re-activate a done
+  wave -- ALL rejected with exit 1.
+
+- Replay idempotency: 3x duplicate phase-set P1 events => replay/repair yields phase P1 (no
+  double-apply). REPLAY_TYPES handlers are all idempotent by construction.
+
+- Clock skew: no code sorts events by ts (all .sort() are on filenames/hashes). Replay is strictly
+  append order (events.ts replayState). Timestamps are UTC ISO (new Date().toISOString()), no TZ
+  dependency; Date.now() deliberately absent from tokens.ts/usage.ts.
+
+- Value roundtrip: node title with emoji/hangul/RTL/cafe, and with quote/backslash/tab/control
+  chars, roundtrips byte-exact through the YAML ledger; 100k-char title stored intact; newline
+  title block-escaped in YAML and JSON-escaped in the journal (valid JSON line).
+
+- re-init after rm -rf .harness: fresh P0, 0 gates, activeWave null -- no state resurrection.
+
+- Hook coverage strength (observed on the auditor's own Bash calls): denies journal writes by
+  literal path, by symlink (realpath), by command substitution/glob (unresolvable target), and by
+  reading interpreter script files (node/sed/awk -f) that write .harness. Two-layer gate-approve
+  defense (hook command-shape deny + CLI TTY gate) both fired.
+
+LOGIC-03 (MED): node IDs unvalidated. --id "" rejected (exit 1) but --id "   " (whitespace) and
+  space-containing / 100k-char ids accepted (exit 0, stored). Enables blank RTM rows and near-
+  duplicate ids (F-1 vs "F-1 ") that silently break exact-match design_refs / STALE propagation
+  (node bump keys on exact id).
+
+LOGIC-04 (LOW): orphan references silent. A wave referencing a now-missing ledger node (node
+  removed out-of-band) is surfaced by neither report rtm nor doctor (both ok, no mention).
+
+LOGIC-05 (LOW): harness wave update writes raw newlines into the line-based turn log, injecting a
+  forged "## turn log" heading (the hook parse anchor). Contained at read time by
+  recentTurnLog (hook.ts:636: first heading wins, last-5-lines, per-line sanitizeUntrusted) plus
+  nonce fence -- format hygiene, not a security break.
+
+LOGIC-06 (LOW): a newline in a node title breaks the RTM markdown table row (cosmetic display).
+
+OBS (MED-LOW): "journal is source of truth" is realized only in the degraded path. A valid-but-
+  wrong state.json (hand-set phase P12 + all gates approved) is trusted by status/phase-set/hook;
+  only doctor detects the divergence, and it is not run on a normal turn. Natural divergences fail
+  safe (state behind journal) and agents cannot edit state.json (hook), so defensible -- but
+  reconciliation is not continuous.

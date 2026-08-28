@@ -1,0 +1,39 @@
+### ax10 OFFLINE install probe — same README steps, npm registry unreachable
+npm_config_registry=http://127.0.0.1:1/  npm_config_offline=true
+
+## marketplace add
+Adding marketplace…✔ Successfully added marketplace: king-wjang-harness (declared in user settings)
+## install
+Installing plugin "king-wjang-harness@king-wjang-harness"...✔ Successfully installed plugin: king-wjang-harness@king-wjang-harness (scope: user)
+exit=
+## plugin list
+Installed plugins:
+
+  ❯ king-wjang-harness@king-wjang-harness
+    Version: 0.1.2
+    Scope: user
+    Status: ✔ enabled
+
+## cache dir present? yes
+   node_modules: ABSENT
+   core/dist/cli.js: present
+## does the CLI still work from that install?
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": null,
+  "gates": {},
+  "backtrack": null,
+## npm log from the offline attempt
+428 silly unfinished npm timer reifyNode:node_modules/@types/estree 1787842704121
+429 silly unfinished npm timer reifyNode:node_modules/@jridgewell/trace-mapping 1787842704121
+430 silly unfinished npm timer reifyNode:node_modules/@jridgewell/sourcemap-codec 1787842704121
+431 silly unfinished npm timer reifyNode:node_modules/@jridgewell/resolve-uri 1787842704121
+432 silly unfinished npm timer reifyNode:node_modules/@jridgewell/gen-mapping 1787842704121
+433 verbose cwd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome2/.claude/plugins/cache/king-wjang-harness/king-wjang-harness/0.1.2
+434 verbose os Darwin 25.5.0
+435 verbose node v22.22.2
+436 verbose npm  v10.9.7
+437 verbose exit 1
+438 verbose code 1
+439 error A complete log of this run can be found in: /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax10/fakehome2/.npm/_logs/2026-08-27T14_58_22_192Z-debug-0.log

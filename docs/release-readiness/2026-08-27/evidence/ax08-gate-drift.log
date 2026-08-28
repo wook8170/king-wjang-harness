@@ -1,0 +1,10 @@
+### LOGIC-01: post-approval artifact tamper does not block phase entry (MEASURED)
+Sandbox: ax08/drift. Approved P0 (pinned hash 3969053c). Appended a line to docs/00-concept.md.
+`harness phase set P1` => "Phase → P1", exit 0 (ALLOWED). status: phase P1, P0 still "approved".
+`gate verify P0` => ok:false "artifact hash mismatch — pinned 3969053c ≠ current 23d24c18".
+`harness doctor` after tamper => ok:true, issues:0 (doctor is BLIND to gate-hash drift).
+Root cause: canEnterPhase/setPhaseViaGate (gate.ts:854-889) check only gates[p].status==='approved';
+never re-verify artifactHash. invalidateStaleGates (gate.ts:814) is wired ONLY to manual
+`harness gate sweep` (cli.ts:830). Contradicts gate.ts:8 "승인 후 몰래 고친 문서로 다음 페이즈에
+들어갈 수 없다" and §4-3.3 "이후 불일치는 게이트 자동 무효화". (Ship-track packet/verdict do call
+verifyGate — report.ts:364 — so it surfaces at ship, not on the design-track transitions.)

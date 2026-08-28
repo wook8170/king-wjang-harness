@@ -1,0 +1,39 @@
+=== 창 위생 (문턱 load<5.0, 여유 두고 4.2 대기) ===
+19:17  up 5 days, 23:31, 1 user, load averages: 3.95 5.48 7.17
+Fri Aug 28 19:17:38 KST 2026
+
+# Hook latency — two surfaces: in-process (the judgement itself) and process wall-time
+#   wall-time is what you wait for on every tool call; in-process is what this tool costs
+#   once `node` startup and bundle loading are excluded. The gate applies to both.
+# node v22.22.2 · arm64 · 10 cores · load 3.95 5.48 7.17
+# journal 100,000 entries · n=30 · 3 warm-up runs discarded
+# `node` startup floor on this machine: p50 39.5ms · p95 42.2ms
+#   ^ that floor belongs to your machine, not to this tool. Every absolute number below includes it.
+
+| Journal shape | Surface | Normal p95 | Degraded (fallback) p95 | Fallback adds | Gate |
+|---|---|---|---|---|---|
+| realistic | in-process | 0.1ms | 15.3ms | **+15.2ms** | PASS |
+| realistic | wall-time | 78.8ms | 111.7ms | **+32.9ms** | PASS |
+| corrupt | in-process | 0.1ms | 10.8ms | **+10.7ms** | PASS |
+| corrupt | wall-time | 78.8ms | 101.0ms | **+22.2ms** | PASS |
+| all-state | in-process | 0.1ms | 53.9ms | **+53.7ms** | recorded only |
+| all-state | wall-time | 104.0ms | 140.5ms | **+36.5ms** | recorded only |
+
+| Command shape | p95 | Gate |
+|---|---|---|
+| plain | 242.7ms | PASS |
+| long-noslash | 355.9ms | PASS |
+| cd-redirect | 454.7ms | PASS |
+| quoted | 172.8ms | PASS |
+| interp-body | 82.6ms | PASS |
+| symlink-cd | 81.0ms | PASS |
+Command parsing must stay under 1000ms p95 — these shapes are the ones that
+went quadratic before (long paths without slashes, repeated `cd` with redirects).
+A hook that exceeds its 10s timeout is killed — and a killed hook allows the call.
+
+Gate G9 is on the last column — **the fallback must add less than 50ms p95**.
+It is a delta, not an absolute, because most of any absolute figure is the `node` startup
+above — a number this tool does not control.
+`all-state` (every line a state transition) is adversarial input: recorded, not gated. The
+journal only grows through harness commands, so reaching 100,000 transitions means running
+100,000 of them — hard to reach in practice, though nothing caps it.

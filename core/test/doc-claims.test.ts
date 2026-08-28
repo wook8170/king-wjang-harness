@@ -99,6 +99,43 @@ describe('PROD-171: README 가 말하는 MCP 도구가 실재한다', () => {
   });
 });
 
+/**
+ * [FEAT-01] **「알려진 한계」의 항목 수가 언어마다 달랐다.**
+ *
+ * 영문에만 있고 ko/ja/zh 에서 통째로 빠진 불릿이 하나 있었는데, 하필 그것이
+ * **제품이 스스로 밝힌 보안 경계의 구멍**(인터프리터 프로그램 파일의 64 KB 상한·미지 런타임·
+ * 언어 내부 경로 조립)이었다. 영어권 사용자만 그 우회 가능성을 알고 방어적으로 쓸 수 있었다.
+ *
+ * 기존 계량 검사는 **숫자와 config 키 이름**만 4개 언어에 대조했다. 그래서 문장·불릿 단위로
+ * 통째로 빠져도 CI 는 계속 green 이었다. 구조적 카운트를 더해 그 사각을 닫는다 —
+ * 번역의 «내용»까지는 기계가 못 보지만, **하나가 통째로 없어진 것**은 볼 수 있다.
+ */
+describe('[FEAT-01] 「알려진 한계」가 4개 언어에서 같은 수의 항목을 말한다', () => {
+  const HEADING = /Known limits|알려진 한계|既知の限界|已知限制/;
+
+  const bulletCount = (body: string): number => {
+    let inSection = false;
+    let n = 0;
+    for (const line of body.split('\n')) {
+      if (/^#{2,3} /.test(line)) inSection = HEADING.test(line);
+      else if (inSection && /^- \*\*/.test(line)) n++;
+    }
+    return n;
+  };
+
+  it('불릿 개수가 같다', () => {
+    const counts = READMES.map(f => [f, bulletCount(read(f))] as const);
+    const uniq = new Set(counts.map(([, n]) => n));
+    expect(uniq.size, `언어별로 항목 수가 다르다: ${JSON.stringify(counts)}`).toBe(1);
+    expect([...uniq][0], '「알려진 한계」 절을 못 찾았다').toBeGreaterThan(0);
+  });
+
+  it('인터프리터 우회 한계 고지가 4개 언어에 전부 있다 — 보안 경계 공시라 특히 중요하다', () => {
+    const missing = READMES.filter(f => !read(f).includes('64 KB'));
+    expect(missing, `이 언어의 독자는 인터프리터 우회 가능성을 듣지 못한다: ${missing}`).toEqual([]);
+  });
+});
+
 describe('PROD: README 가 광고하는 계량이 사실과 맞는다', () => {
   const actualFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.ts')).length;
 

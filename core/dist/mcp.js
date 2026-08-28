@@ -7498,17 +7498,23 @@ function parseConfig(p) {
     block_raw_values: raw.block_raw_values === true
   };
 }
+var KNOWN_CONFIG_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
 function inspectConfig(root) {
   const p = configPath(root);
-  if (!fs2.existsSync(p)) return { problems: [] };
+  if (!fs2.existsSync(p)) return { problems: [], unknownKeys: [], path: p };
   try {
     const parsed = YAML.parse(fs2.readFileSync(p, "utf8"));
     if (parsed !== null && parsed !== void 0 && typeof parsed !== "object") {
-      return { problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`] };
+      return {
+        problems: [`${p}: not a mapping \u2014 every key is ignored and defaults are in effect`],
+        unknownKeys: [],
+        path: p
+      };
     }
-    return { problems: [] };
+    const unknownKeys = parsed && !Array.isArray(parsed) ? Object.keys(parsed).filter((k) => !KNOWN_CONFIG_KEYS.has(k)) : [];
+    return { problems: [], unknownKeys, path: p };
   } catch (e) {
-    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`] };
+    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`], unknownKeys: [], path: p };
   }
 }
 
@@ -7530,9 +7536,10 @@ function tr(root, m) {
 }
 
 // core/src/state.ts
+var SCHEMA_VERSION = 1;
 function defaultState() {
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     phase: "P0",
     activeWave: null,
     gates: {},
@@ -7547,9 +7554,22 @@ function hasHarness(root) {
   return fs3.existsSync(harnessDir(root));
 }
 function readState(root) {
+  let future = null;
   try {
-    return JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
+    const parsed = JSON.parse(fs3.readFileSync(statePath(root), "utf8"));
+    const v = parsed.schemaVersion;
+    if (typeof v === "number" && v > SCHEMA_VERSION) {
+      future = v;
+    }
+    if (future === null) return parsed;
+    throw new Error("");
   } catch (e) {
+    if (future !== null) {
+      throw new Error(tr(root, {
+        en: `state.json was written by a newer harness (schemaVersion ${future}); this build only knows ${SCHEMA_VERSION}. Reading it would silently misinterpret gates and waves, and writing over it would lose what the newer build recorded. Upgrade the harness, or move \`.harness/\` aside and start fresh.`,
+        ko: `state.json \uC774 \uB354 \uC0C8 \uBC84\uC804\uC758 \uD558\uB124\uC2A4\uAC00 \uC4F4 \uAC83\uC774\uB2E4(schemaVersion ${future}). \uC774 \uBE4C\uB4DC\uB294 ${SCHEMA_VERSION} \uAE4C\uC9C0\uB9CC \uC548\uB2E4. \uADF8\uB300\uB85C \uC77D\uC73C\uBA74 \uAC8C\uC774\uD2B8\xB7\uC6E8\uC774\uBE0C\uB97C \uC870\uC6A9\uD788 \uC624\uB3C5\uD558\uACE0, \uADF8 \uC704\uC5D0 \uC4F0\uBA74 \uC0C8 \uBE4C\uB4DC\uAC00 \uAE30\uB85D\uD55C \uAC83\uC744 \uC783\uB294\uB2E4. \uD558\uB124\uC2A4\uB97C \uC5C5\uADF8\uB808\uC774\uB4DC\uD558\uAC70\uB098, \`.harness/\` \uB97C \uC606\uC73C\uB85C \uCE58\uC6B0\uACE0 \uC0C8\uB85C \uC2DC\uC791\uD558\uB77C.`
+      }));
+    }
     if (isInitialized(root)) {
       throw new Error(tr(root, {
         en: `state.json is damaged and could not be parsed (${e.message}) \u2014 the state store is derived, so the event journal can rebuild it: run \`harness doctor --repair\`. \`harness doctor\` alone reports what it finds without changing anything.`,
@@ -7565,12 +7585,26 @@ function readState(root) {
     throw e;
   }
 }
+var WRITE_DENIED = /* @__PURE__ */ new Set(["EACCES", "EPERM", "EROFS"]);
+function rethrowWriteFailure(root, e, target) {
+  const code = e.code;
+  if (!code || !WRITE_DENIED.has(code)) throw e;
+  const dir = path2.dirname(target);
+  throw new Error(tr(root, {
+    en: `Cannot write to ${dir} (${code}) \u2014 the harness keeps its state and journal there, so nothing can be recorded while this lasts: gate approvals, wave history and the activity marker are all dropped. Check the directory permissions (\`chmod u+w ${dir}\`) or whether the volume is mounted read-only, then run \`harness doctor\`. Original error: ${e.message}`,
+    ko: `${dir} \uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 (${code}) \u2014 \uD558\uB124\uC2A4\uB294 \uC0C1\uD0DC\uC640 \uC800\uB110\uC744 \uADF8 \uC544\uB798\uC5D0 \uAE30\uB85D\uD558\uBBC0\uB85C \uC774 \uC0C1\uD0DC\uAC00 \uACC4\uC18D\uB418\uB294 \uB3D9\uC548 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4: \uAC8C\uC774\uD2B8 \uC2B9\uC778\xB7\uC6E8\uC774\uBE0C \uC774\uB825\xB7\uD65C\uB3D9 \uB9C8\uCEE4\uAC00 \uC804\uBD80 \uC720\uC2E4\uB41C\uB2E4. \uB514\uB809\uD1A0\uB9AC \uAD8C\uD55C\uC744 \uD655\uC778\uD558\uAC70\uB098(\`chmod u+w ${dir}\`) \uBCFC\uB968\uC774 \uC77D\uAE30\uC804\uC6A9\uC73C\uB85C \uB9C8\uC6B4\uD2B8\uB410\uB294\uC9C0 \uBCF4\uB77C. \uADF8 \uB4A4 \`harness doctor\` \uB97C \uB3CC\uB824\uB77C. \uC6D0\uBCF8 \uC624\uB958: ${e.message}`
+  }));
+}
 function writeState(root, state) {
   const target = statePath(root);
   const tmp = `${target}.tmp-${process.pid}`;
   const next = { ...state, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-  fs3.renameSync(tmp, target);
+  try {
+    fs3.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+    fs3.renameSync(tmp, target);
+  } catch (e) {
+    rethrowWriteFailure(root, e, target);
+  }
 }
 
 // core/src/gate.ts
@@ -7659,9 +7693,54 @@ var EVENT_TYPES = [
   "policy-pinned"
 ];
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
+var MASK = "***MASKED***";
+var SECRET_RULES = [
+  // PEM 개인키 블록 — 헤더만 남기고 본문을 통째로. 닫힘/열림 두 경우를 모두 본다.
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]*?(-----END [A-Z0-9 ]*PRIVATE KEY-----)/g, to: `$1${MASK}$2` },
+  { re: /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)[\s\S]+/g, to: `$1${MASK}` },
+  // 발급자 접두형 — 접두는 남긴다(무엇이 샜는지가 대응의 첫 정보다).
+  { re: /\b(sk-)[A-Za-z0-9_-]{16,}/g, to: `$1${MASK}` },
+  { re: /\b(gh[pousr]_)[A-Za-z0-9]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(github_pat_)[A-Za-z0-9_]{20,}/g, to: `$1${MASK}` },
+  { re: /\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, to: `$1${MASK}` },
+  { re: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, to: `$1${MASK}` },
+  // `Bearer <토큰>` — 뒤가 12자 이상일 때만. "Bearer of bad news" 같은 산문은 걸리지 않는다.
+  { re: /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/g, to: `$1${MASK}` },
+  // 대입형. 앞의 `\b` 를 일부러 두지 않는다 — `aws_secret_access_key=` 처럼 밑줄로 이어 붙인
+  // 실제 형태를 놓치기 때문이다. 값은 12자 이상만 본다(짧은 영어 단어를 뭉개지 않으려고).
+  {
+    re: /((?:api[-_]?key|apikey|access[-_]?key|secret[-_]?key|client[-_]?secret|auth[-_]?token|access[-_]?token|refresh[-_]?token|secret|password|passwd)["']?\s*[:=]\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi,
+    to: `$1${MASK}`
+  },
+  // 맨 `token` 은 **`=` 일 때만** 본다. `vercel deploy --token=…` 류가 `deployment-recorded` 로
+  // 저널에 들어오기 때문이다. `token:` 을 제외하는 이유는 이 제품이 디자인 **토큰**을 온종일
+  // 말하기 때문 — `token: color-bg-primary` 를 뭉개면 그게 바로 오탐이다.
+  { re: /(\btoken["']?\s*=\s*["']?)[A-Za-z0-9+/_=.~-]{12,}/gi, to: `$1${MASK}` }
+];
+function maskSecrets(text) {
+  let out = text;
+  for (const { re, to } of SECRET_RULES) out = out.replace(re, to);
+  return out;
+}
+function maskDeep(v, depth = 0) {
+  if (typeof v === "string") return maskSecrets(v);
+  if (v === null || typeof v !== "object" || depth >= 8) return v;
+  if (Array.isArray(v)) return v.map((x) => maskDeep(x, depth + 1));
+  const out = {};
+  for (const [k, x] of Object.entries(v)) out[k] = maskDeep(x, depth + 1);
+  return out;
+}
 function appendEvent(root, type, data) {
-  const ev = { ts: (/* @__PURE__ */ new Date()).toISOString(), type, data };
-  fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  const ev = {
+    ts: (/* @__PURE__ */ new Date()).toISOString(),
+    type,
+    data: maskDeep(data)
+  };
+  try {
+    fs4.appendFileSync(eventsPath(root), JSON.stringify(ev) + "\n");
+  } catch (e) {
+    rethrowWriteFailure(root, e, eventsPath(root));
+  }
   return ev;
 }
 function readJournal(root) {
@@ -7772,6 +7851,18 @@ var crypto = __toESM(require("crypto"));
 var fs5 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
+var STATE_FILES = [
+  ".harness/state.json",
+  ".harness/events.jsonl",
+  ".harness/design/ledger.yaml",
+  ".harness/design/registry.yaml",
+  ".harness/ship/defects.yaml",
+  ".harness/ship/deployments.yaml",
+  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
+  ".harness/.runtime/last-activity",
+  ".harness/.runtime/last-turn"
+];
+var OWNED_FILES = [...STATE_FILES, ...POLICY_FILES];
 var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
@@ -9477,6 +9568,20 @@ function sweepOrphanTmp(root) {
   }
   return swept;
 }
+function unwritableDirs(root) {
+  const bad = [];
+  for (const dir of [harnessDir(root), runtimeDir(root)]) {
+    if (!fs16.existsSync(dir)) continue;
+    const probe = path14.join(dir, `write-probe.tmp-${process.pid}`);
+    try {
+      fs16.writeFileSync(probe, "");
+      fs16.rmSync(probe);
+    } catch {
+      bad.push(dir);
+    }
+  }
+  return bad;
+}
 function countHookErrors(root) {
   const p = path14.join(runtimeDir(root), "hook-errors.log");
   if (!fs16.existsSync(p)) return 0;
@@ -9491,8 +9596,28 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
+  if (fs16.existsSync(harnessDir(root))) {
+    const unwritable = unwritableDirs(root);
+    if (unwritable.length > 0) {
+      issues.push(t({
+        en: `cannot write to ${unwritable.join(", ")} \u2014 the harness records everything there, so the activity marker, the hook error log and every gate/wave event are being dropped silently, and the enforcement that depends on the marker (the turn-log settlement guard at session end) is off. Fix the permissions (\`chmod u+w ${unwritable[0]}\`) or remount the volume read-write, then run \`harness doctor\` again.`,
+        ko: `${unwritable.join(", ")} \uC5D0 \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uD558\uB124\uC2A4\uB294 \uBAA8\uB4E0 \uAC83\uC744 \uADF8 \uC544\uB798\uC5D0 \uAE30\uB85D\uD558\uBBC0\uB85C \uD65C\uB3D9 \uB9C8\uCEE4\xB7\uD6C5 \uC624\uB958 \uB85C\uADF8\xB7\uAC8C\uC774\uD2B8/\uC6E8\uC774\uBE0C \uC774\uBCA4\uD2B8\uAC00 \uC804\uBD80 \uC870\uC6A9\uD788 \uC720\uC2E4\uB418\uACE0, \uB9C8\uCEE4\uC5D0 \uAE30\uB300\uB294 \uAC15\uC81C(\uC138\uC158 \uC885\uB8CC \uC2DC \uD134 \uB85C\uADF8 \uC815\uC0B0 \uAC00\uB4DC)\uAC00 \uAEBC\uC9C4\uB2E4. \uAD8C\uD55C\uC744 \uACE0\uCE58\uAC70\uB098(\`chmod u+w ${unwritable[0]}\`) \uBCFC\uB968\uC744 \uC4F0\uAE30 \uAC00\uB2A5\uC73C\uB85C \uB2E4\uC2DC \uB9C8\uC6B4\uD2B8\uD55C \uB4A4 \`harness doctor\` \uB97C \uB2E4\uC2DC \uB3CC\uB824\uB77C.`
+      }));
+    }
+  }
   const journalExists = fs16.existsSync(eventsPath(root));
-  const { events, corruptLines } = readJournal(root);
+  let events = [];
+  let corruptLines = 0;
+  let journalReadable = true;
+  try {
+    ({ events, corruptLines } = readJournal(root));
+  } catch (e) {
+    journalReadable = false;
+    issues.push(t({
+      en: `events.jsonl cannot be read (${e.message}) \u2014 the journal is the source of truth, so there is nothing to check the state against. Restore read access to the file (\`chmod u+r ${eventsPath(root)}\`), then run \`harness doctor\` again.`,
+      ko: `events.jsonl \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC800\uB110\uC774 \uC9C4\uC2E4\uC758 \uC6D0\uCC9C\uC774\uB77C \uC0C1\uD0DC\uB97C \uB300\uC870\uD560 \uADFC\uAC70\uAC00 \uC5C6\uB2E4. \uD30C\uC77C \uC77D\uAE30 \uAD8C\uD55C\uC744 \uBCF5\uAD6C\uD55C \uB4A4(\`chmod u+r ${eventsPath(root)}\`) \`harness doctor\` \uB97C \uB2E4\uC2DC \uB3CC\uB824\uB77C.`
+    }));
+  }
   const replayed = replayState(events);
   let current = null;
   if (!fs16.existsSync(statePath(root))) {
@@ -9510,6 +9635,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   let trustworthy = true;
+  if (!journalReadable) trustworthy = false;
   if (!journalExists) {
     warnings.push(t({
       en: "events.jsonl is missing \u2014 there is no evidence to replay",
@@ -9560,6 +9686,17 @@ function runDoctor(root, opts = {}) {
         ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C \uBD80\uC7AC \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C`
       })
     );
+  } else if (effective.activeWave) {
+    try {
+      readWave(root, effective.activeWave);
+    } catch (e) {
+      issues.push(
+        tr(root, {
+          en: `The wave file for activeWave ${effective.activeWave} exists but cannot be parsed (${e.message}) \u2014 a wave sheet has no journal or git backup, so an overwrite loses its turn log and acceptance criteria for good. Restore the file from your editor or VCS if you can; otherwise settle activeWave to null with \`harness doctor --repair\` and open a new wave.`,
+          ko: `activeWave ${effective.activeWave} \uC758 \uC6E8\uC774\uBE0C \uD30C\uC77C\uC774 \uC788\uC9C0\uB9CC \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB294 \uC800\uB110\xB7git \uBC31\uC5C5\uC774 \uC5C6\uB294 \uC720\uC77C\uD55C \uD30C\uC77C\uC774\uB77C \uB36E\uC5B4\uC4F0\uBA74 \uD134 \uB85C\uADF8\uC640 \uC644\uB8CC\uAE30\uC900\uC774 \uC601\uAD6C\uD788 \uC0AC\uB77C\uC9C4\uB2E4. \uD3B8\uC9D1\uAE30\uB098 VCS \uB85C \uBCF5\uC6D0\uD560 \uC218 \uC788\uC73C\uBA74 \uADF8\uAC83\uC774 \uC6B0\uC120\uC774\uACE0, \uC544\uB2C8\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD55C \uB4A4 \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uC5F4\uC5B4\uB77C.`
+        })
+      );
+    }
   }
   if (current && current.schemaVersion !== 1) {
     warnings.push(
@@ -9573,10 +9710,19 @@ function runDoctor(root, opts = {}) {
   if (swept > 0) {
     notes.push(t({ en: `swept ${swept} orphaned temp file(s)`, ko: `\uACE0\uC544 \uC784\uC2DC\uD30C\uC77C ${swept}\uAC1C \uC815\uB9AC` }));
   }
-  for (const problem of inspectConfig(root).problems) {
+  const cfg = inspectConfig(root);
+  for (const problem of cfg.problems) {
     warnings.push(t({
       en: `config could not be parsed, so defaults are in effect \u2014 ${problem}`,
       ko: `config \uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uC5B4 \uAE30\uBCF8\uAC12\uC73C\uB85C \uB3D9\uC791 \uC911\uC774\uB2E4 \u2014 ${problem}`
+    }));
+  }
+  if (cfg.unknownKeys.length > 0) {
+    const bad = cfg.unknownKeys.map((k) => `"${k}"`).join(", ");
+    const known = [...KNOWN_CONFIG_KEYS].sort().join(", ");
+    issues.push(t({
+      en: `${cfg.path} has ${cfg.unknownKeys.length} key(s) this build does not read: ${bad} \u2014 they are ignored, so the default is in effect and whatever you meant to enforce with them is not enforced. Fix the spelling or delete the key(s); the keys this build reads are: ${known}. (doctor cannot repair this \u2014 the config file is yours to edit.)`,
+      ko: `${cfg.path} \uC5D0 \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uC9C0 \uC54A\uB294 \uD0A4\uAC00 ${cfg.unknownKeys.length}\uAC1C \uC788\uB2E4: ${bad} \u2014 \uBB34\uC2DC\uB418\uBBC0\uB85C \uAE30\uBCF8\uAC12\uC774 \uB3CC\uACE0 \uC788\uACE0, \uADF8 \uD0A4\uB85C \uAC78\uB824\uB358 \uAC15\uC81C\uB294 \uAC78\uB824 \uC788\uC9C0 \uC54A\uB2E4. \uCCA0\uC790\uB97C \uACE0\uCE58\uAC70\uB098 \uADF8 \uD0A4\uB97C \uC9C0\uC6CC\uB77C. \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uB294 \uD0A4\uB294: ${known}. (doctor \uB294 \uC774\uAC83\uC744 \uBCF5\uAD6C\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 config \uD30C\uC77C\uC740 \uC0AC\uB78C\uC774 \uACE0\uCE58\uB294 \uAC83\uC774\uB2E4.)`
     }));
   }
   const hookErrors = countHookErrors(root);
@@ -9587,7 +9733,7 @@ function runDoctor(root, opts = {}) {
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs16.existsSync(harnessDir(root))) {
+  if (fs16.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -9619,6 +9765,11 @@ function runDoctor(root, opts = {}) {
         ko: `\uC815\uCC45 \uD30C\uC77C\uC774 \uACE0\uC815\uB41C \uBCA0\uC774\uC2A4\uB77C\uC778\uACFC \uB2E4\uB974\uB2E4 \u2014 \uACE0\uC815 ${pinned.hash.slice(0, 12)} (${pinned.ts}) \u2260 \uD604\uC7AC ${current2.hash.slice(0, 12)}` + (delta ? ` [${delta}]` : "") + `. \uB300\uC0C1: ${current2.files.join(", ") || "\uC5C6\uC74C"}. \uC774 \uD30C\uC77C\uB4E4\uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uBBC0\uB85C, \uC5EC\uAE30\uAC00 \uBC14\uB00C\uBA74 \uAC15\uC81C \uC790\uCCB4\uAC00 \uBC14\uB010 \uAC83\uC774\uB2E4. \uC815\uB2F9\uD55C \uBCC0\uACBD\uC77C \uC218 \uC788\uB2E4 \u2014 \uB0B4\uC6A9\uC744 \uD655\uC778\uD55C \uB4A4 \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\` \uB85C \uC7AC\uACE0\uC815\uD558\uB77C(env \uC811\uB450\uB294 \uC0AC\uB78C\uC758 \uC190\uC774\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4)`
       }));
     }
+  } catch (e) {
+    warnings.push(t({
+      en: `the policy baseline could not be checked (${e.message}) \u2014 a change to the files that decide what the hook blocks would not be visible right now. Fix the problem above first.`,
+      ko: `\uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uD655\uC778\uD560 \uC218 \uC5C6\uC5C8\uB2E4 (${e.message}) \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC774 \uBC14\uB00C\uC5B4\uB3C4 \uC9C0\uAE08\uC740 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4. \uC704\uC758 \uBB38\uC81C\uB97C \uBA3C\uC800 \uD574\uACB0\uD558\uB77C.`
+    }));
   }
   let repaired = false;
   let refused = false;

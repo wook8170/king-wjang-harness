@@ -291,7 +291,10 @@ export function raiseCritical(
   if (opts.waveId) data.id = opts.waveId;
   if (opts.attempts !== undefined) data.attempts = opts.attempts;
   const ev = appendEvent(root, 'critical-raised', data);
-  return toCriticalEvent(ev.ts, data)!;
+  // [OPS-08] 돌려주는 것도 **저널에 남은 것**이어야 한다(`data` 가 아니라 `ev.data`).
+  // appendEvent 가 비밀 패턴을 가리므로, 원본을 돌려주면 「저장된 것」과 「보고된 것」이
+  // 갈리고 원문이 다른 싱크로 다시 흘러 들어갈 길이 열린다.
+  return toCriticalEvent(ev.ts, ev.data)!;
 }
 
 /** 소환 해제. id 를 주면 그 웨이브의 소환만, 안 주면 무엇이든 해제한다. */

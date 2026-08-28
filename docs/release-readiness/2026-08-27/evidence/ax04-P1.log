@@ -1,0 +1,156 @@
+# ax04-P1 — 처음 도입하는 개발자 (README.md 만 보고) — 2026-08-27 23:41
+# sandbox clone: git archive HEAD | tar -x  →  $R (/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo)
+
+## STEP 1 — 클론 직후, 빌드 없이 CLI 가 도는가 (README: 'works on clone — no build step')
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo && ./bin/harness --version
+king-wjang-harness v0.1.2
+[exit=0]
+
+## STEP 2 — README Quick start 의 유일한 로컬 설치 경로는 'npm install' (from source). 클론만으로 hook 이 도는지 먼저 확인
+
+$ echo '{}' | CLAUDE_PROJECT_DIR=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness-hook session-start
+[exit=0]
+
+## STEP 3 — harness init (README Command reference 1행)
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && CLAUDE_PROJECT_DIR=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness init
+.harness/ initialised — run `harness --help` to see the command map.
+NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human — allowlisting it lets an agent open gates on its own.
+[exit=0]
+
+$ ls -a /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1/.harness
+.
+..
+.runtime
+config.yaml
+design
+events.jsonl
+state.json
+waves
+[exit=0]
+
+## STEP 4 — SessionStart 훅이 뭘 주입하는가 (실 프로토콜: stdin JSON)
+
+$ echo '{"session_id":"p1-s1","hook_event_name":"SessionStart","source":"startup"}' | CLAUDE_PROJECT_DIR=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness-hook session-start
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"[king-wjang-harness] phase: P0 | active wave: none\nDesign track — writing implementation code (the profile's source paths, or source-code file extensions) and deploy-ish commands are blocked. Writable: documents, assets, configuration (including `*.config.js|ts`, `.eslintrc.js`), and test files **named as tests** (`*.test.*`, `*_test.*`, `test_*`, `conftest.py`) — a `test/` directory alone is not enough, and the profile's source paths win over all of these. Anything under .harness/, docs/ or a root *.md is always writable.\nNo active wave. Next: `harness status` to see where you are, `harness --help` for the command map. In the design track, write your design docs then `harness gate submit <P>`.\nOptional: if this environment provides /remote-control, run it to enable mobile supervision; if not, skip it — push notifications and artifacts are the fallback channel. (Silence this with `remote_control: false` in `.harness/config.yaml`.)"}}
+[exit=0]
+
+## STEP 5 — harness status (README: 'Current state as JSON')
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness status
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": null,
+  "gates": {},
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:41:21.525Z"
+}
+[exit=0]
+
+## STEP 6 — README 표만 보고 다음 단계 찾기: phase set P1 을 게이트 없이 시도 (초심자가 하는 실수)
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness phase set P1
+Cannot move to P1 — 1 gate(s) before it are not approved: P0 (P0 is currently: pending). Start with the earliest: `harness gate submit P0` → `harness gate approve P0`. A phase change happens on 'artifact approval', never on 'work finished' (spec §2). Approving a later gate does not stand in for the ones before it
+[exit=1]
+
+## STEP 7 — 첫 설계 행위: node upsert (README Command reference)
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness node upsert --id C-1 --title 'Concept: todo app'
+C-1 created in the design ledger
+[exit=0]
+
+## STEP 8 — 설계 문서를 쓰고 gate submit (SessionStart 가 알려준 명령 — README 표에는 없음)
+
+$ mkdir -p /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1/docs && printf '# Concept
+
+A todo app for teams. Users create tasks, assign them, and track completion. Success metric: a team of five runs a week of work through it without leaving the tool.
+' > /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1/docs/00-concept.md
+[exit=0]
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness gate submit P0 --docs docs/00-concept.md
+Unknown flag: --docs. An unknown flag is never applied — accepting it silently would record something other than what you asked for. Run `harness gate --help` to see what this group takes.
+[exit=1]
+
+## STEP 8b — 에러가 시킨 대로 gate --help
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness gate --help
+harness gate — Phase gates — submit artifacts, then a human approves.
+
+Subcommands:
+  submit <P> --paths <a,b> [--evidence claimed|code|measured]
+                                  Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.
+  approve <P>                     Approve a submitted gate. Humans only — never an agent.
+  verify <P>                      Re-check that submitted artifacts still match their pinned hash.
+  sweep                           Invalidate gates whose artifacts changed after approval.
+  status                          Print all gate records as JSON.
+  feedback <P> [--from <file>]    Collect reviewer/canvas comments as revision grounds; without --from, print what was collected.
+[exit=0]
+
+## STEP 9 — 올바른 플래그로 재시도: gate submit P0 --paths
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness gate submit P0 --paths docs/00-concept.md
+P0 submitted — hash d68b53489783 · evidence claimed
+Review packet: .harness/packets/P0.md
+Note: no document is registered for P0, so the packet says it is not grounds for approval. Link one with `harness doc upsert --id <DOC-x> --path <file> --phase P0` → publish → `harness doc url <DOC-x> <url>`, then submit again.
+Next: a human approves it in their terminal — `harness gate approve P0`.
+[exit=0]
+
+## STEP 10 — gate approve P0 (사람 역할) → phase set P1
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness gate approve P0
+Approving a gate is the human's final click, so it must come from a terminal — this process has no TTY, which is what an agent's tool call looks like. Run `harness gate approve <P>` yourself in your terminal. Everything else on the gate is open: `harness gate status`, `harness gate verify <P>`. If you really are a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` yourself — but then nothing is checking that a person read the review packet.
+[exit=1]
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness phase set P1
+Cannot move to P1 — 1 gate(s) before it are not approved: P0 (P0 is currently: submitted). Start with the earliest: `harness gate submit P0` → `harness gate approve P0`. A phase change happens on 'artifact approval', never on 'work finished' (spec §2). Approving a later gate does not stand in for the ones before it
+[exit=1]
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness status
+{
+  "schemaVersion": 1,
+  "phase": "P0",
+  "activeWave": null,
+  "gates": {
+    "P0": {
+      "status": "submitted",
+      "artifactHash": "d68b53489783e48b2853a01c4c9589f4283e3b084c8b3ffaeada3551b951942d",
+      "evidence": "claimed",
+      "submittedAt": "2026-08-27T14:42:29.755Z"
+    }
+  },
+  "backtrack": null,
+  "updatedAt": "2026-08-27T14:42:29.757Z"
+}
+[exit=0]
+
+## STEP 11 — 거절문이 알려준 사람용 탈출구로 승인 (감사 세션은 TTY 없음 — 실사용자는 터미널에서 그냥 approve)
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && HARNESS_APPROVE_NO_TTY=1 /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness gate approve P0
+P0 approved — 2026-08-27T14:42:46.273Z · evidence claimed
+[exit=0]
+
+## STEP 12 — phase set P1 재시도 → 성공해야 P1 시나리오 완주
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness phase set P1
+Phase → P1
+[exit=0]
+
+$ cd /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 && /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness status | head -8
+{
+  "schemaVersion": 1,
+  "phase": "P1",
+  "activeWave": null,
+  "gates": {
+    "P0": {
+      "status": "approved",
+      "artifactHash": "d68b53489783e48b2853a01c4c9589f4283e3b084c8b3ffaeada3551b951942d",
+[exit=0]
+
+## STEP 13 — SessionStart 재주입: 새 세션이 P1 을 아는가 + 주입 토큰량 측정
+
+$ echo '{"session_id":"p1-s2","hook_event_name":"SessionStart","source":"startup"}' | CLAUDE_PROJECT_DIR=/private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/proj-p1 /private/tmp/claude-501/-Volumes-WorkSpace-0200-Dev-king-wjang-harness/4a045069-1d4e-43ca-b0c8-16c08894133f/scratchpad/ax04/repo/bin/harness-hook session-start | head -c 400
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"[king-wjang-harness] phase: P1 | active wave: none\nDesign track — writing implementation code (the profile's source paths, or source-code file extensions) and deploy-ish commands are blocked. Writable: documents, assets, configuration (including `*.config.js|ts`, `.eslintrc.js`), and test files **named as tests** (`*.tes[exit=0]
+
+[측정] additionalContext 길이: 944 chars ≈ 236 tokens (README 주장 ~240 tokens)

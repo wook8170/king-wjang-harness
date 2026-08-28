@@ -91,6 +91,27 @@ function parseConfig(p: string): HarnessConfig {
 }
 
 /**
+ * [API-03] **제품이 실제로 읽는 키의 정본.** `parseConfig` 가 읽는 키 = 기본값이 있는 키이므로
+ * `DEFAULT_CONFIG` 에서 파생한다 — 손으로 적은 두 번째 목록을 두면 키가 하나 늘 때 진단이
+ * 「멀쩡한 키를 오타라고」 우기는 오보로 갈린다(이 저장소가 반복해 물린 부류).
+ */
+export const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_CONFIG));
+
+export interface ConfigInspection {
+  /** 파싱 자체가 실패했거나 매핑이 아닌 경우 — 파일 전체가 무시된다. */
+  problems: string[];
+  /**
+   * [API-03] 파싱은 됐지만 **제품이 읽지 않는** 최상위 키. 오타 하나로 사용자가 적어 둔 차단이
+   * 통째로 사라지는데 예전에는 아무 신호도 없었다. 문자열이 아니라 목록으로 돌려주는 이유:
+   * 부르는 쪽(doctor)이 문구를 만들고 **판정까지** 정해야 하는데, 문자열을 되파싱하게 하면
+   * 그 판정이 문구 변경으로 조용히 깨진다.
+   */
+  unknownKeys: string[];
+  /** 진단 문장이 「어느 파일을 고쳐야 하는지」를 말할 수 있게 경로를 함께 준다. */
+  path: string;
+}
+
+/**
  * [UX-151] **조용한 폴백을 관측 가능하게 만든다.**
  *
  * `loadConfig` 는 파스 실패를 삼키고 기본값으로 간다 — 훅이 절대 죽으면 안 되기 때문이고,
@@ -101,16 +122,22 @@ function parseConfig(p: string): HarnessConfig {
  * 그래서 판정 경로(훅)는 그대로 조용히 두고, **진단 경로(doctor)** 가 이 함수로 사실을 본다.
  * 프로파일 쪽이 `inspectProfile` 로 이미 쓰는 것과 같은 형태다(표면마다 다른 말을 하지 않게).
  */
-export function inspectConfig(root: string): { problems: string[] } {
+export function inspectConfig(root: string): ConfigInspection {
   const p = configPath(root);
-  if (!fs.existsSync(p)) return { problems: [] };
+  if (!fs.existsSync(p)) return { problems: [], unknownKeys: [], path: p };
   try {
     const parsed = YAML.parse(fs.readFileSync(p, 'utf8'));
     if (parsed !== null && parsed !== undefined && typeof parsed !== 'object') {
-      return { problems: [`${p}: not a mapping — every key is ignored and defaults are in effect`] };
+      return {
+        problems: [`${p}: not a mapping — every key is ignored and defaults are in effect`],
+        unknownKeys: [], path: p,
+      };
     }
-    return { problems: [] };
+    const unknownKeys = parsed && !Array.isArray(parsed)
+      ? Object.keys(parsed as Record<string, unknown>).filter((k) => !KNOWN_CONFIG_KEYS.has(k))
+      : [];
+    return { problems: [], unknownKeys, path: p };
   } catch (e) {
-    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`] };
+    return { problems: [`${p}: ${e instanceof Error ? e.message : String(e)}`], unknownKeys: [], path: p };
   }
 }

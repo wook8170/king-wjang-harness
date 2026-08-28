@@ -1,0 +1,28 @@
+=== axis 11 (ops) — FD/zombie-process check across 200 sequential hook calls ===
+
+$ ps -eo pid | wc -l        # before
+717
+$ for i in 1..200: CLAUDE_PROJECT_DIR=<proj> node bin/harness hook pre-tool < payload.json > /dev/null 2>&1
+29.17s user 6.00s system 47% cpu  1:14.63 total   (~373ms/call average, this machine is shared/busy)
+$ ps -eo pid | wc -l        # after
+718
+$ ps -eo pid,ppid,stat,comm | awk '$3 ~ /Z/'      # zombie/defunct scan
+(no output — zero zombies)
+$ ps -eo pid,etime,comm | grep -i node | grep -v grep
+(all listed node processes have etimes of minutes-to-days, i.e. pre-existing unrelated
+processes on this shared dev machine — none correlate with the 200-call test, which
+completed and produced no lingering entries)
+
+Conclusion: no zombie processes, no material process-count growth (717->718, within noise of
+unrelated system activity). This matches the architecture: each hook invocation is a brand-new,
+short-lived `node bin/harness hook ...` process that exits immediately after printing its
+verdict — there is no persistent daemon/worker in the hook path for file descriptors or
+subprocess handles to leak across calls. (Verified/no defect.)
+
+--- MCP server watcher check (code-level, not live-run — separate persistent-process surface) ---
+mcp/server.js:172-183: the one-shot filesystem watcher used to announce a newly-appeared
+feature is opened, and on first fire immediately does `watcher.close()` inside a try/catch
+("already closed — nothing to do"), and is `.unref()`'d right after creation so it does not
+even keep the process alive by itself. No leak by design (code-grade evidence; the MCP server
+itself was not run for an extended live-duration soak test in this audit — out of scope given
+the primary "hook fires per tool call" risk this task asks about was covered above).

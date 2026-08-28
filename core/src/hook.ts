@@ -12,20 +12,20 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { readState } from './state';
+import { readState, defaultState } from './state';
 import { lastTier, guidanceFor } from './usage';
 import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir } from './paths';
+import { harnessDir, runtimeDir, eventsPath } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, bundledProfilesDir, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
-import { POLICY_FILES, POLICY_PREFIXES } from './policy';
+import { POLICY_FILES, POLICY_PREFIXES, STATE_FILES as SHARED_STATE_FILES } from './policy';
 import type { HarnessConfig, HarnessState } from './types';
 
 export interface HookInput {
@@ -181,6 +181,58 @@ const CORE_INVOKE_RE = new RegExp(
 /** 이 명령이 하네스를 실행하려 하는가 — 이름으로든(harness) 코어 파일로든(cli.js). */
 const invokesHarness = (cmd: string): boolean => FORCE_ESCAPE_RE.test(cmd) || CORE_INVOKE_RE.test(cmd);
 
+/**
+ * [OVERBLOCK-3] **자기해제 형태는 「하네스를 실행하는 명령줄」 안에서 판정한다.**
+ *
+ * 예전에는 세 가드가 전부 `invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd)`
+ * 처럼 **명령 전체를 따로따로** 훑었다. 세 조건이 같은 자리에 있을 필요가 없으니
+ * `echo "docs: harness gate approve P0"` 처럼 **아무것도 실행하지 않는 문자열 출력**이 거부됐다 —
+ * 즉 **이 제품의 승인 절차를 문서화할 수 없었다.** 자기 README·스킬·온보딩 문서가 전부 그 문구를
+ * 담고 있으므로 자기 문서를 에이전트에게 갱신시키는 일이 막힌다.
+ *
+ * `commandLines` 는 이미 실행 단위를 환원한다 — 따옴표를 벗기고, `sh -c`·`eval`·`xargs`·
+ * `find -exec` 안쪽을 풀고, `time`·`sudo`·`npx` 같은 접두와 경로 접두를 벗긴다(실측:
+ * `time harness gate approve P0` → `harness gate approve P0`). 그래서 **그 줄의 머리가
+ * 하네스인지**만 보면 실행과 언급이 갈린다. 우회 20종(백틱·`$()`·개행·연쇄·중첩 셸·
+ * 절대경로·`./`·코어 파일 직접 호출 포함)이 전부 계속 막히는 것을 실측으로 확인했다.
+ */
+const HARNESS_HEAD_RE = /^[`'"\s(]*(?:\S*[\\/])?(?:harness|cli\.js|mcp\.js)\b/;
+
+/**
+ * [COST-OB1] **한 번만 계산한다.** 자기해제 가드가 셋(`gate approve`·`phase --force`·
+ * `doctor --accept-policy`)이라 이 함수가 한 판정에서 세 번 불린다. 예전 가드는 값싼 정규식
+ * 이었지만 이제는 `commandLines`(토크나이즈 + 재귀 언랩)를 돌리므로, 큰 명령에서 그 비용이
+ * **3배로 곱해진다.** 벤치가 바로 잡았다 — `cd-redirect` 형태가 문턱 1000ms 를 넘겨
+ * **1310ms** 가 됐다. 훅이 10초 타임아웃에 걸리면 **판정 없이 통과**하므로, 파싱 비용이
+ * 곧 방어의 구멍이다([COST-260]·[COST-228] 과 같은 부류).
+ *
+ * 훅 프로세스는 한 호출에 명령 하나를 본다 — 한 칸짜리 캐시면 충분하다.
+ */
+let hilCache: { cmd: string; lines: string[] } | null = null;
+
+function harnessInvokingLines(cmd: string): string[] {
+  if (hilCache !== null && hilCache.cmd === cmd) return hilCache.lines;
+  const lines = commandLines(cmd);
+  /**
+   * **명령치환은 「인자」가 아니라 실행이다.** `commandLines` 는 `$( … )` 를 세그먼트 분해가
+   * 괄호를 끊는 덕에 **우연히** 잡지만, 백틱은 분해 기준이 아니라 인자 안에 통째로 남는다 —
+   * 그래서 `echo \`harness phase set P7 --force\`` 의 머리가 `echo` 로 보였다. 실제로는 그
+   * 명령이 실행되고 echo 는 출력만 받는다. 두 형태를 **같은 규칙으로** 편다.
+   * (이 구멍은 기존 회귀 테스트 `hook-pre-tool.test.ts` 「백틱 안 형태를 막는다」가 잡았다 —
+   *  줄 기반으로 좁히면서 한 번 열렸고, 그 테스트가 없었으면 조용히 나갔다.)
+   */
+  for (const m of cmd.matchAll(/`([^`]*)`/g)) lines.push(...commandLines(m[1]));
+  for (const m of cmd.matchAll(/\$\(([^()]*)\)/g)) lines.push(...commandLines(m[1]));
+  const hit = lines.filter(l => HARNESS_HEAD_RE.test(l) || CORE_INVOKE_RE.test(l.replace(/^[`'"\s(]+/, '')));
+  hilCache = { cmd, lines: hit };
+  return hit;
+}
+
+/** 하네스를 **실행하는 줄 하나 안에서** 주어진 형태가 모두 나타나는가. */
+function runsHarnessWith(cmd: string, ...needles: RegExp[]): boolean {
+  return harnessInvokingLines(cmd).some(l => needles.every(re => re.test(l)));
+}
+
 /** 하네스가 스스로만 고쳐야 하는 파일 — 손편집하면 저널과 상태가 어긋나 전부 거짓이 된다. */
 /**
  * **하네스가 소유한 상태 파일** — 에이전트 도구 호출로 직접 쓰는 것이 정당한 경우가 없다.
@@ -195,17 +247,8 @@ const invokesHarness = (cmd: string): boolean => FORCE_ESCAPE_RE.test(cmd) || CO
  * 문서·증적은 여기 넣지 않는다 — `.harness/design/*.md`·`evidence/` 는 **에이전트가 만드는
  * 산출물**이고, 그것까지 막으면 설계 트랙 자체가 돌지 않는다(과차단).
  */
-const STATE_FILES = [
-  '.harness/state.json',
-  '.harness/events.jsonl',
-  '.harness/design/ledger.yaml',
-  '.harness/design/registry.yaml',
-  '.harness/ship/defects.yaml',
-  '.harness/ship/deployments.yaml',
-  // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
-  '.harness/.runtime/last-activity',
-  '.harness/.runtime/last-turn',
-];
+// [LOGIC-02] 정의는 policy.ts 한 벌이다 — 「막는 목록」이 표면마다 갈리면 느슨한 쪽이 정본이 된다.
+const STATE_FILES = SHARED_STATE_FILES;
 
 /**
  * [SEC-69] **판정의 입력이 되는 정책 파일.**
@@ -269,7 +312,37 @@ const excerptNonce = contentNonce;
 /** state.json 을 못 읽어 저널 재생으로 동작 중인 상태 — 판정 신뢰도 하락 신호. */
 interface Degraded {
   corruptLines: number;
+  /**
+   * [OPS-01] 열화의 **출처**. 예전에는 `degraded` 가 「state.json 이 깨져 저널 재생으로 돈다」
+   * 하나뿐이었고, 그래서 **state.json 이 멀쩡하면 저널이 손상돼도 사용자에게 아무 신호가 없었다** —
+   * 배너·deny 사유·Stop 가드 어디에도. 감사 저널(게이트 승인·정책 고정의 유일한 진실 소스)이
+   * 몇 주째 깨져 있어도 스스로 `doctor` 를 돌리지 않는 한 알 길이 없었다.
+   * 두 경우의 **문구가 달라야 한다** — 하나는 「재생으로 돌고 있다」이고 다른 하나는
+   * 「상태는 정상인데 이력이 깨졌다」다.
+   */
+  stateDamaged: boolean;
+  /**
+   * [OPS-06] 저널이 **예산 안에 재생할 수 없을 만큼 커서** 재생을 건너뛴 경우의 바이트 수.
+   * 이때 우리는 페이즈를 모른다 — 그래서 가장 제한적인 자세로 떨어진다(아래 REPLAY_MAX_BYTES).
+   */
+  replaySkippedBytes?: number;
 }
+
+/**
+ * [OPS-06] **재생 비용의 상한 — 넘으면 재생하지 않고 fail-closed 로 떨어진다.**
+ *
+ * 훅은 `hooks.json` 에서 10초를 받고, **초과하면 죽고, 죽은 훅은 통과다.** 그런데 state.json 이
+ * 깨진 경로(= 재생 경로)에는 상한이 없었다. 감사 실측: 저널 70MB 재생 1.2초 · **532MB 재생
+ * 12.4초 → 타임아웃 초과 → fail-open.** 하필 그 조건(state 손상)이 `doctor --repair` 가
+ * 필요한 바로 그 순간이라, **무결성이 가장 필요할 때 강제가 꺼진다**(OPS-02 와 같은 결과,
+ * 다른 트리거).
+ *
+ * 128MB 는 그 실측(약 43MB/s)에서 역산했다 — 약 3초, 예산 대비 3배 이상 여유.
+ * 넘으면 **재생을 포기하되 통과시키지 않는다**: 페이즈를 모르므로 가장 제한적인 상태(P0)로
+ * 판정하고 사유에 처방을 붙인다. 읽기와 harness 명령은 그대로 열려 있어 사용자가
+ * `harness doctor --repair` 로 빠져나올 수 있다 — 한 번 고치면 빠른 경로로 돌아온다.
+ */
+const REPLAY_MAX_BYTES = 128 * 1024 * 1024;
 
 /**
  * readState 가 성공(유효 JSON)해도 형태가 HarnessState 가 아니면 판정이 조용히 뚫린다:
@@ -311,9 +384,40 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       // state.json 은 파생 캐시다 — 없거나(삭제) 깨졌다고(파싱·형태 불량) 판정을 포기하지 않고
       // 진실(저널)로 재구성한다. 인메모리 전용: 여기서 쓰지 않는다. 복구 쓰기는
       // `harness doctor --repair` 의 책임.
-      const journal = readJournalForReplay(root);
-      state = replayState(journal.events);
-      degraded = { corruptLines: journal.corruptLines };
+      // [OPS-06] 재생 전에 **비용을 먼저 본다.** 여기가 상한 없이 열려 있어서, 큰 저널에서
+      // 훅이 타임아웃으로 죽고 그 죽음이 통과가 됐다. 크기는 파일 하나 stat 이라 무료에 가깝다.
+      let size = 0;
+      try { size = fs.statSync(eventsPath(root)).size; } catch { size = 0; }
+      if (size > REPLAY_MAX_BYTES) {
+        // 페이즈를 모른다 → 가장 제한적인 자세. 통과시키는 것만은 하지 않는다.
+        state = defaultState();
+        degraded = { corruptLines: 0, stateDamaged: true, replaySkippedBytes: size };
+      } else {
+        const journal = readJournalForReplay(root);
+        state = replayState(journal.events);
+        degraded = { corruptLines: journal.corruptLines, stateDamaged: true };
+      }
+    }
+    /**
+     * [OPS-01] **state.json 이 멀쩡해도 저널이 깨졌으면 말해 준다.**
+     *
+     * 위 catch 는 state.json 이 깨졌을 때만 저널을 읽는다. 그래서 정상 경로에서는 저널을 아예
+     * 열지 않았고, **손상이 사용자 인터페이스 어디에도 나타나지 않았다.** 실제 사고(디스크
+     * 가득·강제 종료 중 append)로 한 줄이 깨져도 며칠·몇 주가 지나도록 알 방법이 없다.
+     *
+     * **세션 시작에서만** 본다. 매 도구 호출마다 15MB 저널을 파싱하면 이 제품이 파는 「훅은
+     * 단일 밀리초」가 무너진다 — 그 비용은 폴백 경로가 이미 치르고 있고, 정상 경로까지
+     * 치르게 할 이유가 없다. 세션당 한 번이면 배너에 실려 사용자에게 도달한다.
+     */
+    if (degraded === null && event === 'session-start') {
+      try {
+        const journal = readJournalForReplay(root);
+        if (journal.corruptLines > 0) {
+          degraded = { corruptLines: journal.corruptLines, stateDamaged: false };
+        }
+      } catch {
+        // 저널을 못 읽는 것 자체는 아래 판정을 막지 않는다 — 무해 계약이 우선이다.
+      }
     }
     const config = loadConfig(root);
     switch (event) {
@@ -358,6 +462,31 @@ function logHookError(root: string, event: HookEvent, err: unknown): void {
 }
 
 function degradedNote(d: Degraded, lang: Lang): string {
+  /**
+   * [OPS-01] **두 열화는 사용자에게 다른 이야기다.**
+   * `stateDamaged` 면 「지금 재생으로 돌고 있다」(판정이 실제와 다를 수 있다)이고,
+   * 아니면 「상태는 정상인데 감사 이력이 깨졌다」(판정은 맞지만 이력을 못 믿는다)이다.
+   * 예전에는 후자를 아예 말하지 않았고, 그래서 저널 손상이 몇 주째 보이지 않았다.
+   */
+  if (d.replaySkippedBytes !== undefined) {
+    const mb = Math.round(d.replaySkippedBytes / (1024 * 1024));
+    return lang === 'ko'
+      ? `⚠ state.json 이 손상됐고 저널이 ${mb}MB 라 훅 예산(10초) 안에 재생할 수 없다 — `
+        + '페이즈를 모르므로 **가장 제한적인 상태로** 판정 중이다(통과시키지 않는다). '
+        + '읽기와 harness 명령은 열려 있다: `harness doctor --repair` 를 한 번 실행하면 '
+        + 'state.json 이 복구되고 빠른 경로로 돌아온다.'
+      : `⚠ state.json is damaged and the journal is ${mb}MB — too large to replay inside the hook's `
+        + '10s budget. The phase is unknown, so judgement falls back to the **most restrictive** '
+        + 'state rather than letting calls through. Reads and harness commands still work: run '
+        + '`harness doctor --repair` once to rebuild state.json and return to the fast path.';
+  }
+  if (!d.stateDamaged) {
+    return lang === 'ko'
+      ? `⚠ 저널 ${d.corruptLines}줄 손상 — state 는 정상이라 판정은 유효하지만 감사 이력을 믿을 수 없다. `
+        + '`harness doctor` 로 확인하라.'
+      : `⚠ ${d.corruptLines} journal line(s) corrupt — state is intact so decisions still hold, but the `
+        + 'audit history cannot be trusted. Run `harness doctor`.';
+  }
   const base = pick({
     en: '⚠ state.json is damaged — running from journal replay. Run `harness doctor --repair`.',
     ko: '⚠ state.json 손상 감지 — 저널 재생으로 동작 중. `harness doctor --repair` 실행을 권장한다.',
@@ -2166,7 +2295,7 @@ function preTool(
     // [SEC-204] 이름 **전체**로 본다 — 부분 매치는 `HARNESS_ALLOW_FORCED_MIGRATION` 같은
     // 무관한 이름까지 막는다(실측). 탈출구 이름을 세는 검사는 정확해야 값을 한다.
     if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd)
-        || (invokesHarness(cmd) && /\bphase\b/.test(cmd) && /--force(?![\w-])/.test(cmd))) {
+        || runsHarnessWith(cmd, /\bphase\b/, /--force(?![\w-])/)) {
       return deny(L(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
         + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '
@@ -2197,7 +2326,7 @@ function preTool(
     // `--force`·`--accept-policy` 와 같은 두 절 구조다(env 리터럴 언급 + 실행 형태). 이 절이
     // 없으면 훅의 형태 인식을 뚫은 뒤 env 를 붙여 두 번째 겹까지 한 줄로 끌 수 있다.
     if (/HARNESS_APPROVE_NO_TTY/.test(cmd)
-        || (invokesHarness(cmd) && /\bgate\b/.test(cmd) && /\bapprove\b/.test(cmd))) {
+        || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
       return deny(L(
         'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '
         + 'Submit the artifacts and let the review packet be read: '
@@ -2224,7 +2353,7 @@ function preTool(
     // `--force` 쪽과 **같은 두 절**을 둔다: env 리터럴 언급 + 실행 형태. 예전에는 뒤엣것만 있어
     // `node …/cli.js doctor --accept-policy` 가 통과했다(감정이 E2E 로 탐지 정지를 실증).
     if (/HARNESS_ACCEPT_POLICY/.test(cmd)
-        || (invokesHarness(cmd) && /\bdoctor\b/.test(cmd) && /--accept-policy(?![\w-])/.test(cmd))) {
+        || runsHarnessWith(cmd, /\bdoctor\b/, /--accept-policy(?![\w-])/)) {
       return deny(L(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning — '
         + 'so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to '

@@ -330,15 +330,35 @@ describe('hook: 에이전트는 정책 드리프트를 스스로 승인할 수 �
   });
 
   /**
-   * **의도된 과차단**을 계약으로 고정한다. 탐지가 인용부호 안까지 보므로 「그 명령을 실행하는
-   * 문장」과 「그 명령을 적는 문장」을 구별하지 못한다 — `--force` 잠금이 이미 같은 값을
-   * 치르고 있고(SEC-78), 방향을 좁히면 `bash -c "..."` 가 열린다. 문구를 바꾸면 통과한다.
+   * **계약 변경 (출하 검증 2026-08-27 · [API-01]).**
+   *
+   * 예전 계약은 「인용부호 안의 언급도 막는다 — 의도된 과차단」이었고, 그 근거는
+   * **「방향을 좁히면 `bash -c "..."` 가 열린다」** 였다. 그 전제가 **실측으로 반증됐다.**
+   *
+   * `commandLines` 는 이미 실행 단위를 환원한다 — 따옴표를 벗기고, `sh -c`·`eval`·`xargs`·
+   * `find -exec` 안쪽을 풀고, `time`·`sudo`·`npx`·경로 접두를 벗긴다. 그래서 **「그 줄의
+   * 머리가 하네스인가」로 좁혀도** 래퍼 형태가 열리지 않는다(아래 위 `it` 들이 그 증거다 —
+   * 백틱·`$()`·`bash -c`·개행·접두 전건이 계속 deny 다).
+   *
+   * 반면 과차단의 값은 실측으로 컸다: 이 제품의 README·스킬·온보딩 문서가 전부 이 문구를
+   * 담고 있어서, 하네스가 켜진 상태에서는 **제품이 자기 문서를 갱신할 수 없었다.** 감사
+   * 세션 하나에서 아홉 번 거부됐고 결함 대장의 문장을 우회 표기로 바꿔야 했다.
+   *
+   * 새 계약: **실행은 막고, 기록은 막지 않는다.** 명령치환(백틱·`$()`)은 인용부호 «안»에
+   * 있어도 실행이므로 계속 막힌다 — 그게 이 계약의 경계다.
    */
-  it('인용부호 안의 언급도 막힌다 — 의도된 과차단(문구를 바꾸면 통과)', () => {
+  it('언급은 통과하고 실행은 막힌다 — 명령치환은 인용부호 안에서도 실행이다', () => {
     const root = initViaCli();
-    expect(denied(root, 'echo "run harness doctor --accept-policy to re-pin" >> README.md')).toBe(true);
-    expect(denied(root, 'echo "run harness phase set P7 --force" >> README.md')).toBe(true);
-    // 하네스 명령이 전혀 없으면 문구만으로는 막지 않는다.
+    // 기록(문서화) — 통과해야 한다. 이걸 막으면 제품이 자기 문서를 못 고친다.
+    expect(denied(root, 'echo "run harness doctor --accept-policy to re-pin" >> README.md')).toBe(false);
+    expect(denied(root, 'echo "run harness phase set P7 --force" >> README.md')).toBe(false);
     expect(denied(root, 'echo "re-pin the policy baseline" >> README.md')).toBe(false);
+    // 실행 — 인용부호 안이어도 명령치환은 실제로 돈다.
+    expect(denied(root, 'echo `harness doctor --accept-policy`')).toBe(true);
+    expect(denied(root, 'echo "`harness doctor --accept-policy`"')).toBe(true);
+    expect(denied(root, 'echo $(harness phase set P7 --force)')).toBe(true);
+    // 맨몸 실행은 당연히 막힌다.
+    expect(denied(root, 'harness doctor --accept-policy')).toBe(true);
+    expect(denied(root, 'harness phase set P7 --force')).toBe(true);
   });
 });

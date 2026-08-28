@@ -1,0 +1,82 @@
+=== axis 11 (ops) — doctor blind spots under a read-only .harness/ ===
+
+--- Setup ---
+$ node bin/harness init   (fresh sandbox project)
+$ chmod -R 555 .harness   # simulate .harness/ becoming non-writable (perms, RO mount, etc.)
+
+--- Probe A: does a normal PostToolUse activity write fail silently? ---
+$ ls -la .harness/.runtime/          # BEFORE
+total 16
+dr-xr-xr-x  4 ... .
+dr-xr-xr-x  8 ... ..
+-r-xr-xr-x  1 ... .gitignore
+-r-xr-xr-x  1 ... hook-errors.log      (206 bytes, from unrelated earlier probes)
+
+$ CLAUDE_PROJECT_DIR=<proj> node bin/harness hook post-tool < posttool-payload.json   # simulates a Write just happened
+exit=0
+stdout: <empty>
+stderr: <empty>
+
+$ ls -la .harness/.runtime/           # AFTER — unchanged, no last-activity file, hook-errors.log same 206 bytes
+$ cat .harness/.runtime/hook-errors.log   # unchanged from before — NO new entry for this failure
+
+Conclusion: `noteActivity()` (core/src/runtime.ts:7-10) does `fs.writeFileSync` UNGUARDED (no
+try/catch). It throws under a read-only .harness/.runtime, which core/src/hook.ts's outer
+try/catch (core/src/hook.ts:302 .. catch at ~330) swallows via `logHookError()`
+(core/src/hook.ts:347-355) — but `logHookError` ITSELF does `fs.mkdirSync` + `fs.appendFileSync`
+into the same read-only directory, wrapped in its own try/catch that silently drops the
+failure ("로깅 실패는 무시한다" comment at hook.ts:354). Net effect: the activity-marker write
+fails with ZERO trace anywhere — no stdout, no stderr, no hook-errors.log entry, exit 0.
+Call site: core/src/hook.ts:2380 (`if (isWriteTool(tool) || ...) noteActivity(root);`).
+
+--- Probe B: downstream consequence for the Stop guard ---
+core/src/hook.ts:2407-2411 (stopGuard):
+    if (!state.activeWave) return withNote(null);
+    const rt = readRuntime(root);
+    // 마커는 session-start 에서 리셋된다 — 여기서 없다는 건 현 세션에 작업 활동이 없었다는 뜻.
+    if (!rt.lastActivityAt) return withNote(null);
+Because noteActivity's write silently failed (Probe A), `lastActivityAt` stays undefined for
+the rest of the session, so stopGuard treats the session as "no activity happened" and skips
+the "settle your turn log before stopping" block entirely — even though a Write DID happen.
+The turn-log-settlement enforcement is silently bypassed whenever .harness/ is non-writable.
+
+--- Probe C: does `harness doctor` (no --repair) notice ANY of this? ---
+$ node bin/harness doctor
+{
+  "ok": true,
+  "repaired": false,
+  "refused": false,
+  "issues": [],
+  "warnings": [
+    "4 hook decision failure(s) recorded — read <path>/.harness/.runtime/hook-errors.log to find out why"
+  ],
+  "notes": []
+}
+The only warning present is about 4 OLD/unrelated hook-errors.log entries from earlier probes
+(corrupt-stdin/unread-stdin) — nothing about .harness/ being non-writable right now, nothing
+about noteActivity's failure (which produced NO log entry to surface in the first place).
+doctor.ts (core/src/doctor.ts, full file read) never performs an active write-probe (e.g. try
+writing+deleting a temp file under .harness/) — it only reads files and inspects their
+CONTENTS. A pure permission failure that prevents writes is entirely outside what doctor.ts
+checks for.
+
+--- Probe D: `doctor --repair` when there IS a real issue to fix, under read-only .harness/ ---
+Setup: while .harness/ was still writable, hand-edited state.json so `phase` diverges from
+the journal's replayed phase (P5 vs P0) — confirmed via a normal `doctor` call:
+  {"ok": false, "issues": ["phase mismatch: state=\"P5\", journal replay=\"P0\""], ...}
+Then: chmod -R 555 .harness (simulate the disk/mount going read-only mid-incident) and:
+
+$ node bin/harness doctor --repair
+exit=1
+stdout: <empty>
+stderr: "EACCES: permission denied, open '<path>/.harness/state.json.tmp-32208'"
+
+Conclusion: doctor --repair is NOT silent here (exit 1, non-empty stderr — that part is fine),
+but the message is a RAW, unwrapped Node.js fs error with no harness-authored guidance (no
+"check .harness/ permissions", no next step). This is the SAME outer catch-all at
+core/src/cli.ts:1642-1644 (`console.error(String(e.message)); return 1;`) that every other
+command falls back to, but unlike ENOENT paths elsewhere in this codebase (state.ts:51's
+UX-117 handling, wave.ts:210/262's ENOENT-to-guidance rewriting, registry.ts:163, gate.ts:169,
+tokens.ts:322, ship.ts:134), nothing in the write path (writeState / appendEvent used by
+doctor --repair, core/src/doctor.ts:314-330) catches EACCES specifically to produce an
+actionable message.

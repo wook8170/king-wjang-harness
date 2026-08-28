@@ -1,0 +1,174 @@
+# 결함 대장 (정본)
+
+**갱신** 2026-08-28 · **판정** 출하 가능 · **open BLOCKER** 0 · **open 전체** 37
+대상 `bacb4bc` (main) · 축: ①②③④⑤⑥⑦⑧⑨⑩⑪ (전수) · 뺀 축: 없음
+
+| ID | 심각도 | 축 | 한 줄 | 상태 | 근거등급 | 근거 | 닫은 증거 |
+|---|---|---|---|---|---|---|---|
+| DEP-01 | MED | 07 | README 안내 `npm install` 이 첫 실행에서 lockfile 을 다시 쓴다 (package.json 0.1.2 ↔ lock 0.1.0) | open | measured | `package-lock.json:3` | — |
+| DEP-02 | LOW | 07 | 번들된 `yaml`(ISC) 저작권 고지가 배포 산출물 어디에도 없다 | open | measured | `tsup.config.ts:12` | — |
+| DEP-03 | MED | 07 | 마켓플레이스 설치가 태그·SHA 가 아닌 브랜치 HEAD 를 추종한다 | open | code | `README.md:147` | — |
+| DEP-04 | LOW | 07 | `core/test/` 60파일(배포 바이트 26%)이 플러그인 사용자에게 배포된다 | open | measured | `docs/release-readiness/2026-08-27/07-supply-chain.md:115` | — |
+| DEP-05 | LOW | 07 | devDependency `vitest` 가 메이저 2개 뒤처짐 — npm audit 5건의 유일 근원 | open | measured | `package.json:21` | — |
+| DEP-06 | — | 07 | 프로덕션 도달 취약점 0 — `npm audit --omit=dev` critical/high/moderate/low 전부 0 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax07-npm-audit-prod.json:1` | 축⑦ §DEP-06 · README:114 광고와 실측 일치 |
+| DEP-07 | — | 07 | 번들 도달 실측 — `core/dist/*.js` 에 `yaml` 외 의존성 코드 0 (빌드 도구 미혼입) | verified | measured | `tsup.config.ts:12` | 축⑦ §DEP-07 · `require()` 외부참조 = Node 내장뿐 |
+| DEP-08 | — | 07 | 락파일 고정도 완전 — 160항목 전부 integrity 해시 · `npm ci` 무변경 | verified | measured | `package-lock.json:2` | 축⑦ §DEP-08 · 샌드박스 `npm ci` exit 0 + diff 동일 |
+| DEP-09 | — | 07 | 라이선스 충돌 0 — 설치 88패키지 전수 허용적(MIT80·Apache3·ISC3·BSD3C2), copyleft 0 | verified | measured | `package.json:5` | 축⑦ §DEP-09 |
+| DEP-10 | — | 07 | 배포 표면 깔끔 — 144파일 2.99MB, node_modules·내부문서·자격증명 0 | verified | measured | `docs/release-readiness/2026-08-27/07-supply-chain.md:188` | 축⑦ §DEP-10 · `git archive HEAD \| tar -t` 전수 |
+| DEP-11 | — | 07 | 마켓플레이스 설치 경로는 npm 을 트리거하지 않음 → devDependency 가 설치자 머신에 안 내려온다 | verified | measured | `mcp/server.js:1` | 축⑦ §DEP-11 · lifecycle 훅 0 |
+| FEAT-01 | MED | 01 | 영문 「Known limits」의 인터프리터 우회 한계 고지가 ko/ja/zh 3개 언어에서 통째로 누락 (불릿 6 vs 5) | verified | code | `README.md:296` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G3 · ko/ja/zh 번역 삽입 · 불릿 6/6/6/6 실측 · 재발 방지 구조 검사 `core/test/doc-claims.test.ts` |
+| FEAT-02 | LOW | 01 | `~240 tokens/session` 수치에만 재현 명령이 없다 (같은 표의 지연 행은 `npm run bench:hook` 명시) | open | code | `README.md:122` | — |
+| FEAT-03 | — | 01 | P0→P12 전 구간 실동작 — 게이트 6회·웨이브 3개·doctor 복구·report 까지 단절 0 · 침묵 실패 0 | verified | measured | `docs/release-readiness/2026-08-27/01-features.md:148` | 축① §FEAT-03 · 샌드박스 3개 완주 |
+| FEAT-04 | — | 01 | 「에이전트가 스스로 게이트를 못 연다」가 CLI(TTY 방벽)·MCP(항상 거부) 두 경로에서 독립 성립 | verified | measured | `docs/release-readiness/2026-08-27/01-features.md:154` | 축① §FEAT-04 · MCP `tools/call` isError:true 실측 |
+| FEAT-05 | — | 01 | README 의 경쟁 비교(superpowers = advisory) 주장이 공개 문서와 부합 | verified | code | `docs/release-readiness/2026-08-27/01-features.md:161` | 축① §FEAT-05 · WebFetch 로 공개 README 확인 |
+| FEAT-06 | — | 01 | 명령 표면 전수(20 명령군·70+ 하위명령) — 광고했는데 없는 기능 0 · 침묵 성공 0 | verified | measured | `README.md:196` | 축① §카테고리 18 · `--help` 전수 대조 |
+| FEAT-07 | — | 01 | 비간섭 불변식 — `.harness/` 없는 프로젝트에서 stdout 0바이트·exit 0·파일 미생성 | verified | measured | `bin/harness-hook:19` | 축① §카테고리 16 |
+| FEAT-08 | — | 01 | 인젝션 방어 실측 — 턴로그 주입문이 논스 펜스에 격리되고 제어문자(ANSI·BEL) 제거됨 | verified | measured | `docs/release-readiness/2026-08-27/01-features.md:139` | 축① §카테고리 14 |
+| ORCH-01 | HIGH | 04 | Bash 레인이 heredoc **본문** 문자열을 쓰기 대상으로 오인 — 하네스 경로를 언급하는 문서를 쓸 수 없다 (Write 레인은 통과) | verified | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:126` | API-01 과 동일 뿌리 — 같은 수정으로 닫힘. heredoc 본문 마스킹 |
+| ORCH-02 | MED | 04 | 설계 트랙에서 프로젝트 루트 밖 쓰기 전면 차단 — 세션 표준 스크래치패드가 막혀 오히려 저장소를 더럽히게 된다 | open | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:126` | — |
+| ORCH-03 | — | 11 | `.harness/` 제거가 사람 전용 경로로 정확히 차단 — 거부 메시지가 이유·다음 행동·관할을 전부 말한다 | verified | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:301` | 오케스트레이터 §ORCH-03 · `mv` 시도 실측 |
+| ORCH-04 | — | 04 | 과차단이 전면적이지 않음 — 하네스 경로를 언급하지 않는 프로젝트 내 문서 쓰기는 통과 | verified | measured | `docs/release-readiness/2026-08-27/evidence/probe-write.txt:1` | 대조군 산출물 실재 |
+| ORCH-05 | HIGH | 04 | FD 복제 리다이렉트(`2>&1`·`1>&2`)를 파일 쓰기로 오인 — **순수 읽기 명령**이 거부되고 거부 사유가 사실과 다르다 | verified | measured | `docs/release-readiness/2026-08-27/evidence/probe-overblock.md:1` | API-01 과 동일 결함(독립 재발견) — 같은 수정으로 닫힘 |
+| ORCH-06 | — | 06 | 진짜 금지 쓰기 5종(덮어쓰기·append·tee·sed -i·rm) **5/5 전부 차단** — 보안 핵심 건재 | verified | measured | `docs/release-readiness/2026-08-27/evidence/probe-overblock.md:1` | 오케스트레이터 프로브 19케이스 |
+| UX-01 | MED | 03 | 긴 `--help` 요약(173~231자)이 80열에서 열 정렬 없이 흘러 표 구조가 깨진다 (앱이 COLUMNS 를 안 읽음) | verified | measured | `core/src/help.ts:219` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G5 · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 재측정 표 행 502→**폭 초과 0** (en/ko × 80·100열) |
+| UX-02 | — | 03 | (전제 정정) CLI 런타임 i18n 은 **en/ko 2언어**뿐 — 4언어는 README 문서 번역이지 CLI 출력 아님. 미지원 언어는 영어로 안전 폴백, 과대광고 아님 | verified | code | `core/src/i18n.ts:17` | 축③ §UX-02 · G5 전제 오류로 판명 |
+| UX-03 | — | 03 | 비TTY·리다이렉트·doctor 전부 ANSI 이스케이프 **0바이트** (색 라이브러리 자체가 없음) | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:122` | 축③ §UX-03 · python 바이트카운트 교차검증 |
+| UX-04 | — | 03 | `NO_COLOR`/`FORCE_COLOR`/`TERM=dumb` 에서 출력 바이트 동일 | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:134` | 축③ §UX-04 · diff 무출력 |
+| UX-05 | — | 03 | 비ASCII 전 구간 정상 — 한글 경로 init·이모지 제목·훅 사유 내 한글 보존, mojibake 0 | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:143` | 축③ §UX-05 |
+| UX-06 | — | 03 | 200개 노드(한글+이모지) 규모에서 `node list`·`report rtm`·`trace` 출력 손상 0 | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:150` | 축③ §UX-06 |
+| UX-07 | — | 03 | 9000자 경로 인자 안전 — exit 0, 사유 메시지가 664자로 축약돼 읽을 만함 | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:156` | 축③ §UX-07 |
+| UX-08 | — | 03 | 빈 상태 카피 존재 — 「왜 비었는지·고장이 아니다」를 명시 | verified | code | `core/src/report.ts:260` | 축③ §UX-08 |
+| UX-09 | — | 03 | 언어 전환(en↔ko) 실동작 · 미지원 언어는 크래시·undefined 없이 영어 폴백 | verified | measured | `core/src/i18n.ts:29` | 축③ §UX-09 |
+| UX-10 | — | 03 | en/ko 번역 키 쌍 428벌 중 실질 누락 **0** (스크립트 오탐 5건은 수동 대조로 기각) | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:178` | 축③ §UX-10 |
+| UX-11 | — | 03 | README 4언어 헤딩 개수 24/24/24/24 구조 정합 | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:185` | 축③ §UX-11 |
+| UX-12 | — | 03 | 전각 폭 오계산 코드(`str.length` 패딩)는 존재하나 한글·이모지를 받는 호출 경로가 없어 미발현 | verified | code | `core/src/help.ts:225` | 축③ §UX-12 · `padEnd` 사용처 2곳 전수 |
+| UX-13 | — | 03 | 스킬 15 + 에이전트 6 frontmatter 전부 규격 충족 (name kebab·description 347~577자) | verified | measured | `docs/release-readiness/2026-08-27/03-ui.md:204` | 축③ §UX-13 |
+| USE-01 | MED | 04 | `harness doctor` 가 저널 읽기불가(EACCES)에서 진단 대신 raw errno 로 죽는다 — JSON 계약 파괴 | verified | measured | `core/src/doctor.ts:107` | `docs/release-readiness/2026-08-27/fixes-round2-ops.md` · 회귀 `core/test/ops-round2-2026-08-27.test.ts` · 변이검증 M4 red 확인 · doctor 가 저널을 못 읽어도 JSON 계약 유지 |
+| USE-02 | LOW | 04 | `harness init` 을 되돌리는 명령이 없고 유일한 해제법(`.harness/` 수동 삭제)이 문서에 없다 | open | measured | `docs/release-readiness/2026-08-27/04-usability.md:52` | — |
+| USE-03 | LOW | 04 | 저널 중간 손상은 `doctor --repair` 로 못 지우는데 경고 문구가 그 사실을 말하지 않아 무한 루프를 유발 | open | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P4.log:70` | — |
+| USE-04 | LOW | 04 | README Command reference 표에 게이트 제출·승인 두 명령이 없다 (페이즈 전이의 필수 선행 단계) | open | measured | `README.md:184` | — |
+| USE-05 | — | 04 | 🔴 코어 약속 실증 — 설계 트랙 소스 쓰기 우회 **28/28 전부 deny** (심링크·하드링크·끊긴링크·상대경로·인터프리터 포함), 관통 0 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P2.log:1` | 축④ §USE-05 |
+| USE-06 | — | 04 | 정당한 설계 트랙 작업 **20/20 전부 allow** — 문서·테스트·설정·자산·`docs/` 아래 `.ts` 경계까지 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P2.log:54` | 축④ §USE-06 |
+| USE-07 | — | 04 | Stop 가드가 세션을 가두지 못한다 — 루프 차단기로 턴당 최대 1회 block | verified | measured | `core/src/hook.ts:2389` | 축④ §USE-07 |
+| USE-08 | — | 04 | 최악 이중 결함(state 깨짐 + 저널 EACCES)에서 훅 4종 전부 exit 0·0바이트 · fail-open 이 로그로 관측됨 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P4.log:87` | 축④ §USE-08 |
+| USE-09 | — | 04 | 손상 복구 실동작 — state 삭제·깨짐·저널 잘림 각각에서 저널 재생 생존 + `--repair` 로 phase 정확 복원 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P4.log:1` | 축④ §USE-09 |
+| USE-10 | — | 04 | 저널 120k줄/15MB 에서 체감 정지 없음 — 열화경로 471ms ≈ 정상경로 538ms, 절대값은 node 부트 플로어 지배 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-BIG.log:4` | 축④ §USE-10 · 정밀 수치는 축⑤ 이관 |
+| USE-11 | — | 04 | 40 프로세스 동시 append 에서 찢김·인터리브 **0** — 42줄 전부 유효 JSON | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-CONC.log:4` | 축④ §USE-11 · `core/src/events.ts:53` O_APPEND |
+| USE-12 | — | 04 | P1 온보딩이 문서만으로 완주 — 빌드 없이 동작, SessionStart 주입 944자 ≈ 236토큰(README ~240 일치) | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-P1.log:1` | 축④ §USE-12 |
+| SEC-01 | — | 06 | `gitleaks` v8.30.1 이력 전체(315 커밋·7.86MB) 비밀 **0** | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax06-gitleaks.log:10` | 축⑥ §SEC-01 |
+| SEC-02 | MED | 06 | `file_path` **중간** 제어문자(개행·탭)면 훅이 판정을 통째로 건너뛴다(silent allow) — 다른 모든 분류 불가 입력은 fail-closed 인데 여기만 fail-open, 로그에도 안 남음 | open | measured | `core/src/hook.ts:1243` | — |
+| SEC-03 | — | 06 | 경로 탈출 write-through 전 차단 — 심링크·하드링크·`..`·`//`·`/./`·대소문자 20+ 벡터 전건 DENY | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax06-attack-battery.log:1` | 축⑥ §SEC-03 |
+| SEC-04 | — | 06 | 셸 쓰기 우회 **30+ 형태 전건 DENY** (dd·sed -i·perl -i·python·node -e·truncate·install·git restore·ANSI-C·중첩 sh -c 포함) | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax06-attack-battery.log:1` | 축⑥ §SEC-04 |
+| SEC-05 | — | 06 | 셸 인젝션 표면 **0** — 소스·출하 dist 양쪽에 `child_process`/`exec`/`spawn`/`eval` 전무. 제품이 셸을 호출하지 않는다 | verified | measured | `core/src/hook.ts:1` | 축⑥ §SEC-05 · dist require = node 빌트인뿐 |
+| SEC-06 | — | 06 | 커밋된 `core/dist/*.js` 가 현재 소스와 **byte-identical** (경로 주석 정규화 후) — 소스 리뷰가 실행 코드를 실제로 검증한다 | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax06-dist-parity.log:1` | 축⑥ §SEC-06 |
+| SEC-07 | — | 06 | MCP 전송 stdio 전용 — 네트워크 소켓·리스너·인증 표면 없음. 미하네스 프로젝트에는 도구 0개 노출 | verified | measured | `mcp/server.js:1` | 축⑥ §SEC-07 |
+| SEC-08 | — | 06 | 저널은 하네스 도메인 이벤트만 기록 — 에이전트 도구 입력·코드·토큰이 평문으로 남지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/06-security.md:72` | 축⑥ §SEC-08 |
+| SEC-09 | — | 06 | 임시파일 미생성 — `os.tmpdir()`/`mkdtemp` sink 0, 예측가능 이름·심링크 선점 표면 부재 | verified | measured | `docs/release-readiness/2026-08-27/06-security.md:75` | 축⑥ §SEC-09 |
+| SEC-10 | — | 06 | 자기해제 명령 전 차단 — `phase set --force`·env 인라인·`node cli.js` 직접호출 형태 전건 DENY | verified | measured | `docs/release-readiness/2026-08-27/06-security.md:78` | 축⑥ §SEC-10 |
+| SEC-11 | — | 06 | 프롬프트 인젝션 방어 실측 — SHA-256 nonce 펜스로 위조 펜스 breakout 실패, 제어문자 중화, ReDoS 최악 0.48s(타임아웃 10s) | verified | measured | `docs/release-readiness/2026-08-27/06-security.md:81` | 축⑥ §SEC-11 |
+| SEC-12 | LOW | 06 | 사람이 미리 만든 소스 하드링크로의 write-through 미차단 (공시 한계) — 에이전트가 앨리어스를 만드는 경로는 DENY 라 격리됨 | deferred | measured | `core/src/hook.ts:1528` | 위협모델(에이전트 레인) 밖 — 사람은 소스를 직접 고칠 수 있다. 출하 후 백로그 |
+| SEC-13 | — | 06 | 과차단 0/14 — 정당한 조회·백업·변수경로 조회·정상 개발 명령 전건 ALLOW | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax06-attack-battery.log:1` | 축⑥ §SEC-13 |
+| SEC-14 | — | 06 | **SEC-02 승격 조건 불성립 확정** — Write 도구가 중간 개행을 정규화하지 않아 실 write-through 없음 (리터럴 파일명으로 착지) | verified | measured | `docs/release-readiness/2026-08-27/evidence/sec-02-escalation.md:1` | 오케스트레이터 직접 실측 · SEC-02 를 MED 로 고정 |
+| LOGIC-01 | HIGH | 08 | 승인 후 산출물을 고쳐도 다음 페이즈 진입이 막히지 않는다 — 자동 무효화가 수동 `sweep` 한 곳에만 배선됨, `doctor` 도 해시 드리프트에 무관심 | verified | measured | `core/src/gate.ts:854` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G10 · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 변이검증 red 확인 · 역행은 막지 않는다(UTIL-189 회귀가 잡음) |
+| LOGIC-02 | HIGH | 08 | 소유·append-only 파일 보호 — `--out` 경로는 닫혔다(policy.ts 로 목록 일원화). **남은 것: 에이전트가 `Write` 로 활성 웨이브 지시서를 덮는 경로** (README 의 「`.harness/` 는 언제나 쓸 수 있다」와 충돌 — 사용자 결정) | verified | measured | `core/src/cli.ts:331` | `docs/release-readiness/2026-08-27/fixes-round2.md` · `--out` 소유 파일 가드(목록 `policy.ts` 일원화) + **손상된 웨이브 지시서를 `doctor` 가 탐지**. 쓰기는 막지 않았다 — 광고(`.harness/` 는 언제나 쓸 수 있다)를 바꾸지 않고 손실을 관측 가능하게 했다. 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 변이검증 red 확인 |
+| LOGIC-03 | MED | 08 | 원장 노드 ID 미검증 — 공백-only·후행공백 ID 통과, 정확일치 매칭이라 STALE 전파가 조용히 뚫린다 | open | measured | `docs/release-readiness/2026-08-27/08-logic.md:94` | — |
+| LOGIC-04 | LOW | 08 | 고아 참조(웨이브→사라진 노드)를 `doctor`·RTM 어느 쪽도 보고하지 않는다 | open | measured | `docs/release-readiness/2026-08-27/08-logic.md:104` | — |
+| LOGIC-05 | LOW | 08 | 턴 로그에 개행이 원문 기록돼 가짜 헤딩이 생긴다 (읽는 쪽 nonce 펜스로 보안 파손은 없음) | open | measured | `core/src/hook.ts:636` | — |
+| LOGIC-06 | LOW | 08 | 개행 포함 노드 제목이 RTM 마크다운 표를 깬다 (표시 무결성만) | open | measured | `docs/release-readiness/2026-08-27/08-logic.md:122` | — |
+| LOGIC-07 | LOW | 08 | 「이벤트가 정본」은 열화 경로에서만 성립 — 정상 턴에는 state 파일과 저널을 대조하지 않는다 | open | measured | `core/src/events.ts:256` | — |
+| LOGIC-08 | — | 08 | 동시 append 원자성 — 6~8 프로세스 × 8KB·512KB 라인(PIPE_BUF 초과)에서 파싱 실패 0·인터리브 0 | verified | measured | `docs/release-readiness/2026-08-27/08-logic.md:144` | 축⑧ §LOGIC-08 |
+| LOGIC-09 | — | 08 | 부분 실패가 양방향 안전 실패 — 어느 방향이든 `doctor` 가 발산을 잡고, 역방향에서는 `--repair` 를 **거부**해 진행 상태를 보존 | verified | measured | `docs/release-readiness/2026-08-27/08-logic.md:149` | 축⑧ §LOGIC-09 |
+| LOGIC-10 | — | 08 | 상태기계 불가능 전이 **7종 전부 exit 1** — 페이즈 건너뛰기·역행·미승인 진입·웨이브 재완료 등 | verified | measured | `docs/release-readiness/2026-08-27/08-logic.md:154` | 축⑧ §LOGIC-10 |
+| LOGIC-11 | — | 08 | 재생 멱등성 + 시계 비의존 — 중복 이벤트가 중복 적용되지 않고, ts 정렬 코드가 없어 시계 역행에 견딤 | verified | measured | `docs/release-readiness/2026-08-27/08-logic.md:158` | 축⑧ §LOGIC-11 |
+| LOGIC-12 | — | 08 | 값 왕복 무결 — 이모지·한글·RTL·제어문자·100k 글자·개행 제목 전부 바이트 일치 왕복, 재init 시 부활 없음 | verified | measured | `docs/release-readiness/2026-08-27/08-logic.md:163` | 축⑧ §LOGIC-12 |
+| LOGIC-13 | — | 08 | **LOGIC-02 레인 분리 실측** — 저널·state 덮어쓰기는 에이전트 레인에서 4/4 DENY(핵심 약속 유지). 관통은 웨이브 지시서 한 곳(Bash·Write 양쪽 allow) | verified | measured | `docs/release-readiness/2026-08-27/evidence/probe-logic02.md:1` | 오케스트레이터 직접 프로브 10케이스 |
+| ORCH-07 | HIGH | 04 | 디렉터리 이동 접두사가 붙은 순수 읽기 명령이 소스 쓰기로 오인돼 거부된다 — 접두사 하나가 allow→deny | verified | measured | `docs/release-readiness/2026-08-27/evidence/probe-overblock2.md:1` | API-01 과 동일 뿌리 — `cd`·`pushd` 를 READ_ONLY_HEADS 에 추가 |
+| ORCH-08 | HIGH | 04 | 게이트 승인 문구가 명령 텍스트 어디에 있든 승인 시도로 오인 — 문자열 출력만 해도 거부, 자기 문서 갱신 불가 | verified | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:228` | API-01 과 동일 뿌리 — 자기해제 가드를 줄 기반으로 |
+| ORCH-09 | — | 06 | 과차단 종합 실측 — **진짜 차단 10/10 온전**, 과차단 8/32(≈25%). 넷 다 같은 뿌리(명령 텍스트 전체 문자열 스캔) | verified | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:180` | 프로브 2종 32케이스 |
+| SHIP-01 | HIGH | 10 | 롤백 가능한 유일 버전(v0.1.0)이 SEC-300 치명 우회를 그대로 갖고 있다 — 0.1.1·0.1.2 는 태그 없음 | verified | measured | `CHANGELOG.md:13` | `fixes-round2.md` §G12 · `v0.1.1`·`v0.1.2` 주석 태그 · **실측** v0.1.2 에 SEC-300 수정 有(2건), v0.1.0 에 無(0건) — 치명 우회 없는 롤백 대상이 존재한다. 배포(`git push --tags`)는 출하 행위라 사용자의 몫 |
+| SHIP-02 | MED | 10 | README 명령표가 쓰는 실행 이름이 문서대로 설치하면 PATH 에 없다 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:96` | — |
+| SHIP-03 | HIGH | 10 | `core/dist` 부재 시 훅이 **판정 없이 전면 허용**하고 `doctor` 는 `ok:true` — 강제가 꺼진 것을 알 신호가 하나도 없다 | verified | measured | `bin/harness:8` | OPS-02 와 동일 결함 — 같은 수정으로 닫힘 |
+| SHIP-04 | MED | 10 | 플러그인 설치가 매번 devDependencies 69MB 를 네트워크로 끌어오고 언인스톨 후에도 남는다 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:170` | — |
+| SHIP-05 | MED | 10 | `doc upsert --path` 가 절대경로를 받아 확인까지 해 주지만 이후 읽기가 root 에 join 해 불가능한 경로가 된다 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:220` | — |
+| SHIP-06 | MED | 10 | 미래 `schemaVersion` 상태를 일반 명령이 조용히 읽고 그 위에 쓴다 (`doctor` 만 경고) | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:253` | `docs/release-readiness/2026-08-27/fixes-round2.md` · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 변이검증 red 확인 · 모든 표면이 함께 닫힌다(CLI 종료 · 훅은 열화 배너) |
+| SHIP-07 | MED | 10 | 권한 문제를 「파일이 없다」로 오진하고 `--repair` 를 처방한다 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:281` | — |
+| SHIP-08 | LOW | 10 | CI 없음 · 릴리즈 자동화 없음 · 플러그인 릴리즈 태그 규약 미사용 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:309` | — |
+| SHIP-09 | LOW | 10 | `engines` 필드 없음 — 번들은 node18 타깃인데 아무것도 강제하지 않는다 | open | code | `package.json:1` | — |
+| SHIP-10 | LOW | 10 | 제거 절차가 문서 어디에도 없고 에이전트는 잘못 만든 활성화를 스스로 못 지운다 | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:345` | — |
+| SHIP-11 | LOW | 10 | 배포 아카이브에 테스트 60파일이 실려 나간다 (DEP-04 와 동일 사안, 교차 확인) | open | measured | `docs/release-readiness/2026-08-27/10-deploy.md:376` | — |
+| SHIP-12 | — | 10 | 깨끗한 HOME 3개에서 문서대로 설치 성공 (총 16.0s) — 의존성 설치 없이 CLI·훅·MCP 전부 동작 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:393` | 축⑩ §SHIP-12 |
+| SHIP-13 | — | 10 | self-contained 주장 검증 — 의존성 디렉터리 없이 동작 (README:114 광고 일치) | verified | measured | `README.md:114` | 축⑩ §SHIP-13 |
+| SHIP-14 | — | 10 | 구버전 업그레이드 2건(v0.1.0→0.1.2 · v0.0.1→0.1.2) 데이터 손실 0, 저널 prefix sha256 동일 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:413` | 축⑩ §SHIP-14 |
+| SHIP-15 | — | 10 | 롤백 리허설 실측 — 결함 주입판에서 만든 데이터를 이전 버전이 그대로 읽고 이어 간다 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:423` | 축⑩ §SHIP-15 · 기계적 통과(실질은 SHIP-01) |
+| SHIP-16 | — | 10 | 커밋된 `core/dist` 가 현재 소스와 바이트 일치 — 재현 가능 빌드 (축⑥ SEC-06 과 독립 교차 확인) | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:431` | 축⑩ §SHIP-16 |
+| SHIP-17 | — | 10 | 활성화 디렉터리를 다른 경로에 복구해도 동작 — 절대경로 오염 없음 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:441` | 축⑩ §SHIP-17 |
+| SHIP-18 | — | 10 | `core/dist` 부재 시 CLI exit 1 / 훅 exit 0 — 선언한 계약 그대로 | verified | measured | `bin/harness:11` | 축⑩ §SHIP-18 |
+| SHIP-19 | — | 10 | 읽기전용·디스크가득·접근불가에서 훅이 fail-closed 유지, 저널 무손상 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:453` | 축⑩ §SHIP-19 |
+| SHIP-20 | — | 10 | 프로젝트 밖에는 아무것도 쓰지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:463` | 축⑩ §SHIP-20 |
+| SHIP-21 | — | 10 | 플러그인이 선언한 MCP 서버가 실제로 붙는다 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:470` | 축⑩ §SHIP-21 |
+| SHIP-22 | — | 10 | 미지 이벤트(버전 스큐)를 만나면 경고하고 복구를 거부 — 파괴 없음 | verified | measured | `docs/release-readiness/2026-08-27/10-deploy.md:482` | 축⑩ §SHIP-22 |
+| API-01 | BLOCKER | 02 | FD 복제 리다이렉트 하나로 **읽기 전용 명령이 소스 쓰기로 오판**돼 설계 트랙에서 거부된다 (`cat`·`head`·`wc`·`git log`·`git diff`·`grep -rn`·`less` 전부) | verified | measured | `core/src/bashwrite.ts:1246` | `fixes-round1.md` §API-01 · 회귀 `core/test/overblock-2026-08-27.test.ts` · 재측정 과차단 7/12→**0/12**, 관통 0/8 유지 · 변이검증 red 확인 |
+| API-02 | HIGH | 02 | 「프로젝트 루트 밖 쓰기 금지」가 Write/Edit 에만 있고 Bash 경로에는 없다 — 같은 질문에 두 표면이 다른 답 | rejected | measured | `core/src/hook.ts:881` | **근거 든 반박**: 비대칭은 「루트 밖 원고 만들기」 단계에서만 보이고, **실제 위반이 완성되는 「프로젝트 소스로 들여오기」는 10/10 전건 차단**됐다(cp·mv·install·리다이렉트·tee·심링크·rsync·dd·python·node). Bash 쪽 허용은 코드가 이유를 적어 둔 의도적 판단이다(`npm test > /tmp/out.log` 를 막으면 사람이 하네스를 꺼버린다). 구멍이 아니라 일관성 흠이며, **실사용 비용이 있는 쪽은 Write 쪽 과차단이라 ORCH-02(MED)로 남긴다** · **heredoc 형태로도 재확인**(`evidence/heredoc-outofroot.log`): 루트 밖은 Write deny / Bash(heredoc·리다이렉트·tee) allow 로 갈리지만, **루트 안 소스·저널은 heredoc 으로도 전건 deny**. 비대칭은 `hook.ts:881-885` 에 «의도»로 적혀 있고(「지켜야 할 것은 이 프로젝트의 소스이지 디스크 전체가 아니다」) `bashwrite.test.ts:116` 이 그 계약을 고정한다 |
+| API-03 | HIGH | 02 | 설정 키 오타가 침묵 무시되고 `doctor` 는 `ok:true` — 훅이 무엇을 막을지 정하는 파일인데 오타가 조용히 기본값이 된다 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:116` | `docs/release-readiness/2026-08-27/fixes-round3-ops.md` · `inspectConfig` 가 미지 키를 탐지하고 `doctor` 가 **issue** 로 올린다(판정의 입력이 되는 파일이라 warning 으로는 부족) · 회귀 `core/test/ops-round3-2026-08-27.test.ts` 7건 · 변이검증 B·C red 확인 |
+| API-04 | HIGH | 02 | PreToolUse 가 `hooks.json` 의 10초 예산을 초과한다 (1.03MB 명령에서 10.1~12.8s ×3) — 타임아웃 시 무판정 = allow | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:164` | `docs/release-readiness/2026-08-27/fixes-round2.md` · 상한을 **실측으로 재역산** 4MB→1MB(`evidence/api04-cap.md`: 1.09MB=4.4s 여유 2.3배 · 2.23MB=8.0s 여유 1.2배, 부하 창=비관적 방향) · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` 가 **상한에서의 e2e 를 매번 다시 잰다**(숫자만 적으면 또 낡는다) |
+| API-05 | MED | 02 | exit code 1 이 네 가지 의미로 겹쳐 「판정이 NO-GO」와 「명령 실패」를 구분할 수 없다 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:271` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G4 · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 실측 NO-GO→2 · 오타→1 · 정상→0 · 규약을 --help 와 4개 README 에 기재 |
+| API-06 | MED | 02 | 사용자에게 `undefined` 가 그대로 보이는 오류문 3곳 — 이전 라운드가 없앴다고 적은 바로 그 패턴 | open | measured | `core/src/cli.ts:560` | — |
+| API-07 | MED | 02 | `backtrack clear` 가 역행이 없어도 성공하고 매번 저널에 사건을 남긴다 | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:269` | — |
+| API-08 | MED | 02 | `node upsert --id` 에 ID 형식 검증이 전혀 없다 (200KB·개행·traversal 형태 전부 exit 0) | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:349` | — |
+| API-09 | MED | 02 | 배포 명령 목록이 세 벌인데 테스트는 두 벌만 잇고, 두 판정 게이트의 대조 방식이 다르다 (규칙 복제) | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:375` | — |
+| API-10 | MED | 02 | 저널·원장·웨이브 읽기 경로에 크기 상한이 없고 저널에는 회전·압축도 없다 | open | code | `docs/release-readiness/2026-08-27/02-backend.md:481` | — |
+| API-11 | LOW | 02 | MCP `harness_wave_create` 스키마가 `goal` 을 선택으로 선언하는데 구현은 필수로 거부한다 | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:486` | — |
+| API-12 | LOW | 02 | 위치인자 과다가 전 명령에서 침묵 무시된다 — 미지 플래그는 큰 소리로 거부하면서 | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:490` | — |
+| API-13 | LOW | 02 | JSON 으로 파싱되나 객체가 아닌 stdin 이 「입력 없음 = 통과」가 된다 (파싱 실패는 fail-closed 인데) | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:492` | — |
+| API-14 | LOW | 02 | 58개 하위명령 중 20개가 저장소의 어느 `.md` 에도 등장하지 않는다 | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:494` | — |
+| API-15 | LOW | 02 | `schemaVersion` 을 읽기 경로가 검사하지 않는다 (`doctor` 만 본다) | open | measured | `docs/release-readiness/2026-08-27/02-backend.md:516` | — |
+| API-16 | — | 02 | 서브커맨드 전수 도달성 + `--help` 정확성 — 디스패치 85 ↔ 레지스트리 64 대조, 누락 0 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:542` | 축② §API-16 |
+| API-17 | — | 02 | 스택 트레이스 유출 0 · 열거형 검증 · 미지 하위명령에 후보 안내 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:550` | 축② §API-17 |
+| API-18 | — | 02 | 훅 do-no-harm — 빈·잘린·비JSON·5MB stdin 전부 exit 0, 읽지 못하면 fail-closed deny | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:557` | 축② §API-18 |
+| API-19 | — | 02 | MCP JSON-RPC 계약 준수 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:569` | 축② §API-19 |
+| API-20 | — | 02 | 손상·부재 상태 파일에서 훅이 fail-closed 로 떨어진다 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:587` | 축② §API-20 |
+| API-21 | — | 02 | 저널 손상·미래 이벤트 타입을 세어서 드러낸다 (은폐하지 않는다) | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:595` | 축② §API-21 |
+| API-22 | — | 02 | 비TTY·파이프 안전 — ANSI 0, EPIPE 크래시 0, stdin 닫힘 exit 0 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:606` | 축② §API-22 |
+| API-23 | — | 02 | 커밋된 `core/dist` 가 `core/src` 에서 그대로 재현된다 (3번째 독립 확인) | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:613` | 축② §API-23 |
+| API-24 | — | 02 | 상태 파일이 Write 와 Bash 양쪽에서 보호된다 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:620` | 축② §API-24 |
+| API-25 | — | 02 | 비간섭 게이트와 오설정 fail-closed | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:628` | 축② §API-25 |
+| API-26 | — | 02 | 배포 차단의 우회 형태와 `--dry-run` 예외가 규정대로 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:636` | 축② §API-26 |
+| API-27 | — | 02 | 열거형·필수 인자 외의 형태 검증 | verified | measured | `docs/release-readiness/2026-08-27/02-backend.md:644` | 축② §API-27 |
+| OPS-01 | BLOCKER | 11 | 저널 손상이 state 파일만 멀쩡하면 **사용자 인터페이스 어디에도 안 보인다** — 배너·deny 사유·Stop 가드 전부 침묵. 스스로 `doctor` 를 돌려야만 안다 | verified | measured | `core/src/hook.ts:296` | `fixes-round1.md` §OPS-01 · 회귀 `core/test/observability-2026-08-27.test.ts` · 변이검증 red 확인 |
+| OPS-02 | BLOCKER | 11 | `core/dist/cli.js` 부재 시 훅 경로가 완전 침묵(exit 0·stdout 0바이트) — **강제가 조용히 꺼진다**. 축⑩ SHIP-03 과 동일 결함(HIGH↔BLOCKER 불일치, 상향 채택) | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax11-hook-fail-open.log:1` | `fixes-round1.md` §OPS-02 · 회귀 동 파일 §OPS-02 · 변이검증 red 확인 |
+| OPS-03 | HIGH | 11 | 활동 마커 기록이 완전 침묵 실패하고, 그 결과 Stop 가드의 「턴 로그 정산」 강제가 조용히 우회된다 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:65` | `docs/release-readiness/2026-08-27/fixes-round2-ops.md` · 회귀 `core/test/ops-round2-2026-08-27.test.ts` · 변이검증 M1·M2 red 확인 |
+| OPS-04 | MED | 11 | `doctor` 가 활성화 디렉터리의 쓰기 가능 여부를 전혀 점검하지 않는다 — 읽기전용 상태에서 `ok:true` | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:71` | `docs/release-readiness/2026-08-27/fixes-round2-ops.md` · 회귀 `core/test/ops-round2-2026-08-27.test.ts` · 변이검증 M3 red 확인 |
+| OPS-05 | MED | 11 | 읽기전용 상태에서 `doctor --repair` 가 raw EACCES 를 그대로 노출한다 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:77` | `docs/release-readiness/2026-08-27/fixes-round2-ops.md` · 회귀 `core/test/ops-round2-2026-08-27.test.ts` · 변이검증 M5 red 확인 |
+| OPS-06 | HIGH | 11 | 거대 저널 + 손상된 상태 파일 조합이 실측 10초 훅 타임아웃을 넘긴다 — README 의 「bounded」 주장이 실측 규모에서 깨진다 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:83` | `docs/release-readiness/2026-08-27/fixes-round2.md` · 재생 전 크기 확인, 상한 **128MB**(실측 43MB/s 에서 역산) 초과 시 **재생을 포기하되 통과시키지 않는다** — 페이즈 미상이므로 가장 제한적 상태, 읽기·harness 명령은 열어 둬 `doctor --repair` 로 탈출 가능. 회귀 `core/test/fixes-round2-2026-08-27.test.ts`(희소 파일로 600MB 검사) · 변이검증 red 확인 |
+| OPS-07 | MED | 11 | 「최근에 무엇이 막혔는지」 되짚어 볼 CLI 명령이 없다 — deny 결정이 저널에 전혀 남지 않는다 | open | measured | `docs/release-readiness/2026-08-27/11-ops.md:89` | — |
+| OPS-08 | HIGH | 11 | 비밀문자열이 마스킹 없이 저널에 그대로 남고, 활성화 디렉터리가 기본 gitignore 되지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:95` | `docs/release-readiness/2026-08-27/fixes-round3-ops.md` · `appendEvent` 한 곳에서 자유 텍스트 마스킹(sk-·Bearer·AWS·ghp_·PEM·slack 등) + `init` 이 「`.harness/` 는 gitignore 되지 않는다」를 1회 고지 · 회귀 `core/test/ops-round3-2026-08-27.test.ts` 7건 · 변이검증 A·D red 확인 · 구조화 값·평범한 산문 과보고 0 고정 |
+| OPS-09 | MED | 11 | `design inventory --from <없는 파일>` 이 raw ENOENT 를 그대로 유출한다 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:101` | `docs/release-readiness/2026-08-27/fixes-round2-ops.md` + 오케스트레이터가 `core/src/cli.ts` 배선 · 실측 raw ENOENT → 처방 있는 문구 |
+| OPS-10 | — | 11 | 오류 메시지 17건 중 16건이 「다음 행동」을 명확히 제시 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:109` | 축⑪ §OPS-10 |
+| OPS-11 | — | 11 | `doctor` 가 저널 손상·state 발산을 정확히 잡는다 (쓰기 가능 상태에서) | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:112` | 축⑪ §OPS-11 |
+| OPS-12 | — | 11 | 훅 200연속 호출에서 FD 누수·좀비 프로세스 없음 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:115` | 축⑪ §OPS-12 |
+| OPS-13 | — | 11 | MCP 서버의 파일 워처가 1회성으로 정상 정리된다 | verified | code | `docs/release-readiness/2026-08-27/11-ops.md:118` | 축⑪ §OPS-13 |
+| OPS-14 | — | 11 | 저널 대다수 이벤트 타입은 자유 텍스트를 담지 않는다 — OPS-08 예외를 빼면 구조적으로 안전 | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:121` | 축⑪ §OPS-14 |
+| OPS-15 | — | 11 | `doctor --repair` 의 「활성 웨이브 지시서 유실」 복구가 CLI 단독 완결되도록 구현됨 | verified | code | `docs/release-readiness/2026-08-27/11-ops.md:124` | 축⑪ §OPS-15 · 라이브 E2E 는 확인 불가 |
+| OPS-16 | — | 11 | 훅이 아닌 일반 CLI 는 `core/dist` 부재 시 침묵하지 않는다 (exit 1 + 안내) | verified | measured | `docs/release-readiness/2026-08-27/11-ops.md:127` | 축⑪ §OPS-16 |
+| DET-01 | — | 09 | 악조건(load 14.4→27.4→35.6) 3회 반복에서 **1404 pass 완전 동일** · 58 파일 | verified | measured | `docs/release-readiness/2026-08-27/evidence/g1-g11-vitest-x3.log:2` | 축⑨ §DET-01 |
+| DET-02 | — | 09 | 38차가 고친 부하 민감 단언 2건이 실제 부하 창에서 버텼다 — 「고쳤다」가 「재측정했다」로 바뀐 지점 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:57` | 축⑨ §DET-02 |
+| DET-03 | — | 09 | 재현 가능 빌드가 **세 축에서 독립 확인** — 커밋된 산출물이 소스에서 재현된다 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:63` | 축⑨ §DET-03 · 축⑥·⑩·② 교차 |
+| DET-04 | — | 09 | 저장소가 오염된(자기 훅 통치) 비정상 상태에서도 1404 전건 통과 — 스위트가 활성화 상태에 의존하지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/09-determinism.md:69` | 축⑨ §DET-04 |
+| PERF-01 | — | 05 | 저널 120k줄/15MB 에서 **체감 정지 없음** — 저널 크기가 wall-clock 을 늘리지 않는다 (정성 관측, 정밀 수치 아님) | verified | measured | `docs/release-readiness/2026-08-27/evidence/ax04-BIG.log:4` | 축⑤ §PERF-01 · G7 충족은 아님 |
+| PERF-02 | — | 05 | 반대 방향 실측 확보 — 훅이 꼬리에서 10초 예산을 넘긴다(축② API-04 · 축⑪ OPS-06 독립 2건). 재측정은 평균이 아니라 p99·최악 입력을 봐야 한다 | verified | measured | `docs/release-readiness/2026-08-27/05-perf.md:87` | 축⑤ §PERF-02 |
+| PERF-03 | — | 05 | **G7 미실시 — 결함이 아니라 측정 불가.** 창 오염(폭주 프로세스 357% CPU, load 17.2/10코어)으로 타이밍 게이트를 미뤘다. 목표치는 낮추지 않았다 | open | claimed | `docs/release-readiness/2026-08-27/05-perf.md:1` | — |
+| API-28 | LOW | 02 | 자기해제 가드의 env 리터럴 절은 여전히 명령 전체를 훑는다 — 그 환경변수 이름을 **문서에 적는 것**은 아직 막힌다 | open | measured | `docs/release-readiness/2026-08-27/fixes-round1.md:1` | — |
+| SHIP-23 | LOW | 10 | README 배포본 테스트 수(1384)는 기계 검증이 없다 — 총계·파일 수만 `doc-claims.test.ts` 가 잡고 배포본 수치는 산술로만 맞춘다 | open | code | `core/test/doc-claims.test.ts:104` | — |
+| LOGIC-14 | — | 08 | `harness … --out` 이 소유 파일을 덮던 구멍이 닫혔다 — 정의를 `policy.ts` 한 벌로 올려 훅과 CLI 가 같은 목록을 본다 | verified | measured | `core/src/policy.ts:45` | `docs/release-readiness/2026-08-27/fixes-round2.md` · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 변이검증 red 확인 · 빌드 트랙에서도 안 풀린다 |
+| UX-14 | — | 03 | 전각 폭 계산이 실제 호출 경로를 얻었다 — 접기를 넣으며 [UX-12] 의 잠재 결함을 함께 닫았다(한글 요약이 80열을 넘지 않는다) | verified | measured | `core/src/help.ts:230` | `docs/release-readiness/2026-08-27/fixes-round2.md` §G5 · ko 표 행 폭 초과 0 |
+| ENG-01 | — | 02 | 보호 목록 테스트가 소스를 긁던 것을 정본 import 로 바꿨다 — 정의가 움직여도 침묵으로 깨지지 않는다 | verified | measured | `core/test/eng-142-core-file-guards.test.ts:34` | 정의 이동 시 실제로 빈 목록이 됐고 그 검사만이 잡았다 |
+| PERF-04 | — | 05 | 자기해제 가드가 `commandLines` 를 3회 돌려 명령 파싱이 문턱을 넘겼다 — 한 칸 캐시로 `cd-redirect` **1310→375ms**, `long-noslash` **787→265ms** | verified | measured | `docs/release-readiness/2026-08-27/evidence/g7-bench.log:1` | 라운드 2 중 벤치가 잡은 자기 회귀 — 6개 명령형 전부 문턱 1000ms 아래 |
+| PERF-05 | — | 05 | G7 훅 지연 **실측 완료** — 유휴 창(load 3.95, 「machine busy」 표기 0)에서 폴백 추가 지연 realistic **in-proc +15.2ms · wall +32.9ms**, corrupt **+10.7 / +22.2ms** — 전건 PASS(문턱 50ms) | verified | measured | `docs/release-readiness/2026-08-27/evidence/g7-bench-idle.log:1` | 3회 부하 창 실패 뒤 부하가 문턱 아래로 내려오길 기다려 측정. 명령 파싱 6형태도 전부 PASS |
+| PERF-06 | — | 05 | 훅 e2e 비용 곡선 실측 — 선형이고 상한(1MB)에서 4.4s, 예산 10s 대비 **여유 2.3배**(부하 창) | verified | measured | `docs/release-readiness/2026-08-27/evidence/api04-cap.md:1` | 상한 초과는 112ms 에 즉시 거부(fail-closed 확인) |
+| OPS-17 | — | 11 | `doctor` 가 **있는데 깨진** 웨이브 지시서를 본다 — 예전에는 부재만 봤고, 그것이 가장 조용한 데이터 손실 경로였다 | verified | measured | `core/src/doctor.ts:261` | `docs/release-readiness/2026-08-27/fixes-round2.md` · 회귀 `core/test/fixes-round2-2026-08-27.test.ts` · 정상 상태에서 과보고 0 |
+| OPS-18 | — | 11 | `harness init` 이 저널의 git 노출을 1회 고지 — 마스킹은 미탐을 남기는 절충이므로 사용자가 알고 시작해야 한다 | verified | code | `core/src/cli.ts:672` | `docs/release-readiness/2026-08-27/fixes-round2.md` · OPS-08 의 나머지 절반 |
+| PERF-07 | — | 05 | G7 훅 지연 **유휴 창 실측 통과** — 벤치의 busy 기준(`load > 코어수×0.5`)을 코드에서 확인하고 부하가 내려가길 기다려 측정 | verified | measured | `scripts/bench-hook-latency.mjs:137` | 벤치 busy 기준(`load > 코어수×0.5`)을 코드에서 확인하고 부하가 내려가길 기다려 측정(load 3.95, busy 표기 0, PASS 전건). OPS-06 수정 후 대조 측정에서도 in-proc 델타 +27.6/+11.3ms 로 문턱 아래 유지(`evidence/g7-bench-after.log`) |
+| SEC-15 | — | 06 | 루트 밖 원고를 **프로젝트 소스로 들여오는 경로 10종 전건 차단** — 표면 간 비대칭이 탈출을 만들지 않는다 | verified | measured | `docs/release-readiness/2026-08-27/evidence/api02-escape.log:1` | API-02 기각의 근거 |
+| SEC-16 | — | 06 | heredoc 리다이렉트로도 **루트 안** 보호는 온전하다 — 소스(상대·절대)·저널 전건 deny, 문서는 allow. 오늘 넣은 heredoc 본문 마스킹이 대상 추출을 깨지 않았음을 확인 | verified | measured | `docs/release-readiness/2026-08-27/evidence/heredoc-outofroot.log:1` | API-01 수정의 회귀 확인 · API-02 기각 근거 보강 |
+| ORCH-11 | MED | 06 | 「gitleaks 0」이 「GitHub 푸시 보호 통과」를 뜻하지 않는다 — 같은 문자열을 GitHub 은 막고 gitleaks 는 통과시킨다(격리 확인). G8 근거의 범위를 좁혀 읽어야 한다 | open | measured | `docs/release-readiness/2026-08-27/orchestrator-findings.md:126` | — |
+| ORCH-12 | — | 06 | 비밀 «마스킹» 테스트가 비밀 모양을 리터럴로 담고 있어 push 가 거부됐다 — 픽스처를 런타임 조립으로 바꿔 제거(차단 해제 예외는 쓰지 않았다) | verified | measured | `core/test/ops-round3-2026-08-27.test.ts:26` | 14/14 green 유지 · `gitleaks` 316커밋 no leaks · 저장소에 비밀 모양 리터럴 0 |
