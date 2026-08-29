@@ -36,6 +36,11 @@ function invocationsIn(text: string): string[] {
   const re = /`harness\s+([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*)?)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) out.push(m[1].trim());
+  // [UX-15] 사람이 복사할 명령은 humanCmd('<call>') 로 절대 경로를 붙여 낸다 — 그 자리에는
+  // 코드 표기 안에 프로그램 이름이 리터럴로 남지 않으므로 이 형태도 함께 본다(안 그러면
+  // 옮겨 간 만큼 유령 검사가 눈이 먼다).
+  const re2 = /humanCmd\(\s*['"`]([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*)?)/g;
+  while ((m = re2.exec(text)) !== null) out.push(m[1].trim());
   return out;
 }
 

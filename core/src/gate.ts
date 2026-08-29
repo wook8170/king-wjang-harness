@@ -53,7 +53,7 @@ import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
 import { tr } from './tr';
 import type { Msg } from './i18n';
-import { packetsDir, isInsideRoot } from './paths';
+import { packetsDir, isInsideRoot, humanCmd } from './paths';
 import { computePolicyHash } from './policy';
 import { sanitizeUntrusted } from './untrusted';
 import { loadRegistry } from './registry';
@@ -868,12 +868,12 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
       tr(root, {
         en: `Cannot move to ${phase} — ${missing.length} gate(s) before it are not approved: ${list} `
           + `(${first} is currently: ${gates[first]?.status ?? 'pending'}). Start with the earliest: `
-          + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
+          + `\`harness gate submit ${first}\` → \`${humanCmd(`gate approve ${first}`)}\`. `
           + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2). "
           + 'Approving a later gate does not stand in for the ones before it',
         ko: `${phase} 로 갈 수 없다 — 그 앞의 게이트 ${missing.length}개가 승인되지 않았다: ${list} `
           + `(${first} 는 현재 ${gates[first]?.status ?? 'pending'}). 가장 앞의 것부터 처리하라: `
-          + `\`harness gate submit ${first}\` → \`harness gate approve ${first}\`. `
+          + `\`harness gate submit ${first}\` → \`${humanCmd(`gate approve ${first}`)}\`. `
           + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2). "
           + '뒤 게이트를 승인한다고 앞 게이트를 대신하지는 못한다',
       }),
