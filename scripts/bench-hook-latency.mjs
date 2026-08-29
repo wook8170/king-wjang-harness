@@ -18,6 +18,7 @@
  * 친화적인 저널 하나만 재면 그 경로가 가장 필요할 때 얼마나 드는지 알 수 없다([COST-177]).
  */
 import * as fs from 'node:fs';
+import { loadWindow, BUSY_FACTOR } from './load-window.mjs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -132,9 +133,14 @@ const L = (en, k) => (ko ? k : en);
 
 /** [PROD-191] 게이트 문턱(ms). 출력이 문턱만 말하고 판정을 안 하면 사람이 직접 채점하게 된다. */
 const GATE_MS = 50;
-/** 부하가 있으면 wall-time p95 는 제품이 아니라 경쟁 프로세스를 잰다. 그 사실을 말해 준다. */
-const LOAD_1M = os.loadavg()[0];
-const BUSY = LOAD_1M > os.cpus().length * 0.5;
+/**
+ * 부하가 있으면 wall-time p95 는 제품이 아니라 경쟁 프로세스를 잰다. 그 사실을 말해 준다.
+ * [PERF-09] 판정 자체는 `load-window.mjs` 한 곳에 있다 — 회귀 테스트도 같은 규칙을 읽는다.
+ * 여기에만 있던 탓에 테스트가 부하 창에서 제품 대신 기계를 재고 있었다.
+ */
+const WINDOW = loadWindow();
+const LOAD_1M = WINDOW.load1m;
+const BUSY = WINDOW.busy;
 
 console.log(L('# Hook latency — two surfaces: in-process (the judgement itself) and process wall-time',
               '# 훅 지연 — 두 표면: 인프로세스(판정 자체)와 프로세스 wall-time'));
@@ -151,8 +157,8 @@ console.log(L('#   ^ that floor belongs to your machine, not to this tool. Every
               '#   ↑ 이 값은 제품이 아니라 이 머신의 것이다. 아래 절대값은 전부 이 바닥을 포함한다.'));
 if (BUSY) {
   console.log();
-  console.log(L(`# !! This machine is busy (1-min load ${LOAD_1M.toFixed(2)} on ${os.cpus().length} cores).`,
-                `# !! 이 머신은 지금 바쁘다 (1분 load ${LOAD_1M.toFixed(2)} · ${os.cpus().length} 코어).`));
+  console.log(L(`# !! This machine is busy (1-min load ${LOAD_1M.toFixed(2)} on ${WINDOW.cores} cores, threshold ${WINDOW.threshold.toFixed(2)} = cores x ${BUSY_FACTOR}).`,
+                `# !! 이 머신은 지금 바쁘다 (1분 load ${LOAD_1M.toFixed(2)} · ${WINDOW.cores} 코어 · 문턱 ${WINDOW.threshold.toFixed(2)} = 코어수 x ${BUSY_FACTOR}).`));
   console.log(L('#    Wall-time p95 measures whatever else is running too. Re-run on an idle machine before',
                 '#    wall-time p95 는 같이 도는 것들까지 잰다. 판정하기 전에 유휴 상태에서 다시 돌려라 —'));
   console.log(L('#    reading a verdict below — a busy box can inflate the delta several-fold.',

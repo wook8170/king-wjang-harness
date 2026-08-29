@@ -58,7 +58,13 @@ describe('[UX-01] 도움말이 좁은 터미널에서 표 정렬을 잃지 않�
           }
         }
         expect(over).toEqual([]);
-      });
+        // [PERF-09] 명시 타임아웃. 이 테스트의 **단언**은 표시 폭이라 부하와 무관하지만,
+        // 여기서 CLI 프로세스를 18번 띄우므로 **실행 시간**은 부하를 그대로 탄다.
+        // 기본값(5초)에 기대면 바쁜 머신에서 「폭이 넘었다」가 아니라 「시간이 넘었다」로
+        // 죽는다 — 재는 것과 다른 이유로 빨간 불이 켜지는 것이 [PERF-09] 의 부류다.
+        // 문턱을 넉넉히 두는 것은 감추는 것이 아니다: 단언은 그대로이고, 시간은 이 테스트가
+        // 재려는 대상이 아니다.
+      }, 180_000);
     }
   }
 
@@ -98,6 +104,13 @@ import * as os from 'node:os';
 import { initHarness, readState, writeState } from '../src/state';
 import { submitGate, approveGate, canEnterPhase, setPhaseViaGate } from '../src/gate';
 import { readJournal } from '../src/events';
+
+/**
+ * [PERF-09] 부하 창 판정은 벤치와 **같은 한 벌**을 읽는다 — `scripts/load-window.mjs`.
+ * 여기에 규칙을 베껴 두면 벤치와 테스트가 같은 제품을 다르게 채점하게 된다(그것이 [PERF-08] 소동이었다).
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { loadWindow, busyReason } = require(path.join(__dirname, '..', '..', 'scripts', 'load-window.mjs'));
 
 const proj = (): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-r2-'));
@@ -324,7 +337,27 @@ describe('[API-04] 훅이 상한에서도 10초 예산 안에 끝난다', () => 
   const BUDGET_MS = 10_000;
   const ALARM_MS = 8_000;                                    // 예산의 80% — 여기 닿으면 상한을 다시 역산할 때다
 
-  it('상한 바로 아래 페이로드가 예산의 80% 안에 끝난다', () => {
+  it('상한 바로 아래 페이로드가 예산의 80% 안에 끝난다', (ctx: any) => {
+    /**
+     * [PERF-09] **부하 창에서는 시간 판정을 하지 않는다.**
+     *
+     * 이 단언은 wall-clock 이고, wall-clock 은 바쁜 머신에서 제품이 아니라 경쟁 프로세스를
+     * 잰다 — 벤치가 처음부터 그렇게 적어 뒀는데(`scripts/bench-hook-latency.mjs`) 이 테스트만
+     * 그 판정을 갖고 있지 않았다. 그 결과 [PERF-08] 이 열려 판정이 하루 멈췄고, 유휴 창을
+     * 50분 기다렸는데도 열리지 않았다. 실제로는 제품에 아무 문제가 없었다.
+     *
+     * **대체 단언을 넣지 않은 이유는 실측이다.** 같은 페이로드로 세 후보를 재 봤더니
+     * 부하 창에서 전부 흔들렸다 — wall 7.6배 · CPU 시간 1.7배 · 같은 창 기준값 대비 비율
+     * 3.7배(수치는 `scripts/load-window.mjs` 주석). **CPU 시간조차 대체재가 아니다.**
+     * 그러므로 여기서 할 수 있는 정직한 일은 「판정 불가」를 사유와 함께 적는 것뿐이다.
+     */
+    const w = loadWindow();
+    if (w.busy) {
+      const why = busyReason(w, '[API-04] 상한 e2e');
+      console.warn(why);
+      ctx.skip(why);
+      return;
+    }
     const root = proj();
     // 가장 비싼 형태(반복 `cd` + 리다이렉트). 상한 1MB 바로 아래를 겨눈다.
     // 조각 길이가 자릿수에 따라 늘어나므로 **바이트를 세어 가며** 채운다(고정 계산은 넘친다).
@@ -347,7 +380,7 @@ describe('[API-04] 훅이 상한에서도 10초 예산 안에 끝난다', () => 
       });
     } catch (e) { /* deny 여도 시간은 잰다 */ }
     const ms = Date.now() - t0;
-    expect(ms, `상한에서 ${ms}ms — 예산 ${BUDGET_MS}ms 에 붙는다. 상한을 다시 역산하라`).toBeLessThan(ALARM_MS);
+    expect(ms, `상한에서 ${ms}ms (유휴 창 load1m ${w.load1m.toFixed(2)}/${w.cores}코어) — 예산 ${BUDGET_MS}ms 에 붙는다. 상한을 다시 역산하라`).toBeLessThan(ALARM_MS);
   }, 60_000);
 
   it('상한을 넘는 입력은 즉시 거부된다 — 읽다 타임아웃 나지 않는다', () => {

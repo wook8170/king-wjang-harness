@@ -139,7 +139,9 @@ pass/fail 게이트(G1·G2·G11)는 부하에 둔감하므로 진행했고 부�
 | ⑪ 관측성 | **차단 2 닫음**(OPS-01·02) + OPS-03~09 전부 · **G13 충족** | MED 3 | `11-ops.md` |
 | — 오케스트레이터 | 과차단 트리거 5종 분리 · SEC-02 승격 조건 해소 · API-02 탈출 부재 실증 | MED 1 | `orchestrator-findings.md` |
 
-**정본은 `ledger.md`** — 172행(**open 1**「PERF-09·LOW」 · deferred 37「전부 사유 기재」 · rejected 4 · verified 130). `bin/vpr lint` 통과.
+**정본은 `ledger.md`** — 172행(**open 0** · deferred 29「전부 사유 기재」 · rejected 6 · verified 137). 인용 앵커 lint 통과.
+
+**v0.1.3 공급망 위생 라운드 완료(52차) — 8건 + [PERF-09].** 설치본 node_modules **81MB → 1.3MB**(`.npmrc omit=dev`, SHIP-04) · `npm audit` **critical 1·high 1 포함 5건 → low 1건**(vitest 2→4, DEP-05)이고 devDeps 가 설치본에 안 내려가므로 **사용자 디스크 노출 0** · 락파일 재작성 없음(DEP-01) · `engines` 강제(SHIP-09) · 번들이 yaml ISC 고지를 싣는다(DEP-02) · `--version` 이 번들 지문을 내 「같은 버전 다른 코드」가 보인다(DEP-03) · 부하 창 판정을 한 벌로 올려 벤치와 회귀 테스트가 같은 규칙을 읽는다(PERF-09). 배포본 테스트 유지는 **근거 들어 기각**으로 닫았다(DEP-04·SHIP-11 — 광고된 기능이고, SHIP-04 를 닫은 뒤로는 지배적 비용이 아니다).
 
 ---
 

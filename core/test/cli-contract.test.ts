@@ -6,7 +6,7 @@
  * 도움말이 광고한 형태가 실제로는 안 먹는다. 사람은 오류문이 가리키는 곳을 고치려 들기
  * 때문에, **틀린 곳을 가리키는 오류문은 없느니만 못하다.**
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -15,15 +15,28 @@ import { nearestCommand } from '../src/help';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-contract-'));
 
-/** stdout·stderr·throw 메시지를 한 곳에 모은다 — 안내가 어디로 나가든 계약은 「사람이 읽는 것」이다. */
+/**
+ * stdout·stderr·throw 메시지를 한 곳에 모은다 — 안내가 어디로 나가든 계약은 「사람이 읽는 것」이다.
+ *
+ * **중첩 안전해야 한다.** 이 파일에는 `capture(() => run(..., init()))` 처럼 캡처 «안에서»
+ * 설정 헬퍼를 부르는 곳이 있고, `init()` 자신이 또 capture 를 쓴다. 예전에는 `vi.spyOn(...)`
+ * + `mockRestore()` 였는데 `mockRestore()` 는 **원본으로** 되돌린다 — 안쪽이 끝나는 순간
+ * 바깥 캡처가 조용히 풀려 바깥은 빈 문자열을 받았다. 그러면 단언이 「출력이 없다」로 실패하는데
+ * 화면에는 출력이 보여서, 읽는 사람이 제품을 의심하게 된다.
+ *
+ * 그래서 **직전 값으로** 되돌린다. 안쪽이 끝나면 바깥 캡처가 그대로 살아난다.
+ * (vitest 2 에서는 우연히 안 드러났고, 4 로 올리며 3건이 한꺼번에 빨개져 잡혔다.)
+ */
 function capture(fn: () => number): { code: number; text: string } {
   const out: string[] = [];
-  const l = vi.spyOn(console, 'log').mockImplementation(m => { out.push(String(m)); });
-  const e = vi.spyOn(console, 'error').mockImplementation(m => { out.push(String(m)); });
+  const prevLog = console.log;
+  const prevErr = console.error;
+  console.log = (m?: unknown): void => { out.push(String(m)); };
+  console.error = (m?: unknown): void => { out.push(String(m)); };
   try {
     const code = fn();
     return { code, text: out.join('\n') };
-  } finally { l.mockRestore(); e.mockRestore(); }
+  } finally { console.log = prevLog; console.error = prevErr; }
 }
 
 const init = (): string => {

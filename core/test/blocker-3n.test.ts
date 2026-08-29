@@ -20,6 +20,8 @@ import { handleHook, isWriteTool } from '../src/hook';
 import { SHELLS_TAKING_C, isReadOnlyCommand, scanBashWrites, PATH_MAX_GUESS } from '../src/bashwrite';
 import { isDeployCommand, loadProfile } from '../src/profile';
 import type { Phase } from '../src/types';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { loadWindow, busyReason } = require(path.join(__dirname, '..', '..', 'scripts', 'load-window.mjs'));
 
 const setup = (phase?: Phase): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-3n-'));
@@ -136,6 +138,10 @@ describe('[SEC-233] 읽지 못한 페이로드는 통과가 아니다', () => {
   const bashPayload = (command: string): string =>
     JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command } });
 
+  // [PERF-09] 명시 타임아웃. 이 테스트의 **단언**은 deny/allow 판정이라 부하와 무관하지만,
+  // 64KB~상한 페이로드를 훅 프로세스에 통째로 밀어 넣으므로 **실행 시간**은 부하를 그대로
+  // 탄다. 기본값(5초)에 기대면 바쁜 머신에서 「판정이 틀렸다」가 아니라 「시간이 넘었다」로
+  // 죽는다 — 재려는 것과 다른 이유로 빨간 불이 켜지는 [PERF-09] 의 부류다.
   it('★ 파이프 버퍼(64KB)를 넘는 페이로드도 끝까지 읽어 판정한다', () => {
     // 예전에는 `process.stdin.isTTY` 가 fd 0 을 비블로킹으로 만들어 EAGAIN 이 났고,
     // 그것이 「빈 입력 = 무판정 = 통과」로 흡수됐다 — 주석으로 64KB 를 붙이면 훅이 꺼졌다.
@@ -143,12 +149,16 @@ describe('[SEC-233] 읽지 못한 페이로드는 통과가 아니다', () => {
     const pad = 'P'.repeat(66_000);
     expect(judge(root, bashPayload(`printf x > .harness/config.yaml #${pad}`))).toBe('deny');
     expect(judge(root, bashPayload(`harness gate approve P6 --force #${pad}`))).toBe('deny');
-  });
+  }, 120_000);
 
+  // [PERF-09] 명시 타임아웃. 이 테스트의 **단언**은 deny/allow 판정이라 부하와 무관하지만,
+  // 64KB~상한 페이로드를 훅 프로세스에 통째로 밀어 넣으므로 **실행 시간**은 부하를 그대로
+  // 탄다. 기본값(5초)에 기대면 바쁜 머신에서 「판정이 틀렸다」가 아니라 「시간이 넘었다」로
+  // 죽는다 — 재려는 것과 다른 이유로 빨간 불이 켜지는 [PERF-09] 의 부류다.
   it('큰 페이로드라고 무조건 막지는 않는다 — 정상 작업은 그대로 통과한다', () => {
     const root = setup('P0');
     expect(judge(root, bashPayload(`echo ok #${'P'.repeat(300_000)}`))).toBe('allow');
-  });
+  }, 120_000);
 
   it('읽었는데 해석이 안 되면 거부한다 — 못 읽은 호출은 통과시킬 호출이 아니다', () => {
     const root = setup('P0');
@@ -237,19 +247,28 @@ describe('[COST-260] 긴 명령에서도 판정이 끝난다 — 멈추는 훅�
     expect(over.unresolvedTargets, '상한을 넘었는데 계속 해석했다 — 2차가 살아났다').toContain('f');
   });
 
+  // [PERF-09] 명시 타임아웃. 이 테스트의 **단언**은 deny/allow 판정이라 부하와 무관하지만,
+  // 64KB~상한 페이로드를 훅 프로세스에 통째로 밀어 넣으므로 **실행 시간**은 부하를 그대로
+  // 탄다. 기본값(5초)에 기대면 바쁜 머신에서 「판정이 틀렸다」가 아니라 「시간이 넘었다」로
+  // 죽는다 — 재려는 것과 다른 이유로 빨간 불이 켜지는 [PERF-09] 의 부류다.
   it('상한을 넘어도 하네스 소유 이름은 막힌다 — 상한이 방어를 되돌리지 않는다', () => {
     const root = setup('P0');
     // 경로가 안 풀려도 **파일 이름만으로** 지킨다(`unresolvedTargets` 계약).
     expect(denied(bash(root, `${deepCd(2050)} ; echo boom > .harness/config.yaml`)), '상대경로를 놓쳤다').toBe(true);
     expect(denied(bash(root, `${deepCd(2050)} ; echo boom > config.yaml`)), '이름만 남은 코어 파일을 놓쳤다').toBe(true);
-  });
+  }, 120_000);
 
   it('상한을 넘어도 무해한 쓰기는 통과한다 — 과차단은 결함과 같은 무게다', () => {
     const root = setup('P0');
     expect(denied(bash(root, `${deepCd(2050)} ; echo ok > notes.txt`)), '깊은 cwd 를 이유로 과차단했다').toBe(false);
   });
 
-  it('★ 800세그먼트 판정이 훅 타임아웃 안에서 끝난다 — 2차면 자릿수로 벌어진다', () => {
+  it('★ 800세그먼트 판정이 훅 타임아웃 안에서 끝난다 — 2차면 자릿수로 벌어진다', (ctx: any) => {
+    // [PERF-09] wall-clock 단언이므로 부하 창에서는 판정하지 않는다 — 바쁜 머신에서 이 값은
+    // 제품이 아니라 경쟁 프로세스를 잰다(대체 지표 세 후보를 실측으로 기각했다:
+    // `scripts/load-window.mjs` 주석). 사유와 잰 부하를 남겨 「사유 없는 skip」을 만들지 않는다.
+    const w = loadWindow();
+    if (w.busy) { const why = busyReason(w, '[COST-260] 800세그먼트'); console.warn(why); ctx.skip(why); return; }
     const root = setup('P0');
     const cmd = Array.from({ length: 800 }, () => 'cd x > f').join(' ; ');
     const t0 = process.hrtime.bigint();
@@ -262,7 +281,7 @@ describe('[COST-260] 긴 명령에서도 판정이 끝난다 — 멈추는 훅�
      * 수정 전 실측이 저자 머신에서 15초였고, 느린 머신에서는 분 단위가 된다.
      * **이 검사는 자릿수 회귀만 잡는다.** 상수 회귀는 위 구조 단언이 맡는다.
      */
-    expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 — 2차가 살아났다`).toBeLessThan(8000);
+    expect(ms, `판정에 ${ms.toFixed(0)}ms 걸렸다 (유휴 창 load1m ${w.load1m.toFixed(2)}/${w.cores}코어) — 2차가 살아났다`).toBeLessThan(8000);
   }, 30_000);
 
 

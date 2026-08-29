@@ -1,3 +1,21 @@
+/*!
+ * This file bundles third-party source. Notices required by their licenses:
+ *
+ * ---- yaml v2.9.0 (ISC) ----
+ * Copyright Eemeli Aro <eemeli@gmail.com>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any purpose
+ * with or without fee is hereby granted, provided that the above copyright notice
+ * and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+ * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+ * FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+ * INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+ * OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+ * THIS SOFTWARE.
+ */
 "use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -8736,6 +8754,7 @@ function mentionsPath(cmd, needles) {
 // core/src/cli.ts
 var tty = __toESM(require("tty"));
 var path20 = __toESM(require("path"));
+var import_node_crypto2 = require("crypto");
 
 // core/src/state.ts
 var fs3 = __toESM(require("fs"));
@@ -16075,6 +16094,14 @@ function harnessVersion() {
   }
   return "version unknown (package.json not readable)";
 }
+function buildId() {
+  try {
+    const h = (0, import_node_crypto2.createHash)("sha256").update(fs23.readFileSync(__filename)).digest("hex");
+    return h.slice(0, 8);
+  } catch {
+    return "unknown";
+  }
+}
 function warnUnresolvedEvidence(root, evidence, lang) {
   const raw = (evidence ?? "").trim();
   if (!raw) return;
@@ -17010,7 +17037,7 @@ The current phase has not moved yet \u2014 run \`harness phase set ${target}\` t
         return 0;
       }
       case "--version":
-        console.log(`king-wjang-harness ${harnessVersion()}`);
+        console.log(`king-wjang-harness ${harnessVersion()} (build ${buildId()})`);
         return 0;
       default:
         console.error(unknownCommand(cmd, lang));

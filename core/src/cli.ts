@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import { URL_SCHEME_RE } from './bashwrite';
 import * as tty from 'node:tty';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent, resolveState } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
@@ -456,6 +457,28 @@ function harnessVersion(): string {
     } catch { /* 다음 후보 */ }
   }
   return 'version unknown (package.json not readable)';
+}
+
+/**
+ * [DEP-03] **같은 버전 문자열이 서로 다른 코드를 가리킬 수 있다 — 그것을 보이게 한다.**
+ *
+ * 마켓플레이스 설치는 태그·SHA 가 아니라 **브랜치 HEAD** 를 따라간다. 그런데
+ * `claude plugin update` 의 갱신 판단은 **버전 문자열 비교**다. 그래서 브랜치가 아무리
+ * 나아가도 버전을 안 올리면 사용자는 낡은 코드에 **무증상으로** 고정된다.
+ *
+ * 실제로 그랬다(2026-08-26 ~ 08-29): 설치본은 웨이브 32 코드, 리포는 웨이브 50 코드,
+ * `core/src` 15파일이 전부 달랐는데 **양쪽 다 `0.1.2`** 였다. 공식 갱신 명령은
+ * 「already at the latest version」이라고 답했다. 무엇이 도는지 확인할 방법이 없었다.
+ *
+ * 고칠 수 없는 것(마켓플레이스의 참조 방식)과 고칠 수 있는 것(무증상)을 가른다 —
+ * **실행 중인 번들의 지문**을 버전 옆에 찍는다. 두 곳에서 이 값을 비교하면 「같은 버전인데
+ * 다른 코드」가 한눈에 드러난다. 못 읽으면 숨기지 않고 그렇게 적는다(`harnessVersion` 과 같은 원칙).
+ */
+function buildId(): string {
+  try {
+    const h = createHash('sha256').update(fs.readFileSync(__filename)).digest('hex');
+    return h.slice(0, 8);
+  } catch { return 'unknown'; }
 }
 
 /**
@@ -1721,7 +1744,7 @@ export function run(argv: string[], root: string): number {
         // 뿐이라 `plugin.json`·마켓플레이스의 0.0.1 과 어긋났고, Support 절이 "harness --version
         // 을 붙여라" 라고 하는데 그 출력으로는 **릴리스를 구분할 수 없었다.**
         // 값은 `package.json` 에서 읽는다 — 상수로 박으면 릴리스 때마다 두 곳이 갈린다.
-        console.log(`king-wjang-harness ${harnessVersion()}`);
+        console.log(`king-wjang-harness ${harnessVersion()} (build ${buildId()})`);
         return 0;
 
       default:
