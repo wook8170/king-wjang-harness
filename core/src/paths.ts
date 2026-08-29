@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as os from 'node:os';
 
 export const harnessDir = (root: string) => path.join(root, '.harness');
 export const statePath = (root: string) => path.join(harnessDir(root), 'state.json');
@@ -60,6 +61,36 @@ export function humanCmd(args: string): string {
 /** 붙여 넣어 **그대로 도는 것**이 목적이므로 공백·메타문자가 있으면 따옴표로 싼다. */
 function shellQuote(p: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
+
+
+/**
+ * [ORCH-02] **임시 디렉토리는 「이 프로젝트의 소스」가 아니다.**
+ *
+ * 설계 트랙은 루트 밖 쓰기를 Write 레인에서 전면 차단했는데, Claude Code 세션은 **프로젝트 밖
+ * 스크래치패드를 표준으로** 쓴다. 그래서 이 규칙이 중간 산출물·분석 스크립트를 둘 데를 없애
+ * **오히려 작업 저장소를 더럽히는 쪽으로 밀었다** — 이 감사 자신이 그렇게 됐다(스크래치패드에
+ * 측정 드라이버를 못 써서 리포 안에 증거 파일을 만들었다).
+ *
+ * 통과시켜도 탈출이 되지 않는다는 것은 **실측으로 확인돼 있다**: 루트 밖 원고를 프로젝트
+ * 소스로 «들여오는» 경로 10종이 전건 차단된다([SEC-15]). 원고를 어디에 두든 들여올 수 없으면
+ * 경계는 그대로다. Bash 레인은 이미 같은 이유로 루트 밖 쓰기를 통과시킨다(`hook.ts` 의
+ * 「지켜야 할 것은 이 프로젝트의 소스이지 디스크 전체가 아니다」) — 두 레인을 같은 답으로 맞춘다.
+ *
+ * 경로는 **realpath 로 편다** — 심링크로 임시 디렉토리인 척하고 다른 곳에 착지하는 것을 막는다.
+ */
+export function isUnderTempDir(p: string): boolean {
+  if (!p) return false;
+  const real = (x: string): string => { try { return fs.realpathSync(x); } catch { return x; } };
+  // 파일 자신은 아직 없을 수 있으므로 **디렉토리**를 편 뒤 이름을 다시 붙인다.
+  const target = real(path.dirname(p)) + path.sep + path.basename(p);
+  const roots = [process.env.TMPDIR, os.tmpdir(), '/tmp', '/private/tmp']
+    .filter((x): x is string => typeof x === 'string' && x !== '')
+    .map((x) => real(x));
+  return roots.some((r) => {
+    const base = r.endsWith(path.sep) ? r : r + path.sep;
+    return target === r || target.startsWith(base);
+  });
 }
 
 /**

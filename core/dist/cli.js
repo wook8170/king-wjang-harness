@@ -8763,6 +8763,7 @@ var path2 = __toESM(require("path"));
 // core/src/paths.ts
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
+var os = __toESM(require("os"));
 var harnessDir = (root) => path.join(root, ".harness");
 var statePath = (root) => path.join(harnessDir(root), "state.json");
 var eventsPath = (root) => path.join(harnessDir(root), "events.jsonl");
@@ -8793,6 +8794,22 @@ function humanCmd(args) {
 }
 function shellQuote(p) {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
+function isUnderTempDir(p) {
+  if (!p) return false;
+  const real = (x) => {
+    try {
+      return fs.realpathSync(x);
+    } catch {
+      return x;
+    }
+  };
+  const target = real(path.dirname(p)) + path.sep + path.basename(p);
+  const roots = [process.env.TMPDIR, os.tmpdir(), "/tmp", "/private/tmp"].filter((x) => typeof x === "string" && x !== "").map((x) => real(x));
+  return roots.some((r) => {
+    const base = r.endsWith(path.sep) ? r : r + path.sep;
+    return target === r || target.startsWith(base);
+  });
 }
 function presence(p) {
   try {
@@ -11547,8 +11564,16 @@ function runDoctor(root, opts = {}) {
   }
   if (corruptLines > 0) {
     warnings.push(t({
-      en: `${corruptLines} line(s) of events.jsonl are corrupt \u2014 the replay is incomplete`,
-      ko: `events.jsonl ${corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uBD88\uC644\uC804`
+      /**
+       * [USE-03] **`--repair` 가 못 고치는 것임을 말한다.**
+       *
+       * 경고 자체는 정확했지만 「무엇을 하면 사라지는가」를 안 적었다. 운영자가 `--repair` 를
+       * 「복구」로 기대하고 돌리면 state 는 재생되지만 **저널 줄은 그대로**라 같은 경고가
+       * 영속한다 — 「내가 뭘 잘못했나」로 무한 루프에 빠진다. 저널이 append-only 이고
+       * 압축·재작성이 없다는 것은 README 가 광고하는 설계이지 고장이 아니다.
+       */
+      en: `${corruptLines} line(s) of events.jsonl are corrupt \u2014 the replay is incomplete. \`--repair\` will not clear this: it rebuilds state.json from the journal and never rewrites the journal itself (append-only by design, see "Known limits"). The state is already corrected by replay, so the harness keeps working; the warning stays as the record that those entries are unreadable. To remove it, a human must edit or archive events.jsonl themselves \u2014 that is a deliberate act on the audit trail, not a repair.`,
+      ko: `events.jsonl ${corruptLines}\uC904 \uC190\uC0C1 \u2014 \uC7AC\uC0DD \uBD88\uC644\uC804. \`--repair\` \uB85C\uB294 \uC0AC\uB77C\uC9C0\uC9C0 \uC54A\uB294\uB2E4: \uC800\uB110\uC5D0\uC11C state.json \uC744 \uB2E4\uC2DC \uB9CC\uB4E4 \uBFD0, **\uC800\uB110 \uC790\uCCB4\uB294 \uACE0\uCCD0 \uC4F0\uC9C0 \uC54A\uB294\uB2E4**(append-only \uC124\uACC4 \u2014 README \u300C\uC54C\uB824\uC9C4 \uD55C\uACC4\u300D). \uC0C1\uD0DC\uB294 \uC774\uBBF8 \uC7AC\uC0DD\uC73C\uB85C \uBCF4\uC815\uB3FC \uD558\uB124\uC2A4\uB294 \uACC4\uC18D \uB3C8\uB2E4. \uC774 \uACBD\uACE0\uB294 \uADF8 \uC904\uB4E4\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4\uB294 **\uAE30\uB85D**\uC73C\uB85C \uB0A8\uB294 \uAC83\uC774\uB2E4. \uC9C0\uC6B0\uB824\uBA74 \uC0AC\uB78C\uC774 \uC9C1\uC811 events.jsonl \uC744 \uD3B8\uC9D1\uD558\uAC70\uB098 \uBCF4\uAD00\uD574\uC57C \uD55C\uB2E4 \u2014 \uADF8\uAC83\uC740 \uBCF5\uAD6C\uAC00 \uC544\uB2C8\uB77C \uAC10\uC0AC \uAE30\uB85D\uC5D0 \uB300\uD55C \uC758\uB3C4\uC801 \uC870\uCE58\uB2E4.`
     }));
     trustworthy = false;
   }
@@ -15482,6 +15507,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   const outside = isOutsideRoot(rel) && isOutsideRoot(realRel);
   if (outside) {
     if (fromBash) return null;
+    if (isUnderTempDir(raw) && !isUnderTempDir(root)) return null;
     return deny(L(
       `Paths outside the project root cannot be written in the design track: ${sanitizeUntrusted(raw)}`,
       `\uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C\uB294 \uC124\uACC4 \uD2B8\uB799\uC5D0\uC11C \uC4F8 \uC218 \uC5C6\uB2E4: ${sanitizeUntrusted(raw)}`

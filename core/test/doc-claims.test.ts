@@ -217,3 +217,40 @@ describe('UX-146: 설정 키가 4개 언어 문서에 전부 있다', () => {
     for (const f of READMES) expect(read(f)).toContain('.harness/config.yaml');
   });
 });
+
+describe('[SHIP-23] README 의 테스트 수는 산술이 아니라 실측이다', () => {
+  /**
+   * 총계·파일 수는 이 파일이 이미 잡았지만 **배포본 수치는 산술로만** 맞췄다
+   * (「총계 − 리포 전용 = 배포본」). 실제로 틀렸다 — 웨이브 50 의 README 4언어가 배포본을
+   * 1451 로 광고했는데 `git archive` 실측은 1474 였고, 자기 문장과도 어긋났다([SHIP-24]).
+   * 산술은 「리포 전용이 몇 건인가」를 사람이 세는 데 기대는데 그 수는 라운드마다 움직인다.
+   *
+   * 그래서 두 수를 **실제로 돌려 잰 기록**(`docs/test-counts.json`, `npm run doc:counts`)과
+   * 대조한다. 기록이 낡았는지는 **지금 리포의 테스트 파일 수**로 검사한다 — 파일이 늘거나
+   * 줄면 반드시 다시 재게 되고, 그때 배포본 수치도 함께 갱신된다.
+   */
+  const rec = JSON.parse(read('docs/test-counts.json')) as {
+    repo: { files: number; tests: number }; archive: { passed: number };
+  };
+  const actualFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.ts')).length;
+
+  it('실측 기록이 지금 리포와 같은 시점의 것이다 — 낡으면 `npm run doc:counts`', () => {
+    expect(rec.repo.files, 'docs/test-counts.json 이 낡았다 — `npm run doc:counts` 로 다시 재라')
+      .toBe(actualFiles);
+  });
+
+  it('4개 언어가 광고하는 총계가 실측과 같다', () => {
+    for (const f of READMES) {
+      const m = /(\d{3,5})\s*(?:passing|passed|件 パス|項|项通过|tests|테스트)/.exec(read(f));
+      expect(m, `${f} 에 계량 표기가 없다`).not.toBeNull();
+      expect(Number(m![1]), `${f} 의 총계가 실측(${rec.repo.tests})과 다르다`).toBe(rec.repo.tests);
+    }
+  });
+
+  it('4개 언어가 광고하는 **배포본** 통과 수가 실측과 같다 — 여기가 산술로 틀렸던 자리다', () => {
+    for (const f of READMES) {
+      expect(read(f), `${f} 가 배포본 실측값(${rec.archive.passed})을 안 적는다`)
+        .toContain(String(rec.archive.passed));
+    }
+  });
+});

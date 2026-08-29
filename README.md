@@ -7,7 +7,7 @@
 
 Process discipline for AI coding agents — **enforced by hooks, not suggested by prompts.** king-wjang-harness makes the **Design → Build → Ship** lifecycle *inviolable*: it physically denies the tool call when your agent tries to write source code during design, or end a session with work left unsettled. No persuasion. No "please remember to." A deterministic gate that runs **outside the model**.
 
-<sub>Hooks + CLI · append-only event journal as source of truth · ~240 context tokens per session · silent in projects that don't opt in</sub>
+<sub>Hooks + CLI · append-only event journal as source of truth · ~260 context tokens per session · silent in projects that don't opt in</sub>
 
 ---
 
@@ -32,7 +32,7 @@ This is the benchmark that matters. Not "which tool is faster" — **which layer
 | **Mechanism** | Text the model reads and *chooses* to follow | Hook returns `deny` / `block` — a decision **outside** the model |
 | **Can the model ignore it?** | Yes — rationalizes under pressure | **No** — the tool call is physically stopped |
 | **Reliability under load** | Degrades exactly when it matters most | Constant — a return value doesn't get tired |
-| **Context cost** | Grows with every rule you add | **flat ~240 tokens/session** — the rules run out of process, so adding one costs nothing |
+| **Context cost** | Grows with every rule you add | **flat ~260 tokens/session** — the rules run out of process, so adding one costs nothing |
 | **Failure mode** | Silent drift; you find out later | Observable — every skip leaves a trace |
 | **State** | Stateless; re-explained each session | Durable event journal; survives `/clear`, resume, machine change |
 
@@ -118,8 +118,8 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1526 tests** (65 files) — **1504 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
-| Added context per session | **~240 tokens** when the harness is on; **0** in projects without `.harness/` |
+| Test suite | **1548 tests** (66 files) — **1524 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
 
@@ -202,8 +202,22 @@ harness --version
 | `harness wave complete` | Complete a wave (UX-referencing waves require visual evidence) |
 | `harness backtrack <phase> --reason "…"` | Officially return to design from a later track |
 | `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check · journal-replay recovery · policy-drift check (`--accept-policy` needs `HARNESS_ACCEPT_POLICY=1`, humans only) |
+| `harness gate submit <P0..P12>` | Put a phase's artifacts up for review |
+| `harness gate approve <P0..P12>` | **Human only** — the approval that opens the next phase (never allowlist it) |
+| `harness report denials [--limit <n>]` | Recent tool calls the hooks denied — what got blocked, and why |
+| `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | Escalate to a human and stop the wave loop; clear it once decided |
 
 `harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
+
+**Taking it off.** There is no `harness uninstall`, and that is deliberate: an agent must not be able
+to switch off the rules it is working under. Removal is a human action in a human terminal.
+
+```bash
+rm -rf .harness/          # one project: the hooks go quiet here immediately
+```
+
+That deletes the event journal too — it is the audit trail, so copy it out first if you want to keep it.
+To stop the hooks everywhere instead, uninstall the plugin (`claude plugin uninstall king-wjang-harness`).
 
 **Exit codes.** A release script needs to tell "the product is not ready" apart from "the command
 did not run at all" — the two used to share exit `1`.
@@ -260,7 +274,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1526 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1548 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -280,7 +294,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1526 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1548 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and

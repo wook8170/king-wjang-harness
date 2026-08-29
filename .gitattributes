@@ -13,3 +13,5 @@ docs/appraisal         export-ignore
 docs/superpowers       export-ignore
 .claude                export-ignore
 .codesight             export-ignore
+# [SHIP-08] CI 설정은 이 리포를 만드는 장치이지 설치자의 제품이 아니다(PROD-113 과 같은 기준).
+.github                export-ignore

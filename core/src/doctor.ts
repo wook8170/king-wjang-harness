@@ -228,8 +228,26 @@ export function runDoctor(
   }
   if (corruptLines > 0) {
     warnings.push(t({
-      en: `${corruptLines} line(s) of events.jsonl are corrupt — the replay is incomplete`,
-      ko: `events.jsonl ${corruptLines}줄 손상 — 재생 불완전`,
+      /**
+       * [USE-03] **`--repair` 가 못 고치는 것임을 말한다.**
+       *
+       * 경고 자체는 정확했지만 「무엇을 하면 사라지는가」를 안 적었다. 운영자가 `--repair` 를
+       * 「복구」로 기대하고 돌리면 state 는 재생되지만 **저널 줄은 그대로**라 같은 경고가
+       * 영속한다 — 「내가 뭘 잘못했나」로 무한 루프에 빠진다. 저널이 append-only 이고
+       * 압축·재작성이 없다는 것은 README 가 광고하는 설계이지 고장이 아니다.
+       */
+      en: `${corruptLines} line(s) of events.jsonl are corrupt — the replay is incomplete. `
+        + '`--repair` will not clear this: it rebuilds state.json from the journal and never rewrites '
+        + 'the journal itself (append-only by design, see "Known limits"). The state is already '
+        + 'corrected by replay, so the harness keeps working; the warning stays as the record that '
+        + 'those entries are unreadable. To remove it, a human must edit or archive events.jsonl '
+        + 'themselves — that is a deliberate act on the audit trail, not a repair.',
+      ko: `events.jsonl ${corruptLines}줄 손상 — 재생 불완전. `
+        + '`--repair` 로는 사라지지 않는다: 저널에서 state.json 을 다시 만들 뿐, **저널 자체는 '
+        + '고쳐 쓰지 않는다**(append-only 설계 — README 「알려진 한계」). 상태는 이미 재생으로 '
+        + '보정돼 하네스는 계속 돈다. 이 경고는 그 줄들을 읽을 수 없다는 **기록**으로 남는 것이다. '
+        + '지우려면 사람이 직접 events.jsonl 을 편집하거나 보관해야 한다 — 그것은 복구가 아니라 '
+        + '감사 기록에 대한 의도적 조치다.',
     }));
     trustworthy = false;
   }

@@ -12,7 +12,8 @@
     "prepare": "tsup",
     "test": "vitest run",
     "check": "tsc --noEmit",
-    "bench:hook": "node scripts/bench-hook-latency.mjs"
+    "bench:hook": "node scripts/bench-hook-latency.mjs",
+    "doc:counts": "node scripts/measure-test-counts.mjs"
   },
   "dependencies": {
     "yaml": "^2.5.0"

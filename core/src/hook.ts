@@ -18,7 +18,7 @@ import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir, eventsPath, humanCmd, denialsPath } from './paths';
+import { harnessDir, runtimeDir, eventsPath, humanCmd, denialsPath, isUnderTempDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
@@ -1690,6 +1690,20 @@ function judgeWritePath(
   if (outside) {
     // Bash 의 루트 밖 쓰기는 이 프로젝트의 소스가 아니다 — 위 주석의 근거로 통과시킨다.
     if (fromBash) return null;
+    /**
+     * [ORCH-02] **임시 디렉토리는 Write 레인에서도 통과시킨다.**
+     * 세션의 표준 스크래치패드가 프로젝트 밖이라, 여기를 막으면 에이전트가 중간 산출물을
+     * **저장소 안에** 쓰게 된다 — 규칙이 오히려 저장소를 더럽히는 쪽으로 민다.
+     * 원고를 어디에 두든 **소스로 들여오는 경로는 10종 전건 차단**돼 있으므로([SEC-15])
+     * 경계는 그대로다. Bash 레인과 같은 답을 하게 되어 [API-02] 가 지적한 비대칭도 줄어든다.
+     *
+     * **단 프로젝트 자신이 임시 디렉토리 안에 있으면 이 예외를 쓰지 않는다.** 그러면 예외가
+     * 프로젝트의 «이웃 전체»를 열어 버려서, `../outside.md` 같은 **상대경로 탈출까지 통과**한다
+     * — 배포본 스위트가 실제로 그것을 잡았다(`hook-misc` 의 「상대경로 탈출도 차단된다」).
+     * 이 예외의 목적은 «프로젝트 밖에 있는 세션 스크래치패드»를 여는 것이지, 임시 디렉토리를
+     * 안전지대로 선언하는 것이 아니다. 프로젝트가 임시 안에 있으면 임시는 더 이상 «밖»이 아니다.
+     */
+    if (isUnderTempDir(raw) && !isUnderTempDir(root)) return null;
     return deny(L(
       `Paths outside the project root cannot be written in the design track: ${sanitizeUntrusted(raw)}`,
       `프로젝트 루트 밖 경로는 설계 트랙에서 쓸 수 없다: ${sanitizeUntrusted(raw)}`,
