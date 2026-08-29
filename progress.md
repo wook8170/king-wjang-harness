@@ -2,7 +2,8 @@
 
 ## 2026-08-29 (52) — **v0.1.3 라운드 완료: deferred 37 → 10 (28건 닫음)**
 
-**정본.** 로컬 `main` = **`380f765`** · `origin/main` = **`dfccb2a`** — **push 안 됨(3커밋 앞섬)** · 트리 clean.
+**정본.** 작업 커밋 3개(`20424a3` · `c21ca8c` · **`380f765`**) + 핸드오프 커밋 2개 = 로컬 `main` ·
+`origin/main` = **`dfccb2a`** — **push 안 됨(5커밋 앞섬)** · 트리 clean. (핸드오프 최종 확인 2026-08-30)
 **66파일 1546 pass / 2 skip / fail 0 · tsc 0 · 배포본 1524 pass / fail 0 · 대장 172행
 open 0 · deferred 10 · rejected 6 · verified 156 · 앵커 lint 통과 · 판정 GO.**
 
@@ -39,7 +40,7 @@ open 0 · deferred 10 · rejected 6 · verified 156 · 앵커 lint 통과 · 판
 
 ### 다음 즉시 할 일
 
-1. **push — 사용자 승인 대기.** 3커밋이 로컬에만 있다: `git push origin main`.
+1. **push — 사용자 승인 대기.** 5커밋이 로컬에만 있다: `git push origin main`.
 2. **아티팩트 갱신** — 대장이 172행 open 0 / deferred 10 / verified 156 으로 바뀌었고
    README 계량도 바뀌었다. 원본은 `docs/release-readiness/2026-08-27/report.html`,
    URL 은 https://claude.ai/code/artifact/12260342-29cb-4be0-a786-1e31ff73dec2
