@@ -19,11 +19,30 @@ import { initHarness, readState, writeState } from '../src/state';
 import { localProfileDir } from '../src/profile';
 import { lastTier } from '../src/usage';
 
-/** macOS 의 `mktemp` 은 심링크 루트를 준다(`/var` → `/private/var`) — 그것이 이 결함의 조건이다. */
 const sandbox = (): string => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-med3i-'));
   initHarness(root);
   return root;
+};
+
+/**
+ * [FLAKE-02] **심링크 루트를 «직접» 만든다.**
+ *
+ * 예전에는 그냥 `sandbox()` 를 쓰고 「macOS 의 `mktemp` 은 심링크 루트를 준다
+ * (`/var` → `/private/var`)」에 기댔다. 그 우연이 이 결함의 조건이었기 때문이다. 그런데
+ * 리눅스의 `/tmp` 는 실경로라 **가드(`realpath(root) !== root`)가 거기서 깨진다** — CI 첫
+ * 실행이 그것을 잡았다. 우연에 기댄 조건은 그 우연이 없는 곳에서 사라진다.
+ *
+ * 그래서 심링크를 직접 세운다: 어느 플랫폼에서도 조건이 **실제로** 성립하고, macOS 에서
+ * 우연히 성립하던 것이 이제는 의도적으로 성립한다.
+ */
+const symlinkedSandbox = (): string => {
+  const base = fs.realpathSync(os.tmpdir());
+  const real = fs.mkdtempSync(path.join(base, 'kwh-med3i-real-'));
+  const link = path.join(base, `kwh-med3i-link-${path.basename(real)}`);
+  fs.symlinkSync(real, link);
+  initHarness(link);
+  return link;
 };
 
 /** `run` 은 던지지 않는다 — stderr 와 종료코드를 함께 본다. */
@@ -55,8 +74,8 @@ describe('[VAL-134] 없는 파일을 「프로젝트 밖」이라고 하지 않�
   });
 
   it('심링크 루트에서도 안의 파일은 안이라고 판정한다 — 이 결함의 실제 조건', () => {
-    const root = sandbox();
-    // mktemp 루트가 실제로 심링크를 경유하는지 먼저 확인한다(그렇지 않으면 이 테스트는 무의미).
+    const root = symlinkedSandbox();
+    // 루트가 실제로 심링크를 경유하는지 먼저 확인한다(그렇지 않으면 이 테스트는 무의미).
     expect(fs.realpathSync(root)).not.toBe(root);
     writeState(root, { ...readState(root), phase: 'P0' });
     fs.mkdirSync(path.join(root, 'docs'), { recursive: true });

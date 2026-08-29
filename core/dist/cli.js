@@ -7387,6 +7387,31 @@ __export(cli_exports, {
 module.exports = __toCommonJS(cli_exports);
 var fs23 = __toESM(require("fs"));
 
+// core/src/budget.ts
+var HOOK_BUDGET_MS = 1e4;
+var DEFAULT_DEADLINE_MS = HOOK_BUDGET_MS * 0.6;
+var deadlineAt = null;
+function armJudgeClock(now = Date.now()) {
+  const raw = Number(process.env.HARNESS_JUDGE_DEADLINE_MS);
+  const ms = Number.isFinite(raw) && raw >= 0 ? Math.min(raw, DEFAULT_DEADLINE_MS) : DEFAULT_DEADLINE_MS;
+  deadlineAt = now + ms;
+}
+function disarmJudgeClock() {
+  deadlineAt = null;
+}
+var JudgeTimeout = class extends Error {
+  constructor() {
+    super("judge deadline exceeded");
+    this.name = "JudgeTimeout";
+  }
+};
+function overDeadline(now = Date.now()) {
+  return deadlineAt !== null && now > deadlineAt;
+}
+function checkDeadline() {
+  if (overDeadline()) throw new JudgeTimeout();
+}
+
 // core/src/bashwrite.ts
 var SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
 var MUTATING_TOKENS = [
@@ -7647,6 +7672,7 @@ function segmentsWithIndex(cmd) {
   let cwd = "";
   let sawCd = false;
   for (const seg of out) {
+    checkDeadline();
     const tokens = tokenize(seg.text);
     seg.tokens = tokens;
     if (sawCd && tokens.some((t) => BRANCH_END.has(t))) cwd = null;
@@ -8331,6 +8357,7 @@ function scanBashWrites(rawCmd, env = {}) {
   const segs = segmentsWithIndex(cmd);
   const substMarks = /* @__PURE__ */ new Set();
   for (const seg of segs) {
+    checkDeadline();
     const t = seg.tokens;
     if (t.length === 0) continue;
     const c = commandName(t);
@@ -8345,6 +8372,7 @@ function scanBashWrites(rawCmd, env = {}) {
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   for (const r of redirects) {
+    checkDeadline();
     if (isSubst(r.path)) {
       unresolvedTargets.push(r.path);
       continue;
@@ -8357,6 +8385,7 @@ function scanBashWrites(rawCmd, env = {}) {
     }
   }
   for (const seg of segs) {
+    checkDeadline();
     const segment = seg.text;
     const firstNew = targets.length;
     const tokens = seg.tokens;
@@ -14827,6 +14856,7 @@ function handleHook(root, event, input) {
         return null;
     }
   } catch (err) {
+    if (err instanceof JudgeTimeout) throw err;
     logHookError(root, event, err);
     return null;
   } finally {
@@ -15365,6 +15395,7 @@ function targetLost(cmd, targets) {
   return void 0;
 }
 function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getProfile, coreOnly = false) {
+  checkDeadline();
   const lang = config.lang;
   const L = (en, ko) => pick({ en, ko }, lang);
   const raw = rawPath.trim();
@@ -15731,6 +15762,7 @@ function preTool(root, state, config, input, degraded) {
           ), degraded, lang);
         }
       }
+      checkDeadline();
       const lost = targetLost(cmd, scan.targets);
       if (lost) {
         return deny(L(
@@ -16271,6 +16303,7 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         }, langFor(root)));
         return 0;
       }
+      if (sub === "pre-tool") armJudgeClock();
       let input = {};
       let unread = false;
       try {
@@ -16306,9 +16339,30 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
           return 0;
         }
       }
-      const out = handleHook(root, sub, input);
-      if (out) console.log(JSON.stringify(out));
+      try {
+        const out = handleHook(root, sub, input);
+        const decided = out?.hookSpecificOutput?.permissionDecision;
+        if (overDeadline() && decided !== "deny") throw new JudgeTimeout();
+        if (out) console.log(JSON.stringify(out));
+      } catch (e) {
+        if (!(e instanceof JudgeTimeout)) throw e;
+        logHookIssue(root, `cli judge-timeout ${String(sub)}`);
+        if (sub === "pre-tool" && hasHarness(root)) {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: "deny",
+              permissionDecisionReason: pick({
+                en: "The harness hook ran out of its judging budget on this tool call, so it could not judge it \u2014 and a call it cannot judge is not a call it may allow. This happens on a very large or deeply nested command (many redirects), and sooner on a slow machine. Split the command into smaller ones. If this repeats, see `.harness/.runtime/hook-errors.log` and run `harness doctor`.",
+                ko: "\uD558\uB124\uC2A4 \uD6C5\uC774 \uC774 \uB3C4\uAD6C \uD638\uCD9C\uC744 \uD310\uC815\uD558\uB2E4 \uC2DC\uAC04 \uC608\uC0B0\uC744 \uB2E4 \uC37C\uB2E4 \u2014 \uD310\uC815\uD558\uC9C0 \uBABB\uD55C \uD638\uCD9C\uC740 \uD1B5\uACFC\uC2DC\uD0AC \uC218 \uC788\uB294 \uD638\uCD9C\uC774 \uC544\uB2C8\uB2E4. \uC544\uC8FC \uD06C\uAC70\uB098 \uAE4A\uAC8C \uC911\uCCA9\uB41C \uBA85\uB839(\uB9AC\uB2E4\uC774\uB809\uD2B8\uAC00 \uB9CE\uC740 \uAC83)\uC5D0\uC11C \uB098\uACE0, \uB290\uB9B0 \uBA38\uC2E0\uC77C\uC218\uB85D \uC774\uB974\uAC8C \uB09C\uB2E4. \uBA85\uB839\uC744 \uB098\uB220\uC11C \uB2E4\uC2DC \uC2E4\uD589\uD558\uB77C. \uBC18\uBCF5\uB418\uBA74 `.harness/.runtime/hook-errors.log` \uB97C \uBCF4\uACE0 `harness doctor` \uB97C \uB3CC\uB824\uB77C."
+              }, langFor(root))
+            }
+          }));
+        }
+      }
     } catch {
+    } finally {
+      disarmJudgeClock();
     }
     return 0;
   }

@@ -24,6 +24,7 @@ import { pick, type Lang } from './i18n';
 import { langFor, tr } from './tr';
 import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand, flagsOfGroup } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
+import { armJudgeClock, disarmJudgeClock, overDeadline, JudgeTimeout } from './budget';
 import {
   submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate,
   recordGateFeedback, readGateFeedback, feedbackPath,
@@ -592,6 +593,17 @@ export function run(argv: string[], root: string): number {
         }, langFor(root)));
         return 0;
       }
+      /**
+       * [API-31] **판정 시계는 여기서 건다.** stdin 읽기가 이 뒤에 오므로, 입력 크기에
+       * 비례하는 구간이 전부 시계 안에 들어온다. node 기동·번들 로드만 앞에 남는데 그것은
+       * 입력과 무관하게 유계다(~110ms, [PERF-95]) — 마감이 남긴 여유가 덮는다.
+       *
+       * **`pre-tool` 에서만 건다.** 마감의 대가는 「판정을 포기하고 거부한다」인데, 거부를
+       * 낼 수 있는 이벤트가 그것뿐이다. 다른 이벤트에 걸면 얻는 것 없이 **결과만 조용히
+       * 사라진다** — 예컨대 stop 가드는 플랫폼이 죽일 10초보다 4초 일찍 풀린다. 거기서도
+       * 예산 초과는 여전히 결함이지만, 그건 이 결함이 아니고 처방도 다르다.
+       */
+      if (sub === 'pre-tool') armJudgeClock();
       let input: HookInput = {};
       let unread = false;
       try {
@@ -654,9 +666,52 @@ export function run(argv: string[], root: string): number {
           return 0;
         }
       }
-      const out = handleHook(root, sub as HookEvent, input);
-      if (out) console.log(JSON.stringify(out));
+      /**
+       * [API-31] **제때 판정하지 못한 것도 통과시킬 수 있는 호출이 아니다.**
+       *
+       * 아래 바깥 catch 는 「훅은 절대 실패를 전파하지 않는다」를 지키느라 **모든 예외를
+       * 통과로 바꾼다.** 마감 초과가 거기까지 흘러가면 우리가 닫으려던 fail-open 이 그대로
+       * 돌아오므로, 이 예외만 여기서 먼저 잡아 거부로 바꾼다(위 [SEC-233] 과 같은 태도 ·
+       * 같은 범위: `pre-tool` 이고 `.harness/` 가 있는 프로젝트에서만).
+       */
+      try {
+        const out = handleHook(root, sub as HookEvent, input);
+        /**
+         * [API-31] **보장은 여기 한 곳이다.** 루프 안의 마감 검사는 빨리 끊는 최적화일 뿐
+         * 보장이 아니다 — 판정은 스캔·대상 루프 밖에서도 시간을 쓰고(1MB 원문을 다시 훑는
+         * 안전망들), 실측에서 그 구간만으로 예산을 넘겼다. 그러니 **통과를 내보내기 직전에**
+         * 예산을 다시 묻는다: 시간이 다 된 뒤의 통과는 판정이 아니라 시간 초과다.
+         * 이미 거부라면 그대로 둔다 — 사유가 더 구체적이다.
+         */
+        const decided = (out as { hookSpecificOutput?: { permissionDecision?: string } } | null)
+          ?.hookSpecificOutput?.permissionDecision;
+        if (overDeadline() && decided !== 'deny') throw new JudgeTimeout();
+        if (out) console.log(JSON.stringify(out));
+      } catch (e) {
+        if (!(e instanceof JudgeTimeout)) throw e;
+        logHookIssue(root, `cli judge-timeout ${String(sub)}`);
+        if (sub === 'pre-tool' && hasHarness(root)) {
+          console.log(JSON.stringify({
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse',
+              permissionDecision: 'deny',
+              permissionDecisionReason: pick({
+                en: 'The harness hook ran out of its judging budget on this tool call, so it could not '
+                  + 'judge it — and a call it cannot judge is not a call it may allow. This happens on a '
+                  + 'very large or deeply nested command (many redirects), and sooner on a slow machine. '
+                  + 'Split the command into smaller ones. If this repeats, see '
+                  + '`.harness/.runtime/hook-errors.log` and run `harness doctor`.',
+                ko: '하네스 훅이 이 도구 호출을 판정하다 시간 예산을 다 썼다 — 판정하지 못한 호출은 '
+                  + '통과시킬 수 있는 호출이 아니다. 아주 크거나 깊게 중첩된 명령(리다이렉트가 많은 것)'
+                  + '에서 나고, 느린 머신일수록 이르게 난다. 명령을 나눠서 다시 실행하라. '
+                  + '반복되면 `.harness/.runtime/hook-errors.log` 를 보고 `harness doctor` 를 돌려라.',
+              }, langFor(root)),
+            },
+          }));
+        }
+      }
     } catch { /* 훅 경로는 절대 실패를 전파하지 않는다 */ }
+    finally { disarmJudgeClock(); }
     return 0;
   }
 

@@ -25,6 +25,35 @@ import { submitGate } from '../src/gate';
 import { configPath, runtimeDir } from '../src/paths';
 import type { Phase } from '../src/types';
 
+/**
+ * [FLAKE-03] **stdin 은 파이프가 아니라 «파일»로 물린다.**
+ *
+ * `execFileSync(..., { input })` 은 자식에게 파이프로 써 넣는다. 그런데 이 두 경우의 훅은
+ * **stdin 을 읽지 않고 먼저 끝난다** — `.harness` 가 없으면 sh 게이트가 `exit 0` 하고, 일반
+ * 파일이면 코어가 판정 전에 빠져나온다. 그러면 부모의 쓰기가 닫힌 파이프를 만나 `EPIPE` 로
+ * 던진다. macOS 에서는 파이프 버퍼가 48바이트를 삼켜 경합이 안 보였고, **리눅스 CI 에서만**
+ * 터졌다(CI 첫 실행이 잡았다).
+ *
+ * 파일 리다이렉트에는 깨질 파이프가 없다. 훅이 읽든 안 읽든 결과가 같아지고, 이 테스트가
+ * 확인하려는 것(= sh 게이트의 판정)만 남는다.
+ */
+function hookWithStdin(repo: string, payload: string, env: NodeJS.ProcessEnv): { out: string; code: number } {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-stdin-')), 'payload.json');
+  fs.writeFileSync(f, payload);
+  const fd = fs.openSync(f, 'r');
+  try {
+    const out = execFileSync('sh', [path.join(repo, 'bin/harness-hook'), 'pre-tool'], {
+      env, encoding: 'utf8', timeout: 20_000, stdio: [fd, 'pipe', 'pipe'],
+    });
+    return { out, code: 0 };
+  } catch (e) {
+    return { out: String((e as { stdout?: string }).stdout ?? ''), code: (e as { status?: number }).status ?? 0 };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+
 const repo = path.resolve(__dirname, '../..');
 
 const sandbox = (phase: Phase = 'P0'): string => {
@@ -144,13 +173,8 @@ describe('[COST-130] sh 게이트와 코어가 같은 판정을 쓴다', () => {
   it('`.harness` 가 일반 파일이면 sh 게이트가 판정으로 넘긴다 — fail-closed', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-c130-'));
     fs.writeFileSync(path.join(root, '.harness'), 'not a directory\n');
-    let code = 0;
-    try {
-      execFileSync('sh', [path.join(repo, 'bin/harness-hook'), 'pre-tool'], {
-        input: '{"tool_name":"Bash","tool_input":{"command":"ls"}}\n',
-        env: { ...process.env, CLAUDE_PROJECT_DIR: root }, encoding: 'utf8', timeout: 20_000,
-      });
-    } catch (e) { code = (e as { status?: number }).status ?? 0; }
+    const { code } = hookWithStdin(repo, '{"tool_name":"Bash","tool_input":{"command":"ls"}}\n',
+      { ...process.env, CLAUDE_PROJECT_DIR: root });
     // 통과(exit 0·무출력)든 거부든, **sh 가 조용히 전부 허용하고 끝내지는 않는다**:
     // 게이트를 통과해 코어로 넘어갔다는 것이 요점이다(코어가 거부 사유를 낸다).
     expect(code).toBeGreaterThanOrEqual(0);
@@ -160,10 +184,8 @@ describe('[COST-130] sh 게이트와 코어가 같은 판정을 쓴다', () => {
 
   it('`.harness` 가 아예 없으면 예전대로 조용히 통과한다 — 비간섭', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-c130b-'));
-    const out = execFileSync('sh', [path.join(repo, 'bin/harness-hook'), 'pre-tool'], {
-      input: '{"tool_name":"Bash","tool_input":{"command":"ls"}}\n',
-      env: { ...process.env, CLAUDE_PROJECT_DIR: root }, encoding: 'utf8', timeout: 20_000,
-    });
+    const { out } = hookWithStdin(repo, '{"tool_name":"Bash","tool_input":{"command":"ls"}}\n',
+      { ...process.env, CLAUDE_PROJECT_DIR: root });
     expect(out).toBe('');
   });
 });

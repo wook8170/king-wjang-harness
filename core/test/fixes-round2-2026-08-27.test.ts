@@ -372,15 +372,40 @@ describe('[API-04] 훅이 상한에서도 10초 예산 안에 끝난다', () => 
     expect(Buffer.byteLength(cmd)).toBeLessThan(1024 * 1024);
 
     const t0 = Date.now();
+    let out = '';
     try {
-      execFileSync(path.join(REPO, 'bin/harness-hook'), ['pre-tool'], {
+      out = execFileSync(path.join(REPO, 'bin/harness-hook'), ['pre-tool'], {
         input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: cmd } }),
         cwd: root, env: { ...process.env, CLAUDE_PROJECT_DIR: root }, stdio: 'pipe',
-        maxBuffer: 64 * 1024 * 1024,
+        encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
       });
-    } catch (e) { /* deny 여도 시간은 잰다 */ }
+    } catch (e) { out = String((e as { stdout?: string }).stdout ?? ''); /* deny 여도 시간은 잰다 */ }
     const ms = Date.now() - t0;
-    expect(ms, `상한에서 ${ms}ms (유휴 창 load1m ${w.load1m.toFixed(2)}/${w.cores}코어) — 예산 ${BUDGET_MS}ms 에 붙는다. 상한을 다시 역산하라`).toBeLessThan(ALARM_MS);
+    const where = `상한에서 ${ms}ms (유휴 창 load1m ${w.load1m.toFixed(2)}/${w.cores}코어, ${w.cores}코어)`;
+
+    /**
+     * [API-31] **이 단언은 「이 머신에서 빠른가」가 아니라 「어떤 머신에서도 조용히 통과하지
+     * 않는가」다.**
+     *
+     * 예전에는 `ms < ALARM_MS` 하나였다. 그것은 **역산을 한 대의 머신에서 했다는 사실**을
+     * 단언으로 굳힌 것이었고, CI 첫 실행이 그 값을 깼다 — 4코어 러너에서 같은 페이로드가
+     * 10029ms 였다(개발기 4272ms). 그리고 그 실패는 눈금 문제가 아니었다: 예산을 넘긴
+     * 훅은 플랫폼이 죽이고 **죽은 훅은 통과**이므로, [API-04] 가 닫았다고 적은 fail-open 이
+     * 평범한 러너에서 열려 있었다는 뜻이었다.
+     *
+     * [API-31] 이 그것을 시간으로 닫았다(판정 마감 → 초과하면 거부). 그래서 여기서 지킬
+     * 불변식은 둘이다 — 느린 머신에서도 성립한다:
+     */
+    // (1) 예산 «안에서» 판정을 내보내고 끝난다. 넘기면 플랫폼이 죽이고, 죽은 훅은 통과다.
+    expect(ms, `${where} — 예산 ${BUDGET_MS}ms 를 넘겼다. 넘긴 훅은 죽고 죽은 훅은 통과다`)
+      .toBeLessThan(BUDGET_MS);
+    // (2) 알람을 넘겼다면 이 머신이 느리다는 뜻이고, 그때 허용되는 결말은 **시간초과 거부**뿐이다.
+    //     조용한 통과는 닫아 둔 fail-open 이 다시 열린 것이다.
+    if (ms >= ALARM_MS) {
+      expect(/"permissionDecision":"deny"/.test(out) && /(judging budget|시간 예산)/.test(out),
+        `${where} — 알람 ${ALARM_MS}ms 를 넘겼는데 시간초과 거부가 아니다: ${out.slice(0, 200) || '(무출력 = 통과)'}`)
+        .toBe(true);
+    }
   }, 60_000);
 
   it('상한을 넘는 입력은 즉시 거부된다 — 읽다 타임아웃 나지 않는다', () => {

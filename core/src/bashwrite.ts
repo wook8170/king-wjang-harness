@@ -27,6 +27,8 @@ const SEGMENT_SPLIT = /(?:\|\||&&|[;|&\n()])/;
  * 여기 없는 순수 조회(`cat`·`grep`·`head`)만으로는 코어 파일을 언급해도 막지 않는다 —
  * 디버깅으로 저널을 읽는 것은 정당하고, 그것까지 막으면 사람이 하네스를 꺼버린다.
  */
+import { checkDeadline } from './budget';
+
 const MUTATING_TOKENS = [
   // [EFF-214] `sed`·`awk`·`perl` 은 **이름만으로 변형이 아니다.** `-i` 없는 `sed -n '1,5p' f`·
   // `awk 'NR<3' f` 는 순수 조회인데, 이름으로 `mutating` 을 세우는 바람에 안전망이 발화해
@@ -369,6 +371,9 @@ function segmentsWithIndex(cmd: string): Array<{ text: string; start: number; cw
   let cwd: Cwd = '';
   let sawCd = false;
   for (const seg of out) {
+    // [API-31] 실측상 **여기가 가장 비싸다** — 상한 페이로드의 시간 대부분이 이 토크나이즈에
+    // 든다. 스캔 본문에만 마감을 걸면 이 앞구간에서 이미 예산을 다 쓴 뒤라 늦는다.
+    checkDeadline();
     const tokens = tokenize(seg.text);
     seg.tokens = tokens;                                    // [COST-293] 한 번만 만든다
     if (sawCd && tokens.some(t => BRANCH_END.has(t))) cwd = null;
@@ -1305,6 +1310,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
    */
   const substMarks = new Set<string>();
   for (const seg of segs) {
+    checkDeadline();                                        // [API-31]
     const t = seg.tokens;                                   // [COST-293] 이미 만들어 둔 것
     if (t.length === 0) continue;
     const c = commandName(t);
@@ -1320,6 +1326,10 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
   const redirects = redirectTargets(cmd);
   if (redirects.length > 0) mutating = true;
   for (const r of redirects) {
+    // [API-31] 입력 크기에 비례하는 두 루프가 이것과 아래 세그먼트 루프다 — 여기서 마감을 본다.
+    // 실측상 이 루프가 가장 비싸다: 같은 1MB 라도 리다이렉트 1.3만 개는 4.27s, 세미콜론뿐인
+    // 같은 크기는 1.25s 였다(개발기). 마감을 넘기면 던지고, 훅 진입이 그것을 거부로 바꾼다.
+    checkDeadline();
     if (isSubst(r.path)) { unresolvedTargets.push(r.path); continue; }
     const resolved = resolveIn(cwdAt(segs, r.index), r.path);
     if (resolved === null) unresolvedTargets.push(r.path);
@@ -1328,6 +1338,7 @@ export function scanBashWrites(rawCmd: string, env: Record<string, string | unde
 
 
   for (const seg of segs) {
+    checkDeadline();                                        // [API-31] 위 리다이렉트 루프와 같은 이유
     const segment = seg.text;
     const firstNew = targets.length;
     const tokens = seg.tokens;                              // [COST-293] 이미 만들어 둔 것

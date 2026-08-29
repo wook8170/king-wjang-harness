@@ -23,6 +23,7 @@ import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE, oneLine } from './untrusted';
+import { JudgeTimeout, checkDeadline } from './budget';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, bundledProfilesDir, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
 import { POLICY_FILES, POLICY_PREFIXES, STATE_FILES as SHARED_STATE_FILES } from './policy';
@@ -438,6 +439,10 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
         return null;
     }
   } catch (err) {
+    // [API-31] **마감 초과만은 삼키지 않는다.** 여기서 null 을 내면 그것이 곧 통과이고,
+    // 그러면 「제때 판정 못 한 것은 거부한다」가 이 한 줄에서 되돌려진다. 호출측(cli 훅 진입)이
+    // 이것만 잡아 거부로 바꾼다 — 기록도 거기서 한다(judge-timeout).
+    if (err instanceof JudgeTimeout) throw err;
     logHookError(root, event, err);
     return null; // 불변식(2) 무해: 판정 실패가 세션을 깨뜨리지 않는다
   } finally {
@@ -1413,6 +1418,11 @@ function judgeWritePath(
   // 설계트랙 소스 판정은 건너뛴다 — 소스 참조 필드가 정상 문서쓰기를 과차단하지 않도록.
   coreOnly = false,
 ): object | null {
+  // [API-31] **대상 하나가 판정의 단위다.** 대상 루프가 네 곳(리다이렉트·명령 대상·언급
+  // 안전망·미해결)이라 루프마다 거는 대신 여기 한 곳에서 본다 — 넷이 갈리면 언제나 한쪽이
+  // 낡는다. 스캔 쪽 마감만으로는 늦다: 1MB 상한 페이로드는 대상을 1.3만 개 만들고, 그
+  // 판정이 스캔보다 오래 걸린다(실측: 스캔 뒤에도 예산이 계속 소진됐다).
+  checkDeadline();
   const lang = config.lang;
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const raw = rawPath.trim();
@@ -2305,6 +2315,11 @@ function preTool(
        * 닫을 수 있는 것이 아니고, 그 사실을 README 「알려진 한계」에 적는 것이 정직하다.
        * 되살릴 근거는 하나뿐이다: **과차단 없이 그 부류를 막는 조건을 실제로 보이는 것.**
        */
+
+      // [API-31] 아래 안전망들은 **원문 1MB 를 다시 여러 번 훑는다.** 대상 루프에서 이미
+      // 예산을 다 썼다면 여기 들어가기 전에 멈춘다 — 마감을 넘긴 뒤의 추가 작업은 그만큼
+      // 「거부를 내보낼 시간」을 깎는다(예산을 통째로 넘기면 훅이 죽고, 죽은 훅은 통과다).
+      checkDeadline();
 
       // [SEC-207] **대상 추출 자체가 실패한 경우**를 잡는다 — 표기가 토큰을 부수면
       // 위의 어떤 판정도 발화하지 않는다. 「못 봤다」를 「없다」로 읽지 않는다.
