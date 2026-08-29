@@ -41,3 +41,19 @@ export function sanitizeUntrusted(s: unknown, max = UNTRUSTED_MAX_LINE): string 
 export function contentNonce(body: string): string {
   return createHash('sha256').update(body).digest('hex').slice(0, 8);
 }
+
+/**
+ * [LOGIC-05·LOGIC-06] **한 줄 포맷에 넣을 텍스트에서 줄바꿈을 없앤다 — 삼키지 말고 보이게.**
+ *
+ * 두 곳이 「한 항목 = 한 줄」을 전제한다: 웨이브 턴 로그(`- [ts] …`)와 RTM 마크다운 표 셀.
+ * 원문 개행이 그대로 들어가면 포맷 계약이 깨진다 — 턴 로그에는 **가짜 `## 턴 로그` 헤딩**이
+ * 생기고(읽는 쪽 nonce 펜스가 보안 파손은 막지만 포맷은 깨진다), RTM 은 표 행이 중간에서
+ * 끊겨 나머지 제목이 표 밖으로 흘러나온다.
+ *
+ * 지우지 않고 `\n` 리터럴로 남긴다 — 삼키면 내용이 사라져 무엇이 적혔는지 알 수 없게 되고,
+ * 그것은 「기록」이라는 이 파일들의 목적과 반대다. 규칙을 여기 한 벌로 두어 세 번째 한 줄
+ * 포맷이 생겨도 같은 답을 쓰게 한다.
+ */
+export function oneLine(s: unknown): string {
+  return String(s).replace(/\r\n|\r|\n/gu, '\\n');
+}

@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { wavesDir, wavePath, evidenceDir } from './paths';
+import { oneLine } from './untrusted';
 import { getNode } from './ledger';
 import { tr, langFor } from './tr';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
@@ -279,7 +280,8 @@ export function logTurn(root: string, text: string): void {
   if (!state.activeWave) throw new Error(tr(root, { en: 'No active wave — activate one with `harness wave activate <wave-id>`', ko: '활성 웨이브가 없다 — `harness wave activate <wave-id>` 로 활성화하라' }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
-  const entry = `- [${new Date().toISOString()}] ${text}`;
+  // [LOGIC-05] 턴 로그는 「한 항목 = 한 줄」이다 — 원문 개행이 들어오면 가짜 헤딩이 생긴다.
+  const entry = `- [${new Date().toISOString()}] ${oneLine(text)}`;
   writeWave(root, id, meta, body.trimEnd() + '\n' + entry + '\n');
   appendEvent(root, 'wave-turn-logged', { id }); // 순서 계약: 저널이 먼저
   noteTurnLogged(root);

@@ -32,7 +32,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { evidenceDir, wavesDir } from './paths';
+import { evidenceDir, wavesDir, denialsPath } from './paths';
+import { oneLine } from './untrusted';
 import { verifyGate, readGateFeedback, submissionSignals, MIN_SUBSTANCE_CHARS } from './gate';
 import { loadLedger, getNode } from './ledger';
 import { docsForPhase, inspectRegistry, staleDocs, loadRegistry } from './registry';
@@ -103,7 +104,9 @@ function attempt<T>(fn: () => T): Safe<T> {
 const generatedAt = (t: Tr) => `${t({ en: 'Generated', ko: '생성' })}: ${new Date().toISOString()}`;
 
 /** 표 셀 이스케이프 — 제목에 든 `|` 하나로 표 전체가 무너지지 않게. */
-const cell = (s: string) => s.replace(/\|/g, '\\|');
+// [LOGIC-06] 파이프뿐 아니라 **개행**도 셀을 깬다 — 표 행이 중간에서 끊겨 나머지가
+// 표 밖으로 흘러나온다. 한 줄 규칙은 `untrusted.ts` 한 벌을 쓴다.
+const cell = (s: string) => oneLine(s).replace(/\|/g, '\\|');
 const listCell = (xs: string[]) => (xs.length ? xs.map(cell).join(', ') : '—');
 
 /**
@@ -229,7 +232,9 @@ function collectRtm(root: string, t: Tr): RtmCollection {
       .map(w => w.id);
     const row: RtmRow = {
       id: node.id,
-      title: typeof node.title === 'string' && node.title ? node.title : t({ en: '(untitled)', ko: '(제목 없음)' }),
+      // [LOGIC-06] 제목을 **읽어 들일 때 한 번** 한 줄로 만든다 — 렌더 지점마다 감싸면
+      // 언젠가 한 곳을 빠뜨린다(실제로 표는 고쳤는데 불릿 목록이 남아 있었다).
+      title: typeof node.title === 'string' && node.title ? oneLine(node.title) : t({ en: '(untitled)', ko: '(제목 없음)' }),
       version: typeof node.version === 'number' ? node.version : 0,
       status: node.status,
       docs: linked.filter(d => !d.id.startsWith('ADR-')).map(d => d.id),
@@ -478,9 +483,9 @@ export function buildReviewPacket(root: string, phase: Phase): string {
       out.push(`## ${t({ en: 'STALE warnings', ko: 'STALE 경고' })}`, '');
       for (const n of stale) {
         out.push(t({
-          en: `- **${n.id}** ${n.title} (v${n.version}) — the design was revised. `
+          en: `- **${n.id}** ${oneLine(n.title)} (v${n.version}) — the design was revised. `
             + 'Do not approve before confirming the artifacts reflect the revision.',
-          ko: `- **${n.id}** ${n.title} (v${n.version}) — 설계가 개정됐다. `
+          ko: `- **${n.id}** ${oneLine(n.title)} (v${n.version}) — 설계가 개정됐다. `
             + '산출물이 개정본을 반영하는지 확인하기 전에는 승인하지 마라.',
         }));
         blockers.push(t({
@@ -641,4 +646,41 @@ export function buildHub(root: string): string {
   out.push(`## ${t({ en: 'Gap summary', ko: '미커버 요약' })}`, '', ...gapLines(rtm.rows, t));
   out.push(...unreadableSection(unreadable, t));
   return out.join('\n') + '\n';
+}
+
+/**
+ * [OPS-07] 최근 거부 조회. **막힌 일을 되짚는 유일한 창구**다 —
+ * 지금까지는 그 순간의 채팅 화면에만 있었다.
+ *
+ * 파일이 없으면 「아직 없다」가 정답이다: 거부가 한 번도 없었다는 뜻이고, 그것은 고장이 아니다
+ * (빈 상태 카피는 [UX-08] 이 세운 규칙 — 왜 비었는지·고장이 아님을 말한다).
+ */
+export function renderDenials(root: string, limit = 20): string {
+  const t = trFor(langFor(root));
+  let raw: string;
+  try {
+    raw = fs.readFileSync(denialsPath(root), 'utf8');
+  } catch {
+    return t({
+      en: 'No denials recorded yet — nothing has been blocked in this project since the harness was installed. '
+        + 'This file only appears the first time a tool call is denied.',
+      ko: '아직 기록된 거부가 없다 — 하네스가 걸린 뒤로 이 프로젝트에서 막힌 것이 없다는 뜻이다. '
+        + '이 파일은 도구 호출이 처음 거부될 때 생긴다.',
+    });
+  }
+  const rows = raw.split('\n').filter(Boolean).slice(-limit).map((l) => {
+    try { return JSON.parse(l) as { ts: string; tool: string; target: string; reason: string }; }
+    catch { return null; }
+  }).filter((r): r is { ts: string; tool: string; target: string; reason: string } => r !== null);
+  if (rows.length === 0) {
+    return t({ en: 'No denials recorded yet.', ko: '아직 기록된 거부가 없다.' });
+  }
+  const out: string[] = [t({ en: `# Recent denials (${rows.length})`, ko: `# 최근 거부 (${rows.length}건)` }), ''];
+  out.push('| ts | tool | target | reason |', '|---|---|---|---|');
+  for (const r of rows) out.push(`| ${r.ts} | ${cell(r.tool)} | ${cell(r.target)} | ${cell(r.reason)} |`);
+  out.push('', t({
+    en: 'Kept in `.harness/.runtime/denials.log` (rotating, secret-masked) — derived, not the audit journal.',
+    ko: '`.harness/.runtime/denials.log` 에 남는다(회전·비밀 마스킹) — 감사 저널이 아니라 파생물이다.',
+  }));
+  return out.join('\n');
 }

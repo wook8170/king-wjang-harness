@@ -15,13 +15,13 @@ import * as tty from 'node:tty';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
-import { appendEvent, resolveState } from './events';
+import { appendEvent, resolveState, readJournal, replayState } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { getNode, mergeNode, reviseNode, loadLedger } from './ledger';
 import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick, type Lang } from './i18n';
-import { langFor } from './tr';
+import { langFor, tr } from './tr';
 import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand, flagsOfGroup } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
 import {
@@ -33,7 +33,7 @@ import {
   staleDocs, loadRegistry,
   docsForPhase,
 } from './registry';
-import { buildReviewPacket, renderRtm, buildHub, traceNode } from './report';
+import { buildReviewPacket, renderRtm, buildHub, traceNode, renderDenials } from './report';
 import { proposeAdr, decideAdr, reviseAdr, getAdr, listAdrs, renderAdrPacket } from './adr';
 import {
   loadTokens, generateCss, generateTs, generateTailwind, findRawValues,
@@ -62,8 +62,8 @@ import {
 } from './ship';
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
-import type { DocNode, EvidenceGrade, Phase } from './types';
-import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd } from './paths';
+import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
+import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd, eventsPath } from './paths';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
@@ -507,6 +507,48 @@ function warnUnresolvedEvidence(root: string, evidence: string, lang: Lang): voi
       + 'Point it at a real file with `harness ship defect update <id> --evidence <path:line>`.');
 }
 
+
+/** [LOGIC-07] 저널이 이보다 크면 대조를 건너뛴다 — `status` 를 느리게 만들지 않기 위한 관문. */
+const DIVERGE_CHECK_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * [LOGIC-07] state.json 이 저널 재생 결과와 갈렸는지 **보고만** 한다.
+ *
+ * 자연 발생 갈림은 안전 실패(state 가 저널보다 뒤처짐 = 과소 진행)라 막을 것이 아니고,
+ * 위험한 것은 **조용한 갈림**이다. 그래서 고치지 않고 말한다 — 고치는 것은 `doctor --repair`
+ * 의 일이고, 그것은 사람이 진단을 보고 내리는 결정이다.
+ *
+ * 어떤 실패도 `status` 를 깨지 않는다: 저널을 못 읽는 사정은 `doctor` 가 따로 말한다.
+ */
+function warnIfDiverged(root: string, current: HarnessState): void {
+  try {
+    const p = eventsPath(root);
+    if (fs.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;   // 큰 저널은 doctor 의 몫
+    const { events } = readJournal(root);
+    const replayed = replayState(events);
+    const diffs: string[] = [];
+    if (replayed.phase !== current.phase) diffs.push(`phase: state=${current.phase} journal=${replayed.phase}`);
+    for (const ph of Object.keys({ ...replayed.gates, ...current.gates })) {
+      const a = current.gates?.[ph as Phase]?.status;
+      const b = replayed.gates?.[ph as Phase]?.status;
+      if (a !== b) diffs.push(`gate ${ph}: state=${a ?? 'none'} journal=${b ?? 'none'}`);
+    }
+    if (diffs.length === 0) return;
+    console.error(tr(root, {
+      en: `WARNING: state.json disagrees with the event journal (${diffs.join('; ')}). `
+        + 'The journal is the record of truth and state.json is derived from it, so something changed '
+        + 'state.json outside the harness — a branch switch, an external tool, or a hand edit. '
+        + 'The hooks enforce what state.json says, so this is enforcing the wrong rules. '
+        + 'Run `harness doctor` to see the full comparison, then `harness doctor --repair` to rebuild.',
+      ko: `경고: state.json 이 이벤트 저널과 다르다 (${diffs.join('; ')}). `
+        + '저널이 정본이고 state.json 은 거기서 파생된 값이므로, 하네스 밖에서 state.json 이 '
+        + '바뀌었다는 뜻이다 — 브랜치 전환·외부 도구·손 편집. 훅은 state.json 이 말하는 대로 '
+        + '강제하므로 지금은 **틀린 규칙을 강제하고 있다**. `harness doctor` 로 전체 비교를 보고 '
+        + '`harness doctor --repair` 로 저널에서 다시 만들어라.',
+    }));
+  } catch { /* 저널을 못 읽는 사정은 doctor 가 말한다 — status 를 깨지 않는다 */ }
+}
+
 export function run(argv: string[], root: string): number {
   const [cmd, sub, ...rest] = argv;
 
@@ -730,11 +772,28 @@ export function run(argv: string[], root: string): number {
         ));
         return 0;
 
-      case 'status':
+      case 'status': {
         // 미초기화 안내는 위 공통 가드가 한다. 여기서는 state.json 손상 등 다른 실패를
         // readState 가 원문 그대로 던지게 둔다.
-        console.log(JSON.stringify(readState(root), null, 2));
+        const st = readState(root);
+        console.log(JSON.stringify(st, null, 2));
+        /**
+         * [LOGIC-07] **「이벤트가 정본」이 열화 경로에서만 성립했다.**
+         *
+         * `resolveState` 는 state.json 이 **읽히면** 그대로 쓰고, 재생은 부재·손상일 때만 한다.
+         * 그래서 state.json 이 조용히 갈리면(브랜치 전환·외부 도구·사람) 훅이 틀린 규칙을
+         * 강제하고도 **오직 `doctor` 만** 그것을 안다 — 정상 턴에는 아무도 doctor 를 안 돌린다.
+         *
+         * 훅에 상시 대조를 넣는 것은 값이 비싸다(큰 저널에서 재생은 수백 ms 이고 훅은 도구
+         * 호출마다 돈다 — [OPS-06] 이 그 예산을 이미 한 번 넘겼다). 그래서 **사람이 상태를
+         * 물어보는 자리**인 `status` 에서 대조한다. 여기라면 한 번의 재생을 감당할 수 있다.
+         *
+         * stdout 의 JSON 계약은 건드리지 않는다 — 갈림은 **stderr 경고**로 낸다. 판정을
+         * 바꾸지도 않는다(exit 0): 이 명령의 일은 보고이지 강제가 아니다.
+         */
+        warnIfDiverged(root, st);
         return 0;
+      }
 
       case 'doctor': {
         // OPS-76: `--accept-policy` 는 정책 베이스라인을 지금 상태로 재고정한다 — 즉 드리프트
@@ -1011,7 +1070,10 @@ export function run(argv: string[], root: string): number {
               return 0;
             }
             if (op === 'update') {
-              const d = updateDefect(root, flag(args, 'id') ?? rest[1], {
+              // [API-06] 인자 부재는 **누락**이지 「대장에 없는 id」가 아니다 — `undefined` 를
+            // 도메인까지 흘려보내면 사람이 「내가 등록을 안 했나」로 오진한다([USE-94] 와 같은 부류).
+            const defectId = req(flag(args, 'id') ?? rest[1], 'harness ship defect update <id> --status <s>');
+            const d = updateDefect(root, defectId, {
                 status: flag(args, 'status') as DefectRecord['status'] | undefined,
                 deferReason: flag(args, 'defer-reason'),
                 evidence: flag(args, 'evidence'),
@@ -1215,7 +1277,9 @@ export function run(argv: string[], root: string): number {
             // 어느 파일인지도 말하지 않았다(`profile show` 는 같은 상태에서 줄·열까지 보여 준다 —
             // 같은 사실을 표면마다 다르게 말하면 사람은 덜 말하는 쪽을 믿는다).
             const { profile: p, problems } = inspectProfile(root, flag(args, 'name'));
-            const c = commandFor(p, rest[0]);
+            // [API-06] 같은 부류 — 인자를 안 준 것이지 프로파일에 그 명령이 없는 것이 아니다.
+            const cmdKey = req(rest[0], 'harness profile cmd <key>');
+            const c = commandFor(p, cmdKey);
             if (!c) {
               // [UX-147] 처방은 **고쳐도 되는 곳**을 가리켜야 한다. 예전에는 해석에 쓰인
               // 디렉토리를 그대로 안내해서, 번들 프로파일이 쓰이는 흔한 경우에 플러그인
@@ -1443,6 +1507,13 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'rtm': console.log(renderRtm(root)); return 0;
+          // [OPS-07] 막힌 일을 되짚는 창구. 조회 전용이라 저널에 사건을 남기지 않는다.
+          case 'denials': {
+            const args = [sub, ...rest];
+            const n = Number(flag(args, 'limit') ?? 20);
+            console.log(renderDenials(root, Number.isFinite(n) && n > 0 ? Math.floor(n) : 20));
+            return 0;
+          }
           case 'hub': console.log(buildHub(root)); return 0;
           default: throw new Error(unknownSub('report', sub, lang));
         }
@@ -1489,7 +1560,9 @@ export function run(argv: string[], root: string): number {
             return 0;
           }
           case 'revise': {
-            const { record, affectedWaves, unverifiable } = reviseAdr(root, rest[0], {
+            // [API-06] 같은 부류 — 「그런 ADR 이 없다」가 아니라 어느 ADR 인지 안 말한 것이다.
+            const adrId = req(rest[0], 'harness adr revise <ADR-x> --question <q>');
+            const { record, affectedWaves, unverifiable } = reviseAdr(root, adrId, {
               question: flag(args, 'question'),
             });
             console.log(L(`${record.id} → v${record.version} · STALE waves: ${affectedWaves.join(', ') || 'none'}`, `${record.id} → v${record.version} · STALE 웨이브: ${affectedWaves.join(', ') || '없음'}`));
@@ -1695,6 +1768,18 @@ export function run(argv: string[], root: string): number {
 
       case 'backtrack': {
         if (sub === 'clear') {
+          /**
+           * [API-07] **끝낼 것이 없으면 「끝냈다」고 말하지 않는다.**
+           *
+           * 예전에는 역행이 없어도 exit 0 + 「역행 종료」였고, 부를 때마다 저널에
+           * `backtrack-cleared` 를 남겼다. 저널은 감사 기록이라 **일어나지 않은 사건**이
+           * 쌓이면 나중에 읽는 사람이 「여기서 역행이 세 번 있었다」로 읽는다.
+           * 멱등성은 지킨다(exit 0) — 방어적으로 부르는 스크립트를 깨지 않는다.
+           */
+          if (readState(root).backtrack === null) {
+            console.log(L('No backtrack in progress — nothing to clear.', '진행 중인 역행이 없다 — 종료할 것이 없다.'));
+            return 0;
+          }
           appendEvent(root, 'backtrack-cleared', {}); // 순서 계약
           writeState(root, { ...readState(root), backtrack: null });
           console.log(L('Backtrack ended', '역행 종료'));

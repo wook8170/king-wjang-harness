@@ -36,7 +36,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
 import { harnessDir } from './paths';
-import { loadConfig } from './config';
+import { loadConfig, DEFAULT_CONFIG } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { runsCommand, judgeableLines } from './bashwrite';
 
@@ -88,29 +88,16 @@ export const GENERIC_FLOOR: Readonly<Profile> = Object.freeze({
   sourceGlobs: Object.freeze(['src/**', 'lib/**', 'app/**']) as unknown as string[],
   // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
   // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
-  deployCommands: Object.freeze([
-    'docker push',
-    'kubectl apply',
-    'helm upgrade',
-    'helm install',
-    'vercel deploy',
-    'vercel --prod',
-    'netlify deploy',
-    'fly deploy',
-    'wrangler deploy',
-    'serverless deploy',
-    'sst deploy',
-    'eb deploy',
-    'gcloud app deploy',
-    'npm publish',
-    'yarn publish',
-    'pnpm publish',
-    'cargo publish',
-    'gem push',
-    'twine upload',
-    'terraform apply',
-    'pulumi up',
-  ]) as unknown as string[],
+  /**
+   * [API-09] **정본은 한 곳이다 — 여기서 베끼지 않고 가져온다.**
+   *
+   * 예전에는 같은 21개 목록이 세 곳(`config.ts` · 여기 · `profiles/generic/profile.yaml`)에
+   * 리터럴로 있었고, 테스트는 **뒤의 두 벌만** 이었다. 세 값이 «우연히» 같았을 뿐이고,
+   * 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 배포 차단에 구멍이 난다.
+   * 목록이 셋이면 언제나 하나가 낡는다 — 그래서 `DEFAULT_CONFIG` 를 정본으로 삼는다.
+   * `profile.yaml` 은 남은 한 벌이고, 그 동치는 `profile.test.ts` 가 이미 지킨다.
+   */
+  deployCommands: Object.freeze([...DEFAULT_CONFIG.design_blocked_bash]) as unknown as string[],
   commands: Object.freeze({}) as Record<string, string>,
   designSystemRoots: Object.freeze([]) as unknown as string[],
   origin: 'floor',

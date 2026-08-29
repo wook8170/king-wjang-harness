@@ -16,13 +16,13 @@ import { readState, defaultState } from './state';
 import { lastTier, guidanceFor } from './usage';
 import { loadConfig } from './config';
 import { readWave } from './wave';
-import { readJournalForReplay, replayState } from './events';
+import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir, eventsPath, humanCmd } from './paths';
+import { harnessDir, runtimeDir, eventsPath, humanCmd, denialsPath } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
-import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE } from './untrusted';
+import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE, oneLine } from './untrusted';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, bundledProfilesDir, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
 import { POLICY_FILES, POLICY_PREFIXES, STATE_FILES as SHARED_STATE_FILES } from './policy';
@@ -423,8 +423,13 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
     switch (event) {
       case 'session-start':
         return sessionStart(root, state, config, degraded, input);
-      case 'pre-tool':
-        return preTool(root, state, config, input, degraded);
+      case 'pre-tool': {
+        // [OPS-07] 거부를 **여기 한 곳에서** 기록한다 — `deny()` 호출부가 36곳이라
+        // 호출부마다 적으면 언젠가 새 거부가 기록에서 빠진다([UX-102] 와 같은 원칙).
+        const out = preTool(root, state, config, input, degraded);
+        recordDenial(root, input, out);
+        return out;
+      }
       case 'post-tool':
         return postTool(root, input);
       case 'stop':
@@ -770,6 +775,49 @@ function recentTurnLog(body: string): string {
 }
 
 // ---- pre-tool ----
+
+
+/** [OPS-07] 남겨 두는 최근 거부 건수. 되짚어 보기에 충분하고 파일이 커지지 않는 선. */
+const DENIALS_KEEP = 200;
+/** 이 크기를 넘으면 회전한다 — 매 거부마다 전체를 읽지 않기 위한 싸구려 관문. */
+const DENIALS_ROTATE_BYTES = 128 * 1024;
+
+/**
+ * [OPS-07] **이 제품의 핵심 기능인 「차단」이 어디에도 남지 않았다.**
+ *
+ * PreToolUse 거부는 그 순간의 채팅 화면에만 존재했다. 상태를 바꾸는 명령(게이트 제출·웨이브
+ * 생성)은 저널에 남는데, 정작 «막은 일»은 감사 대상이 아니었다 — 「이 프로젝트에서 에이전트가
+ * 최근에 뭘 하려다 막혔나」를 되짚을 방법이 전혀 없었다.
+ *
+ * 세 가지를 지킨다.
+ * ① **저널과 분리한다.** 저널은 append-only 정본이라 회전시킬 수 없고, 거부는 빈번하다.
+ * ② **비밀을 그대로 적지 않는다.** 거부 사유·대상에 명령 원문이 섞이므로 저널과 같은
+ *    마스킹(`maskSecrets`)을 통과시키고 길이를 자른다.
+ * ③ **기록 실패가 판정을 바꾸지 않는다.** 훅은 여기서 절대 죽지 않는다 — 읽기 전용 볼륨이나
+ *    권한 문제로 못 적더라도 거부는 거부다.
+ */
+function recordDenial(root: string, input: HookInput, out: object | null): void {
+  try {
+    const d = (out as { hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string } } | null)
+      ?.hookSpecificOutput;
+    if (!d || d.permissionDecision !== 'deny') return;
+    const ti = (input.tool_input ?? {}) as Record<string, unknown>;
+    const target = String(ti.file_path ?? ti.command ?? ti.path ?? '');
+    const line = JSON.stringify({
+      ts: new Date().toISOString(),
+      tool: String(input.tool_name ?? ''),
+      target: maskSecrets(oneLine(target)).slice(0, 300),
+      reason: maskSecrets(oneLine(String(d.permissionDecisionReason ?? ''))).slice(0, 400),
+    });
+    const p = denialsPath(root);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.appendFileSync(p, line + '\n');
+    if (fs.statSync(p).size > DENIALS_ROTATE_BYTES) {
+      const kept = fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).slice(-DENIALS_KEEP);
+      fs.writeFileSync(p, kept.join('\n') + '\n');
+    }
+  } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
 
 function deny(reason: string, degraded: Degraded | null, lang: Lang = 'en'): object {
   const tag = degraded

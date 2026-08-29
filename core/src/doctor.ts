@@ -12,12 +12,12 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir,
-} from './paths';
+import { harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir, presence } from './paths';
+import { listAdrs } from './adr';
+import { loadLedger } from './ledger';
 import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
 import { tr } from './tr';
-import { readWave } from './wave';
+import { readWave, listWaves } from './wave';
 import type { Msg } from './i18n';
 import { readState, writeState, defaultState } from './state';
 import { inspectConfig, KNOWN_CONFIG_KEYS } from './config';
@@ -190,7 +190,17 @@ export function runDoctor(
 
   // 2. state 읽기
   let current: HarnessState | null = null;
-  if (!fs.existsSync(statePath(root))) {
+  const statePresence = presence(statePath(root));
+  if (statePresence === 'unreadable') {
+    // [SHIP-07] 권한을 「없음」으로 뭉개면 처방이 `--repair` 가 되는데, 그것도 같은 파일을
+    // 읽으므로 실패한다. 원인을 그대로 말하고 그에 맞는 처방을 준다.
+    issues.push(t({
+      en: `state.json cannot be read (permission) — restore access with \`chmod u+r ${statePath(root)}\`; `
+        + '`--repair` reads the same file and cannot help',
+      ko: `state.json 을 읽을 수 없다(권한) — \`chmod u+r ${statePath(root)}\` 로 접근을 되돌려라. `
+        + '`--repair` 는 같은 파일을 읽으므로 도움이 안 된다',
+    }));
+  } else if (statePresence === 'absent') {
     issues.push(t({
       en: 'state.json is missing — it must be rebuilt by replaying the journal',
       ko: 'state.json 이 없다 — 이벤트 재생으로 복구 필요',
@@ -447,6 +457,42 @@ export function runDoctor(
         + '파일이 바뀌어도 지금은 보이지 않는다. 위의 문제를 먼저 해결하라.',
     }));
   }
+
+  /**
+   * [LOGIC-04] **참조 대상이 사라진 웨이브가 어디에서도 보고되지 않았다.**
+   *
+   * RTM 의 존재 이유가 「추적 누락 포착」인데, 웨이브의 `design_refs` 가 가리키는 노드가
+   * 원장에서 사라져도 `doctor` 는 ok 였고 RTM 은 그 웨이브를 언급조차 하지 않았다.
+   * 노드 삭제는 CLI 명령이 아니고 원장은 훅 보호라 발생 확률은 낮지만(브랜치 전환·외부
+   * 도구·사람), **침묵 자체가 갭**이다 — 무엇을 구현했는지 알 수 없는 웨이브가 남는다.
+   *
+   * ADR 도 `design_refs` 에 들어갈 수 있으므로 **노드와 ADR 을 함께** 아는 집합으로 본다.
+   * 한쪽만 보면 정상 ADR 참조가 전부 고아로 잡혀 경고가 소음이 된다.
+   *
+   * 경고(warning)로 낸다 — 강제·정합성을 깨지 않고, 사람이 판단할 사실이다.
+   */
+  try {
+    const known = new Set<string>([
+      ...loadLedger(root).map((n) => n.id),
+      ...listAdrs(root).map((a) => a.id),
+    ]);
+    const dangling: string[] = [];
+    for (const w of listWaves(root)) {
+      for (const ref of w.design_refs ?? []) {
+        if (!known.has(ref)) dangling.push(`${w.id} → ${ref}`);
+      }
+    }
+    if (dangling.length > 0) {
+      warnings.push(t({
+        en: `wave design_refs point at ${dangling.length} id(s) that are in neither the design ledger nor the ADR set: `
+          + `${dangling.join(', ')} — the wave says what it implements, but that target is gone. `
+          + 'Re-register the node (`harness node upsert`) or fix the wave sheet.',
+        ko: `웨이브의 design_refs 중 ${dangling.length}건이 설계 원장에도 ADR 에도 없다: `
+          + `${dangling.join(', ')} — 웨이브는 무엇을 구현한다고 적었는데 그 대상이 사라졌다. `
+          + '노드를 다시 등록하거나(`harness node upsert`) 웨이브 지시서를 고쳐라.',
+      }));
+    }
+  } catch { /* 원장·웨이브를 못 읽는 상황은 위의 검사들이 이미 말한다 */ }
 
   // 8. repair — 고칠 발산이 있을 때만 움직인다. 저널이 손상이어도 발산이 없으면 할 일이 없다.
   let repaired = false;

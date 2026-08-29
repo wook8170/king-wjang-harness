@@ -8775,6 +8775,7 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+var denialsPath = (root) => path.join(runtimeDir(root), "denials.log");
 var cachedCliPath;
 function harnessCliPath() {
   if (cachedCliPath !== void 0) return cachedCliPath;
@@ -8792,6 +8793,14 @@ function humanCmd(args) {
 }
 function shellQuote(p) {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
+function presence(p) {
+  try {
+    fs.statSync(p);
+    return "present";
+  } catch (e) {
+    return e.code === "ENOENT" ? "absent" : "unreadable";
+  }
 }
 function realOrNearest(p) {
   let cur = path.resolve(p);
@@ -8985,6 +8994,12 @@ function readState(root) {
       throw new Error(tr(root, {
         en: `state.json is damaged and could not be parsed (${e.message}) \u2014 the state store is derived, so the event journal can rebuild it: run \`harness doctor --repair\`. \`harness doctor\` alone reports what it finds without changing anything.`,
         ko: `state.json \uC774 \uC190\uC0C1\uB3FC \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4 (${e.message}) \u2014 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uD30C\uC0DD\uBB3C\uC774\uB77C \uC774\uBCA4\uD2B8 \uC800\uB110\uB85C \uB2E4\uC2DC \uB9CC\uB4E4 \uC218 \uC788\uB2E4: \`harness doctor --repair\` \uB97C \uC2E4\uD589\uD558\uB77C. \`harness doctor\` \uB9CC \uC2E4\uD589\uD558\uBA74 \uC544\uBB34\uAC83\uB3C4 \uBC14\uAFB8\uC9C0 \uC54A\uACE0 \uC9C4\uB2E8\uB9CC \uD55C\uB2E4.`
+      }));
+    }
+    if (hasHarness(root) && presence(statePath(root)) === "unreadable") {
+      throw new Error(tr(root, {
+        en: `state.json cannot be read \u2014 this is a permission problem, not a missing file. Restore access (\`chmod u+rx ${harnessDir(root)}\` and \`chmod u+r ${statePath(root)}\`), then run \`harness doctor\`. \`--repair\` cannot help here: it reads the same files.`,
+        ko: `state.json \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD30C\uC77C\uC774 \uC5C6\uB294 \uAC83\uC774 \uC544\uB2C8\uB77C \uAD8C\uD55C \uBB38\uC81C\uB2E4. \uC811\uADFC \uAD8C\uD55C\uC744 \uB418\uB3CC\uB9B0 \uB4A4(\`chmod u+rx ${harnessDir(root)}\` \xB7 \`chmod u+r ${statePath(root)}\`) \`harness doctor\` \uB97C \uC2E4\uD589\uD558\uB77C. \`--repair\` \uB294 \uAC19\uC740 \uD30C\uC77C\uC744 \uC77D\uC73C\uBBC0\uB85C \uC5EC\uAE30\uC11C\uB294 \uB3C4\uC6C0\uC774 \uC548 \uB41C\uB2E4.`
       }));
     }
     if (hasHarness(root) && !isInitialized(root)) {
@@ -9312,6 +9327,19 @@ function resolveState(root) {
 var fs10 = __toESM(require("fs"));
 var path8 = __toESM(require("path"));
 var YAML4 = __toESM(require_dist());
+
+// core/src/untrusted.ts
+var import_node_crypto = require("crypto");
+var UNTRUSTED_MAX_LINE = 200;
+function sanitizeUntrusted(s, max = UNTRUSTED_MAX_LINE) {
+  return String(s).replace(/[\r\n]+/g, " ").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, max);
+}
+function contentNonce(body) {
+  return (0, import_node_crypto.createHash)("sha256").update(body).digest("hex").slice(0, 8);
+}
+function oneLine(s) {
+  return String(s).replace(/\r\n|\r|\n/gu, "\\n");
+}
 
 // core/src/ledger.ts
 var fs5 = __toESM(require("fs"));
@@ -10942,7 +10970,7 @@ function logTurn(root, text) {
   if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
   const id = state.activeWave;
   const { meta, body } = readActiveWave(root, id);
-  const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${text}`;
+  const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${oneLine(text)}`;
   writeWave(root, id, meta, body.trimEnd() + "\n" + entry + "\n");
   appendEvent(root, "wave-turn-logged", { id });
   noteTurnLogged(root);
@@ -10992,8 +11020,319 @@ function markStale(root, id) {
 }
 
 // core/src/doctor.ts
-var fs12 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
+var fs13 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
+
+// core/src/adr.ts
+var fs11 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
+var YAML5 = __toESM(require_dist());
+var adrDir = (root) => path9.join(designDir(root), "adr");
+var adrPath = (root, id) => path9.join(adrDir(root), `${id}.yaml`);
+var adrHistoryPath = (root, id, version) => path9.join(adrDir(root), `${id}.v${version}.yaml`);
+var CUSTOM_OPTION_ID = "custom";
+var MIN_OPTIONS = 2;
+var MAX_OPTIONS = 4;
+function writeAdrFile(target, rec) {
+  fs11.mkdirSync(path9.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs11.writeFileSync(tmp, YAML5.stringify(rec));
+  fs11.renameSync(tmp, target);
+}
+function toAdrRecord(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.question !== "string") return null;
+  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
+  if (o.status !== "proposed" && o.status !== "accepted" && o.status !== "superseded") return null;
+  const options = (Array.isArray(o.options) ? o.options : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({
+    id: String(e.id ?? ""),
+    title: String(e.title ?? ""),
+    pros: Array.isArray(e.pros) ? e.pros.map(String) : [],
+    cons: Array.isArray(e.cons) ? e.cons.map(String) : []
+  }));
+  const rejected = (Array.isArray(o.rejected) ? o.rejected : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({ id: String(e.id ?? ""), reason: String(e.reason ?? "") }));
+  const rec = {
+    id: o.id,
+    phase: o.phase,
+    question: o.question,
+    options,
+    rejected,
+    status: o.status,
+    version: o.version
+  };
+  if (typeof o.recommended === "string" && o.recommended) rec.recommended = o.recommended;
+  if (typeof o.chosen === "string" && o.chosen) rec.chosen = o.chosen;
+  if (typeof o.rationale === "string" && o.rationale) rec.rationale = o.rationale;
+  return rec;
+}
+function getAdr(root, id) {
+  const p = adrPath(root, id);
+  if (!fs11.existsSync(p)) return void 0;
+  const parsed = toAdrRecord(YAML5.parse(fs11.readFileSync(p, "utf8")));
+  if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} \u2014 restore it from git history`, ko: `ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
+  return parsed;
+}
+function listAdrs(root) {
+  const dir = adrDir(root);
+  if (!fs11.existsSync(dir)) return [];
+  const out = [];
+  for (const f2 of fs11.readdirSync(dir).sort()) {
+    if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
+    if (/\.v\d+\.yaml$/.test(f2)) continue;
+    try {
+      const rec = toAdrRecord(YAML5.parse(fs11.readFileSync(path9.join(dir, f2), "utf8")));
+      if (rec) out.push(rec);
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+function assertOptions(root, options, recommended) {
+  if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
+    throw new Error(
+      tr(root, {
+        en: `An ADR needs ${MIN_OPTIONS}\u2013${MAX_OPTIONS} options (currently ${options.length}) \u2014 a one-option decision is an announcement, not a decision. Offer comparable alternatives with trade-offs.`,
+        ko: `ADR \uC120\uD0DD\uC9C0\uB294 ${MIN_OPTIONS}~${MAX_OPTIONS}\uAC1C\uC5EC\uC57C \uD55C\uB2E4(\uD604\uC7AC ${options.length}\uAC1C) \u2014 \uC120\uD0DD\uC9C0 \uD558\uB098\uC9DC\uB9AC \uACB0\uC815\uC740 \uACB0\uC815\uC774 \uC544\uB2C8\uB77C \uD1B5\uBCF4\uB2E4. \uBE44\uAD50 \uAC00\uB2A5\uD55C \uB300\uC548\uC744 \uD2B8\uB808\uC774\uB4DC\uC624\uD504\uC640 \uD568\uAED8 \uC81C\uC2DC\uD558\uB77C.`
+      })
+    );
+  }
+  if (recommended !== void 0 && !options.some((o) => o.id === recommended)) {
+    throw new Error(
+      tr(root, { en: `The recommendation "${recommended}" is not among the options \u2014 it must be one of (${options.map((o) => o.id).join(", ")})`, ko: `\uCD94\uCC9C\uC548 "${recommended}" \uC774 \uC120\uD0DD\uC9C0\uC5D0 \uC5C6\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4(${options.map((o) => o.id).join(", ")})` })
+    );
+  }
+}
+function requireAdr(root, id) {
+  const rec = getAdr(root, id);
+  if (!rec) {
+    throw new Error(tr(root, { en: `No ADR record ${id} (${adrPath(root, id)}) \u2014 propose it first`, ko: `ADR ${id} \uAE30\uB85D\uC774 \uC5C6\uB2E4 (${adrPath(root, id)}) \u2014 \uBA3C\uC800 \uC81C\uC548(propose)\uD558\uB77C` }));
+  }
+  return rec;
+}
+var INDEX_STATUS = {
+  proposed: "draft",
+  accepted: "approved",
+  superseded: "stale"
+};
+function syncIndex(root, rec) {
+  const prev = getNode(root, rec.id);
+  upsertNode(root, {
+    id: rec.id,
+    title: rec.question,
+    parent: prev?.parent,
+    doc_anchor: prev?.doc_anchor,
+    version: rec.version,
+    status: INDEX_STATUS[rec.status]
+  });
+}
+function referencingWaves(root, id) {
+  const affected = [];
+  const unverifiable = [];
+  if (!fs11.existsSync(wavesDir(root))) return { affected, unverifiable };
+  for (const f2 of fs11.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+    const stem = f2.replace(/\.md$/, "");
+    let txt;
+    try {
+      txt = fs11.readFileSync(path9.join(wavesDir(root), f2), "utf8");
+    } catch {
+      unverifiable.push(stem);
+      continue;
+    }
+    let meta;
+    try {
+      meta = parseWave(txt).meta;
+    } catch {
+      unverifiable.push(stem);
+      continue;
+    }
+    if (meta.design_refs.includes(id) && meta.status !== "stale") affected.push(stem);
+  }
+  return { affected, unverifiable };
+}
+function proposeAdr(root, input) {
+  if (!input.id.startsWith("ADR-")) {
+    throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (\xA73-2 ledger id convention)`, ko: `ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)` }));
+  }
+  if (fs11.existsSync(adrPath(root, input.id))) {
+    throw new Error(
+      tr(root, {
+        en: `ADR ${input.id} already exists \u2014 do not overwrite a decision. To change it, revise formally with reviseAdr (version++ and STALE propagation).`,
+        ko: `ADR ${input.id} \uAC00 \uC774\uBBF8 \uC788\uB2E4 \u2014 \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F0\uC9C0 \uB9C8\uB77C. \uBC14\uAFB8\uB824\uBA74 reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815\uD558\uB77C(version++ + STALE \uC804\uD30C).`
+      })
+    );
+  }
+  assertOptions(root, input.options, input.recommended);
+  const rec = {
+    id: input.id,
+    phase: input.phase,
+    question: input.question,
+    options: input.options,
+    ...input.recommended ? { recommended: input.recommended } : {},
+    rejected: [],
+    status: "proposed",
+    version: 1
+  };
+  appendEvent(root, "adr-proposed", {
+    id: rec.id,
+    phase: rec.phase,
+    version: rec.version,
+    options: rec.options.map((o) => o.id),
+    recommended: rec.recommended
+  });
+  writeAdrFile(adrPath(root, rec.id), rec);
+  syncIndex(root, rec);
+  return rec;
+}
+function decideAdr(root, id, input) {
+  const prev = requireAdr(root, id);
+  if (prev.status !== "proposed") {
+    throw new Error(
+      tr(root, {
+        en: `ADR ${id} is not proposed (currently ${prev.status}) \u2014 a recorded decision cannot be overwritten. Revise it formally (version++ and STALE propagation), then decide again.`,
+        ko: `ADR ${id} \uB294 proposed \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${prev.status}) \u2014 \uAE30\uB85D\uB41C \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC5C6\uB2E4. reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815(version++ + STALE \uC804\uD30C)\uD55C \uB4A4 \uB2E4\uC2DC \uCC44\uD0DD\uD558\uB77C.`
+      })
+    );
+  }
+  const chosenRaw = input.chosen.trim();
+  if (!chosenRaw) throw new Error(tr(root, { en: `The chosen value for ADR ${id} is empty \u2014 give an option id or a free-form value`, ko: `ADR ${id} \uCC44\uD0DD \uAC12\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uB610\uB294 \uC790\uC720 \uC815\uC758 \uAC12\uC744 \uB123\uC5B4\uB77C` }));
+  if (!input.rationale.trim()) {
+    throw new Error(
+      tr(root, {
+        en: `ADR ${id} has no rationale \u2014 a decision log without one tells the reader nothing six months later. Leave at least one line on why this option won.`,
+        ko: `ADR ${id} \uCC44\uD0DD \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uACB0\uC815 \uAE30\uB85D\uC740 \uBC18\uB144 \uB4A4 \uC77D\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uC544\uBB34 \uC815\uBCF4\uB3C4 \uC8FC\uC9C0 \uC54A\uB294\uB2E4. \uC65C \uC774 \uC548\uC744 \uACE8\uB790\uB294\uC9C0 \uD55C \uC904\uC774\uB77C\uB3C4 \uB0A8\uACA8\uB77C.`
+      })
+    );
+  }
+  const known = prev.options.some((o) => o.id === chosenRaw);
+  const options = known ? prev.options : [...prev.options, { id: CUSTOM_OPTION_ID, title: chosenRaw, pros: [], cons: [] }];
+  const chosen = known ? chosenRaw : CUSTOM_OPTION_ID;
+  const missing = [];
+  const rejected = [];
+  for (const o of options) {
+    if (o.id === chosen) continue;
+    const reason = (input.rejectedReasons[o.id] ?? "").trim();
+    if (!reason) {
+      missing.push(o.id);
+      continue;
+    }
+    rejected.push({ id: o.id, reason });
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Options in ADR ${id} with no rejection reason: ${missing.join(", ")} \u2014 a decision log without them cannot answer "why not that one". Give a reason for every option you did not take.`,
+        ko: `ADR ${id} \uC758 \uAE30\uAC01 \uC0AC\uC720\uAC00 \uBE60\uC9C4 \uC120\uD0DD\uC9C0: ${missing.join(", ")} \u2014 \uAE30\uAC01 \uC0AC\uC720 \uC5C6\uB294 \uACB0\uC815 \uB85C\uADF8\uB294 "\uC65C \uC800\uAC74 \uC548 \uD588\uB098"\uC5D0 \uB2F5\uD558\uC9C0 \uBABB\uD55C\uB2E4. \uCC44\uD0DD\uD558\uC9C0 \uC54A\uC740 \uBAA8\uB4E0 \uC120\uD0DD\uC9C0\uC5D0 \uC0AC\uC720\uB97C \uB2EC\uC544\uB77C.`
+      })
+    );
+  }
+  const rec = {
+    ...prev,
+    options,
+    chosen,
+    rationale: input.rationale.trim(),
+    rejected,
+    status: "accepted"
+  };
+  appendEvent(root, "adr-decided", {
+    id: rec.id,
+    phase: rec.phase,
+    version: rec.version,
+    chosen: rec.chosen,
+    custom: !known,
+    rejected: rec.rejected.map((r) => r.id)
+  });
+  writeAdrFile(adrPath(root, rec.id), rec);
+  syncIndex(root, rec);
+  return rec;
+}
+function reviseAdr(root, id, input) {
+  const prev = requireAdr(root, id);
+  const options = input.options ?? prev.options;
+  const recommended = input.options ? input.recommended : input.recommended ?? prev.recommended;
+  assertOptions(root, options, recommended);
+  const { affected, unverifiable } = referencingWaves(root, id);
+  const rec = {
+    id: prev.id,
+    phase: prev.phase,
+    question: input.question ?? prev.question,
+    options,
+    ...recommended ? { recommended } : {},
+    rejected: [],
+    status: "proposed",
+    version: prev.version + 1
+  };
+  appendEvent(root, "adr-revised", {
+    id: rec.id,
+    phase: rec.phase,
+    from: prev.version,
+    to: rec.version,
+    affected,
+    unverifiable
+  });
+  writeAdrFile(adrHistoryPath(root, id, prev.version), { ...prev, status: "superseded" });
+  writeAdrFile(adrPath(root, id), rec);
+  syncIndex(root, rec);
+  for (const w of affected) markStale(root, w);
+  return { record: rec, affectedWaves: affected, unverifiable };
+}
+var STATUS_LABEL = {
+  proposed: { en: "proposed", ko: "\uC81C\uC548\uB428" },
+  accepted: { en: "accepted", ko: "\uCC44\uD0DD\uB428" },
+  superseded: { en: "superseded", ko: "\uB300\uCCB4\uB428" }
+};
+var M = {
+  status: { en: "Status", ko: "\uC0C1\uD0DC" },
+  options: { en: "Options", ko: "\uC120\uD0DD\uC9C0" },
+  chosenMark: { en: " \u2190 chosen", ko: " \u2190 \uCC44\uD0DD" },
+  recommendedMark: { en: " \u2190 recommended", ko: " \u2190 \uCD94\uCC9C" },
+  pros: { en: "Pros", ko: "\uC7A5\uC810" },
+  cons: { en: "Cons", ko: "\uB2E8\uC810" },
+  unstated: { en: "(not stated)", ko: "(\uBBF8\uAE30\uC7AC)" },
+  recommendation: { en: "Recommendation", ko: "\uCD94\uCC9C\uC548" },
+  goneFromOptions: { en: "(no longer among the options)", ko: "(\uC120\uD0DD\uC9C0\uC5D0\uC11C \uC0AC\uB77C\uC9D0)" },
+  decision: { en: "Decision", ko: "\uACB0\uC815" },
+  chosen: { en: "Chosen", ko: "\uCC44\uD0DD" },
+  rationale: { en: "Rationale", ko: "\uADFC\uAC70" },
+  rejectedReasons: { en: "Rejection reasons", ko: "\uAE30\uAC01 \uC0AC\uC720" },
+  none: { en: "(none)", ko: "(\uC5C6\uC74C)" }
+};
+function renderAdrPacket(rec, lang = DEFAULT_LANG) {
+  const t = (m) => pick(m, lang);
+  const L = [];
+  L.push(`# ${rec.id} \xB7 ${rec.phase} \u2014 ${rec.question}`, "");
+  L.push(`- ${t(M.status)}: ${t(STATUS_LABEL[rec.status])} (v${rec.version})`, "");
+  L.push(`## ${t(M.options)}`, "");
+  for (const o of rec.options) {
+    const mark = o.id === rec.chosen ? t(M.chosenMark) : o.id === rec.recommended ? t(M.recommendedMark) : "";
+    L.push(`### ${o.title} (\`${o.id}\`)${mark}`);
+    L.push(`- ${t(M.pros)}: ${o.pros.length ? o.pros.join(", ") : t(M.unstated)}`);
+    L.push(`- ${t(M.cons)}: ${o.cons.length ? o.cons.join(", ") : t(M.unstated)}`, "");
+  }
+  if (rec.recommended) {
+    const r = rec.options.find((o) => o.id === rec.recommended);
+    L.push(`## ${t(M.recommendation)}`, "", `\`${rec.recommended}\` \u2014 ${r ? r.title : t(M.goneFromOptions)}`, "");
+  }
+  if (rec.chosen) {
+    const c = rec.options.find((o) => o.id === rec.chosen);
+    L.push(`## ${t(M.decision)}`, "");
+    L.push(`- ${t(M.chosen)}: \`${rec.chosen}\` \u2014 ${c ? c.title : t(M.goneFromOptions)}`);
+    L.push(`- ${t(M.rationale)}: ${rec.rationale ?? t(M.unstated)}`);
+    L.push(`- ${t(M.rejectedReasons)}:`);
+    if (rec.rejected.length === 0) {
+      L.push(`  - ${t(M.none)}`);
+    } else {
+      for (const r of rec.rejected) {
+        const o = rec.options.find((x) => x.id === r.id);
+        L.push(`  - \`${r.id}\`${o ? ` (${o.title})` : ""}: ${r.reason}`);
+      }
+    }
+    L.push("");
+  }
+  return L.join("\n");
+}
 
 // core/src/policy.ts
 var crypto2 = __toESM(require("crypto"));
@@ -11009,8 +11348,8 @@ function updateHashEntry(h, rel, content) {
 }
 
 // core/src/policy.ts
-var fs11 = __toESM(require("fs"));
-var path9 = __toESM(require("path"));
+var fs12 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
 var STATE_FILES = [
   ".harness/state.json",
@@ -11028,25 +11367,25 @@ var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
   try {
-    entries = fs11.readdirSync(dir, { withFileTypes: true });
+    entries = fs12.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const e of entries) {
-    const p = path9.join(dir, e.name);
+    const p = path10.join(dir, e.name);
     if (e.isDirectory()) collect(root, p, out);
-    else if (e.isFile()) out.push(path9.relative(root, p).split(path9.sep).join("/"));
+    else if (e.isFile()) out.push(path10.relative(root, p).split(path10.sep).join("/"));
   }
 }
 function listPolicyFiles(root) {
   const out = [];
   for (const rel of POLICY_FILES) {
     try {
-      if (fs11.statSync(path9.join(root, rel)).isFile()) out.push(rel);
+      if (fs12.statSync(path10.join(root, rel)).isFile()) out.push(rel);
     } catch {
     }
   }
-  for (const pre of POLICY_PREFIXES) collect(root, path9.join(root, pre), out);
+  for (const pre of POLICY_PREFIXES) collect(root, path10.join(root, pre), out);
   return [...new Set(out)].sort();
 }
 function computePolicyHash(root) {
@@ -11055,7 +11394,7 @@ function computePolicyHash(root) {
   for (const rel of files) {
     let content = null;
     try {
-      content = fs11.readFileSync(path9.join(root, rel));
+      content = fs12.readFileSync(path10.join(root, rel));
     } catch {
       content = null;
     }
@@ -11107,17 +11446,17 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs12.readdirSync(dir);
+      names = fs13.readdirSync(dir);
     } catch {
       continue;
     }
     for (const name of names) {
       const m = TMP_RE.exec(name);
       if (!m || pidAlive(Number(m[1]))) continue;
-      const p = path10.join(dir, name);
+      const p = path11.join(dir, name);
       try {
-        if (!fs12.statSync(p).isFile()) continue;
-        fs12.rmSync(p);
+        if (!fs13.statSync(p).isFile()) continue;
+        fs13.rmSync(p);
         swept++;
       } catch {
       }
@@ -11128,11 +11467,11 @@ function sweepOrphanTmp(root) {
 function unwritableDirs(root) {
   const bad = [];
   for (const dir of [harnessDir(root), runtimeDir(root)]) {
-    if (!fs12.existsSync(dir)) continue;
-    const probe = path10.join(dir, `write-probe.tmp-${process.pid}`);
+    if (!fs13.existsSync(dir)) continue;
+    const probe = path11.join(dir, `write-probe.tmp-${process.pid}`);
     try {
-      fs12.writeFileSync(probe, "");
-      fs12.rmSync(probe);
+      fs13.writeFileSync(probe, "");
+      fs13.rmSync(probe);
     } catch {
       bad.push(dir);
     }
@@ -11140,9 +11479,9 @@ function unwritableDirs(root) {
   return bad;
 }
 function countHookErrors(root) {
-  const p = path10.join(runtimeDir(root), "hook-errors.log");
-  if (!fs12.existsSync(p)) return 0;
-  return fs12.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  const p = path11.join(runtimeDir(root), "hook-errors.log");
+  if (!fs13.existsSync(p)) return 0;
+  return fs13.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -11153,7 +11492,7 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  if (fs12.existsSync(harnessDir(root))) {
+  if (fs13.existsSync(harnessDir(root))) {
     const unwritable = unwritableDirs(root);
     if (unwritable.length > 0) {
       issues.push(t({
@@ -11162,7 +11501,7 @@ function runDoctor(root, opts = {}) {
       }));
     }
   }
-  const journalExists = fs12.existsSync(eventsPath(root));
+  const journalExists = fs13.existsSync(eventsPath(root));
   let events = [];
   let corruptLines = 0;
   let journalReadable = true;
@@ -11177,7 +11516,13 @@ function runDoctor(root, opts = {}) {
   }
   const replayed = replayState(events);
   let current = null;
-  if (!fs12.existsSync(statePath(root))) {
+  const statePresence = presence(statePath(root));
+  if (statePresence === "unreadable") {
+    issues.push(t({
+      en: `state.json cannot be read (permission) \u2014 restore access with \`chmod u+r ${statePath(root)}\`; \`--repair\` reads the same file and cannot help`,
+      ko: `state.json \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uAD8C\uD55C) \u2014 \`chmod u+r ${statePath(root)}\` \uB85C \uC811\uADFC\uC744 \uB418\uB3CC\uB824\uB77C. \`--repair\` \uB294 \uAC19\uC740 \uD30C\uC77C\uC744 \uC77D\uC73C\uBBC0\uB85C \uB3C4\uC6C0\uC774 \uC548 \uB41C\uB2E4`
+    }));
+  } else if (statePresence === "absent") {
     issues.push(t({
       en: "state.json is missing \u2014 it must be rebuilt by replaying the journal",
       ko: "state.json \uC774 \uC5C6\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC7AC\uC0DD\uC73C\uB85C \uBCF5\uAD6C \uD544\uC694"
@@ -11236,7 +11581,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs12.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs13.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -11284,13 +11629,13 @@ function runDoctor(root, opts = {}) {
   }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    const log = path10.join(runtimeDir(root), "hook-errors.log");
+    const log = path11.join(runtimeDir(root), "hook-errors.log");
     warnings.push(t({
       en: `${hookErrors} hook decision failure(s) recorded \u2014 read ${log} to find out why`,
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs12.existsSync(harnessDir(root))) try {
+  if (fs13.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -11328,6 +11673,25 @@ function runDoctor(root, opts = {}) {
       ko: `\uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uD655\uC778\uD560 \uC218 \uC5C6\uC5C8\uB2E4 (${e.message}) \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC774 \uBC14\uB00C\uC5B4\uB3C4 \uC9C0\uAE08\uC740 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4. \uC704\uC758 \uBB38\uC81C\uB97C \uBA3C\uC800 \uD574\uACB0\uD558\uB77C.`
     }));
   }
+  try {
+    const known = /* @__PURE__ */ new Set([
+      ...loadLedger(root).map((n) => n.id),
+      ...listAdrs(root).map((a) => a.id)
+    ]);
+    const dangling = [];
+    for (const w of listWaves(root)) {
+      for (const ref of w.design_refs ?? []) {
+        if (!known.has(ref)) dangling.push(`${w.id} \u2192 ${ref}`);
+      }
+    }
+    if (dangling.length > 0) {
+      warnings.push(t({
+        en: `wave design_refs point at ${dangling.length} id(s) that are in neither the design ledger nor the ADR set: ${dangling.join(", ")} \u2014 the wave says what it implements, but that target is gone. Re-register the node (\`harness node upsert\`) or fix the wave sheet.`,
+        ko: `\uC6E8\uC774\uBE0C\uC758 design_refs \uC911 ${dangling.length}\uAC74\uC774 \uC124\uACC4 \uC6D0\uC7A5\uC5D0\uB3C4 ADR \uC5D0\uB3C4 \uC5C6\uB2E4: ${dangling.join(", ")} \u2014 \uC6E8\uC774\uBE0C\uB294 \uBB34\uC5C7\uC744 \uAD6C\uD604\uD55C\uB2E4\uACE0 \uC801\uC5C8\uB294\uB370 \uADF8 \uB300\uC0C1\uC774 \uC0AC\uB77C\uC84C\uB2E4. \uB178\uB4DC\uB97C \uB2E4\uC2DC \uB4F1\uB85D\uD558\uAC70\uB098(\`harness node upsert\`) \uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB97C \uACE0\uCCD0\uB77C.`
+      }));
+    }
+  } catch {
+  }
   let repaired = false;
   let refused = false;
   if (issues.length > 0 && opts.repair) {
@@ -11341,7 +11705,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs12.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs13.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -11361,9 +11725,9 @@ function runDoctor(root, opts = {}) {
     }
   }
   if (opts.repair && !refused && hookErrors > 0) {
-    const log = path10.join(runtimeDir(root), "hook-errors.log");
+    const log = path11.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs12.renameSync(log, `${log}.prev`);
+      fs13.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -11379,19 +11743,7 @@ function runDoctor(root, opts = {}) {
 }
 
 // core/src/loop.ts
-var fs13 = __toESM(require("fs"));
-
-// core/src/untrusted.ts
-var import_node_crypto = require("crypto");
-var UNTRUSTED_MAX_LINE = 200;
-function sanitizeUntrusted(s, max = UNTRUSTED_MAX_LINE) {
-  return String(s).replace(/[\r\n]+/g, " ").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, max);
-}
-function contentNonce(body) {
-  return (0, import_node_crypto.createHash)("sha256").update(body).digest("hex").slice(0, 8);
-}
-
-// core/src/loop.ts
+var fs14 = __toESM(require("fs"));
 var CRITICAL_REASONS = [
   "repeated-failure",
   "backtrack-needed",
@@ -11471,7 +11823,7 @@ function recordAttempt(root, waveId, outcome, detail) {
   if (outcome !== "pass" && outcome !== "fail") {
     throw new Error(tr(root, { en: `The verification outcome must be pass or fail: ${String(outcome)}`, ko: `\uAC80\uC99D \uACB0\uACFC\uB294 pass \uB610\uB294 fail \uC774\uC5B4\uC57C \uD55C\uB2E4: ${String(outcome)}` }));
   }
-  if (!fs13.existsSync(wavePath(root, waveId))) {
+  if (!fs14.existsSync(wavePath(root, waveId))) {
     throw new Error(
       tr(root, {
         en: `No instruction sheet for wave ${waveId} (${wavePath(root, waveId)}) \u2014 check the id, or list them with \`harness wave list\``,
@@ -11891,20 +12243,20 @@ function buildVerifierBrief(root, waveId) {
 }
 
 // core/src/ship.ts
-var fs17 = __toESM(require("fs"));
-var path14 = __toESM(require("path"));
-var YAML6 = __toESM(require_dist());
+var fs18 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
+var YAML7 = __toESM(require_dist());
 
 // core/src/gate.ts
 var crypto4 = __toESM(require("crypto"));
-var fs15 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
+var fs16 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
 
 // core/src/registry.ts
-var fs14 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
+var fs15 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
 var crypto3 = __toESM(require("crypto"));
-var YAML5 = __toESM(require_dist());
+var YAML6 = __toESM(require_dist());
 function toDocNode(v) {
   if (typeof v !== "object" || v === null) return null;
   const o = v;
@@ -11925,10 +12277,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs14.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs15.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML5.parse(fs14.readFileSync(registryPath(root), "utf8"));
+    doc = YAML6.parse(fs15.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -11938,8 +12290,8 @@ function readEntries(root) {
 function writeEntries(root, entries) {
   const target = registryPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs14.writeFileSync(tmp, YAML5.stringify({ docs: entries }));
-  fs14.renameSync(tmp, target);
+  fs15.writeFileSync(tmp, YAML6.stringify({ docs: entries }));
+  fs15.renameSync(tmp, target);
 }
 function inspectRegistry(root) {
   const { entries, parseError } = readEntries(root);
@@ -11982,10 +12334,10 @@ function upsertDoc(root, node) {
   writeEntries(root, entries);
 }
 function computeDocHash(root, doc) {
-  const abs = path11.join(root, doc.path);
+  const abs = path12.join(root, doc.path);
   let buf;
   try {
-    buf = fs14.readFileSync(abs);
+    buf = fs15.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -12138,9 +12490,9 @@ function docsForPhase(root, phase) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs15.realpathSync(path12.resolve(root, rel));
-    const r = path12.relative(fs15.realpathSync(root), real);
-    return r && !r.startsWith(`..${path12.sep}`) && r !== ".." && !path12.isAbsolute(r) ? r : rel;
+    const real = fs16.realpathSync(path13.resolve(root, rel));
+    const r = path13.relative(fs16.realpathSync(root), real);
+    return r && !r.startsWith(`..${path13.sep}`) && r !== ".." && !path13.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
   }
@@ -12162,7 +12514,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs15.readFileSync(path12.resolve(root, rel));
+    return fs16.readFileSync(path13.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -12311,7 +12663,7 @@ function assertNewMaterial(root, phase, paths, gates) {
     );
   }
 }
-var normRel = (p) => path12.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
   const want = new Set(paths.map(normRel));
   const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
@@ -12354,7 +12706,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs15.readFileSync(path12.resolve(root, rel)).toString("utf8");
+      text = fs16.readFileSync(path13.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -12475,7 +12827,7 @@ function approveGate(root, phase) {
   return record;
 }
 function feedbackPath(root, phase) {
-  return path12.join(packetsDir(root), `${phase}.feedback.md`);
+  return path13.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function recordGateFeedback(root, phase, raw) {
   const stripBullet = (l) => l.replace(/^\s*[-*+]\s+/, "");
@@ -12489,8 +12841,8 @@ function recordGateFeedback(root, phase, raw) {
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs15.mkdirSync(packetsDir(root), { recursive: true });
-  fs15.appendFileSync(
+  fs16.mkdirSync(packetsDir(root), { recursive: true });
+  fs16.appendFileSync(
     feedbackPath(root, phase),
     `
 ## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
@@ -12502,7 +12854,7 @@ ${lines.map((l) => `- ${l}`).join("\n")}
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs15.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs16.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -12598,8 +12950,8 @@ function setPhaseViaGate(root, phase) {
 }
 
 // core/src/report.ts
-var fs16 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
+var fs17 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
 var trFor3 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -12624,7 +12976,7 @@ function attempt(fn) {
   }
 }
 var generatedAt = (t) => `${t({ en: "Generated", ko: "\uC0DD\uC131" })}: ${(/* @__PURE__ */ new Date()).toISOString()}`;
-var cell2 = (s) => s.replace(/\|/g, "\\|");
+var cell2 = (s) => oneLine(s).replace(/\|/g, "\\|");
 var listCell = (xs) => xs.length ? xs.map(cell2).join(", ") : "\u2014";
 function ledgerIndex(root) {
   return attempt(() => {
@@ -12644,10 +12996,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs16.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs17.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs16.readdirSync(wavesDir(root));
+    files = fs17.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -12663,14 +13015,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs16.readdirSync(dir);
+    files = fs17.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs16.statSync(path13.join(dir, f2));
+      const st = fs17.statSync(path14.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -12723,7 +13075,9 @@ function collectRtm(root, t) {
     const waveIds = waves.entries.filter((w) => w.meta.design_refs.includes(node.id)).map((w) => w.id);
     const row = {
       id: node.id,
-      title: typeof node.title === "string" && node.title ? node.title : t({ en: "(untitled)", ko: "(\uC81C\uBAA9 \uC5C6\uC74C)" }),
+      // [LOGIC-06] 제목을 **읽어 들일 때 한 번** 한 줄로 만든다 — 렌더 지점마다 감싸면
+      // 언젠가 한 곳을 빠뜨린다(실제로 표는 고쳤는데 불릿 목록이 남아 있었다).
+      title: typeof node.title === "string" && node.title ? oneLine(node.title) : t({ en: "(untitled)", ko: "(\uC81C\uBAA9 \uC5C6\uC74C)" }),
       version: typeof node.version === "number" ? node.version : 0,
       status: node.status,
       docs: linked.filter((d) => !d.id.startsWith("ADR-")).map((d) => d.id),
@@ -12936,8 +13290,8 @@ function buildReviewPacket(root, phase) {
       out.push(`## ${t({ en: "STALE warnings", ko: "STALE \uACBD\uACE0" })}`, "");
       for (const n of stale) {
         out.push(t({
-          en: `- **${n.id}** ${n.title} (v${n.version}) \u2014 the design was revised. Do not approve before confirming the artifacts reflect the revision.`,
-          ko: `- **${n.id}** ${n.title} (v${n.version}) \u2014 \uC124\uACC4\uAC00 \uAC1C\uC815\uB410\uB2E4. \uC0B0\uCD9C\uBB3C\uC774 \uAC1C\uC815\uBCF8\uC744 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uAE30 \uC804\uC5D0\uB294 \uC2B9\uC778\uD558\uC9C0 \uB9C8\uB77C.`
+          en: `- **${n.id}** ${oneLine(n.title)} (v${n.version}) \u2014 the design was revised. Do not approve before confirming the artifacts reflect the revision.`,
+          ko: `- **${n.id}** ${oneLine(n.title)} (v${n.version}) \u2014 \uC124\uACC4\uAC00 \uAC1C\uC815\uB410\uB2E4. \uC0B0\uCD9C\uBB3C\uC774 \uAC1C\uC815\uBCF8\uC744 \uBC18\uC601\uD558\uB294\uC9C0 \uD655\uC778\uD558\uAE30 \uC804\uC5D0\uB294 \uC2B9\uC778\uD558\uC9C0 \uB9C8\uB77C.`
         }));
         blockers.push(t({
           en: `${n.id} is STALE \u2014 confirm the artifacts reflect the revised design`,
@@ -13061,26 +13415,56 @@ function buildHub(root) {
   out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
+function renderDenials(root, limit = 20) {
+  const t = trFor3(langFor(root));
+  let raw;
+  try {
+    raw = fs17.readFileSync(denialsPath(root), "utf8");
+  } catch {
+    return t({
+      en: "No denials recorded yet \u2014 nothing has been blocked in this project since the harness was installed. This file only appears the first time a tool call is denied.",
+      ko: "\uC544\uC9C1 \uAE30\uB85D\uB41C \uAC70\uBD80\uAC00 \uC5C6\uB2E4 \u2014 \uD558\uB124\uC2A4\uAC00 \uAC78\uB9B0 \uB4A4\uB85C \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0\uC11C \uB9C9\uD78C \uAC83\uC774 \uC5C6\uB2E4\uB294 \uB73B\uC774\uB2E4. \uC774 \uD30C\uC77C\uC740 \uB3C4\uAD6C \uD638\uCD9C\uC774 \uCC98\uC74C \uAC70\uBD80\uB420 \uB54C \uC0DD\uAE34\uB2E4."
+    });
+  }
+  const rows = raw.split("\n").filter(Boolean).slice(-limit).map((l) => {
+    try {
+      return JSON.parse(l);
+    } catch {
+      return null;
+    }
+  }).filter((r) => r !== null);
+  if (rows.length === 0) {
+    return t({ en: "No denials recorded yet.", ko: "\uC544\uC9C1 \uAE30\uB85D\uB41C \uAC70\uBD80\uAC00 \uC5C6\uB2E4." });
+  }
+  const out = [t({ en: `# Recent denials (${rows.length})`, ko: `# \uCD5C\uADFC \uAC70\uBD80 (${rows.length}\uAC74)` }), ""];
+  out.push("| ts | tool | target | reason |", "|---|---|---|---|");
+  for (const r of rows) out.push(`| ${r.ts} | ${cell2(r.tool)} | ${cell2(r.target)} | ${cell2(r.reason)} |`);
+  out.push("", t({
+    en: "Kept in `.harness/.runtime/denials.log` (rotating, secret-masked) \u2014 derived, not the audit journal.",
+    ko: "`.harness/.runtime/denials.log` \uC5D0 \uB0A8\uB294\uB2E4(\uD68C\uC804\xB7\uBE44\uBC00 \uB9C8\uC2A4\uD0B9) \u2014 \uAC10\uC0AC \uC800\uB110\uC774 \uC544\uB2C8\uB77C \uD30C\uC0DD\uBB3C\uC774\uB2E4."
+  }));
+  return out.join("\n");
+}
 
 // core/src/ship.ts
 var trFor4 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path14.join(harnessDir(root), "ship");
-var defectsPath = (root) => path14.join(shipDir(root), "defects.yaml");
-var readinessPath = (root) => path14.join(shipDir(root), "readiness.md");
-var deploymentsPath = (root) => path14.join(shipDir(root), "deployments.yaml");
+var shipDir = (root) => path15.join(harnessDir(root), "ship");
+var defectsPath = (root) => path15.join(shipDir(root), "defects.yaml");
+var readinessPath = (root) => path15.join(shipDir(root), "readiness.md");
+var deploymentsPath = (root) => path15.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 function writeAtomic(target, content) {
-  fs17.mkdirSync(path14.dirname(target), { recursive: true });
+  fs18.mkdirSync(path15.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs17.writeFileSync(tmp, content);
-  fs17.renameSync(tmp, target);
+  fs18.writeFileSync(tmp, content);
+  fs18.renameSync(tmp, target);
 }
 function readRecords(root, file, key, to) {
-  if (!fs17.existsSync(file)) return [];
+  if (!fs18.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML6.parse(fs17.readFileSync(file, "utf8"));
+    doc = YAML7.parse(fs18.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -13123,7 +13507,7 @@ function listDefects(root) {
   return readRecords(root, defectsPath(root), "defects", toDefect);
 }
 function saveDefects(root, defects) {
-  writeAtomic(defectsPath(root), YAML6.stringify({ defects }));
+  writeAtomic(defectsPath(root), YAML7.stringify({ defects }));
   writeAtomic(readinessPath(root), renderLedger(defects, trFor4(langFor(root))));
 }
 function assertDeferReason(root, rec) {
@@ -13349,7 +13733,7 @@ function recordDeployment(root, input) {
     environment,
     evidence
   });
-  writeAtomic(deploymentsPath(root), YAML6.stringify({ deployments: [...listDeployments(root), rec] }));
+  writeAtomic(deploymentsPath(root), YAML7.stringify({ deployments: [...listDeployments(root), rec] }));
   return rec;
 }
 function attempt2(fn) {
@@ -13362,16 +13746,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs17.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs18.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs17.readdirSync(wavesDir(root));
+    files = fs18.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs17.readFileSync(path14.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs18.readFileSync(path15.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -13551,14 +13935,14 @@ function renderReleaseChecklist(root) {
 }
 
 // core/src/help.ts
-var M = (en, ko) => ({ en, ko });
+var M2 = (en, ko) => ({ en, ko });
 var COMMANDS = [
-  { name: "init", summary: M("Create .harness/ and start the design track at P0.", ".harness/ \uB97C \uB9CC\uB4E4\uACE0 \uC124\uACC4 \uD2B8\uB799 P0 \uC5D0\uC11C \uC2DC\uC791\uD55C\uB2E4.") },
-  { name: "status", summary: M("Print current phase, active wave, gates and backtrack as JSON.", "\uD604\uC7AC \uD398\uC774\uC988\xB7\uD65C\uC131 \uC6E8\uC774\uBE0C\xB7\uAC8C\uC774\uD2B8\xB7\uC5ED\uD589\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+  { name: "init", summary: M2("Create .harness/ and start the design track at P0.", ".harness/ \uB97C \uB9CC\uB4E4\uACE0 \uC124\uACC4 \uD2B8\uB799 P0 \uC5D0\uC11C \uC2DC\uC791\uD55C\uB2E4.") },
+  { name: "status", summary: M2("Print current phase, active wave, gates and backtrack as JSON.", "\uD604\uC7AC \uD398\uC774\uC988\xB7\uD65C\uC131 \uC6E8\uC774\uBE0C\xB7\uAC8C\uC774\uD2B8\xB7\uC5ED\uD589\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
   {
     name: "doctor",
     args: "[--repair] [--force] [--accept-policy]",
-    summary: M(
+    summary: M2(
       "Diagnose state vs journal and policy drift; --repair replays state, --accept-policy re-pins the policy baseline (needs HARNESS_ACCEPT_POLICY=1 \u2014 humans only).",
       "\uC0C1\uD0DC\xB7\uC800\uB110 \uC815\uD569\uACFC \uC815\uCC45 \uBCC0\uACBD\uC744 \uC9C4\uB2E8\uD55C\uB2E4. --repair \uB294 \uC800\uB110 \uC7AC\uC0DD\uC73C\uB85C \uC0C1\uD0DC\uB97C \uBCF5\uAD6C\uD558\uACE0, --accept-policy \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD55C\uB2E4(HARNESS_ACCEPT_POLICY=1 \uD544\uC694 \u2014 \uC0AC\uB78C\uB9CC)."
     )
@@ -13566,102 +13950,103 @@ var COMMANDS = [
   {
     name: "phase",
     args: "<P0..P12>",
-    summary: M("Move to a phase. Only an approved gate opens the next phase.", "\uD398\uC774\uC988\uB97C \uC62E\uAE34\uB2E4. \uB2E4\uC74C \uD398\uC774\uC988\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778\uC73C\uB85C\uB9CC \uC5F4\uB9B0\uB2E4."),
-    subs: [{ name: "set", args: "<P0..P12>", summary: M("Move to the phase (requires the previous gate approved).", "\uD574\uB2F9 \uD398\uC774\uC988\uB85C \uC774\uB3D9\uD55C\uB2E4(\uC9C1\uC804 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uD544\uC694).") }]
+    summary: M2("Move to a phase. Only an approved gate opens the next phase.", "\uD398\uC774\uC988\uB97C \uC62E\uAE34\uB2E4. \uB2E4\uC74C \uD398\uC774\uC988\uB294 \uAC8C\uC774\uD2B8 \uC2B9\uC778\uC73C\uB85C\uB9CC \uC5F4\uB9B0\uB2E4."),
+    subs: [{ name: "set", args: "<P0..P12>", summary: M2("Move to the phase (requires the previous gate approved).", "\uD574\uB2F9 \uD398\uC774\uC988\uB85C \uC774\uB3D9\uD55C\uB2E4(\uC9C1\uC804 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uD544\uC694).") }]
   },
   {
     name: "gate",
-    summary: M("Phase gates \u2014 submit artifacts, then a human approves.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8 \u2014 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uACE0 \uC0AC\uB78C\uC774 \uC2B9\uC778\uD55C\uB2E4."),
+    summary: M2("Phase gates \u2014 submit artifacts, then a human approves.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8 \u2014 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uACE0 \uC0AC\uB78C\uC774 \uC2B9\uC778\uD55C\uB2E4."),
     subs: [
-      { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M("Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4. \uBE48 \uBB38\uC11C\xB7\uC790\uB9AC\uD45C\uC2DC\uC790\uC640 \uC774\uBBF8 \uB2E4\uB978 \uAC8C\uC774\uD2B8\uB97C \uC5F0 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uD55C\uB2E4.") },
-      { name: "approve", args: "<P>", summary: M("Approve a submitted gate. Humans only \u2014 never an agent.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uBABB \uD55C\uB2E4.") },
-      { name: "verify", args: "<P>", summary: M("Re-check that submitted artifacts still match their pinned hash.", "\uC81C\uCD9C \uB2F9\uC2DC \uD574\uC2DC\uC640 \uD604\uC7AC \uC0B0\uCD9C\uBB3C\uC774 \uAC19\uC740\uC9C0 \uB2E4\uC2DC \uD655\uC778\uD55C\uB2E4.") },
-      { name: "sweep", summary: M("Invalidate gates whose artifacts changed after approval.", "\uC2B9\uC778 \uD6C4 \uC0B0\uCD9C\uBB3C\uC774 \uBC14\uB010 \uAC8C\uC774\uD2B8\uB97C \uBB34\uD6A8\uD654\uD55C\uB2E4.") },
-      { name: "status", summary: M("Print all gate records as JSON.", "\uC804 \uAC8C\uC774\uD2B8 \uB808\uCF54\uB4DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "feedback", args: "<P> [--from <file>]", summary: M("Collect reviewer/canvas comments as revision grounds; without --from, print what was collected.", "\uB9AC\uBDF0\xB7\uCE94\uBC84\uC2A4 \uCF54\uBA58\uD2B8\uB97C \uAC1C\uC815 \uADFC\uAC70\uB85C \uC218\uC9D1\uD55C\uB2E4. --from \uC5C6\uC774 \uBD80\uB974\uBA74 \uC218\uC9D1\uB41C \uAC83\uC744 \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M2("Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4. \uBE48 \uBB38\uC11C\xB7\uC790\uB9AC\uD45C\uC2DC\uC790\uC640 \uC774\uBBF8 \uB2E4\uB978 \uAC8C\uC774\uD2B8\uB97C \uC5F0 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uD55C\uB2E4.") },
+      { name: "approve", args: "<P>", summary: M2("Approve a submitted gate. Humans only \u2014 never an agent.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uBABB \uD55C\uB2E4.") },
+      { name: "verify", args: "<P>", summary: M2("Re-check that submitted artifacts still match their pinned hash.", "\uC81C\uCD9C \uB2F9\uC2DC \uD574\uC2DC\uC640 \uD604\uC7AC \uC0B0\uCD9C\uBB3C\uC774 \uAC19\uC740\uC9C0 \uB2E4\uC2DC \uD655\uC778\uD55C\uB2E4.") },
+      { name: "sweep", summary: M2("Invalidate gates whose artifacts changed after approval.", "\uC2B9\uC778 \uD6C4 \uC0B0\uCD9C\uBB3C\uC774 \uBC14\uB010 \uAC8C\uC774\uD2B8\uB97C \uBB34\uD6A8\uD654\uD55C\uB2E4.") },
+      { name: "status", summary: M2("Print all gate records as JSON.", "\uC804 \uAC8C\uC774\uD2B8 \uB808\uCF54\uB4DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "feedback", args: "<P> [--from <file>]", summary: M2("Collect reviewer/canvas comments as revision grounds; without --from, print what was collected.", "\uB9AC\uBDF0\xB7\uCE94\uBC84\uC2A4 \uCF54\uBA58\uD2B8\uB97C \uAC1C\uC815 \uADFC\uAC70\uB85C \uC218\uC9D1\uD55C\uB2E4. --from \uC5C6\uC774 \uBD80\uB974\uBA74 \uC218\uC9D1\uB41C \uAC83\uC744 \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "wave",
-    summary: M("Waves \u2014 the unit of build work, with a written instruction sheet.", "\uC6E8\uC774\uBE0C \u2014 \uC9C0\uC2DC\uC11C\uB97C \uAC00\uC9C4 \uAD6C\uCD95 \uC791\uC5C5 \uB2E8\uC704."),
+    summary: M2("Waves \u2014 the unit of build work, with a written instruction sheet.", "\uC6E8\uC774\uBE0C \u2014 \uC9C0\uC2DC\uC11C\uB97C \uAC00\uC9C4 \uAD6C\uCD95 \uC791\uC5C5 \uB2E8\uC704."),
     subs: [
-      { name: "create", args: "--goal <text> [--milestone <m>] [--refs <ids>] [--acceptance|--accept <list>]", summary: M("Create a wave instruction sheet (pending). Design refs must exist in the ledger.", "\uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB97C \uB9CC\uB4E0\uB2E4(pending). \uC124\uACC4 \uCC38\uC870\uB294 \uC6D0\uC7A5\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4.") },
-      { name: "activate", args: "<wave-id>", summary: M("Activate a wave. Only one can be active.", "\uC6E8\uC774\uBE0C\uB97C \uD65C\uC131\uD654\uD55C\uB2E4. \uB3D9\uC2DC\uC5D0 \uD558\uB098\uB9CC \uAC00\uB2A5\uD558\uB2E4.") },
-      { name: "update", args: "<text>", summary: M("Append one turn-log line (what you did / what is next).", "\uD134 \uB85C\uADF8\uB97C \uD55C \uC904 \uB0A8\uAE34\uB2E4(\uD55C \uC77C / \uB2E4\uC74C \uD560 \uC77C).") },
-      { name: "complete", summary: M("Complete the active wave. UX waves need visual evidence.", "\uD65C\uC131 \uC6E8\uC774\uBE0C\uB97C \uC644\uB8CC\uD55C\uB2E4. UX \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801\uC774 \uD544\uC694\uD558\uB2E4.") },
-      { name: "list", summary: M("Print every wave frontmatter as JSON.", "\uC804 \uC6E8\uC774\uBE0C frontmatter \uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "create", args: "--goal <text> [--milestone <m>] [--refs <ids>] [--acceptance|--accept <list>]", summary: M2("Create a wave instruction sheet (pending). Design refs must exist in the ledger.", "\uC6E8\uC774\uBE0C \uC9C0\uC2DC\uC11C\uB97C \uB9CC\uB4E0\uB2E4(pending). \uC124\uACC4 \uCC38\uC870\uB294 \uC6D0\uC7A5\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4.") },
+      { name: "activate", args: "<wave-id>", summary: M2("Activate a wave. Only one can be active.", "\uC6E8\uC774\uBE0C\uB97C \uD65C\uC131\uD654\uD55C\uB2E4. \uB3D9\uC2DC\uC5D0 \uD558\uB098\uB9CC \uAC00\uB2A5\uD558\uB2E4.") },
+      { name: "update", args: "<text>", summary: M2("Append one turn-log line (what you did / what is next).", "\uD134 \uB85C\uADF8\uB97C \uD55C \uC904 \uB0A8\uAE34\uB2E4(\uD55C \uC77C / \uB2E4\uC74C \uD560 \uC77C).") },
+      { name: "complete", summary: M2("Complete the active wave. UX waves need visual evidence.", "\uD65C\uC131 \uC6E8\uC774\uBE0C\uB97C \uC644\uB8CC\uD55C\uB2E4. UX \uC6E8\uC774\uBE0C\uB294 \uC2DC\uAC01 \uC99D\uC801\uC774 \uD544\uC694\uD558\uB2E4.") },
+      { name: "list", summary: M2("Print every wave frontmatter as JSON.", "\uC804 \uC6E8\uC774\uBE0C frontmatter \uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "node",
-    summary: M("Design ledger nodes \u2014 the things waves are allowed to implement.", "\uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC \u2014 \uC6E8\uC774\uBE0C\uAC00 \uAD6C\uD604\uD560 \uC218 \uC788\uB294 \uB300\uC0C1."),
+    summary: M2("Design ledger nodes \u2014 the things waves are allowed to implement.", "\uC124\uACC4 \uC6D0\uC7A5 \uB178\uB4DC \u2014 \uC6E8\uC774\uBE0C\uAC00 \uAD6C\uD604\uD560 \uC218 \uC788\uB294 \uB300\uC0C1."),
     subs: [
-      { name: "upsert", args: "--id <id> --title <t> [--parent <id>] [--anchor <file#h>] [--status <s>]", summary: M("Create or update a ledger node (version is preserved).", "\uC6D0\uC7A5 \uB178\uB4DC\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4(version \uC740 \uBCF4\uC874\uB41C\uB2E4).") },
-      { name: "bump", args: "<id>", summary: M("Revise a node (version++, stale) and propagate STALE to waves that cite it.", "\uB178\uB4DC\uB97C \uAC1C\uC815\uD558\uACE0(version++\xB7stale) \uCC38\uC870 \uC6E8\uC774\uBE0C\uC5D0 STALE \uC744 \uC804\uD30C\uD55C\uB2E4.") },
-      { name: "list", summary: M("Print the whole design ledger as JSON.", "\uC124\uACC4 \uC6D0\uC7A5 \uC804\uCCB4\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "upsert", args: "--id <id> --title <t> [--parent <id>] [--anchor <file#h>] [--status <s>]", summary: M2("Create or update a ledger node (version is preserved).", "\uC6D0\uC7A5 \uB178\uB4DC\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4(version \uC740 \uBCF4\uC874\uB41C\uB2E4).") },
+      { name: "bump", args: "<id>", summary: M2("Revise a node (version++, stale) and propagate STALE to waves that cite it.", "\uB178\uB4DC\uB97C \uAC1C\uC815\uD558\uACE0(version++\xB7stale) \uCC38\uC870 \uC6E8\uC774\uBE0C\uC5D0 STALE \uC744 \uC804\uD30C\uD55C\uB2E4.") },
+      { name: "list", summary: M2("Print the whole design ledger as JSON.", "\uC124\uACC4 \uC6D0\uC7A5 \uC804\uCCB4\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "trace",
     args: "<node-id>",
-    summary: M("Trace a design node to the waves and documents that reference it.", "\uC124\uACC4 \uB178\uB4DC\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\xB7\uBB38\uC11C\uB97C \uC774\uC5B4\uC11C \uC870\uD68C\uD55C\uB2E4.")
+    summary: M2("Trace a design node to the waves and documents that reference it.", "\uC124\uACC4 \uB178\uB4DC\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\xB7\uBB38\uC11C\uB97C \uC774\uC5B4\uC11C \uC870\uD68C\uD55C\uB2E4.")
   },
   {
     name: "report",
-    summary: M("Rendered views over the ledger, registry and gates.", "\uC6D0\uC7A5\xB7\uB808\uC9C0\uC2A4\uD2B8\uB9AC\xB7\uAC8C\uC774\uD2B8\uB97C \uB80C\uB354\uB9C1\uD55C \uBDF0."),
+    summary: M2("Rendered views over the ledger, registry and gates.", "\uC6D0\uC7A5\xB7\uB808\uC9C0\uC2A4\uD2B8\uB9AC\xB7\uAC8C\uC774\uD2B8\uB97C \uB80C\uB354\uB9C1\uD55C \uBDF0."),
     subs: [
-      { name: "packet", args: "<P>", summary: M("Render the review packet for a phase.", "\uD574\uB2F9 \uD398\uC774\uC988\uC758 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
-      { name: "rtm", summary: M("Render the requirements traceability matrix.", "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
-      { name: "hub", summary: M("Render the artifact hub (document registry + artifact URLs).", "\uC0B0\uCD9C\uBB3C \uD5C8\uBE0C(\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC + \uC544\uD2F0\uD329\uD2B8 URL)\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
+      { name: "packet", args: "<P>", summary: M2("Render the review packet for a phase.", "\uD574\uB2F9 \uD398\uC774\uC988\uC758 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "rtm", summary: M2("Render the requirements traceability matrix.", "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "hub", summary: M2("Render the artifact hub (document registry + artifact URLs).", "\uC0B0\uCD9C\uBB3C \uD5C8\uBE0C(\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC + \uC544\uD2F0\uD329\uD2B8 URL)\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "denials", args: "[--limit <n>]", summary: M2("Show recent tool calls the hooks denied.", "\uD6C5\uC774 \uCD5C\uADFC\uC5D0 \uAC70\uBD80\uD55C \uB3C4\uAD6C \uD638\uCD9C\uC744 \uBCF4\uC5EC \uC900\uB2E4.") }
     ]
   },
   {
     name: "doc",
-    summary: M("Document registry \u2014 the artifacts a gate reviews.", "\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC \u2014 \uAC8C\uC774\uD2B8\uAC00 \uC2EC\uC0AC\uD558\uB294 \uC0B0\uCD9C\uBB3C."),
+    summary: M2("Document registry \u2014 the artifacts a gate reviews.", "\uBB38\uC11C \uB808\uC9C0\uC2A4\uD2B8\uB9AC \u2014 \uAC8C\uC774\uD2B8\uAC00 \uC2EC\uC0AC\uD558\uB294 \uC0B0\uCD9C\uBB3C."),
     subs: [
-      { name: "upsert", args: "--id <DOC-x> --path <p> --phase <P> [--refs <ids>] [--url <url>]", summary: M("Register or update a document. --refs links it to ledger nodes (RTM traceability).", "\uBB38\uC11C\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4. --refs \uB85C \uC6D0\uC7A5 \uB178\uB4DC\uC5D0 \uC5F0\uACB0\uD55C\uB2E4(RTM \uCD94\uC801\uC131).") },
-      { name: "url", args: "<DOC-x> <artifact-url>", summary: M("Attach a published artifact URL to a document.", "\uBB38\uC11C\uC5D0 \uAC8C\uC2DC\uB41C \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uBD99\uC778\uB2E4.") },
-      { name: "submit", args: "<DOC-x>", summary: M("Submit a document for review (pins its hash).", "\uBB38\uC11C\uB97C \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4(\uD574\uC2DC \uACE0\uC815).") },
-      { name: "approve", args: "<DOC-x>", summary: M("Approve a submitted document.", "\uC81C\uCD9C\uB41C \uBB38\uC11C\uB97C \uC2B9\uC778\uD55C\uB2E4.") },
-      { name: "revise", args: "<DOC-x> [--path <p>]", summary: M("Revise an approved document (supersedes the old version).", "\uC2B9\uC778 \uBB38\uC11C\uB97C \uAC1C\uC815\uD55C\uB2E4(\uC774\uC804 \uBC84\uC804 supersede).") },
-      { name: "stale", summary: M("List approved documents whose content no longer matches the pinned hash.", "\uC2B9\uC778 \uD6C4 \uB0B4\uC6A9\uC774 \uBC14\uB010 \uBB38\uC11C\uB97C \uB098\uC5F4\uD55C\uB2E4.") },
-      { name: "list", summary: M("Print the whole registry as JSON.", "\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC804\uCCB4\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "upsert", args: "--id <DOC-x> --path <p> --phase <P> [--refs <ids>] [--url <url>]", summary: M2("Register or update a document. --refs links it to ledger nodes (RTM traceability).", "\uBB38\uC11C\uB97C \uB4F1\uB85D\xB7\uC218\uC815\uD55C\uB2E4. --refs \uB85C \uC6D0\uC7A5 \uB178\uB4DC\uC5D0 \uC5F0\uACB0\uD55C\uB2E4(RTM \uCD94\uC801\uC131).") },
+      { name: "url", args: "<DOC-x> <artifact-url>", summary: M2("Attach a published artifact URL to a document.", "\uBB38\uC11C\uC5D0 \uAC8C\uC2DC\uB41C \uC544\uD2F0\uD329\uD2B8 URL \uC744 \uBD99\uC778\uB2E4.") },
+      { name: "submit", args: "<DOC-x>", summary: M2("Submit a document for review (pins its hash).", "\uBB38\uC11C\uB97C \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4(\uD574\uC2DC \uACE0\uC815).") },
+      { name: "approve", args: "<DOC-x>", summary: M2("Approve a submitted document.", "\uC81C\uCD9C\uB41C \uBB38\uC11C\uB97C \uC2B9\uC778\uD55C\uB2E4.") },
+      { name: "revise", args: "<DOC-x> [--path <p>]", summary: M2("Revise an approved document (supersedes the old version).", "\uC2B9\uC778 \uBB38\uC11C\uB97C \uAC1C\uC815\uD55C\uB2E4(\uC774\uC804 \uBC84\uC804 supersede).") },
+      { name: "stale", summary: M2("List approved documents whose content no longer matches the pinned hash.", "\uC2B9\uC778 \uD6C4 \uB0B4\uC6A9\uC774 \uBC14\uB010 \uBB38\uC11C\uB97C \uB098\uC5F4\uD55C\uB2E4.") },
+      { name: "list", summary: M2("Print the whole registry as JSON.", "\uB808\uC9C0\uC2A4\uD2B8\uB9AC \uC804\uCCB4\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "adr",
-    summary: M("Architecture decision records tied to phase gates.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uC5D0 \uBB36\uC778 \uC544\uD0A4\uD14D\uCC98 \uACB0\uC815 \uAE30\uB85D."),
+    summary: M2("Architecture decision records tied to phase gates.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8\uC5D0 \uBB36\uC778 \uC544\uD0A4\uD14D\uCC98 \uACB0\uC815 \uAE30\uB85D."),
     subs: [
-      { name: "propose", args: "--id <ADR-x> --phase <P> --question <q> --option <id:title> ...", summary: M("Open a decision point with options.", "\uC120\uD0DD\uC9C0\uB97C \uAC00\uC9C4 \uACB0\uC815 \uD3EC\uC778\uD2B8\uB97C \uC5F0\uB2E4.") },
-      { name: "decide", args: "<ADR-x> --choose <id> --rationale <why> [--reject <id>:<why>]", summary: M("Record the decision and why the others were rejected.", "\uACB0\uC815\uACFC \uB098\uBA38\uC9C0\uB97C \uBC84\uB9B0 \uC774\uC720\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
-      { name: "revise", args: "<ADR-x> --question <q>", summary: M("Reopen a decided ADR (supersedes it).", "\uACB0\uC815\uB41C ADR \uC744 \uB2E4\uC2DC \uC5F0\uB2E4(supersede).") },
-      { name: "show", args: "<ADR-x>", summary: M("Render one ADR.", "ADR \uD558\uB098\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
-      { name: "list", summary: M("Print all ADRs as JSON.", "\uC804 ADR \uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "propose", args: "--id <ADR-x> --phase <P> --question <q> --option <id:title> ...", summary: M2("Open a decision point with options.", "\uC120\uD0DD\uC9C0\uB97C \uAC00\uC9C4 \uACB0\uC815 \uD3EC\uC778\uD2B8\uB97C \uC5F0\uB2E4.") },
+      { name: "decide", args: "<ADR-x> --choose <id> --rationale <why> [--reject <id>:<why>]", summary: M2("Record the decision and why the others were rejected.", "\uACB0\uC815\uACFC \uB098\uBA38\uC9C0\uB97C \uBC84\uB9B0 \uC774\uC720\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
+      { name: "revise", args: "<ADR-x> --question <q>", summary: M2("Reopen a decided ADR (supersedes it).", "\uACB0\uC815\uB41C ADR \uC744 \uB2E4\uC2DC \uC5F0\uB2E4(supersede).") },
+      { name: "show", args: "<ADR-x>", summary: M2("Render one ADR.", "ADR \uD558\uB098\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "list", summary: M2("Print all ADRs as JSON.", "\uC804 ADR \uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "design",
-    summary: M("Claude Design canvas link \u2014 UX nodes, sync and baselines.", "Claude Design \uCE94\uBC84\uC2A4 \uC5F0\uB3D9 \u2014 UX \uB178\uB4DC\xB7\uB3D9\uAE30\uD654\xB7\uAE30\uC900\uC120."),
+    summary: M2("Claude Design canvas link \u2014 UX nodes, sync and baselines.", "Claude Design \uCE94\uBC84\uC2A4 \uC5F0\uB3D9 \u2014 UX \uB178\uB4DC\xB7\uB3D9\uAE30\uD654\xB7\uAE30\uC900\uC120."),
     subs: [
-      { name: "link", args: "--ux <UX-x> --url <canvas-url> [--artboard <name>]", summary: M("Link a UX node to a canvas artboard.", "UX \uB178\uB4DC\uB97C \uCE94\uBC84\uC2A4 \uC544\uD2B8\uBCF4\uB4DC\uC5D0 \uC5F0\uACB0\uD55C\uB2E4.") },
-      { name: "sync", args: "<UX-x> --from <file>", summary: M("Sync fetched canvas content into the ledger.", "\uAC00\uC838\uC628 \uCE94\uBC84\uC2A4 \uB0B4\uC6A9\uC744 \uC6D0\uC7A5\uC5D0 \uBC18\uC601\uD55C\uB2E4.") },
-      { name: "inventory", args: "--from <file>", summary: M("Extract a component inventory from canvas content.", "\uCE94\uBC84\uC2A4 \uB0B4\uC6A9\uC5D0\uC11C \uCEF4\uD3EC\uB10C\uD2B8 \uBAA9\uB85D\uC744 \uBF51\uB294\uB2E4.") },
-      { name: "baseline", args: "<UX-x> --png <file>", summary: M("Record a baseline screenshot for a UX node.", "UX \uB178\uB4DC\uC758 \uAE30\uC900\uC120 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uAE30\uB85D\uD55C\uB2E4.") },
-      { name: "html", args: "<UX-x>", summary: M("Render the linked artboard as standalone HTML.", "\uC5F0\uACB0\uB41C \uC544\uD2B8\uBCF4\uB4DC\uB97C \uC790\uCCB4\uC644\uACB0 HTML \uB85C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
-      { name: "list", summary: M("Print all canvas links as JSON.", "\uC804 \uCE94\uBC84\uC2A4 \uB9C1\uD06C\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "link", args: "--ux <UX-x> --url <canvas-url> [--artboard <name>]", summary: M2("Link a UX node to a canvas artboard.", "UX \uB178\uB4DC\uB97C \uCE94\uBC84\uC2A4 \uC544\uD2B8\uBCF4\uB4DC\uC5D0 \uC5F0\uACB0\uD55C\uB2E4.") },
+      { name: "sync", args: "<UX-x> --from <file>", summary: M2("Sync fetched canvas content into the ledger.", "\uAC00\uC838\uC628 \uCE94\uBC84\uC2A4 \uB0B4\uC6A9\uC744 \uC6D0\uC7A5\uC5D0 \uBC18\uC601\uD55C\uB2E4.") },
+      { name: "inventory", args: "--from <file>", summary: M2("Extract a component inventory from canvas content.", "\uCE94\uBC84\uC2A4 \uB0B4\uC6A9\uC5D0\uC11C \uCEF4\uD3EC\uB10C\uD2B8 \uBAA9\uB85D\uC744 \uBF51\uB294\uB2E4.") },
+      { name: "baseline", args: "<UX-x> --png <file>", summary: M2("Record a baseline screenshot for a UX node.", "UX \uB178\uB4DC\uC758 \uAE30\uC900\uC120 \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uAE30\uB85D\uD55C\uB2E4.") },
+      { name: "html", args: "<UX-x>", summary: M2("Render the linked artboard as standalone HTML.", "\uC5F0\uACB0\uB41C \uC544\uD2B8\uBCF4\uB4DC\uB97C \uC790\uCCB4\uC644\uACB0 HTML \uB85C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "list", summary: M2("Print all canvas links as JSON.", "\uC804 \uCE94\uBC84\uC2A4 \uB9C1\uD06C\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "tokens",
-    summary: M("Design tokens \u2014 generate, lint raw values, swap themes.", "\uB514\uC790\uC778 \uD1A0\uD070 \u2014 \uC0DD\uC131\xB7raw \uAC12 \uAC80\uC0AC\xB7\uD14C\uB9C8 \uAD50\uCCB4."),
+    summary: M2("Design tokens \u2014 generate, lint raw values, swap themes.", "\uB514\uC790\uC778 \uD1A0\uD070 \u2014 \uC0DD\uC131\xB7raw \uAC12 \uAC80\uC0AC\xB7\uD14C\uB9C8 \uAD50\uCCB4."),
     subs: [
-      { name: "gen", args: "[--out <dir>]", summary: M("Generate CSS/TS token files from the token source. Without --out they land in the project root (tokens.css, tokens.ts, tailwind.tokens.js).", "\uD1A0\uD070 \uC6D0\uBCF8\uC5D0\uC11C CSS/TS \uD1A0\uD070 \uD30C\uC77C\uC744 \uC0DD\uC131\uD55C\uB2E4. --out \uC5C6\uC774 \uBD80\uB974\uBA74 \uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4(tokens.css\xB7tokens.ts\xB7tailwind.tokens.js).") },
-      { name: "lint", args: "<files...>", summary: M("Find raw colour/size literals that should be semantic tokens.", "\uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC774\uC5B4\uC57C \uD560 raw \uC0C9\xB7\uD06C\uAE30 \uB9AC\uD130\uB7F4\uC744 \uCC3E\uB294\uB2E4.") },
-      { name: "swap", args: "--with <theme.json> [--out <dir>]", summary: M("Regenerate tokens with an override theme.", "\uB300\uCCB4 \uD14C\uB9C8\uB85C \uD1A0\uD070\uC744 \uB2E4\uC2DC \uC0DD\uC131\uD55C\uB2E4.") }
+      { name: "gen", args: "[--out <dir>]", summary: M2("Generate CSS/TS token files from the token source. Without --out they land in the project root (tokens.css, tokens.ts, tailwind.tokens.js).", "\uD1A0\uD070 \uC6D0\uBCF8\uC5D0\uC11C CSS/TS \uD1A0\uD070 \uD30C\uC77C\uC744 \uC0DD\uC131\uD55C\uB2E4. --out \uC5C6\uC774 \uBD80\uB974\uBA74 \uD504\uB85C\uC81D\uD2B8 \uB8E8\uD2B8\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4(tokens.css\xB7tokens.ts\xB7tailwind.tokens.js).") },
+      { name: "lint", args: "<files...>", summary: M2("Find raw colour/size literals that should be semantic tokens.", "\uC2DC\uB9E8\uD2F1 \uD1A0\uD070\uC774\uC5B4\uC57C \uD560 raw \uC0C9\xB7\uD06C\uAE30 \uB9AC\uD130\uB7F4\uC744 \uCC3E\uB294\uB2E4.") },
+      { name: "swap", args: "--with <theme.json> [--out <dir>]", summary: M2("Regenerate tokens with an override theme.", "\uB300\uCCB4 \uD14C\uB9C8\uB85C \uD1A0\uD070\uC744 \uB2E4\uC2DC \uC0DD\uC131\uD55C\uB2E4.") }
     ],
     // [UTIL-B] 원천 파일의 형태를 여기 적지 않으면 첫 시도가 반드시 실패한다 — 코어는
     // 기본값을 발명하지 않으므로(§7) 사람이 빈 화면에서 스키마를 알아맞혀야 했다.
-    note: M(
+    note: M2(
       `Token source: .harness/design/tokens/design-tokens.json
 ${TOKEN_DOC_SHAPE_HINT}
 
@@ -13676,69 +14061,69 @@ ${TOKEN_DOC_SKELETON}`
   },
   {
     name: "evidence",
-    summary: M("Visual evidence for UX waves \u2014 spec, check and packet.", "UX \uC6E8\uC774\uBE0C\uC758 \uC2DC\uAC01 \uC99D\uC801 \u2014 \uC0AC\uC591\xB7\uAC80\uC0AC\xB7\uD328\uD0B7."),
+    summary: M2("Visual evidence for UX waves \u2014 spec, check and packet.", "UX \uC6E8\uC774\uBE0C\uC758 \uC2DC\uAC01 \uC99D\uC801 \u2014 \uC0AC\uC591\xB7\uAC80\uC0AC\xB7\uD328\uD0B7."),
     subs: [
-      { name: "spec", args: "<UX-x> [--wave <id>] [--out <path>]", summary: M("Write the capture spec an agent must satisfy.", "\uC5D0\uC774\uC804\uD2B8\uAC00 \uCDA9\uC871\uD574\uC57C \uD560 \uCEA1\uCC98 \uC0AC\uC591\uC744 \uC4F4\uB2E4.") },
-      { name: "check", args: "<wave-id>", summary: M("Check whether the wave has real (non-empty) capture evidence.", "\uC6E8\uC774\uBE0C\uC5D0 \uC2E4\uC81C(\uBE44\uC5B4 \uC788\uC9C0 \uC54A\uC740) \uCEA1\uCC98 \uC99D\uC801\uC774 \uC788\uB294\uC9C0 \uBCF8\uB2E4.") },
-      { name: "packet", args: "--ux <UX-x> [--wave <id>] [--out <path>]", summary: M("Render a before/after comparison packet.", "\uAE30\uC900\uC120 \uB300\uBE44 \uBE44\uAD50 \uD328\uD0B7\uC744 \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
+      { name: "spec", args: "<UX-x> [--wave <id>] [--out <path>]", summary: M2("Write the capture spec an agent must satisfy.", "\uC5D0\uC774\uC804\uD2B8\uAC00 \uCDA9\uC871\uD574\uC57C \uD560 \uCEA1\uCC98 \uC0AC\uC591\uC744 \uC4F4\uB2E4.") },
+      { name: "check", args: "<wave-id>", summary: M2("Check whether the wave has real (non-empty) capture evidence.", "\uC6E8\uC774\uBE0C\uC5D0 \uC2E4\uC81C(\uBE44\uC5B4 \uC788\uC9C0 \uC54A\uC740) \uCEA1\uCC98 \uC99D\uC801\uC774 \uC788\uB294\uC9C0 \uBCF8\uB2E4.") },
+      { name: "packet", args: "--ux <UX-x> [--wave <id>] [--out <path>]", summary: M2("Render a before/after comparison packet.", "\uAE30\uC900\uC120 \uB300\uBE44 \uBE44\uAD50 \uD328\uD0B7\uC744 \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
     ]
   },
   {
     name: "loop",
-    summary: M("Wave execution loop \u2014 next work, attempts, briefs, escalation.", "\uC6E8\uC774\uBE0C \uC2E4\uD589 \uB8E8\uD504 \u2014 \uB2E4\uC74C \uC791\uC5C5\xB7\uC2DC\uB3C4\xB7\uBE0C\uB9AC\uD504\xB7\uC18C\uD658."),
+    summary: M2("Wave execution loop \u2014 next work, attempts, briefs, escalation.", "\uC6E8\uC774\uBE0C \uC2E4\uD589 \uB8E8\uD504 \u2014 \uB2E4\uC74C \uC791\uC5C5\xB7\uC2DC\uB3C4\xB7\uBE0C\uB9AC\uD504\xB7\uC18C\uD658."),
     subs: [
-      { name: "next", summary: M("Print what to do next as JSON.", "\uB2E4\uC74C\uC5D0 \uD560 \uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "attempt", args: "<wave-id> --outcome <pass|fail> [--detail <text>]", summary: M("Record one execution attempt and its outcome.", "\uC2E4\uD589 \uC2DC\uB3C4 \uD55C \uBC88\uACFC \uACB0\uACFC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
-      { name: "brief", args: "<wave-id> [--for <executor|verifier>]", summary: M("Render the sanitized brief handed to an agent.", "\uC5D0\uC774\uC804\uD2B8\uC5D0\uAC8C \uB118\uAE38 \uC911\uD654\uB41C \uBE0C\uB9AC\uD504\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
+      { name: "next", summary: M2("Print what to do next as JSON.", "\uB2E4\uC74C\uC5D0 \uD560 \uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "attempt", args: "<wave-id> --outcome <pass|fail> [--detail <text>]", summary: M2("Record one execution attempt and its outcome.", "\uC2E4\uD589 \uC2DC\uB3C4 \uD55C \uBC88\uACFC \uACB0\uACFC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
+      { name: "brief", args: "<wave-id> [--for <executor|verifier>]", summary: M2("Render the sanitized brief handed to an agent.", "\uC5D0\uC774\uC804\uD2B8\uC5D0\uAC8C \uB118\uAE38 \uC911\uD654\uB41C \uBE0C\uB9AC\uD504\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") },
       {
         name: "critical raise",
         // [UTIL-A5·UX-102] `--reason` 은 enum 이다. `<r>` 로 적어 두면 안내대로 친 사람이
         // usage 에러를 만난다 — 도움말이 실제 계약을 그대로 보여야 한다.
         args: `--reason <${CRITICAL_REASONS.join("|")}> [--wave <id>] [--detail <text>]`,
-        summary: M("Escalate to the human with a reason.", "\uC0AC\uC720\uC640 \uD568\uAED8 \uC0AC\uB78C\uC744 \uC18C\uD658\uD55C\uB2E4.")
+        summary: M2("Escalate to the human with a reason.", "\uC0AC\uC720\uC640 \uD568\uAED8 \uC0AC\uB78C\uC744 \uC18C\uD658\uD55C\uB2E4.")
       },
       // [UX-A1] 해제 명령이 도움말에 없어서, 소환된 사람이 **빠져나올 길을 찾을 수 없었다.**
       // 안내 문구는 실재하지 않는 `loop clear` 를 가리키고 있었다 — 막다른 길 두 겹.
-      { name: "critical clear", summary: M("Clear the escalation so the wave loop can run again.", "\uC18C\uD658\uC744 \uD574\uC81C\uD574 \uC6E8\uC774\uBE0C \uB8E8\uD504\uB97C \uB2E4\uC2DC \uB3CC\uB9B0\uB2E4.") }
+      { name: "critical clear", summary: M2("Clear the escalation so the wave loop can run again.", "\uC18C\uD658\uC744 \uD574\uC81C\uD574 \uC6E8\uC774\uBE0C \uB8E8\uD504\uB97C \uB2E4\uC2DC \uB3CC\uB9B0\uB2E4.") }
     ]
   },
   {
     name: "ship",
-    summary: M("Ship track \u2014 defect ledger, deployments, final verdict.", "\uCD9C\uD558 \uD2B8\uB799 \u2014 \uACB0\uD568 \uB300\uC7A5\xB7\uBC30\uD3EC \uAE30\uB85D\xB7\uCD5C\uC885 \uD310\uC815."),
+    summary: M2("Ship track \u2014 defect ledger, deployments, final verdict.", "\uCD9C\uD558 \uD2B8\uB799 \u2014 \uACB0\uD568 \uB300\uC7A5\xB7\uBC30\uD3EC \uAE30\uB85D\xB7\uCD5C\uC885 \uD310\uC815."),
     subs: [
       // [UX-A2] 인자를 적지 않으면 **알아낼 방법이 없다** — 미지 플래그 오류가 이 도움말을
       // 가리키는데 여기 인자가 없으면 그 안내도 막다른 길이 된다(같은 군의 deploy 는 이미 적고 있다).
-      { name: "defect add", args: "--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>", summary: M("Add a defect to the ledger. Findings without evidence are refused.", "\uACB0\uD568\uC744 \uB300\uC7A5\uC5D0 \uC62C\uB9B0\uB2E4. \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uAC70\uBD80\uB41C\uB2E4.") },
-      { name: "defect update", args: `<id> --status <${DEFECT_STATUSES.join("|")}> [--defer-reason <why>] [--evidence <e>]`, summary: M("Change a defect\u2019s status.", "\uACB0\uD568\uC758 \uC0C1\uD0DC\uB97C \uBC14\uAFBC\uB2E4.") },
-      { name: "defect list", summary: M("Print the defect ledger as JSON.", "\uACB0\uD568 \uB300\uC7A5\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "deploy", args: "--env <env> --version <v> --sha <commit> [--evidence <e>]", summary: M("Record a deployment.", "\uBC30\uD3EC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
-      { name: "deployments", summary: M("Print deployment history as JSON.", "\uBC30\uD3EC \uC774\uB825\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "verdict", summary: M("Final go/no-go. Never passes without measured evidence.", "\uCD5C\uC885 go/no-go. measured \uADFC\uAC70 \uC5C6\uC774\uB294 \uD1B5\uACFC\uD558\uC9C0 \uC54A\uB294\uB2E4.") },
-      { name: "checklist", summary: M("Render the release checklist.", "\uB9B4\uB9AC\uC2A4 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
+      { name: "defect add", args: "--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>", summary: M2("Add a defect to the ledger. Findings without evidence are refused.", "\uACB0\uD568\uC744 \uB300\uC7A5\uC5D0 \uC62C\uB9B0\uB2E4. \uADFC\uAC70 \uC5C6\uB294 \uC9C0\uC801\uC740 \uAC70\uBD80\uB41C\uB2E4.") },
+      { name: "defect update", args: `<id> --status <${DEFECT_STATUSES.join("|")}> [--defer-reason <why>] [--evidence <e>]`, summary: M2("Change a defect\u2019s status.", "\uACB0\uD568\uC758 \uC0C1\uD0DC\uB97C \uBC14\uAFBC\uB2E4.") },
+      { name: "defect list", summary: M2("Print the defect ledger as JSON.", "\uACB0\uD568 \uB300\uC7A5\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "deploy", args: "--env <env> --version <v> --sha <commit> [--evidence <e>]", summary: M2("Record a deployment.", "\uBC30\uD3EC\uB97C \uAE30\uB85D\uD55C\uB2E4.") },
+      { name: "deployments", summary: M2("Print deployment history as JSON.", "\uBC30\uD3EC \uC774\uB825\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "verdict", summary: M2("Final go/no-go. Never passes without measured evidence.", "\uCD5C\uC885 go/no-go. measured \uADFC\uAC70 \uC5C6\uC774\uB294 \uD1B5\uACFC\uD558\uC9C0 \uC54A\uB294\uB2E4.") },
+      { name: "checklist", summary: M2("Render the release checklist.", "\uB9B4\uB9AC\uC2A4 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8\uB97C \uB80C\uB354\uB9C1\uD55C\uB2E4.") }
     ]
   },
   {
     name: "profile",
-    summary: M('Stack profile \u2014 what "build", "test", "deploy" mean here.', "\uC2A4\uD0DD \uD504\uB85C\uD30C\uC77C \u2014 \uC774 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBE4C\uB4DC\xB7\uD14C\uC2A4\uD2B8\xB7\uBC30\uD3EC\uAC00 \uBB34\uC5C7\uC778\uC9C0."),
+    summary: M2('Stack profile \u2014 what "build", "test", "deploy" mean here.', "\uC2A4\uD0DD \uD504\uB85C\uD30C\uC77C \u2014 \uC774 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBE4C\uB4DC\xB7\uD14C\uC2A4\uD2B8\xB7\uBC30\uD3EC\uAC00 \uBB34\uC5C7\uC778\uC9C0."),
     subs: [
-      { name: "show", summary: M("Print the resolved profile as JSON.", "\uD574\uC11D\uB41C \uD504\uB85C\uD30C\uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "cmd", args: "<key>", summary: M("Print one profile command.", "\uD504\uB85C\uD30C\uC77C \uBA85\uB839 \uD558\uB098\uB97C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "show", summary: M2("Print the resolved profile as JSON.", "\uD574\uC11D\uB41C \uD504\uB85C\uD30C\uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "cmd", args: "<key>", summary: M2("Print one profile command.", "\uD504\uB85C\uD30C\uC77C \uBA85\uB839 \uD558\uB098\uB97C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "usage",
-    summary: M("Usage tier guidance for long sessions.", "\uAE34 \uC138\uC158\uC744 \uC704\uD55C \uC0AC\uC6A9\uB7C9 \uD2F0\uC5B4 \uC548\uB0B4."),
+    summary: M2("Usage tier guidance for long sessions.", "\uAE34 \uC138\uC158\uC744 \uC704\uD55C \uC0AC\uC6A9\uB7C9 \uD2F0\uC5B4 \uC548\uB0B4."),
     subs: [
-      { name: "tier", args: "--percent <0-100>", summary: M("Print the tier and what to do at that usage level.", "\uD2F0\uC5B4\uC640 \uADF8 \uC218\uC900\uC5D0\uC11C \uD560 \uC77C\uC744 \uCD9C\uB825\uD55C\uB2E4.") },
-      { name: "status", summary: M("Print the cached usage state as JSON.", "\uCE90\uC2DC\uB41C \uC0AC\uC6A9\uB7C9 \uC0C1\uD0DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
+      { name: "tier", args: "--percent <0-100>", summary: M2("Print the tier and what to do at that usage level.", "\uD2F0\uC5B4\uC640 \uADF8 \uC218\uC900\uC5D0\uC11C \uD560 \uC77C\uC744 \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "status", summary: M2("Print the cached usage state as JSON.", "\uCE90\uC2DC\uB41C \uC0AC\uC6A9\uB7C9 \uC0C1\uD0DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") }
     ]
   },
   {
     name: "backtrack",
     args: "<P0..P12> --reason <why> | clear",
-    summary: M("Officially go back to an earlier phase (the only way to edit approved design).", "\uACF5\uC2DD \uC5ED\uD589 \u2014 \uC2B9\uC778\uB41C \uC124\uACC4\uB97C \uACE0\uCE58\uB294 \uC720\uC77C\uD55C \uACBD\uB85C.")
+    summary: M2("Officially go back to an earlier phase (the only way to edit approved design).", "\uACF5\uC2DD \uC5ED\uD589 \u2014 \uC2B9\uC778\uB41C \uC124\uACC4\uB97C \uACE0\uCE58\uB294 \uC720\uC77C\uD55C \uACBD\uB85C.")
   },
-  { name: "migrate", summary: M("Detect hand-rolled hooks/skills that would double-fire with the harness.", "\uD558\uB124\uC2A4\uC640 \uC774\uC911 \uBC1C\uD654\uD560 \uC790\uC791 \uD6C5\xB7\uC2A4\uD0AC\uC744 \uAC10\uC9C0\uD55C\uB2E4.") }
+  { name: "migrate", summary: M2("Detect hand-rolled hooks/skills that would double-fire with the harness.", "\uD558\uB124\uC2A4\uC640 \uC774\uC911 \uBC1C\uD654\uD560 \uC790\uC791 \uD6C5\xB7\uC2A4\uD0AC\uC744 \uAC10\uC9C0\uD55C\uB2E4.") }
 ];
 var MAX_LEFT = 30;
 var WRAP_MIN = 60;
@@ -13929,14 +14314,14 @@ Run \`harness --help\` for the full usage.`;
 }
 
 // core/src/hook.ts
-var fs20 = __toESM(require("fs"));
-var path17 = __toESM(require("path"));
+var fs21 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs18 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
-var tierFile = (root) => path15.join(runtimeDir(root), "usage-tier");
+var tierFile = (root) => path16.join(runtimeDir(root), "usage-tier");
 function tierFor(percent) {
   if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
   if (percent >= 99) return "final-handoff";
@@ -13969,12 +14354,12 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs18.mkdirSync(runtimeDir(root), { recursive: true });
-  fs18.writeFileSync(tierFile(root), tier + "\n");
+  fs19.mkdirSync(runtimeDir(root), { recursive: true });
+  fs19.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs18.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs19.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
@@ -13982,9 +14367,9 @@ function lastTier(root) {
 }
 
 // core/src/profile.ts
-var fs19 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
-var YAML7 = __toESM(require_dist());
+var fs20 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
+var YAML8 = __toESM(require_dist());
 var trFor5 = (lang) => (m) => pick(m, lang);
 var GENERIC = "generic";
 var GENERIC_FLOOR = Object.freeze({
@@ -13993,42 +14378,29 @@ var GENERIC_FLOOR = Object.freeze({
   sourceGlobs: Object.freeze(["src/**", "lib/**", "app/**"]),
   // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
   // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
-  deployCommands: Object.freeze([
-    "docker push",
-    "kubectl apply",
-    "helm upgrade",
-    "helm install",
-    "vercel deploy",
-    "vercel --prod",
-    "netlify deploy",
-    "fly deploy",
-    "wrangler deploy",
-    "serverless deploy",
-    "sst deploy",
-    "eb deploy",
-    "gcloud app deploy",
-    "npm publish",
-    "yarn publish",
-    "pnpm publish",
-    "cargo publish",
-    "gem push",
-    "twine upload",
-    "terraform apply",
-    "pulumi up"
-  ]),
+  /**
+   * [API-09] **정본은 한 곳이다 — 여기서 베끼지 않고 가져온다.**
+   *
+   * 예전에는 같은 21개 목록이 세 곳(`config.ts` · 여기 · `profiles/generic/profile.yaml`)에
+   * 리터럴로 있었고, 테스트는 **뒤의 두 벌만** 이었다. 세 값이 «우연히» 같았을 뿐이고,
+   * 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 배포 차단에 구멍이 난다.
+   * 목록이 셋이면 언제나 하나가 낡는다 — 그래서 `DEFAULT_CONFIG` 를 정본으로 삼는다.
+   * `profile.yaml` 은 남은 한 벌이고, 그 동치는 `profile.test.ts` 가 이미 지킨다.
+   */
+  deployCommands: Object.freeze([...DEFAULT_CONFIG.design_blocked_bash]),
   commands: Object.freeze({}),
   designSystemRoots: Object.freeze([]),
   origin: "floor",
   dir: ""
 });
-var localProfileDir = (root) => path16.join(harnessDir(root), "profile");
+var localProfileDir = (root) => path17.join(harnessDir(root), "profile");
 function bundledProfilesDir() {
-  return path16.resolve(__dirname, "..", "..", "profiles");
+  return path17.resolve(__dirname, "..", "..", "profiles");
 }
 var errMsg = (e) => e instanceof Error ? e.message : String(e);
 function isDir(p) {
   try {
-    return fs19.statSync(p).isDirectory();
+    return fs20.statSync(p).isDirectory();
   } catch {
     return false;
   }
@@ -14066,10 +14438,10 @@ function readList(m, key, fallback, yamlPath, problems, required, t) {
   return parsed.list;
 }
 function readCommands(dir, problems, t) {
-  const p = path16.join(dir, "commands.yaml");
+  const p = path17.join(dir, "commands.yaml");
   let text;
   try {
-    text = fs19.readFileSync(p, "utf8");
+    text = fs20.readFileSync(p, "utf8");
   } catch {
     problems.push(t({
       en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
@@ -14079,7 +14451,7 @@ function readCommands(dir, problems, t) {
   }
   let raw;
   try {
-    raw = YAML7.parse(text);
+    raw = YAML8.parse(text);
   } catch (e) {
     problems.push(t({
       en: `failed to parse ${p} (${errMsg(e)}) \u2014 continuing without a command mapping`,
@@ -14111,12 +14483,12 @@ function readCommands(dir, problems, t) {
   return out;
 }
 function readProfileDir(dir, origin, problems, t) {
-  const yamlPath = path16.join(dir, "profile.yaml");
+  const yamlPath = path17.join(dir, "profile.yaml");
   let text;
   try {
-    text = fs19.readFileSync(yamlPath, "utf8");
+    text = fs20.readFileSync(yamlPath, "utf8");
   } catch (e) {
-    if (fs19.existsSync(path16.join(dir, "commands.yaml"))) {
+    if (fs20.existsSync(path17.join(dir, "commands.yaml"))) {
       text = "name: local";
     } else {
       problems.push(t({
@@ -14128,7 +14500,7 @@ function readProfileDir(dir, origin, problems, t) {
   }
   let raw;
   try {
-    raw = YAML7.parse(text);
+    raw = YAML8.parse(text);
   } catch (e) {
     problems.push(t({
       en: `failed to parse ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
@@ -14144,7 +14516,7 @@ function readProfileDir(dir, origin, problems, t) {
     return null;
   }
   const m = raw;
-  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path16.basename(dir);
+  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path17.basename(dir);
   const description = typeof m.description === "string" ? m.description.trim() : void 0;
   return {
     name,
@@ -14173,7 +14545,7 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
   const problems = [];
   const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
   const local = localProfileDir(root);
-  if (fs19.existsSync(local)) {
+  if (fs20.existsSync(local)) {
     if (!isDir(local)) {
       problems.push(t({
         en: `${local} is not a directory \u2014 skipping the project-local profile`,
@@ -14192,8 +14564,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
         ko: `\uD504\uB85C\uD30C\uC77C \uC774\uB984 '${wanted}' \uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4(\uC601\uC22B\uC790\xB7. _ - \uB9CC \uD5C8\uC6A9) \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \`.harness/config.yaml\` \uC758 \`profile\` \uC744 \uACE0\uCCD0\uB77C`
       })
     );
-  } else if (isDir(path16.join(bundled, wanted))) {
-    const p = readProfileDir(path16.join(bundled, wanted), "bundled", problems, t);
+  } else if (isDir(path17.join(bundled, wanted))) {
+    const p = readProfileDir(path17.join(bundled, wanted), "bundled", problems, t);
     if (p) return { profile: p, problems };
   } else {
     problems.push(
@@ -14203,8 +14575,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
       })
     );
   }
-  if (wanted !== GENERIC && isDir(path16.join(bundled, GENERIC))) {
-    const p = readProfileDir(path16.join(bundled, GENERIC), "bundled", problems, t);
+  if (wanted !== GENERIC && isDir(path17.join(bundled, GENERIC))) {
+    const p = readProfileDir(path17.join(bundled, GENERIC), "bundled", problems, t);
     if (p) return { profile: p, problems };
   }
   problems.push(
@@ -14381,7 +14753,7 @@ function isHarnessStateShape(s) {
 function handleHook(root, event, input) {
   realCache = /* @__PURE__ */ new Map();
   try {
-    if (!fs20.existsSync(harnessDir(root))) return null;
+    if (!fs21.existsSync(harnessDir(root))) return null;
     let state;
     let degraded = null;
     try {
@@ -14391,7 +14763,7 @@ function handleHook(root, event, input) {
     } catch {
       let size = 0;
       try {
-        size = fs20.statSync(eventsPath(root)).size;
+        size = fs21.statSync(eventsPath(root)).size;
       } catch {
         size = 0;
       }
@@ -14417,8 +14789,11 @@ function handleHook(root, event, input) {
     switch (event) {
       case "session-start":
         return sessionStart(root, state, config, degraded, input);
-      case "pre-tool":
-        return preTool(root, state, config, input, degraded);
+      case "pre-tool": {
+        const out = preTool(root, state, config, input, degraded);
+        recordDenial(root, input, out);
+        return out;
+      }
       case "post-tool":
         return postTool(root, input);
       case "stop":
@@ -14436,9 +14811,9 @@ function handleHook(root, event, input) {
 function logHookError(root, event, err) {
   try {
     const dir = runtimeDir(root);
-    fs20.mkdirSync(dir, { recursive: true });
-    fs20.appendFileSync(
-      path17.join(dir, "hook-errors.log"),
+    fs21.mkdirSync(dir, { recursive: true });
+    fs21.appendFileSync(
+      path18.join(dir, "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${event} ${String(err)}
 `
     );
@@ -14630,6 +15005,30 @@ function recentTurnLog(body) {
   if (!log) return "(none)";
   return log.split("\n").slice(-5).map((l) => sanitizeUntrusted(l)).join("\n");
 }
+var DENIALS_KEEP = 200;
+var DENIALS_ROTATE_BYTES = 128 * 1024;
+function recordDenial(root, input, out) {
+  try {
+    const d = out?.hookSpecificOutput;
+    if (!d || d.permissionDecision !== "deny") return;
+    const ti = input.tool_input ?? {};
+    const target = String(ti.file_path ?? ti.command ?? ti.path ?? "");
+    const line = JSON.stringify({
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      tool: String(input.tool_name ?? ""),
+      target: maskSecrets(oneLine(target)).slice(0, 300),
+      reason: maskSecrets(oneLine(String(d.permissionDecisionReason ?? ""))).slice(0, 400)
+    });
+    const p = denialsPath(root);
+    fs21.mkdirSync(path18.dirname(p), { recursive: true });
+    fs21.appendFileSync(p, line + "\n");
+    if (fs21.statSync(p).size > DENIALS_ROTATE_BYTES) {
+      const kept = fs21.readFileSync(p, "utf8").split("\n").filter(Boolean).slice(-DENIALS_KEEP);
+      fs21.writeFileSync(p, kept.join("\n") + "\n");
+    }
+  } catch {
+  }
+}
 function deny(reason, degraded, lang = "en") {
   const tag = degraded ? lang === "ko" ? ` [state \uC190\uC0C1 \u2014 harness doctor --repair \uAD8C\uC7A5${degraded.corruptLines > 0 ? `; \uC800\uB110 ${degraded.corruptLines}\uC904 \uC190\uC0C1` : ""}]` : ` [state damaged \u2014 run harness doctor --repair${degraded.corruptLines > 0 ? `; ${degraded.corruptLines} journal line(s) corrupt` : ""}]` : "";
   return {
@@ -14650,27 +15049,27 @@ function realOrSelf(p) {
 }
 function realOrSelfUncached(p) {
   try {
-    return fs20.realpathSync.native(p);
+    return fs21.realpathSync.native(p);
   } catch {
     try {
-      const target = fs20.readlinkSync(p);
-      return realOrSelf(path17.isAbsolute(target) ? target : path17.join(path17.dirname(p), target));
+      const target = fs21.readlinkSync(p);
+      return realOrSelf(path18.isAbsolute(target) ? target : path18.join(path18.dirname(p), target));
     } catch {
     }
-    const parent = path17.dirname(p);
+    const parent = path18.dirname(p);
     if (parent === p) return p;
-    return path17.join(realOrSelf(parent), path17.basename(p));
+    return path18.join(realOrSelf(parent), path18.basename(p));
   }
 }
 function relPath(root, p) {
-  return path17.relative(root, path17.resolve(root, p));
+  return path18.relative(root, path18.resolve(root, p));
 }
 function realRelPath(root, p) {
-  const abs = path17.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
-  return path17.relative(realOrSelf(root), realOrSelf(abs));
+  const abs = path18.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
+  return path18.relative(realOrSelf(root), realOrSelf(abs));
 }
 function isOutsideRoot(rel) {
-  return rel === ".." || rel.startsWith(`..${path17.sep}`) || path17.isAbsolute(rel);
+  return rel === ".." || rel.startsWith(`..${path18.sep}`) || path18.isAbsolute(rel);
 }
 var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
 var DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join("|")})$`);
@@ -14703,19 +15102,19 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
           continue;
         }
         try {
-          const st0 = fs20.statSync(path17.resolve(root, candidate));
+          const st0 = fs21.statSync(path18.resolve(root, candidate));
           if (!st0.isFile()) continue;
           if (st0.size > SCRIPT_MAX_BYTES) {
             unread.push(candidate);
             continue;
           }
-          outside.push(fs20.readFileSync(path17.resolve(root, candidate), "utf8"));
+          outside.push(fs21.readFileSync(path18.resolve(root, candidate), "utf8"));
         } catch {
         }
         continue;
       }
-      const abs = path17.resolve(root, candidate);
-      const st = fs20.statSync(abs);
+      const abs = path18.resolve(root, candidate);
+      const st = fs21.statSync(abs);
       if (!st.isFile()) continue;
       if (atLimit) {
         tooDeep.push(candidate);
@@ -14725,7 +15124,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
         unread.push(candidate);
         continue;
       }
-      const body = fs20.readFileSync(abs, "utf8");
+      const body = fs21.readFileSync(abs, "utf8");
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);
       out.push(...sub.bodies);
@@ -14738,7 +15137,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
   if (npmRun) {
     try {
-      const pkg = JSON.parse(fs20.readFileSync(path17.join(root, "package.json"), "utf8"));
+      const pkg = JSON.parse(fs21.readFileSync(path18.join(root, "package.json"), "utf8"));
       const script = pkg.scripts?.[npmRun[1]];
       if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
@@ -14765,11 +15164,11 @@ function interpreterProgramBodies(root, cmd) {
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     try {
-      const abs = path17.resolve(root, candidate);
-      const st = fs20.statSync(abs);
+      const abs = path18.resolve(root, candidate);
+      const st = fs21.statSync(abs);
       if (!st.isFile()) continue;
       if (st.size > SCRIPT_MAX_BYTES) continue;
-      bodies.push(fs20.readFileSync(abs, "utf8"));
+      bodies.push(fs21.readFileSync(abs, "utf8"));
     } catch {
     }
   }
@@ -14795,11 +15194,11 @@ function readPatchTargets(root, files) {
   if (files.length === 0) return null;
   const out = [];
   for (const rel of files) {
-    const abs = path17.isAbsolute(rel) ? rel : path17.resolve(root, rel);
+    const abs = path18.isAbsolute(rel) ? rel : path18.resolve(root, rel);
     let body;
     try {
-      if (fs20.statSync(abs).size > PATCH_READ_CAP) return null;
-      body = fs20.readFileSync(abs, "utf8");
+      if (fs21.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs21.readFileSync(abs, "utf8");
     } catch {
       return null;
     }
@@ -14879,22 +15278,22 @@ function protectedByGlob(target) {
   return CORE_FILES.find((f2) => re.test(f2)) ?? POLICY_PREFIXES.map((pre) => `${pre}profile.yaml`).find((f2) => re.test(f2));
 }
 function harnessProgramFiles() {
-  const install = path17.resolve(__dirname, "..", "..");
+  const install = path18.resolve(__dirname, "..", "..");
   return [
-    path17.join(install, "core", "dist", "cli.js"),
-    path17.join(install, "core", "dist", "mcp.js"),
-    path17.join(install, "core", "src", "cli.ts"),
-    path17.join(install, "core", "src", "mcp.ts"),
-    path17.join(install, "core", "src", "hook.ts"),
-    path17.join(install, "bin", "harness"),
-    path17.join(install, "bin", "harness-hook")
+    path18.join(install, "core", "dist", "cli.js"),
+    path18.join(install, "core", "dist", "mcp.js"),
+    path18.join(install, "core", "src", "cli.ts"),
+    path18.join(install, "core", "src", "mcp.ts"),
+    path18.join(install, "core", "src", "hook.ts"),
+    path18.join(install, "bin", "harness"),
+    path18.join(install, "bin", "harness-hook")
   ];
 }
 var INTERPRETER_HEADS = new RegExp(
   `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join("|")})$`
 );
 function runsProgramDirectly(root, line, prog) {
-  const same = (t) => realOrSelf(path17.isAbsolute(t) ? t : path17.resolve(root, t)) === realOrSelf(prog);
+  const same = (t) => realOrSelf(path18.isAbsolute(t) ? t : path18.resolve(root, t)) === realOrSelf(prog);
   const tokens = line.split(/\s+/).filter(Boolean);
   const first = tokens[0] ?? "";
   if (first && same(first)) return true;
@@ -14907,7 +15306,7 @@ function copiesHarnessProgram(root, cmd) {
   const real = progs.map((f2) => realOrSelf(f2));
   const lines = commandLines(cmd);
   for (const m of pathLikeMentions(cmd)) {
-    const abs = realOrSelf(path17.isAbsolute(m) ? m : path17.resolve(root, m));
+    const abs = realOrSelf(path18.isAbsolute(m) ? m : path18.resolve(root, m));
     const i = real.indexOf(abs);
     if (i === -1) continue;
     if (lines.some((l) => runsProgramDirectly(root, l, progs[i]))) continue;
@@ -14977,12 +15376,12 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   }
   const aliasOfCore = (() => {
     try {
-      const abs = path17.resolve(root, raw);
-      const st = fs20.statSync(abs);
+      const abs = path18.resolve(root, raw);
+      const st = fs21.statSync(abs);
       if (!st.isFile() || st.nlink < 2) return void 0;
       for (const core of CORE_FILES) {
         try {
-          const cs = fs20.statSync(path17.join(root, core));
+          const cs = fs21.statSync(path18.join(root, core));
           if (cs.dev === st.dev && cs.ino === st.ino) return core;
         } catch {
         }
@@ -15022,7 +15421,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     );
   }
   const bundleDir = realOrSelf(bundledProfilesDir());
-  const bundleHit = [raw].map((r) => realOrSelf(path17.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path17.sep}`));
+  const bundleHit = [raw].map((r) => realOrSelf(path18.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path18.sep}`));
   if (raw && bundleHit) {
     return deny(
       L(
@@ -15049,7 +15448,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   if (!coreOnly && SHIP_PHASES.includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
-    const isNew = inRoot && target !== "" && !fs20.existsSync(path17.join(root, target));
+    const isNew = inRoot && target !== "" && !fs21.existsSync(path18.join(root, target));
     if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
         // [UTIL-149] **강제하지 않는 것을 강제한다고 말하지 않는다.** 예전 문구는 「이 구간은
@@ -15246,8 +15645,8 @@ function preTool(root, state, config, input, degraded) {
       const copied = copiesHarnessProgram(root, cmd);
       if (copied) {
         return deny(L(
-          `This copies the harness's own program (${path17.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
-          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path17.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
+          `This copies the harness's own program (${path18.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
+          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path18.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
         ), degraded, lang);
       }
       const blind0 = scan.blindTargets[0];
@@ -15445,317 +15844,6 @@ ${note}` };
     });
   }
   return withNote(null);
-}
-
-// core/src/adr.ts
-var fs21 = __toESM(require("fs"));
-var path18 = __toESM(require("path"));
-var YAML8 = __toESM(require_dist());
-var adrDir = (root) => path18.join(designDir(root), "adr");
-var adrPath = (root, id) => path18.join(adrDir(root), `${id}.yaml`);
-var adrHistoryPath = (root, id, version) => path18.join(adrDir(root), `${id}.v${version}.yaml`);
-var CUSTOM_OPTION_ID = "custom";
-var MIN_OPTIONS = 2;
-var MAX_OPTIONS = 4;
-function writeAdrFile(target, rec) {
-  fs21.mkdirSync(path18.dirname(target), { recursive: true });
-  const tmp = `${target}.tmp-${process.pid}`;
-  fs21.writeFileSync(tmp, YAML8.stringify(rec));
-  fs21.renameSync(tmp, target);
-}
-function toAdrRecord(v) {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v;
-  if (typeof o.id !== "string" || !o.id) return null;
-  if (typeof o.question !== "string") return null;
-  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
-  if (o.status !== "proposed" && o.status !== "accepted" && o.status !== "superseded") return null;
-  const options = (Array.isArray(o.options) ? o.options : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({
-    id: String(e.id ?? ""),
-    title: String(e.title ?? ""),
-    pros: Array.isArray(e.pros) ? e.pros.map(String) : [],
-    cons: Array.isArray(e.cons) ? e.cons.map(String) : []
-  }));
-  const rejected = (Array.isArray(o.rejected) ? o.rejected : []).filter((e) => typeof e === "object" && e !== null).map((e) => ({ id: String(e.id ?? ""), reason: String(e.reason ?? "") }));
-  const rec = {
-    id: o.id,
-    phase: o.phase,
-    question: o.question,
-    options,
-    rejected,
-    status: o.status,
-    version: o.version
-  };
-  if (typeof o.recommended === "string" && o.recommended) rec.recommended = o.recommended;
-  if (typeof o.chosen === "string" && o.chosen) rec.chosen = o.chosen;
-  if (typeof o.rationale === "string" && o.rationale) rec.rationale = o.rationale;
-  return rec;
-}
-function getAdr(root, id) {
-  const p = adrPath(root, id);
-  if (!fs21.existsSync(p)) return void 0;
-  const parsed = toAdrRecord(YAML8.parse(fs21.readFileSync(p, "utf8")));
-  if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} \u2014 restore it from git history`, ko: `ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
-  return parsed;
-}
-function listAdrs(root) {
-  const dir = adrDir(root);
-  if (!fs21.existsSync(dir)) return [];
-  const out = [];
-  for (const f2 of fs21.readdirSync(dir).sort()) {
-    if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
-    if (/\.v\d+\.yaml$/.test(f2)) continue;
-    try {
-      const rec = toAdrRecord(YAML8.parse(fs21.readFileSync(path18.join(dir, f2), "utf8")));
-      if (rec) out.push(rec);
-    } catch {
-      continue;
-    }
-  }
-  return out;
-}
-function assertOptions(root, options, recommended) {
-  if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
-    throw new Error(
-      tr(root, {
-        en: `An ADR needs ${MIN_OPTIONS}\u2013${MAX_OPTIONS} options (currently ${options.length}) \u2014 a one-option decision is an announcement, not a decision. Offer comparable alternatives with trade-offs.`,
-        ko: `ADR \uC120\uD0DD\uC9C0\uB294 ${MIN_OPTIONS}~${MAX_OPTIONS}\uAC1C\uC5EC\uC57C \uD55C\uB2E4(\uD604\uC7AC ${options.length}\uAC1C) \u2014 \uC120\uD0DD\uC9C0 \uD558\uB098\uC9DC\uB9AC \uACB0\uC815\uC740 \uACB0\uC815\uC774 \uC544\uB2C8\uB77C \uD1B5\uBCF4\uB2E4. \uBE44\uAD50 \uAC00\uB2A5\uD55C \uB300\uC548\uC744 \uD2B8\uB808\uC774\uB4DC\uC624\uD504\uC640 \uD568\uAED8 \uC81C\uC2DC\uD558\uB77C.`
-      })
-    );
-  }
-  if (recommended !== void 0 && !options.some((o) => o.id === recommended)) {
-    throw new Error(
-      tr(root, { en: `The recommendation "${recommended}" is not among the options \u2014 it must be one of (${options.map((o) => o.id).join(", ")})`, ko: `\uCD94\uCC9C\uC548 "${recommended}" \uC774 \uC120\uD0DD\uC9C0\uC5D0 \uC5C6\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uC911 \uD558\uB098\uC5EC\uC57C \uD55C\uB2E4(${options.map((o) => o.id).join(", ")})` })
-    );
-  }
-}
-function requireAdr(root, id) {
-  const rec = getAdr(root, id);
-  if (!rec) {
-    throw new Error(tr(root, { en: `No ADR record ${id} (${adrPath(root, id)}) \u2014 propose it first`, ko: `ADR ${id} \uAE30\uB85D\uC774 \uC5C6\uB2E4 (${adrPath(root, id)}) \u2014 \uBA3C\uC800 \uC81C\uC548(propose)\uD558\uB77C` }));
-  }
-  return rec;
-}
-var INDEX_STATUS = {
-  proposed: "draft",
-  accepted: "approved",
-  superseded: "stale"
-};
-function syncIndex(root, rec) {
-  const prev = getNode(root, rec.id);
-  upsertNode(root, {
-    id: rec.id,
-    title: rec.question,
-    parent: prev?.parent,
-    doc_anchor: prev?.doc_anchor,
-    version: rec.version,
-    status: INDEX_STATUS[rec.status]
-  });
-}
-function referencingWaves(root, id) {
-  const affected = [];
-  const unverifiable = [];
-  if (!fs21.existsSync(wavesDir(root))) return { affected, unverifiable };
-  for (const f2 of fs21.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
-    const stem = f2.replace(/\.md$/, "");
-    let txt;
-    try {
-      txt = fs21.readFileSync(path18.join(wavesDir(root), f2), "utf8");
-    } catch {
-      unverifiable.push(stem);
-      continue;
-    }
-    let meta;
-    try {
-      meta = parseWave(txt).meta;
-    } catch {
-      unverifiable.push(stem);
-      continue;
-    }
-    if (meta.design_refs.includes(id) && meta.status !== "stale") affected.push(stem);
-  }
-  return { affected, unverifiable };
-}
-function proposeAdr(root, input) {
-  if (!input.id.startsWith("ADR-")) {
-    throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (\xA73-2 ledger id convention)`, ko: `ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)` }));
-  }
-  if (fs21.existsSync(adrPath(root, input.id))) {
-    throw new Error(
-      tr(root, {
-        en: `ADR ${input.id} already exists \u2014 do not overwrite a decision. To change it, revise formally with reviseAdr (version++ and STALE propagation).`,
-        ko: `ADR ${input.id} \uAC00 \uC774\uBBF8 \uC788\uB2E4 \u2014 \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F0\uC9C0 \uB9C8\uB77C. \uBC14\uAFB8\uB824\uBA74 reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815\uD558\uB77C(version++ + STALE \uC804\uD30C).`
-      })
-    );
-  }
-  assertOptions(root, input.options, input.recommended);
-  const rec = {
-    id: input.id,
-    phase: input.phase,
-    question: input.question,
-    options: input.options,
-    ...input.recommended ? { recommended: input.recommended } : {},
-    rejected: [],
-    status: "proposed",
-    version: 1
-  };
-  appendEvent(root, "adr-proposed", {
-    id: rec.id,
-    phase: rec.phase,
-    version: rec.version,
-    options: rec.options.map((o) => o.id),
-    recommended: rec.recommended
-  });
-  writeAdrFile(adrPath(root, rec.id), rec);
-  syncIndex(root, rec);
-  return rec;
-}
-function decideAdr(root, id, input) {
-  const prev = requireAdr(root, id);
-  if (prev.status !== "proposed") {
-    throw new Error(
-      tr(root, {
-        en: `ADR ${id} is not proposed (currently ${prev.status}) \u2014 a recorded decision cannot be overwritten. Revise it formally (version++ and STALE propagation), then decide again.`,
-        ko: `ADR ${id} \uB294 proposed \uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC ${prev.status}) \u2014 \uAE30\uB85D\uB41C \uACB0\uC815\uC744 \uB36E\uC5B4\uC4F8 \uC218 \uC5C6\uB2E4. reviseAdr \uB85C \uC815\uC2DD \uAC1C\uC815(version++ + STALE \uC804\uD30C)\uD55C \uB4A4 \uB2E4\uC2DC \uCC44\uD0DD\uD558\uB77C.`
-      })
-    );
-  }
-  const chosenRaw = input.chosen.trim();
-  if (!chosenRaw) throw new Error(tr(root, { en: `The chosen value for ADR ${id} is empty \u2014 give an option id or a free-form value`, ko: `ADR ${id} \uCC44\uD0DD \uAC12\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uC120\uD0DD\uC9C0 id \uB610\uB294 \uC790\uC720 \uC815\uC758 \uAC12\uC744 \uB123\uC5B4\uB77C` }));
-  if (!input.rationale.trim()) {
-    throw new Error(
-      tr(root, {
-        en: `ADR ${id} has no rationale \u2014 a decision log without one tells the reader nothing six months later. Leave at least one line on why this option won.`,
-        ko: `ADR ${id} \uCC44\uD0DD \uADFC\uAC70\uAC00 \uC5C6\uB2E4 \u2014 \uADFC\uAC70 \uC5C6\uB294 \uACB0\uC815 \uAE30\uB85D\uC740 \uBC18\uB144 \uB4A4 \uC77D\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uC544\uBB34 \uC815\uBCF4\uB3C4 \uC8FC\uC9C0 \uC54A\uB294\uB2E4. \uC65C \uC774 \uC548\uC744 \uACE8\uB790\uB294\uC9C0 \uD55C \uC904\uC774\uB77C\uB3C4 \uB0A8\uACA8\uB77C.`
-      })
-    );
-  }
-  const known = prev.options.some((o) => o.id === chosenRaw);
-  const options = known ? prev.options : [...prev.options, { id: CUSTOM_OPTION_ID, title: chosenRaw, pros: [], cons: [] }];
-  const chosen = known ? chosenRaw : CUSTOM_OPTION_ID;
-  const missing = [];
-  const rejected = [];
-  for (const o of options) {
-    if (o.id === chosen) continue;
-    const reason = (input.rejectedReasons[o.id] ?? "").trim();
-    if (!reason) {
-      missing.push(o.id);
-      continue;
-    }
-    rejected.push({ id: o.id, reason });
-  }
-  if (missing.length > 0) {
-    throw new Error(
-      tr(root, {
-        en: `Options in ADR ${id} with no rejection reason: ${missing.join(", ")} \u2014 a decision log without them cannot answer "why not that one". Give a reason for every option you did not take.`,
-        ko: `ADR ${id} \uC758 \uAE30\uAC01 \uC0AC\uC720\uAC00 \uBE60\uC9C4 \uC120\uD0DD\uC9C0: ${missing.join(", ")} \u2014 \uAE30\uAC01 \uC0AC\uC720 \uC5C6\uB294 \uACB0\uC815 \uB85C\uADF8\uB294 "\uC65C \uC800\uAC74 \uC548 \uD588\uB098"\uC5D0 \uB2F5\uD558\uC9C0 \uBABB\uD55C\uB2E4. \uCC44\uD0DD\uD558\uC9C0 \uC54A\uC740 \uBAA8\uB4E0 \uC120\uD0DD\uC9C0\uC5D0 \uC0AC\uC720\uB97C \uB2EC\uC544\uB77C.`
-      })
-    );
-  }
-  const rec = {
-    ...prev,
-    options,
-    chosen,
-    rationale: input.rationale.trim(),
-    rejected,
-    status: "accepted"
-  };
-  appendEvent(root, "adr-decided", {
-    id: rec.id,
-    phase: rec.phase,
-    version: rec.version,
-    chosen: rec.chosen,
-    custom: !known,
-    rejected: rec.rejected.map((r) => r.id)
-  });
-  writeAdrFile(adrPath(root, rec.id), rec);
-  syncIndex(root, rec);
-  return rec;
-}
-function reviseAdr(root, id, input) {
-  const prev = requireAdr(root, id);
-  const options = input.options ?? prev.options;
-  const recommended = input.options ? input.recommended : input.recommended ?? prev.recommended;
-  assertOptions(root, options, recommended);
-  const { affected, unverifiable } = referencingWaves(root, id);
-  const rec = {
-    id: prev.id,
-    phase: prev.phase,
-    question: input.question ?? prev.question,
-    options,
-    ...recommended ? { recommended } : {},
-    rejected: [],
-    status: "proposed",
-    version: prev.version + 1
-  };
-  appendEvent(root, "adr-revised", {
-    id: rec.id,
-    phase: rec.phase,
-    from: prev.version,
-    to: rec.version,
-    affected,
-    unverifiable
-  });
-  writeAdrFile(adrHistoryPath(root, id, prev.version), { ...prev, status: "superseded" });
-  writeAdrFile(adrPath(root, id), rec);
-  syncIndex(root, rec);
-  for (const w of affected) markStale(root, w);
-  return { record: rec, affectedWaves: affected, unverifiable };
-}
-var STATUS_LABEL = {
-  proposed: { en: "proposed", ko: "\uC81C\uC548\uB428" },
-  accepted: { en: "accepted", ko: "\uCC44\uD0DD\uB428" },
-  superseded: { en: "superseded", ko: "\uB300\uCCB4\uB428" }
-};
-var M2 = {
-  status: { en: "Status", ko: "\uC0C1\uD0DC" },
-  options: { en: "Options", ko: "\uC120\uD0DD\uC9C0" },
-  chosenMark: { en: " \u2190 chosen", ko: " \u2190 \uCC44\uD0DD" },
-  recommendedMark: { en: " \u2190 recommended", ko: " \u2190 \uCD94\uCC9C" },
-  pros: { en: "Pros", ko: "\uC7A5\uC810" },
-  cons: { en: "Cons", ko: "\uB2E8\uC810" },
-  unstated: { en: "(not stated)", ko: "(\uBBF8\uAE30\uC7AC)" },
-  recommendation: { en: "Recommendation", ko: "\uCD94\uCC9C\uC548" },
-  goneFromOptions: { en: "(no longer among the options)", ko: "(\uC120\uD0DD\uC9C0\uC5D0\uC11C \uC0AC\uB77C\uC9D0)" },
-  decision: { en: "Decision", ko: "\uACB0\uC815" },
-  chosen: { en: "Chosen", ko: "\uCC44\uD0DD" },
-  rationale: { en: "Rationale", ko: "\uADFC\uAC70" },
-  rejectedReasons: { en: "Rejection reasons", ko: "\uAE30\uAC01 \uC0AC\uC720" },
-  none: { en: "(none)", ko: "(\uC5C6\uC74C)" }
-};
-function renderAdrPacket(rec, lang = DEFAULT_LANG) {
-  const t = (m) => pick(m, lang);
-  const L = [];
-  L.push(`# ${rec.id} \xB7 ${rec.phase} \u2014 ${rec.question}`, "");
-  L.push(`- ${t(M2.status)}: ${t(STATUS_LABEL[rec.status])} (v${rec.version})`, "");
-  L.push(`## ${t(M2.options)}`, "");
-  for (const o of rec.options) {
-    const mark = o.id === rec.chosen ? t(M2.chosenMark) : o.id === rec.recommended ? t(M2.recommendedMark) : "";
-    L.push(`### ${o.title} (\`${o.id}\`)${mark}`);
-    L.push(`- ${t(M2.pros)}: ${o.pros.length ? o.pros.join(", ") : t(M2.unstated)}`);
-    L.push(`- ${t(M2.cons)}: ${o.cons.length ? o.cons.join(", ") : t(M2.unstated)}`, "");
-  }
-  if (rec.recommended) {
-    const r = rec.options.find((o) => o.id === rec.recommended);
-    L.push(`## ${t(M2.recommendation)}`, "", `\`${rec.recommended}\` \u2014 ${r ? r.title : t(M2.goneFromOptions)}`, "");
-  }
-  if (rec.chosen) {
-    const c = rec.options.find((o) => o.id === rec.chosen);
-    L.push(`## ${t(M2.decision)}`, "");
-    L.push(`- ${t(M2.chosen)}: \`${rec.chosen}\` \u2014 ${c ? c.title : t(M2.goneFromOptions)}`);
-    L.push(`- ${t(M2.rationale)}: ${rec.rationale ?? t(M2.unstated)}`);
-    L.push(`- ${t(M2.rejectedReasons)}:`);
-    if (rec.rejected.length === 0) {
-      L.push(`  - ${t(M2.none)}`);
-    } else {
-      for (const r of rec.rejected) {
-        const o = rec.options.find((x) => x.id === r.id);
-        L.push(`  - \`${r.id}\`${o ? ` (${o.title})` : ""}: ${r.reason}`);
-      }
-    }
-    L.push("");
-  }
-  return L.join("\n");
 }
 
 // core/src/migrate.ts
@@ -16112,6 +16200,28 @@ function warnUnresolvedEvidence(root, evidence, lang) {
   if (fs23.existsSync(path20.resolve(root, p0))) return;
   console.error(lang === "ko" ? `\uACBD\uACE0: \uADFC\uAC70 \uACBD\uB85C\uAC00 \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC5C6\uB2E4 \u2014 ${p0}. \uACB0\uD568\uC740 \uB4F1\uC7AC\uD588\uB2E4. \uC2E4\uC81C \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uAC8C \uACE0\uCE58\uB824\uBA74 \`harness ship defect update <id> --evidence <\uACBD\uB85C:\uC904>\` \uC744 \uC4F0\uB77C.` : `Warning: the evidence path does not exist in this project \u2014 ${p0}. The defect was recorded. Point it at a real file with \`harness ship defect update <id> --evidence <path:line>\`.`);
 }
+var DIVERGE_CHECK_MAX_BYTES = 8 * 1024 * 1024;
+function warnIfDiverged(root, current) {
+  try {
+    const p = eventsPath(root);
+    if (fs23.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;
+    const { events } = readJournal(root);
+    const replayed = replayState(events);
+    const diffs = [];
+    if (replayed.phase !== current.phase) diffs.push(`phase: state=${current.phase} journal=${replayed.phase}`);
+    for (const ph of Object.keys({ ...replayed.gates, ...current.gates })) {
+      const a = current.gates?.[ph]?.status;
+      const b = replayed.gates?.[ph]?.status;
+      if (a !== b) diffs.push(`gate ${ph}: state=${a ?? "none"} journal=${b ?? "none"}`);
+    }
+    if (diffs.length === 0) return;
+    console.error(tr(root, {
+      en: `WARNING: state.json disagrees with the event journal (${diffs.join("; ")}). The journal is the record of truth and state.json is derived from it, so something changed state.json outside the harness \u2014 a branch switch, an external tool, or a hand edit. The hooks enforce what state.json says, so this is enforcing the wrong rules. Run \`harness doctor\` to see the full comparison, then \`harness doctor --repair\` to rebuild.`,
+      ko: `\uACBD\uACE0: state.json \uC774 \uC774\uBCA4\uD2B8 \uC800\uB110\uACFC \uB2E4\uB974\uB2E4 (${diffs.join("; ")}). \uC800\uB110\uC774 \uC815\uBCF8\uC774\uACE0 state.json \uC740 \uAC70\uAE30\uC11C \uD30C\uC0DD\uB41C \uAC12\uC774\uBBC0\uB85C, \uD558\uB124\uC2A4 \uBC16\uC5D0\uC11C state.json \uC774 \uBC14\uB00C\uC5C8\uB2E4\uB294 \uB73B\uC774\uB2E4 \u2014 \uBE0C\uB79C\uCE58 \uC804\uD658\xB7\uC678\uBD80 \uB3C4\uAD6C\xB7\uC190 \uD3B8\uC9D1. \uD6C5\uC740 state.json \uC774 \uB9D0\uD558\uB294 \uB300\uB85C \uAC15\uC81C\uD558\uBBC0\uB85C \uC9C0\uAE08\uC740 **\uD2C0\uB9B0 \uADDC\uCE59\uC744 \uAC15\uC81C\uD558\uACE0 \uC788\uB2E4**. \`harness doctor\` \uB85C \uC804\uCCB4 \uBE44\uAD50\uB97C \uBCF4\uACE0 \`harness doctor --repair\` \uB85C \uC800\uB110\uC5D0\uC11C \uB2E4\uC2DC \uB9CC\uB4E4\uC5B4\uB77C.`
+    }));
+  } catch {
+  }
+}
 function run(argv, root) {
   const [cmd, sub, ...rest] = argv;
   if (cmd === "hook") {
@@ -16226,9 +16336,12 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
           "\uACE0\uC9C0: `harness gate approve` \uB97C \uAD8C\uD55C allowlist \uC5D0 \uB123\uC9C0 \uB9C8\uB77C. \uAC8C\uC774\uD2B8\uB294 \uAD8C\uD55C \uB2E4\uC774\uC5BC\uB85C\uADF8\uC5D0 \uAE30\uB300\uC5B4 \u300C\uC2B9\uC778\uC758 \uCD5C\uC885 \uD074\uB9AD\uC740 \uC0AC\uB78C\u300D\uC744 \uC9C0\uD0A8\uB2E4 \u2014 allowlist \uC5D0 \uB123\uC73C\uBA74 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2A4\uC2A4\uB85C \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC788\uB2E4."
         ));
         return 0;
-      case "status":
-        console.log(JSON.stringify(readState(root), null, 2));
+      case "status": {
+        const st = readState(root);
+        console.log(JSON.stringify(st, null, 2));
+        warnIfDiverged(root, st);
         return 0;
+      }
       case "doctor": {
         if (argv.includes("--accept-policy") && process.env.HARNESS_ACCEPT_POLICY !== "1") {
           throw new Error(
@@ -16393,7 +16506,8 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
               return 0;
             }
             if (op === "update") {
-              const d = updateDefect(root, flag(args, "id") ?? rest[1], {
+              const defectId = req(flag(args, "id") ?? rest[1], "harness ship defect update <id> --status <s>");
+              const d = updateDefect(root, defectId, {
                 status: flag(args, "status"),
                 deferReason: flag(args, "defer-reason"),
                 evidence: flag(args, "evidence")
@@ -16583,7 +16697,8 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           }
           case "cmd": {
             const { profile: p, problems } = inspectProfile(root, flag(args, "name"));
-            const c = commandFor(p, rest[0]);
+            const cmdKey = req(rest[0], "harness profile cmd <key>");
+            const c = commandFor(p, cmdKey);
             if (!c) {
               const localFile = path20.join(localProfileDir(root), "commands.yaml");
               const where = p.origin === "local" && p.dir ? path20.join(p.dir, "commands.yaml") : L(`${localFile} (project-local, always wins)`, `${localFile} (\uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \u2014 \uD56D\uC0C1 \uC6B0\uC120)`);
@@ -16765,6 +16880,13 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
           case "rtm":
             console.log(renderRtm(root));
             return 0;
+          // [OPS-07] 막힌 일을 되짚는 창구. 조회 전용이라 저널에 사건을 남기지 않는다.
+          case "denials": {
+            const args = [sub, ...rest];
+            const n = Number(flag(args, "limit") ?? 20);
+            console.log(renderDenials(root, Number.isFinite(n) && n > 0 ? Math.floor(n) : 20));
+            return 0;
+          }
           case "hub":
             console.log(buildHub(root));
             return 0;
@@ -16809,7 +16931,8 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             return 0;
           }
           case "revise": {
-            const { record, affectedWaves, unverifiable } = reviseAdr(root, rest[0], {
+            const adrId = req(rest[0], "harness adr revise <ADR-x> --question <q>");
+            const { record, affectedWaves, unverifiable } = reviseAdr(root, adrId, {
               question: flag(args, "question")
             });
             console.log(L(`${record.id} \u2192 v${record.version} \xB7 STALE waves: ${affectedWaves.join(", ") || "none"}`, `${record.id} \u2192 v${record.version} \xB7 STALE \uC6E8\uC774\uBE0C: ${affectedWaves.join(", ") || "\uC5C6\uC74C"}`));
@@ -17007,6 +17130,10 @@ Next: publish it as a claude.ai artifact, then \`harness doc url ${id} <url>\``,
       }
       case "backtrack": {
         if (sub === "clear") {
+          if (readState(root).backtrack === null) {
+            console.log(L("No backtrack in progress \u2014 nothing to clear.", "\uC9C4\uD589 \uC911\uC778 \uC5ED\uD589\uC774 \uC5C6\uB2E4 \u2014 \uC885\uB8CC\uD560 \uAC83\uC774 \uC5C6\uB2E4."));
+            return 0;
+          }
           appendEvent(root, "backtrack-cleared", {});
           writeState(root, { ...readState(root), backtrack: null });
           console.log(L("Backtrack ended", "\uC5ED\uD589 \uC885\uB8CC"));

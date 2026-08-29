@@ -96,6 +96,7 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'packet', args: '<P>', summary: M('Render the review packet for a phase.', '해당 페이즈의 리뷰 패킷을 렌더링한다.') },
       { name: 'rtm', summary: M('Render the requirements traceability matrix.', '요구사항 추적 매트릭스를 렌더링한다.') },
       { name: 'hub', summary: M('Render the artifact hub (document registry + artifact URLs).', '산출물 허브(문서 레지스트리 + 아티팩트 URL)를 렌더링한다.') },
+      { name: 'denials', args: '[--limit <n>]', summary: M('Show recent tool calls the hooks denied.', '훅이 최근에 거부한 도구 호출을 보여 준다.') },
     ],
   },
   {

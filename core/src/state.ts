@@ -1,8 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  harnessDir, statePath, wavesDir, designDir, ledgerPath, configPath, runtimeDir, eventsPath,
-} from './paths';
+import { harnessDir, statePath, wavesDir, designDir, ledgerPath, configPath, runtimeDir, eventsPath, presence } from './paths';
 import type { HarnessState } from './types';
 import { tr } from './tr';
 
@@ -106,6 +104,21 @@ export function readState(root: string): HarnessState {
         ko: `state.json 이 손상돼 해석할 수 없다 (${(e as Error).message}) — 상태 저장소는 파생물이라 `
           + '이벤트 저널로 다시 만들 수 있다: `harness doctor --repair` 를 실행하라. '
           + '`harness doctor` 만 실행하면 아무것도 바꾸지 않고 진단만 한다.',
+      }));
+    }
+    /**
+     * [SHIP-07] 「못 읽는다」를 「없다」로 뭉개지 않는다. `chmod 000 .harness` 상태에서 예전에는
+     * 「state.json 이 없다 → `doctor --repair`」라고 했는데, 파일은 멀쩡히 있고 `--repair` 도
+     * 같은 권한에 막힌다 — 처방이 통하지 않는 막다른 길이었다.
+     */
+    if (hasHarness(root) && presence(statePath(root)) === 'unreadable') {
+      throw new Error(tr(root, {
+        en: `state.json cannot be read — this is a permission problem, not a missing file. `
+          + `Restore access (\`chmod u+rx ${harnessDir(root)}\` and \`chmod u+r ${statePath(root)}\`), `
+          + 'then run `harness doctor`. `--repair` cannot help here: it reads the same files.',
+        ko: `state.json 을 읽을 수 없다 — 파일이 없는 것이 아니라 권한 문제다. `
+          + `접근 권한을 되돌린 뒤(\`chmod u+rx ${harnessDir(root)}\` · \`chmod u+r ${statePath(root)}\`) `
+          + '`harness doctor` 를 실행하라. `--repair` 는 같은 파일을 읽으므로 여기서는 도움이 안 된다.',
       }));
     }
     if (hasHarness(root) && !isInitialized(root)) {

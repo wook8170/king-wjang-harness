@@ -16,6 +16,11 @@ export const wavePath = (root: string, id: string) => path.join(wavesDir(root), 
 export const evidenceDir = (root: string, waveId: string) =>
   path.join(harnessDir(root), 'evidence', waveId);
 export const runtimeDir = (root: string) => path.join(harnessDir(root), '.runtime');
+/**
+ * [OPS-07] 거부 기록. **저널과 분리한다** — 저널은 append-only 감사 정본이라 회전시킬 수
+ * 없고, 거부는 빈번해서 정본에 섞으면 정본이 잡음에 묻힌다. `.runtime/` 은 파생물 자리다.
+ */
+export const denialsPath = (root: string) => path.join(runtimeDir(root), 'denials.log');
 
 /**
  * [UX-15] **사람에게 내미는 명령은 사람의 터미널에서 그대로 돌아야 한다.**
@@ -55,6 +60,29 @@ export function humanCmd(args: string): string {
 /** 붙여 넣어 **그대로 도는 것**이 목적이므로 공백·메타문자가 있으면 따옴표로 싼다. */
 function shellQuote(p: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
+
+/**
+ * [SHIP-07] **「없다」와 「못 읽는다」는 다른 사실이고, 처방도 다르다.**
+ *
+ * `fs.existsSync` 는 부모 디렉토리를 못 읽으면(EACCES) **false** 를 돌려준다 — 파일이 멀쩡히
+ * 있어도 그렇다. 그 위에 세운 안내가 「state.json 이 없다 → `doctor --repair` 로 저널에서
+ * 다시 만들어라」였다. 실측(`chmod 000 .harness`)에서 파일은 둘 다 있는데 `status` 는 「없다」고
+ * 했고, 처방대로 `--repair` 를 돌려도 같은 이유로 실패한다 — **사람을 막다른 길로 보낸다.**
+ *
+ * 그래서 세 갈래로 답한다. 「못 읽는다」에는 권한 처방(`chmod`)이 붙어야 하고, 그것은
+ * 「저널로 재생하라」와 전혀 다른 행동이다.
+ */
+export type Presence = 'present' | 'absent' | 'unreadable';
+
+/** 파일·디렉토리의 존재 여부 — 못 읽는 경우를 「없음」으로 뭉개지 않는다. */
+export function presence(p: string): Presence {
+  try {
+    fs.statSync(p);
+    return 'present';
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'unreadable';
+  }
 }
 
 /**
