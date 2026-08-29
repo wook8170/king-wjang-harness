@@ -22,9 +22,10 @@ import { runDoctor } from './doctor';
 import { loadConfig } from './config';
 import { pick, type Lang } from './i18n';
 import { langFor, tr } from './tr';
-import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand, flagsOfGroup } from './help';
+import { renderHelp, renderGroupHelp, findGroup, unknownSub, unknownCommand, flagsOfGroup, type SubCommand } from './help';
 import { handleHook, HookEvent, HookInput } from './hook';
 import { armJudgeClock, disarmJudgeClock, overDeadline, JudgeTimeout } from './budget';
+import { expectedPositionals, positionalsOf } from './validate';
 import {
   submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate,
   recordGateFeedback, readGateFeedback, feedbackPath,
@@ -622,7 +623,20 @@ export function run(argv: string[], root: string): number {
             unread = true;
           } else if (raw.trim()) {
             try {
-              input = JSON.parse(raw);
+              const parsed: unknown = JSON.parse(raw);
+              /**
+               * [API-13] **파싱됐다고 읽은 것이 아니다.** `null`·`[]`·`12345` 는 전부 유효한
+               * JSON 이라 여기서 던지지 않았고, 그대로 `input` 이 되어 아래 판정이 「필드가
+               * 없다 = 볼 것이 없다」로 통과시켰다 — **파싱 실패는 fail-closed 인데 이쪽만
+               * fail-open** 이었다. 훅 페이로드는 언제나 객체다. 객체가 아니면 그것은 우리가
+               * 아는 페이로드가 아니고, 모르는 페이로드는 읽은 것이 아니다.
+               */
+              if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                logHookIssue(root, `cli non-object-stdin ${String(sub)}`);
+                unread = true;
+              } else {
+                input = parsed as HookInput;
+              }
             } catch {
               // stdin 부재·빈 입력은 정상이라 기록하지 않는다. 내용이 있는데 해석 못 하는
               // 것만 사고다 — 훅이 빈 입력으로 오판정하는 원인이 된다.
@@ -778,6 +792,39 @@ export function run(argv: string[], root: string): number {
           + `record something other than what you asked for. Run \`harness ${cmd} --help\` to see what this group takes.`,
           `알 수 없는 플래그: ${what}. 모르는 플래그는 적용되지 않는다 — 조용히 받으면 `
           + `요청과 다른 것이 기록된다. \`harness ${cmd} --help\` 로 이 명령군이 받는 것을 확인하라.`,
+        ));
+      }
+      /**
+       * [API-12] **위치인자 과다도 같은 이유로 거부한다.** 바로 위의 거부문이 이유를 이미
+       * 적어 뒀다 — 「조용히 받으면 요청과 다른 것이 기록된다」. 그 이유는 위치인자에도 똑같이
+       * 성립하는데(`harness node bump D-1 D-2` 는 `D-2` 를 **버린다**) 지금까지 한쪽만 쟀다.
+       *
+       * 개수는 **도움말에서 파생한다**([API-12] 의 제안 그대로) — 따로 적어 두면 도움말과
+       * 갈리고, 갈리면 느슨한 쪽이 정본이 된다.
+       */
+      const pos = positionalsOf(argv, n => VALUE_FLAGS.has(n)).slice(1);   // 명령군 자신은 뺀다
+      /**
+       * 하위명령 이름은 **한 토큰이 아닐 수 있다** — `defect add`·`critical raise` 가 그렇다.
+       * 한 토큰으로만 맞추면 그 명령들이 통째로 「하위명령 없음」이 되고, 그 이름 두 개가
+       * 남는 위치인자로 세어져 **정상 호출이 거부된다**(이 검사를 넣자마자 10건이 그렇게 깨졌다).
+       * 가장 긴 것으로 맞춘다.
+       */
+      let subDef: SubCommand | undefined;
+      let consumed = 0;
+      for (const cand of grp.subs ?? []) {
+        const words = cand.name.split(' ');
+        if (words.length > consumed && words.every((w, i) => pos[i] === w)) { subDef = cand; consumed = words.length; }
+      }
+      const expected = expectedPositionals(subDef ? subDef.args : grp.args);
+      const given = pos.slice(consumed);
+      if (given.length > expected) {
+        const extra = given.slice(expected).map(t => JSON.stringify(t)).join(' · ');
+        const usage = `harness ${cmd}${subDef ? ` ${subDef.name}` : ''} ${(subDef ? subDef.args : grp.args) ?? ''}`.trim();
+        throw new Error(L(
+          `Too many arguments: ${extra}. Extra positional arguments are never applied — accepting them `
+          + `silently would record something other than what you asked for. Usage: ${usage}`,
+          `인자가 너무 많다: ${extra}. 남는 위치인자는 적용되지 않는다 — 조용히 받으면 `
+          + `요청과 다른 것이 기록된다. 사용법: ${usage}`,
         ));
       }
     }

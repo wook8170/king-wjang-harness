@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import { eventsPath } from './paths';
 import { defaultState, readState, rethrowWriteFailure } from './state';
 import { isPhase, isEvidenceGrade } from './types';
+import { readCapped, READ_CAPS } from './validate';
 import type { HarnessEvent, HarnessState } from './types';
 
 /**
@@ -140,7 +141,9 @@ export function readJournal(root: string): Journal {
   if (!fs.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events: HarnessEvent[] = [];
   let corruptLines = 0;
-  for (const line of fs.readFileSync(eventsPath(root), 'utf8').split('\n')) {
+  // [API-10] 저널은 프로젝트 수명 내내 자라는 유일한 파일이다 — 읽는 쪽에 상한이 없으면
+  // 「언제부터 위험한가」를 코드가 스스로 모른다. 상한은 `validate.ts` 한 곳에 있다.
+  for (const line of readCapped(root, eventsPath(root), READ_CAPS.JOURNAL, 'the event journal').split('\n')) {
     if (!line.trim()) continue;
     let parsed: unknown;
     try { parsed = JSON.parse(line); } catch { corruptLines++; continue; }
@@ -223,7 +226,9 @@ export function readJournalForReplay(root: string): Journal {
   if (!fs.existsSync(eventsPath(root))) return { events: [], corruptLines: 0 };
   const events: HarnessEvent[] = [];
   let corruptLines = 0;
-  for (const line of fs.readFileSync(eventsPath(root), 'utf8').split('\n')) {
+  // [API-10] 재생 경로에는 훅 쪽 상한([OPS-06])이 이미 있지만, 그것은 **훅에만** 걸린다.
+  // 같은 수를 여기서도 쓴다 — 두 상한이 다르면 어느 쪽이 정본인지 아무도 모른다.
+  for (const line of readCapped(root, eventsPath(root), READ_CAPS.JOURNAL, 'the event journal').split('\n')) {
     if (!line.trim()) continue;
     const t = eventType(line);
     if (t && !REPLAY_TYPES.has(t)) continue;          // 상태 무변이 — 파싱할 이유가 없다

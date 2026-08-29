@@ -20,10 +20,11 @@ import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir, eventsPath, humanCmd, denialsPath, isUnderTempDir } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
-import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
+import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE, setsEnv } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE, oneLine } from './untrusted';
 import { JudgeTimeout, checkDeadline } from './budget';
+import { hasControlChars } from './validate';
 import { findRawValues, isFrozenPath, isTokenFile } from './tokens';
 import { loadProfile, bundledProfilesDir, isDeployCommand, isSourcePath, isSourceTree, commandFor, type Profile } from './profile';
 import { POLICY_FILES, POLICY_PREFIXES, STATE_FILES as SHARED_STATE_FILES } from './policy';
@@ -1427,8 +1428,36 @@ function judgeWritePath(
   const L = (en: string, ko: string): string => pick({ en, ko }, lang);
   const raw = rawPath.trim();
   if (!raw) return null;
+  /**
+   * [SEC-02] **분류할 수 없는 경로는 통과가 아니다.**
+   *
+   * 훅은 opaqueExec·미독 스크립트·blind 대상 등 「분류 불가」를 어디서나 **fail-closed** 로
+   * 다루는데, **경로 «가운데»의 제어문자만은 fail-open** 이었다: `relPath` 도 allow-list 매치도
+   * 프로파일 글롭도 개행을 넘지 못해 전부 null 을 냈고, `judgeWritePath` 는 그 null 을
+   * 「해당 없음 = 통과」로 읽었다. 양끝 제어문자는 위 `trim()` 에 걸려 거부되고 있었으므로,
+   * **같은 입력 부류가 위치에 따라 다른 자세를 받고 있었다**.
+   *
+   * 실제 파일시스템에서 `.harness/events.jsonl\nJUNK` 는 실코어와 다른 파일이라 관통은
+   * 아니었다. 그러나 제품이 파는 것은 「훅이 물리적으로 강제한다」이고, **판정 자체를 건너뛰는
+   * 입력 부류의 존재**는 그 계약의 결함이다. 그리고 하류 도구가 경로를 정규화하는 순간
+   * 그것은 관통이 된다 — 그 승격 조건을 기다릴 이유가 없다.
+   */
   const rel = relPath(root, raw);
   const realRel = realRelPath(root, raw);
+  /**
+   * 루트 «밖»은 이 검사에 넘기지 않는다 — 그쪽에는 이미 더 구체적인 사유가 있고([SEC-12] 가
+   * 그 사유의 중화까지 세워 뒀다), 어느 쪽이든 거부라 fail-open 이 생기지 않는다. 덜 구체적인
+   * 사유로 덮어쓰는 것은 사람을 엉뚱한 수리로 보내는 일이다([VAL-134] 가 같은 교훈이다).
+   */
+  if (hasControlChars(raw) && !isOutsideRoot(rel)) {
+    return deny(L(
+      'This path contains a control character (a newline, tab, or escape) in the middle, so the hook '
+      + 'cannot tell which file it names — and a path it cannot classify is not a path it may allow. '
+      + 'Write the path out as plain text.',
+      '이 경로 가운데에 제어문자(개행·탭·이스케이프)가 있어 어느 파일을 가리키는지 판정할 수 없다 — '
+      + '분류하지 못한 경로는 통과시킬 수 있는 경로가 아니다. 경로를 평문으로 적어라.',
+    ), degraded, lang);
+  }
 
   /**
    * [SEC-91] **디렉토리를 대상으로 쓰는 것은 그 안의 파일을 쓰는 것이다.**
@@ -2402,7 +2431,9 @@ function preTool(
     // [SEC-138] 두 번째 겹(CLI 의 TTY 검사)의 탈출구 env 를 **인라인으로 켜는 것**을 막는다 —
     // `--force`·`--accept-policy` 와 같은 두 절 구조다(env 리터럴 언급 + 실행 형태). 이 절이
     // 없으면 훅의 형태 인식을 뚫은 뒤 env 를 붙여 두 번째 겹까지 한 줄로 끌 수 있다.
-    if (/HARNESS_APPROVE_NO_TTY/.test(cmd)
+    // [API-28] 이름이 «나오는가»가 아니라 실제로 «켜는가»를 묻는다 — 문서에 적는 것까지
+    // 막던 과차단을 여기서 좁힌다. 막으려던 것(인라인으로 켜기)은 그대로 막힌다.
+    if (setsEnv(cmd, 'HARNESS_APPROVE_NO_TTY')
         || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
       return deny(L(
         'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '

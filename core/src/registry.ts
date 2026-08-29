@@ -41,6 +41,7 @@ import { registryPath, isInsideRoot } from './paths';
 import { tr } from './tr';
 import { appendEvent } from './events';
 import { isDocStatus, isPhase } from './types';
+import { validateId } from './validate';
 import type { DocNode, Phase } from './types';
 
 export interface Registry {
@@ -128,6 +129,9 @@ export function getDoc(root: string, id: string): DocNode | undefined {
 
 /** `{id, version}` 복합키로 제자리 교체(순서 보존). 형태 불량 엔트리는 건드리지 않는다. */
 export function upsertDoc(root: string, node: DocNode): void {
+  // [LOGIC-03]·[API-08] 문서 ID 도 원장 노드와 **같은 규칙**이다 — 둘이 다르면 어느 쪽이
+  // 정본인지 아무도 모른다. 정규형을 그대로 쓴다(`DOC-1 ` 과 `DOC-1` 은 한 문서다).
+  node = { ...node, id: validateId(root, node.id, 'document id') };
   /**
    * [SEC-295] **등록도 심사 대상을 정한다.** 게이트 제출은 루트 밖 경로를 거부하는데
    * 등록은 받고 있었고, 등록된 문서는 그 페이즈의 **리뷰 패킷에 「심사 대상」으로 실린다** —

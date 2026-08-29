@@ -118,7 +118,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1558 tests** (67 files) — **1534 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1596 tests** (68 files) — **1572 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -274,7 +274,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1558 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1596 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -294,7 +294,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1558 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1596 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and
@@ -330,7 +330,7 @@ core — is a wall.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a script chain deeper than 3 levels is **not followed — it is denied**, because not seeing what the last step writes is not the same as it being safe.
 - **Interpreter program files are read the same way a shell script is** — when a program is handed to an interpreter as a *file* (`sed -f prog.sed`, `awk -f prog.awk`, `perl x.pl`, `python3 x.py`, `node x.js`, `bun`, `deno run`, `ruby`, `php`, `tclsh`, `lua`, `Rscript`), the hook reads that file and denies it if it writes a harness-owned path. Three bounds are deliberate: a program file **over 64 KB is skipped, not denied** (real bundles are large and hand-written forgers are tiny — a >64 KB forger is the disclosed cost of not blocking `node dist/cli.js`); an **interpreter the hook does not know** (exotic runtimes such as `julia`, `groovy`, `raku`) falls outside the enumerated set; and **a program that assembles a harness-owned path inside the language rather than writing it literally** — string concatenation (`".har" + "ness/…"`), `chr()` / `String.fromCharCode`, or base64 — is not caught by the literal-path check (relative `chdir(".harness")` into a protected directory *is* caught). Closing the interpreter long-tail and in-language obfuscation completely needs filesystem-layer enforcement, not hook body-reading; that is out of scope for the hook.
-- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events / 15 MB (decades of use) measured at +17.7 ms p95 in-process (+24.7 ms wall-clock) over the normal path, and only while the state store is degraded — `doctor --repair` ends it.
+- **The event journal has no compaction command, by choice.** `events.jsonl` is the audit trail, so a command that rewrites it would be an erase primitive in the one place nothing may be erased. The cost of not having it is bounded: replay at 100k events / 15 MB (decades of use) measured at +17.7 ms p95 in-process (+24.7 ms wall-clock) over the normal path, and only while the state store is degraded — `doctor --repair` ends it. **What v0.2 added is a cap, not a compactor**: reads of the journal are refused past 128 MB (the design ledger and instruction sheets past 16 MB), with a prescription to archive the file yourself, and `doctor` warns once a file passes half of its cap — so the limit is visible before it is hit, and nothing deletes the audit trail for you.
 
 ---
 

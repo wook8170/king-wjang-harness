@@ -376,10 +376,13 @@ describe('[SEC-295] 「프로젝트 안인가」는 하나의 규칙이다 — �
 
   it('프로젝트 안 경로는 그대로 등록된다 — 아직 없는 파일도', () => {
     const root = setup();
-    for (const ok of ['docs/d.md', './docs/d.md', 'docs/sub/../d.md', 'docs/not-yet.md', '.harness/design/x.md']) {
-      expect(() => upsertDoc(root, { id: `D-${ok}`, phase: 'P0', path: ok, version: 1, status: 'draft', linkedNodes: [] }),
-        `과차단: ${ok}`).not.toThrow();
-    }
+    // ID 는 경로가 아니다([API-08] 이후 도메인이 검증한다) — 여기서 재는 것은 **경로 규칙**이므로
+    // ID 는 그냥 번호를 붙인다. 예전에는 `D-${ok}` 로 경로를 ID 에 그대로 박아 두 규칙이 섞여 있었다.
+    const ok = ['docs/d.md', './docs/d.md', 'docs/sub/../d.md', 'docs/not-yet.md', '.harness/design/x.md'];
+    ok.forEach((p, i) => {
+      expect(() => upsertDoc(root, { id: `D-${i + 1}`, phase: 'P0', path: p, version: 1, status: 'draft', linkedNodes: [] }),
+        `과차단: ${p}`).not.toThrow();
+    });
   });
 });
 

@@ -11,6 +11,7 @@ import { appendEvent, readEvents } from './events';
 import { noteTurnLogged } from './runtime';
 import type { WaveMeta } from './types';
 import { validateEvidence } from './evidence';
+import { readCapped, READ_CAPS } from './validate';
 
 /**
  * frontmatter는 신뢰할 수 없는 입력이다 — 손편집·불완전 파일이 들어올 수 있으므로
@@ -60,7 +61,8 @@ export function serializeWave(meta: WaveMeta, body: string): string {
 }
 
 export function readWave(root: string, id: string): { meta: WaveMeta; body: string } {
-  return parseWave(fs.readFileSync(wavePath(root, id), 'utf8'), langFor(root));
+  // [API-10] 지시서 한 장이 16MB 일 수는 없다 — 상한은 `validate.ts` 한 곳에 있다.
+  return parseWave(readCapped(root, wavePath(root, id), READ_CAPS.WAVE, `the instruction sheet of ${id}`), langFor(root));
 }
 
 /** 깨진 웨이브 파일은 스킵한다 (bumpNode의 손상 방어와 동일 관용) — 목록 조회가 죽으면 안 된다. */
@@ -69,7 +71,7 @@ export function listWaves(root: string): WaveMeta[] {
   const out: WaveMeta[] = [];
   for (const f of fs.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
-      out.push(parseWave(fs.readFileSync(path.join(wavesDir(root), f), 'utf8'), langFor(root)).meta);
+      out.push(parseWave(readCapped(root, path.join(wavesDir(root), f), READ_CAPS.WAVE, `the instruction sheet ${f}`), langFor(root)).meta);
     } catch {
       continue;
     }

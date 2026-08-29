@@ -1015,6 +1015,36 @@ const READ_ONLY_GIT = [
   'ls-files', 'shortlog', 'reflog', 'grep', 'cat-file',
 ];
 
+/**
+ * [API-28] **그 이름을 «적는 것»과 «켜는 것»은 다르다.**
+ *
+ * 훅에는 탈출구 환경변수를 인라인으로 켜는 것을 막는 절이 있는데, 그 절이 명령 **전체 문자열**을
+ * 정규식으로 훑었다. 그래서 `HARNESS_APPROVE_NO_TTY` 라는 이름을 **문서에 적는 쓰기**까지
+ * 거부됐다 — 이 리포의 README 가 그 이름을 설명하는 바로 그 문장을 쓸 수 없었다. 방어가
+ * 자기 문서를 막는 것은 순이익이 음수인 방어다([SEC-275]·[QUAL-229] 와 같은 판단).
+ *
+ * 그래서 **대입 자리**만 본다: 명령 앞 선행 대입(`NAME=1 cmd`)과 `export`·`env`·`declare` 의
+ * 피연산자. `echo "NAME=1" > doc.md` 의 `NAME=1` 은 `echo` 의 **인자**라 여기 걸리지 않는다.
+ * 세그먼트 분해·토크나이즈는 스캐너가 쓰는 것과 같은 것을 쓴다 — 두 벌이면 느슨한 쪽이 정본이 된다.
+ */
+export function setsEnv(rawCmd: string, name: string): boolean {
+  const cmd = maskNonCommandText(foldLineContinuations(rawCmd));
+  const assigns = (tok: string): boolean => tok === name || tok.startsWith(`${name}=`);
+  for (const seg of segmentsWithIndex(cmd)) {
+    const t = seg.tokens;
+    // (1) 명령 이름 «앞»의 선행 대입. 키워드·접두명령(`env`·`sudo` …)은 건너뛴다.
+    for (let i = 0; i < t.length; i++) {
+      if (SHELL_KEYWORDS.has(t[i]) || PREFIX_COMMANDS.has((t[i].split('/').pop() ?? ''))) continue;
+      if (!ENV_ASSIGN_RE.test(t[i])) break;                 // 대입 구간이 끝났다 = 여기부터 명령이다
+      if (assigns(t[i])) return true;
+    }
+    // (2) 환경을 «명령으로» 세우는 것들.
+    const { name: head, args } = commandName(t);
+    if (['export', 'declare', 'typeset', 'setenv'].includes(head) && args.some(assigns)) return true;
+  }
+  return false;
+}
+
 export function isReadOnlyCommand(cmd: string): boolean {
   if (cmd.trim() === '') return false;
   const scan = scanBashWrites(cmd);

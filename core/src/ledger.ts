@@ -6,6 +6,7 @@ import { tr } from './tr';
 import { parseWave, markStale, isWaveFile } from './wave';
 import { appendEvent } from './events';
 import { readState } from './state';
+import { validateId, readCapped, READ_CAPS } from './validate';
 import type { LedgerNode, WaveMeta } from './types';
 
 // 원장은 저널 파생이 아니다 — replayState가 node-* 이벤트를 폴드하지 않으며, 손상 시
@@ -13,7 +14,8 @@ import type { LedgerNode, WaveMeta } from './types';
 
 export function loadLedger(root: string): LedgerNode[] {
   if (!fs.existsSync(ledgerPath(root))) return [];
-  const doc = YAML.parse(fs.readFileSync(ledgerPath(root), 'utf8')) as { nodes?: unknown } | null;
+  // [API-10] 원장도 상한 안에서 읽는다 — 사람이 쓰는 문서라 여기 닿았다면 그 자체가 신호다.
+  const doc = YAML.parse(readCapped(root, ledgerPath(root), READ_CAPS.LEDGER, 'the design ledger')) as { nodes?: unknown } | null;
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? (nodes as LedgerNode[]) : [];
 }
@@ -177,6 +179,19 @@ export function mergeNode(
   root: string,
   patch: { id: string; title: string; parent?: string; doc_anchor?: string; status?: LedgerNode['status'] },
 ): LedgerNode {
+  /**
+   * [LOGIC-03]·[API-08] **ID 검증은 도메인이 한다.** CLI 에만 두면 MCP 가 그대로 뚫린다 —
+   * 부모 검증을 여기로 옮긴 것과 같은 이유다(위 [USE-96·ENG-E]). 정규형을 돌려받아 그것을
+   * 쓰는 것이 요점이다: `F-1 ` 을 거부만 하면 사람은 다시 치지만, 정규화하면 `F-1` 과
+   * **같은 노드**가 된다 — 두 노드로 갈리는 것이 이 결함의 피해였다.
+   */
+  const id = validateId(root, patch.id, 'node id');
+  const parentRaw = patch.parent;
+  patch = {
+    ...patch,
+    id,
+    parent: parentRaw === undefined || parentRaw === '' ? parentRaw : validateId(root, parentRaw, 'node parent'),
+  };
   const prev = getNode(root, patch.id);
   const node: LedgerNode = {
     id: patch.id,

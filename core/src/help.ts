@@ -130,7 +130,7 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'link', args: '--ux <UX-x> --url <canvas-url> [--artboard <name>]', summary: M('Link a UX node to a canvas artboard.', 'UX 노드를 캔버스 아트보드에 연결한다.') },
       { name: 'sync', args: '<UX-x> --from <file>', summary: M('Sync fetched canvas content into the ledger.', '가져온 캔버스 내용을 원장에 반영한다.') },
       { name: 'inventory', args: '--from <file>', summary: M('Extract a component inventory from canvas content.', '캔버스 내용에서 컴포넌트 목록을 뽑는다.') },
-      { name: 'baseline', args: '<UX-x> --png <file>', summary: M('Record a baseline screenshot for a UX node.', 'UX 노드의 기준선 스크린샷을 기록한다.') },
+      { name: 'baseline', args: '<UX-x> [<file>] [--png <file>]', summary: M('Record a baseline screenshot for a UX node.', 'UX 노드의 기준선 스크린샷을 기록한다.') },
       { name: 'html', args: '<UX-x>', summary: M('Render the linked artboard as standalone HTML.', '연결된 아트보드를 자체완결 HTML 로 렌더링한다.') },
       { name: 'list', summary: M('Print all canvas links as JSON.', '전 캔버스 링크를 JSON 으로 출력한다.') },
     ],
@@ -181,7 +181,7 @@ export const COMMANDS: CommandGroup[] = [
     subs: [
       // [UX-A2] 인자를 적지 않으면 **알아낼 방법이 없다** — 미지 플래그 오류가 이 도움말을
       // 가리키는데 여기 인자가 없으면 그 안내도 막다른 길이 된다(같은 군의 deploy 는 이미 적고 있다).
-      { name: 'defect add', args: '--id <id> --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>', summary: M('Add a defect to the ledger. Findings without evidence are refused.', '결함을 대장에 올린다. 근거 없는 지적은 거부된다.') },
+      { name: 'defect add', args: '<id> [--id <id>] --severity <blocker|high|medium|low> --title <one line> --evidence <path|run>', summary: M('Add a defect to the ledger. Findings without evidence are refused.', '결함을 대장에 올린다. 근거 없는 지적은 거부된다.') },
       { name: 'defect update', args: `<id> --status <${DEFECT_STATUSES.join('|')}> [--defer-reason <why>] [--evidence <e>]`, summary: M('Change a defect’s status.', '결함의 상태를 바꾼다.') },
       { name: 'defect list', summary: M('Print the defect ledger as JSON.', '결함 대장을 JSON 으로 출력한다.') },
       { name: 'deploy', args: '--env <env> --version <v> --sha <commit> [--evidence <e>]', summary: M('Record a deployment.', '배포를 기록한다.') },

@@ -12,7 +12,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir, presence } from './paths';
+import { harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir, presence, ledgerPath } from './paths';
+import { READ_CAPS, READ_WARN_RATIO } from './validate';
 import { listAdrs } from './adr';
 import { loadLedger } from './ledger';
 import { readJournal, replayState, appendEvent, KNOWN_EVENT_TYPES } from './events';
@@ -345,6 +346,32 @@ export function runDoctor(
           + '더 새 버전의 하네스가 쓴 파일일 수 있다. 업그레이드하지 않으면 상태를 오독한다.',
       }),
     );
+  }
+
+  /**
+   * [API-10] **상한에 «닿기 전에» 말한다.** 읽기 상한은 `validate.ts` 가 강제하지만, 그것만
+   * 있으면 사람은 어느 날 갑자기 「읽을 수 없다」를 만난다 — 그때는 이미 훅이 느려진 뒤다.
+   * 관측되지 않는 한계는 한계가 아니다(이 리포의 [OPS-02]·[SEC-13] 이 같은 교훈이다).
+   *
+   * 회전·압축은 하지 않는다: 저널은 감사 추적이고 `doctor --repair` 의 유일한 복원원이라,
+   * 오래된 줄을 지우거나 옮기면 그 두 성질이 함께 깨진다. 그래서 **사람에게 말한다.**
+   */
+  for (const [file, cap, what] of [
+    [eventsPath(root), READ_CAPS.JOURNAL, 'the event journal (.harness/events.jsonl)'],
+    [ledgerPath(root), READ_CAPS.LEDGER, 'the design ledger'],
+  ] as const) {
+    let size = 0;
+    try { size = fs.statSync(file).size; } catch { continue; }
+    if (size <= cap * READ_WARN_RATIO) continue;
+    const mb = (n: number): string => `${(n / (1024 * 1024)).toFixed(1)}MB`;
+    warnings.push(tr(root, {
+      en: `${what} is ${mb(size)}, past half of this build's ${mb(cap)} read cap. Every harness call and `
+        + 'every hook reads it, and the hook has a 10s budget. Archive it yourself (move it aside and keep '
+        + 'it — it is the audit trail, so nothing deletes it for you), then run `harness doctor --repair`.',
+      ko: `${what} 크기가 ${mb(size)} 로 이 빌드의 읽기 상한 ${mb(cap)} 의 절반을 넘었다. 모든 harness `
+        + '호출과 훅이 이것을 읽고, 훅에는 10초 예산이 있다. 직접 보관하라(옆으로 옮겨 두고 남긴다 — '
+        + '감사 추적이라 아무도 대신 지우지 않는다). 그 뒤 `harness doctor --repair` 를 실행하라.',
+    }));
   }
 
   // 6. 고아 tmp 스윕 — 죽은 pid 것만이라 항상 안전하게 수행한다
