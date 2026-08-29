@@ -37,7 +37,7 @@ import { appendEvent, readEvents, replayState } from './events';
 import { readState } from './state';
 import { readWave, listWaves } from './wave';
 import { getNode } from './ledger';
-import { wavePath, evidenceDir } from './paths';
+import { wavePath, evidenceDir, humanCmd } from './paths';
 import { TOKENS_REL } from './tokens';
 import type { HarnessState, WaveMeta } from './types';
 
@@ -412,8 +412,8 @@ export function summonMessage(evt: CriticalEvent, root?: string): string {
   lines.push(`${t({ en: 'To decide', ko: '결정할 것' })}:`);
   for (const d of REASON_DECISION[evt.reason]) lines.push(`  - ${t(d)}`);
   lines.push(t({
-    en: 'Once decided, clear the escalation with `harness loop critical clear` — the wave loop stays stopped until then.',
-    ko: '판단이 끝나면 `harness loop critical clear` 로 소환을 해제해야 웨이브 루프가 다시 돈다.',
+    en: 'Once decided, clear the escalation with `' + humanCmd('loop critical clear') + '` — the wave loop stays stopped until then.',
+    ko: '판단이 끝나면 `' + humanCmd('loop critical clear') + '` 로 소환을 해제해야 웨이브 루프가 다시 돈다.',
   }));
   return lines.join('\n');
 }

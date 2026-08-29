@@ -8756,6 +8756,24 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+var cachedCliPath;
+function harnessCliPath() {
+  if (cachedCliPath !== void 0) return cachedCliPath;
+  const candidate = path.resolve(__dirname, "..", "..", "bin", "harness");
+  let resolved = "harness";
+  try {
+    if (fs.statSync(candidate).isFile()) resolved = fs.realpathSync(candidate);
+  } catch {
+  }
+  cachedCliPath = shellQuote(resolved);
+  return cachedCliPath;
+}
+function humanCmd(args) {
+  return harnessCliPath() + " " + args;
+}
+function shellQuote(p) {
+  return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
 function realOrNearest(p) {
   let cur = path.resolve(p);
   const rest = [];
@@ -11595,8 +11613,8 @@ function summonMessage(evt, root) {
   lines.push(`${t({ en: "To decide", ko: "\uACB0\uC815\uD560 \uAC83" })}:`);
   for (const d of REASON_DECISION[evt.reason]) lines.push(`  - ${t(d)}`);
   lines.push(t({
-    en: "Once decided, clear the escalation with `harness loop critical clear` \u2014 the wave loop stays stopped until then.",
-    ko: "\uD310\uB2E8\uC774 \uB05D\uB098\uBA74 `harness loop critical clear` \uB85C \uC18C\uD658\uC744 \uD574\uC81C\uD574\uC57C \uC6E8\uC774\uBE0C \uB8E8\uD504\uAC00 \uB2E4\uC2DC \uB3C8\uB2E4."
+    en: "Once decided, clear the escalation with `" + humanCmd("loop critical clear") + "` \u2014 the wave loop stays stopped until then.",
+    ko: "\uD310\uB2E8\uC774 \uB05D\uB098\uBA74 `" + humanCmd("loop critical clear") + "` \uB85C \uC18C\uD658\uC744 \uD574\uC81C\uD574\uC57C \uC6E8\uC774\uBE0C \uB8E8\uD504\uAC00 \uB2E4\uC2DC \uB3C8\uB2E4."
   }));
   return lines.join("\n");
 }
@@ -12545,8 +12563,8 @@ function canEnterPhase(root, phase) {
   return {
     ok: false,
     reason: tr(root, {
-      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${first} is currently: ${gates[first]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
-      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${first} \uB294 \uD604\uC7AC ${gates[first]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`harness gate approve ${first}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
+      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${first} is currently: ${gates[first]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`${humanCmd(`gate approve ${first}`)}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${first} \uB294 \uD604\uC7AC ${gates[first]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`${humanCmd(`gate approve ${first}`)}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
     })
   };
 }
@@ -13437,8 +13455,8 @@ function renderReleaseChecklist(root) {
       }),
       "",
       t({
-        en: "This verdict does not open the gate for you \u2014 a human presses `harness gate approve P12`.",
-        ko: "\uC774 \uD310\uC815\uC740 \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0 \uC5F4\uC9C0 \uC54A\uB294\uB2E4 \u2014 `harness gate approve P12` \uB294 \uC0AC\uB78C\uC774 \uB204\uB978\uB2E4."
+        en: "This verdict does not open the gate for you \u2014 a human presses `" + humanCmd("gate approve P12") + "`.",
+        ko: "\uC774 \uD310\uC815\uC740 \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0 \uC5F4\uC9C0 \uC54A\uB294\uB2E4 \u2014 `" + humanCmd("gate approve P12") + "` \uB294 \uC0AC\uB78C\uC774 \uB204\uB978\uB2E4."
       })
     );
   } else {
@@ -15293,20 +15311,20 @@ function preTool(root, state, config, input, degraded) {
     }
     if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd) || runsHarnessWith(cmd, /\bphase\b/, /--force(?![\w-])/)) {
       return deny(L(
-        "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.",
-        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
+        "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 " + humanCmd("phase set <P> --force") + "`.",
+        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 " + humanCmd("phase set <P> --force") + "` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
       ), degraded, lang);
     }
     if (/HARNESS_APPROVE_NO_TTY/.test(cmd) || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
       return deny(L(
-        "Approving a gate is the human's decision \u2014 an agent cannot run `harness gate approve`. Submit the artifacts and let the review packet be read: `harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** in their terminal with `harness gate approve <P>`. Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.",
-        "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 `harness gate approve` \uB97C \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD574 \uB9AC\uBDF0 \uD328\uD0B7\uC774 \uC77D\uD788\uAC8C \uD558\uB77C: `harness gate submit <P> --evidence measured --paths <\uC0B0\uCD9C\uBB3C>`. \uADF8 \uB2E4\uC74C **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811** \uD130\uBBF8\uB110\uC5D0\uC11C `harness gate approve <P>` \uB85C \uC2B9\uC778\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`."
+        "Approving a gate is the human's decision \u2014 an agent cannot run `harness gate approve`. Submit the artifacts and let the review packet be read: `harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** in their terminal with `" + humanCmd("gate approve <P>") + "`. Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.",
+        "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 `harness gate approve` \uB97C \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD574 \uB9AC\uBDF0 \uD328\uD0B7\uC774 \uC77D\uD788\uAC8C \uD558\uB77C: `harness gate submit <P> --evidence measured --paths <\uC0B0\uCD9C\uBB3C>`. \uADF8 \uB2E4\uC74C **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811** \uD130\uBBF8\uB110\uC5D0\uC11C `" + humanCmd("gate approve <P>") + "` \uB85C \uC2B9\uC778\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`."
       ), degraded, lang);
     }
     if (/HARNESS_ACCEPT_POLICY/.test(cmd) || runsHarnessWith(cmd, /\bdoctor\b/, /--accept-policy(?![\w-])/)) {
       return deny(L(
-        '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing the diff: `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`. Diagnosis is open to you: `harness doctor` reports the drift.',
-        "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
+        '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing the diff: `HARNESS_ACCEPT_POLICY=1 ' + humanCmd("doctor --accept-policy") + "`. Diagnosis is open to you: `harness doctor` reports the drift.",
+        "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
       ), degraded, lang);
     }
     const inBuild = BUILD_PHASES.includes(state.phase);
@@ -16188,8 +16206,8 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         if (argv.includes("--accept-policy") && process.env.HARNESS_ACCEPT_POLICY !== "1") {
           throw new Error(
             L(
-              "`--accept-policy` re-pins the policy baseline and clears the \"policy changed\" warning, so it is locked by default \u2014 accepting a change to the files that decide what the hook blocks is the user's judgement, not an agent's. Review the diff, then run `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` yourself. Diagnosis is always open: plain `harness doctor` reports the drift.",
-              "`--accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC758 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC544\uB2C8\uB77C \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4. \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` \uB85C \uC2E4\uD589\uD558\uB77C. \uC9C4\uB2E8\uC740 \uC5B8\uC81C\uB098 \uC5F4\uB824 \uC788\uB2E4: \uADF8\uB0E5 `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
+              "`--accept-policy` re-pins the policy baseline and clears the \"policy changed\" warning, so it is locked by default \u2014 accepting a change to the files that decide what the hook blocks is the user's judgement, not an agent's. Review the diff, then run `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` yourself. Diagnosis is always open: plain `harness doctor` reports the drift.",
+              "`--accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC758 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC544\uB2C8\uB77C \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4. \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` \uB85C \uC2E4\uD589\uD558\uB77C. \uC9C4\uB2E8\uC740 \uC5B8\uC81C\uB098 \uC5F4\uB824 \uC788\uB2E4: \uADF8\uB0E5 `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
             )
           );
         }
@@ -16211,8 +16229,8 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         if (argv.includes("--force") && process.env.HARNESS_ALLOW_FORCE !== "1") {
           throw new Error(
             L(
-              `\`--force\` skips the gate check and is locked by default \u2014 it stops the design-track enforcement from being undone in one line. The normal path is \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. If bootstrap or recovery genuinely needs it, run \`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` yourself.`,
-              `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` \uB85C \uC2E4\uD589\uD558\uB77C.`
+              `\`--force\` skips the gate check and is locked by default \u2014 it stops the design-track enforcement from being undone in one line. The normal path is \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. If bootstrap or recovery genuinely needs it, run \`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` yourself.`,
+              `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` \uB85C \uC2E4\uD589\uD558\uB77C.`
             )
           );
         }
@@ -16260,11 +16278,13 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
                 `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}` + (packet ? `
 Review packet: ${path20.relative(root, packet)}` : "") + (noDoc ? `
 Note: no document is registered for ${phase}, so the packet says it is not grounds for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` \u2192 publish \u2192 \`harness doc url <DOC-x> <url>\`, then submit again.` : "") + `
-Next: a human approves it in their terminal \u2014 \`harness gate approve ${phase}\`.`,
+Next: a human approves it in their terminal:
+  ${humanCmd(`gate approve ${phase}`)}`,
                 `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
 \uB9AC\uBDF0 \uD328\uD0B7: ${path20.relative(root, packet)}` : "") + (noDoc ? `
 \uCC38\uACE0: ${phase} \uC5D0 \uB4F1\uB85D\uB41C \uBB38\uC11C\uAC00 \uC5C6\uC5B4 \uD328\uD0B7\uC774 \u300C\uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4\u300D\uB77C\uACE0 \uC801\uB294\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uD30C\uC77C> --phase ${phase}\` \u2192 \uBC1C\uD589 \u2192 \`harness doc url <DOC-x> <url>\` \uB85C \uC774\uC740 \uB4A4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C.` : "") + `
-\uB2E4\uC74C: \uC0AC\uB78C\uC774 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2B9\uC778\uD55C\uB2E4 \u2014 \`harness gate approve ${phase}\`.`
+\uB2E4\uC74C: \uC0AC\uB78C\uC774 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2B9\uC778\uD55C\uB2E4:
+  ${humanCmd(`gate approve ${phase}`)}`
               )
             );
             return 0;
@@ -16272,8 +16292,8 @@ Next: a human approves it in their terminal \u2014 \`harness gate approve ${phas
           case "approve": {
             if (!process.stdin.isTTY && process.env.HARNESS_APPROVE_NO_TTY !== "1") {
               throw new Error(L(
-                "Approving a gate is the human's final click, so it must come from a terminal \u2014 this process has no TTY, which is what an agent's tool call looks like. Run `harness gate approve <P>` yourself in your terminal. Everything else on the gate is open: `harness gate status`, `harness gate verify <P>`. If you really are a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` yourself \u2014 but then nothing is checking that a person read the review packet.",
-                "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uCD5C\uC885 \uD074\uB9AD\uC774\uB77C \uD130\uBBF8\uB110\uC5D0\uC11C \uC640\uC57C \uD55C\uB2E4 \u2014 \uC774 \uD504\uB85C\uC138\uC2A4\uC5D0\uB294 TTY \uAC00 \uC5C6\uACE0, \uADF8\uAC83\uC774 \uACE7 \uC5D0\uC774\uC804\uD2B8 \uB3C4\uAD6C \uD638\uCD9C\uC758 \uBAA8\uC2B5\uC774\uB2E4. `harness gate approve <P>` \uB97C \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`. TTY \uC5C6\uB294 \uC0AC\uB78C \uD658\uACBD(\uC6D0\uACA9 \uD30C\uC774\uD504\xB7CI)\uC774 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_APPROVE_NO_TTY=1` \uC744 \uCF20\uB2E4 \u2014 \uB2E4\uB9CC \uADF8 \uC21C\uAC04 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uC0AC\uB78C\uC774 \uC77D\uC5C8\uB294\uC9C0 \uAC80\uC0AC\uD558\uB294 \uAC83\uC774 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4."
+                "Approving a gate is the human's final click, so it must come from a terminal \u2014 this process has no TTY, which is what an agent's tool call looks like. Run `" + humanCmd("gate approve <P>") + "` yourself in your terminal. Everything else on the gate is open: `harness gate status`, `harness gate verify <P>`. If you really are a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` yourself \u2014 but then nothing is checking that a person read the review packet.",
+                "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uCD5C\uC885 \uD074\uB9AD\uC774\uB77C \uD130\uBBF8\uB110\uC5D0\uC11C \uC640\uC57C \uD55C\uB2E4 \u2014 \uC774 \uD504\uB85C\uC138\uC2A4\uC5D0\uB294 TTY \uAC00 \uC5C6\uACE0, \uADF8\uAC83\uC774 \uACE7 \uC5D0\uC774\uC804\uD2B8 \uB3C4\uAD6C \uD638\uCD9C\uC758 \uBAA8\uC2B5\uC774\uB2E4. `" + humanCmd("gate approve <P>") + "` \uB97C \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`. TTY \uC5C6\uB294 \uC0AC\uB78C \uD658\uACBD(\uC6D0\uACA9 \uD30C\uC774\uD504\xB7CI)\uC774 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_APPROVE_NO_TTY=1` \uC744 \uCF20\uB2E4 \u2014 \uB2E4\uB9CC \uADF8 \uC21C\uAC04 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uC0AC\uB78C\uC774 \uC77D\uC5C8\uB294\uC9C0 \uAC80\uC0AC\uD558\uB294 \uAC83\uC774 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4."
               ));
             }
             const phase = requirePhase(rest[0], "harness gate approve", lang);

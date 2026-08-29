@@ -7386,6 +7386,24 @@ var wavesDir = (root) => path.join(harnessDir(root), "waves");
 var wavePath = (root, id) => path.join(wavesDir(root), `${id}.md`);
 var evidenceDir = (root, waveId) => path.join(harnessDir(root), "evidence", waveId);
 var runtimeDir = (root) => path.join(harnessDir(root), ".runtime");
+var cachedCliPath;
+function harnessCliPath() {
+  if (cachedCliPath !== void 0) return cachedCliPath;
+  const candidate = path.resolve(__dirname, "..", "..", "bin", "harness");
+  let resolved = "harness";
+  try {
+    if (fs.statSync(candidate).isFile()) resolved = fs.realpathSync(candidate);
+  } catch {
+  }
+  cachedCliPath = shellQuote(resolved);
+  return cachedCliPath;
+}
+function humanCmd(args) {
+  return harnessCliPath() + " " + args;
+}
+function shellQuote(p) {
+  return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
 function realOrNearest(p) {
   let cur = path.resolve(p);
   const rest = [];
@@ -9994,7 +10012,7 @@ function refuseApprove(o) {
   const phase = str(o, "phase");
   const target = isPhase(phase) ? phase : "<P0..P12>";
   return fail(
-    `Gate approval cannot be done over MCP \u2014 run \`harness gate approve ${target}\` in the terminal.
+    `Gate approval cannot be done over MCP \u2014 run \`${humanCmd(`gate approve ${target}`)}\` in the terminal.
 That command is deliberately excluded from the permission allowlist, so a permission dialog appears on every run and the final click that opens a gate is always a human (spec \xA74-3). Approving on your behalf through an MCP tool would bypass that, so this path refuses.
 You can still submit: use \`harness_gate_submit\` to build a review packet and hand it to a human.`
   );
@@ -10053,7 +10071,7 @@ Warning: review packet generation failed (the submission still stands) \u2014 ${
       return ok(
         `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
 Review packet: ${path15.relative(root, packet)}
-Approve in the terminal with \`harness gate approve ${phase}\` \u2014 the final click is a human.`
+Approve in the terminal with \`${humanCmd(`gate approve ${phase}`)}\` \u2014 the final click is a human.`
       );
     }
     case "harness_wave_create": {

@@ -18,7 +18,7 @@ import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournalForReplay, replayState } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir, eventsPath } from './paths';
+import { harnessDir, runtimeDir, eventsPath, humanCmd } from './paths';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
@@ -2300,11 +2300,11 @@ function preTool(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
         + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '
         + 'or recovery genuinely needs it, **the user must run it themselves** in their terminal: '
-        + '`HARNESS_ALLOW_FORCE=1 harness phase set <P> --force`.',
+        + '`HARNESS_ALLOW_FORCE=1 ' + humanCmd('phase set <P> --force') + '`.',
         '`phase set --force` 는 게이트 검사를 건너뛰므로 에이전트가 실행할 수 없다 — '
         + '페이즈 전환은 `harness gate submit <P>` → 사람 승인 `harness gate approve <P>` 로만 한다. '
         + '부트스트랩·복구가 정말 필요하면 **사용자가 직접 터미널에서** '
-        + '`HARNESS_ALLOW_FORCE=1 harness phase set <P> --force` 를 실행해야 한다.',
+        + '`HARNESS_ALLOW_FORCE=1 ' + humanCmd('phase set <P> --force') + '` 를 실행해야 한다.',
       ), degraded, lang);
     }
 
@@ -2331,12 +2331,12 @@ function preTool(
         'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '
         + 'Submit the artifacts and let the review packet be read: '
         + '`harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** '
-        + 'in their terminal with `harness gate approve <P>`. Everything else on the gate is open to '
+        + 'in their terminal with `' + humanCmd('gate approve <P>') + '`. Everything else on the gate is open to '
         + 'you: `harness gate status`, `harness gate verify <P>`.',
         '게이트 승인은 사람의 판단이라 에이전트가 `harness gate approve` 를 실행할 수 없다. '
         + '산출물을 제출해 리뷰 패킷이 읽히게 하라: '
         + '`harness gate submit <P> --evidence measured --paths <산출물>`. 그 다음 **사용자가 직접** '
-        + '터미널에서 `harness gate approve <P>` 로 승인한다. 나머지는 열려 있다: '
+        + '터미널에서 `' + humanCmd('gate approve <P>') + '` 로 승인한다. 나머지는 열려 있다: '
         + '`harness gate status`·`harness gate verify <P>`.',
       ), degraded, lang);
     }
@@ -2358,12 +2358,12 @@ function preTool(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning — '
         + 'so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to '
         + 'them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing '
-        + 'the diff: `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`. '
+        + 'the diff: `HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '`. '
         + 'Diagnosis is open to you: `harness doctor` reports the drift.',
         '`doctor --accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우는 '
         + '명령이라 에이전트가 실행할 수 없다. 정책 파일은 이 훅이 무엇을 막을지 정하고, 그 변경을 '
         + '수용하는 것은 사용자의 판단이다 — **사용자가 직접 터미널에서** 차이를 확인한 뒤 '
-        + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 실행한다. '
+        + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` 로 실행한다. '
         + '진단은 열려 있다: `harness doctor` 가 드리프트를 보고한다.',
       ), degraded, lang);
     }

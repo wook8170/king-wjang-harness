@@ -42,7 +42,7 @@ import { loadRegistry } from './registry';
 import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
 import { runDoctor } from './doctor';
-import { packetsDir } from './paths';
+import { packetsDir, humanCmd } from './paths';
 import { PHASES, EVIDENCE_GRADES, LEDGER_STATUSES, isPhase, isEvidenceGrade } from './types';
 import type { EvidenceGrade, LedgerNode } from './types';
 
@@ -292,7 +292,7 @@ function refuseApprove(o: Record<string, unknown>): McpToolResult {
   const phase = str(o, 'phase');
   const target = isPhase(phase) ? phase : '<P0..P12>';
   return fail(
-    `Gate approval cannot be done over MCP — run \`harness gate approve ${target}\` in the terminal.\n`
+    `Gate approval cannot be done over MCP — run \`${humanCmd(`gate approve ${target}`)}\` in the terminal.\n`
     + 'That command is deliberately excluded from the permission allowlist, so a permission dialog '
     + 'appears on every run and the final click that opens a gate is always a human (spec §4-3). Approving on '
     + "your behalf through an MCP tool would bypass that, so this path refuses.\n"
@@ -379,7 +379,7 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       return ok(
         `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}\n`
         + `Review packet: ${path.relative(root, packet)}\n`
-        + `Approve in the terminal with \`harness gate approve ${phase}\` — the final click is a human.`,
+        + `Approve in the terminal with \`${humanCmd(`gate approve ${phase}`)}\` — the final click is a human.`,
       );
     }
 

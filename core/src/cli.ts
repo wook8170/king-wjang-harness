@@ -62,7 +62,7 @@ import {
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase } from './types';
-import { harnessDir, runtimeDir, packetsDir, isInsideRoot } from './paths';
+import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd } from './paths';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
@@ -726,12 +726,12 @@ export function run(argv: string[], root: string): number {
               '`--accept-policy` re-pins the policy baseline and clears the "policy changed" warning, '
               + 'so it is locked by default — accepting a change to the files that decide what the hook '
               + 'blocks is the user\'s judgement, not an agent\'s. Review the diff, then run '
-              + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` yourself. '
+              + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` yourself. '
               + 'Diagnosis is always open: plain `harness doctor` reports the drift.',
               '`--accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우므로 '
               + '기본 잠금이다 — 훅이 무엇을 막을지 정하는 파일의 변경을 수용하는 것은 에이전트가 '
               + '아니라 사용자의 판단이다. 차이를 확인한 뒤 사용자가 직접 '
-              + '`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy` 로 실행하라. '
+              + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` 로 실행하라. '
               + '진단은 언제나 열려 있다: 그냥 `harness doctor` 가 드리프트를 보고한다.',
             ),
           );
@@ -764,11 +764,11 @@ export function run(argv: string[], root: string): number {
               '`--force` skips the gate check and is locked by default — it stops the design-track '
               + 'enforcement from being undone in one line. The normal path is `harness gate submit <P>` '
               + '→ `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, run '
-              + `\`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` yourself.`,
+              + `\`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` yourself.`,
               '`--force` 는 게이트 검사를 건너뛰므로 기본 잠금이다 — 설계 트랙 강제가 한 줄로 '
               + '풀리는 것을 막는다. 정상 경로는 `harness gate submit <P>` → `harness gate approve <P>`. '
               + '부트스트랩·복구로 정말 필요하면 사용자가 직접 '
-              + `\`HARNESS_ALLOW_FORCE=1 harness phase set ${phase} --force\` 로 실행하라.`,
+              + `\`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` 로 실행하라.`,
             ),
           );
         }
@@ -857,7 +857,7 @@ export function run(argv: string[], root: string): number {
                     + `for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` `
                     + '→ publish → `harness doc url <DOC-x> <url>`, then submit again.'
                   : '')
-                + `\nNext: a human approves it in their terminal — \`harness gate approve ${phase}\`.`,
+                + `\nNext: a human approves it in their terminal:\n  ${humanCmd(`gate approve ${phase}`)}`,
                 `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`
                 + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : '')
                 + (noDoc
@@ -865,7 +865,7 @@ export function run(argv: string[], root: string): number {
                     + `\`harness doc upsert --id <DOC-x> --path <파일> --phase ${phase}\` `
                     + '→ 발행 → `harness doc url <DOC-x> <url>` 로 이은 뒤 다시 제출하라.'
                   : '')
-                + `\n다음: 사람이 자기 터미널에서 승인한다 — \`harness gate approve ${phase}\`.`,
+                + `\n다음: 사람이 자기 터미널에서 승인한다:\n  ${humanCmd(`gate approve ${phase}`)}`,
               ),
             );
             return 0;
@@ -890,12 +890,12 @@ export function run(argv: string[], root: string): number {
               throw new Error(L(
                 'Approving a gate is the human\'s final click, so it must come from a terminal — '
                 + 'this process has no TTY, which is what an agent\'s tool call looks like. '
-                + 'Run `harness gate approve <P>` yourself in your terminal. Everything else on the '
+                + 'Run `' + humanCmd('gate approve <P>') + '` yourself in your terminal. Everything else on the '
                 + 'gate is open: `harness gate status`, `harness gate verify <P>`. If you really are '
                 + 'a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` '
                 + 'yourself — but then nothing is checking that a person read the review packet.',
                 '게이트 승인은 사람의 최종 클릭이라 터미널에서 와야 한다 — 이 프로세스에는 TTY 가 '
-                + '없고, 그것이 곧 에이전트 도구 호출의 모습이다. `harness gate approve <P>` 를 '
+                + '없고, 그것이 곧 에이전트 도구 호출의 모습이다. `' + humanCmd('gate approve <P>') + '` 를 '
                 + '사용자가 직접 터미널에서 실행하라. 나머지는 열려 있다: `harness gate status`·'
                 + '`harness gate verify <P>`. TTY 없는 사람 환경(원격 파이프·CI)이 정말 필요하면 '
                 + '사용자가 직접 `HARNESS_APPROVE_NO_TTY=1` 을 켠다 — 다만 그 순간 리뷰 패킷을 '

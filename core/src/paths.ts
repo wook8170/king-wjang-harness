@@ -18,6 +18,46 @@ export const evidenceDir = (root: string, waveId: string) =>
 export const runtimeDir = (root: string) => path.join(harnessDir(root), '.runtime');
 
 /**
+ * [UX-15] **사람에게 내미는 명령은 사람의 터미널에서 그대로 돌아야 한다.**
+ *
+ * 플러그인으로 설치되면 이 CLI 는 플러그인 캐시(~/.claude/plugins/cache/... 아래 버전
+ * 디렉토리)의 bin/ 에 놓이고 **사용자 셸의 PATH 에는 없다.** 에이전트 세션은 그 경로를 이미
+ * export 해 두므로 짧은 이름으로 부를 수 있지만, 그 출력을 복사한 사람의 터미널에서는
+ * "command not found" 가 난다. 하필 그렇게 안내되는 것이 게이트 승인이다 — **사람만 실행할
+ * 수 있는 명령**이라, 사람이 못 치면 게이트가 열리지 않는다. 실제 사고: P1 제출 뒤 안내문을
+ * 그대로 복사한 사용자가 여기서 막혔다.
+ *
+ * 경로는 **런타임에 푼다**(하드코딩하면 설치 위치·버전이 바뀔 때마다 안내가 거짓말이 된다).
+ * __dirname 은 <install>/core/dist(번들) 또는 <install>/core/src(테스트) 이므로 두 단계 위가
+ * 설치 루트다 — profile.ts 의 번들 프로파일 경로와 hook.ts 의 harnessProgramFiles 가 이미 같은
+ * 가정 위에 서 있다. 심링크는 realpath 로 편다.
+ */
+let cachedCliPath: string | undefined;
+
+/** 이 프로세스를 돌리고 있는 실행 파일의 절대 경로 — 셸에 그대로 붙여 넣을 수 있는 형태. */
+export function harnessCliPath(): string {
+  if (cachedCliPath !== undefined) return cachedCliPath;
+  const candidate = path.resolve(__dirname, '..', '..', 'bin', 'harness');
+  // 못 찾으면 짧은 이름으로 둔다 — 부분 설치에서 안내가 통째로 사라지는 것보다 낫다.
+  let resolved = 'harness';
+  try {
+    if (fs.statSync(candidate).isFile()) resolved = fs.realpathSync(candidate);
+  } catch { /* 번들만 떼어 온 설치 — 폴백 */ }
+  cachedCliPath = shellQuote(resolved);
+  return cachedCliPath;
+}
+
+/** 사람이 자기 터미널에 그대로 붙여 넣는 명령 한 줄(절대 경로 포함). */
+export function humanCmd(args: string): string {
+  return harnessCliPath() + ' ' + args;
+}
+
+/** 붙여 넣어 **그대로 도는 것**이 목적이므로 공백·메타문자가 있으면 따옴표로 싼다. */
+function shellQuote(p: string): string {
+  return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
+}
+
+/**
  * [SEC-295] **「프로젝트 안인가」는 하나의 규칙이다 — 문구는 표면마다 다르더라도.**
  *
  * 게이트 제출은 루트 밖 경로를 거부한다(「심사자가 리포에서 볼 수 없는 파일에 승인 도장을
