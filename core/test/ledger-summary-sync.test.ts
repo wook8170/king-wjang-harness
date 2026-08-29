@@ -92,37 +92,65 @@ function summaryBlock(): string {
 describe.skipIf(!HAS_DOCS)('VAL-C: 대장 인용 줄이 실재하고 쓸모없지 않다', () => {
   const CITE = /`([\w/.\-]+\.(?:ts|md|js|yaml|json)):(\d+)`/;
   const repo = path.resolve(__dirname, '../..');
-  const rows = readDoc(LEDGER).split('\n').filter(l => ROW.test(l));
 
-  it('인용한 파일과 줄이 실재한다', () => {
-    const bad: string[] = [];
-    for (const line of rows) {
-      const f = line.split('|').map(x => x.trim());
-      const m = CITE.exec(f[7] ?? '');
-      if (!m) continue;
-      const file = path.join(repo, m[1]);
-      if (!fs.existsSync(file)) { bad.push(`${ROW.exec(line)![1]}: 없는 파일 ${m[1]}`); continue; }
-      const lines = fs.readFileSync(file, 'utf8').split('\n');
-      if (Number(m[2]) > lines.length) bad.push(`${ROW.exec(line)![1]}: ${m[1]} 에 ${m[2]} 줄이 없다`);
+  /**
+   * [VAL-D] **라운드가 늘면 검사도 함께 늘어야 한다.**
+   *
+   * 이 lint 는 2026-08-21 대장 하나만 봤다. 그 뒤 2026-08-27 라운드가 167행짜리 대장을 새로
+   * 만들었고 그 대장의 인용은 **아무도 기계로 보지 않았다** — 실측으로 7행이 닫는 괄호·`---`·
+   * `{` 를 가리키고 있었다. 라운드 디렉토리를 손으로 적으면 다음 라운드에서 같은 빈틈이
+   * 다시 생기므로 **`docs/release-readiness/<날짜>/ledger.md` 를 훑는다** — 새 라운드는
+   * 만들어 두기만 하면 자동으로 검사에 들어온다.
+   */
+  const RR = path.resolve(repo, 'docs/release-readiness');
+  const ROUNDS = (fs.existsSync(RR) ? fs.readdirSync(RR) : [])
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort()
+    .map(d => ({ round: d, ledger: path.join(RR, d, 'ledger.md') }))
+    .filter(r => fs.existsSync(r.ledger));
+
+  it('라운드 대장이 전부 잡힌다 — 빈 집합·한 라운드만 통과하지 않게', () => {
+    expect(ROUNDS.map(r => r.round), '라운드 대장을 못 찾았다').toContain('2026-08-21');
+    expect(ROUNDS.length, '새 라운드 대장이 검사에서 빠졌다').toBeGreaterThanOrEqual(2);
+    for (const { round, ledger } of ROUNDS) {
+      const n = readDoc(ledger).split('\n').filter(l => ROW.test(l)).length;
+      expect(n, `${round} 대장에서 데이터 행을 못 잡았다`).toBeGreaterThan(0);
     }
-    expect(bad).toEqual([]);
   });
 
-  it('인용한 줄이 닫는 괄호·주석 종료·공백 같은 무의미한 줄이 아니다', () => {
-    const bad: string[] = [];
-    for (const line of rows) {
-      const f = line.split('|').map(x => x.trim());
-      const m = CITE.exec(f[7] ?? '');
-      if (!m) continue;
-      const file = path.join(repo, m[1]);
-      if (!fs.existsSync(file)) continue;                       // 위 검사가 잡는다
-      const target = (fs.readFileSync(file, 'utf8').split('\n')[Number(m[2]) - 1] ?? '').trim();
-      // 식별자·단어가 두 글자 이상 남아야 «무엇을 가리키는지» 알 수 있다.
-      const meat = target.replace(/[^\p{L}\p{N}_]/gu, '');
-      if (meat.length < 2) bad.push(`${ROW.exec(line)![1]}: ${m[1]}:${m[2]} → ${JSON.stringify(target)}`);
-    }
-    expect(bad, '인용이 소스 변경으로 밀렸다 — 내용을 보고 다시 앵커하라').toEqual([]);
-  });
+  for (const { round, ledger } of ROUNDS) {
+    const rows = readDoc(ledger).split('\n').filter(l => ROW.test(l));
+
+    it(`[${round}] 인용한 파일과 줄이 실재한다`, () => {
+      const bad: string[] = [];
+      for (const line of rows) {
+        const f = line.split('|').map(x => x.trim());
+        const m = CITE.exec(f[7] ?? '');
+        if (!m) continue;
+        const file = path.join(repo, m[1]);
+        if (!fs.existsSync(file)) { bad.push(`${ROW.exec(line)![1]}: 없는 파일 ${m[1]}`); continue; }
+        const lines = fs.readFileSync(file, 'utf8').split('\n');
+        if (Number(m[2]) > lines.length) bad.push(`${ROW.exec(line)![1]}: ${m[1]} 에 ${m[2]} 줄이 없다`);
+      }
+      expect(bad).toEqual([]);
+    });
+
+    it(`[${round}] 인용한 줄이 닫는 괄호·주석 종료·공백 같은 무의미한 줄이 아니다`, () => {
+      const bad: string[] = [];
+      for (const line of rows) {
+        const f = line.split('|').map(x => x.trim());
+        const m = CITE.exec(f[7] ?? '');
+        if (!m) continue;
+        const file = path.join(repo, m[1]);
+        if (!fs.existsSync(file)) continue;                       // 위 검사가 잡는다
+        const target = (fs.readFileSync(file, 'utf8').split('\n')[Number(m[2]) - 1] ?? '').trim();
+        // 식별자·단어가 두 글자 이상 남아야 «무엇을 가리키는지» 알 수 있다.
+        const meat = target.replace(/[^\p{L}\p{N}_]/gu, '');
+        if (meat.length < 2) bad.push(`${ROW.exec(line)![1]}: ${m[1]}:${m[2]} → ${JSON.stringify(target)}`);
+      }
+      expect(bad, '인용이 소스 변경으로 밀렸다 — 내용을 보고 다시 앵커하라').toEqual([]);
+    });
+  }
 });
 
 describe.skipIf(!HAS_DOCS)('VAL-B: 판정 블록이 대장과 갈리지 않는다', () => {
