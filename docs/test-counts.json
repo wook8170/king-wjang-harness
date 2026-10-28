@@ -1,18 +1,18 @@
 {
-  "measuredAt": "2026-10-28T10:30:54.139Z",
-  "sha": "696b2bca54caa59244c02a164e7933b652812a9e",
+  "measuredAt": "2026-10-28T10:36:36.065Z",
+  "sha": "3b2531a110d926b233563e7fcab42d365a06eba2",
   "repo": {
     "files": 69,
     "tests": 1633,
-    "passed": 1627,
+    "passed": 1631,
     "skipped": 2,
-    "failed": 4
+    "failed": 0
   },
   "archive": {
     "files": 69,
     "tests": 1629,
-    "passed": 1607,
+    "passed": 1609,
     "skipped": 20,
-    "failed": 2
+    "failed": 0
   }
 }

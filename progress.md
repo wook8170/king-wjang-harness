@@ -1,5 +1,50 @@
 # king-wjang-harness 진행상황 (핸드오프)
 
+## 2026-10-28 (55) — **버전별 보안 점검 회차 · 결과서(엑셀) · 출하 게이트 연결**
+
+**정본.** 브랜치 `feat/security-verify`(기준 main `a3b30b8`) · 커밋 3개(`696b2bc` 기능 · `3b2531a` 중복 규칙·재앵커·계량 ·
+이 핸드오프 커밋) · **push 안 함**(오너 결정 대기) · 트리 clean.
+**69파일 1633 tests — 1631 pass / 2 skip / fail 0 · tsc 0 · 배포본 1629개 중 1609 pass / fail 0 · dist 재현(2회 빌드 해시 동일) ·
+대장 FEAT-09 추가(verified · measured) · 앵커 lint 통과.**
+
+### 이번 웨이브가 한 일
+
+gstudio 에서 만든 「버전마다 보안 점검 → 엑셀 결과서」를 제품에 묶이지 않게 옮겼다.
+
+| 조각 | 위치 |
+|---|---|
+| 판정 · 설정 · 허용 대상 · 라우트 해석 · 결과서 · 결함 초안 | `core/src/security.ts` (네트워크·프로세스 없음) |
+| 최소 xlsx 작성기(Node 내장, 결정적) | `core/src/xlsx.ts` |
+| 실행기(스택 · deps · 헤더 · 권한 거부 · 수동 · ZAP) | `core/src/security-run.ts` → `core/dist/security-run.js` (별도 진입점 — CLI·훅은 import 안 함, 회귀가 고정) |
+| CLI | `harness security verdict\|report\|defects\|target\|routes` |
+| 게이트 | `approveGate` P10·P12 + `shipVerdict` 가 `securityGateViolation` 한 벌을 부른다 |
+| 설정 | `.harness/profile/security.yaml` — 정책 접두사라 훅이 에이전트 쓰기를 거부(실측 deny) |
+| 스킬·에이전트 | `skills/security-verify`(신설) · P10·P12 · 드라이버 · readiness-auditor 규칙 9 |
+
+판정 기준(코드 고정): 미해결 High 0 · 미조치 Medium 0 · 권한 거부 100% · 결과서가 현재 원자료에서 만들어짐(입력 해시) ·
+6단계 전부 완료. High 는 수용 불가, Medium 수용은 `approved_by` 필수, 오탐은 근거 필수.
+
+### 실측(시험 프로젝트 `/Volumes/WorkSpace/0200_Dev/harness-sec-test-proj`, 127.0.0.1:9911)
+
+1회차(심어 둔 권한 누락) → 뷰어 `GET /api/admin/settings` 200 을 High 로 잡음 → `harness security defects` 줄을 그대로
+실행해 결함 대장 등록 → 서버 수정 → 전 단계 재실행 **통과**(권한 거부 10/10 · 수동 7/7 · ZAP baseline 61 PASS · active 113 PASS ·
+경고 0 · npm audit 0) → 대장 verified → `package.json` 을 0.2.0 으로 올리자 `ship verdict` 가 막음 → 되돌림.
+비밀번호·토큰 결과 폴더 잔존 0. 컨테이너 0 · 9901~9920 LISTEN 0.
+
+### 다음 즉시 할 일
+
+1. **오너 결정** — push·PR·버전(0.1.2 → 0.2.0 권장: P10/P12 승인 조건이 바뀌는 동작 변경).
+2. 아티팩트(출하 검증 리포트) 갱신은 이번 범위 밖 — 다음 라운드에서 FEAT-09 반영.
+
+### 함정
+
+- **`npm run doc:counts` 는 `git stash create` 로 배포본을 뜬다 — 추적 안 된 새 파일은 빠진다.** 새 파일을 만든 뒤엔 먼저 커밋(또는 `git add`)하고 재라.
+- 계량 고정점: README 의 배포본 수 = 기록 파일의 수일 때만 배포본 스위트가 전부 통과한다. 기록을 기대값으로 맞춘 뒤 한 번 재면 실측으로 덮인다.
+- 소스 줄을 밀면 두 대장의 인용이 밀린다 — 기준 커밋과 difflib 줄 대응으로 일괄 재앵커했다(74곳). 재실행하면 이중 이동하니 한 번만.
+- OrbStack/Docker Desktop 에서는 ZAP 컨테이너가 `host.docker.internal` 로 호스트 루프백에 닿는다(리눅스는 host 망). 허용 대상 확인은 설정 주소(루프백)로 한다.
+
+---
+
 ## 2026-08-30 (54) — **v0.2 입력 검증 계층 9건 마감 · 아티팩트 재게시**
 
 **정본.** 커밋 `85f5335`(v0.2) + 이 핸드오프 커밋 · **push 완료** · 트리 clean ·
