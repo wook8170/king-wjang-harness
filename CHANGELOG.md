@@ -24,7 +24,8 @@ version collects everything in `.harness/security/<version>/`:
 - `summary.json` and `defects.md` — unresolved High/Medium as `harness ship defect add` lines.
 
 Pass criteria are fixed in the core: unresolved High 0 · unaddressed Medium 0 · authorization
-denial 100% · results workbook present and built from the current results. False positives and
+denial 100% · results workbook present and built from the current results. Dependency advisories
+block only at critical/high; moderate/low are recorded in the workbook and do not block. False positives and
 accepted risks go in the round's `triage.yaml` with reason and evidence; a High cannot be accepted,
 and an accepted Medium needs a named approver.
 

@@ -275,7 +275,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 
 | 点検 | 内容 |
 |---|---|
-| 依存関係の監査 | ロックファイルからパッケージマネージャを選ぶ（npm・pnpm・yarn・cargo・pip-audit・govulncheck）。`deps.command` で変えられる |
+| 依存関係の監査 | ロックファイルからパッケージマネージャを選ぶ（npm・pnpm・yarn・cargo・pip-audit・govulncheck）。`deps.command` で変えられる。critical・high は High として止め、moderate・low は結果書に記録するだけ |
 | セキュリティヘッダー | CSP・`X-Content-Type-Options`・`X-Frame-Options`（CSP `frame-ancestors` で代替可）・`Referrer-Policy`、https なら HSTS、Cookie 属性、`Server` のバージョン露出 |
 | 動的点検 | ZAP baseline とログインしたロールでの active 点検。イメージはタグかダイジェストで固定し、外部コールバック（OAST）と更新確認を切る |
 | 権限拒否の全数確認 | ルート一覧コマンドの出力を読み、権限のないロールで対象ルートをすべて呼ぶ。新しい API は次の回に自動で入る |

@@ -275,7 +275,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 
 | 점검 | 내용 |
 |---|---|
-| 의존성 감사 | 잠금 파일로 패키지 관리자를 고른다(npm·pnpm·yarn·cargo·pip-audit·govulncheck). `deps.command` 로 바꿀 수 있다 |
+| 의존성 감사 | 잠금 파일로 패키지 관리자를 고른다(npm·pnpm·yarn·cargo·pip-audit·govulncheck). `deps.command` 로 바꿀 수 있다. critical·high 는 High 로 막고, moderate·low 는 결과서에 기록만 한다 |
 | 보안 헤더 | CSP·`X-Content-Type-Options`·`X-Frame-Options`(CSP `frame-ancestors` 로 대신 가능)·`Referrer-Policy`, https 면 HSTS, 쿠키 속성, `Server` 버전 노출 |
 | 동적 점검 | ZAP baseline 과 로그인한 역할의 active 점검. 이미지는 태그·다이제스트로 고정해야 하고, 외부 콜백(OAST)과 업데이트 확인을 끈다 |
 | 권한 거부 전수 | 라우트 목록 명령의 출력을 읽어, 권한 없는 역할로 모든 대상 라우트를 호출한다. 새 API 는 다음 회차에 자동으로 포함된다 |

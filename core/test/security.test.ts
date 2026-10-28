@@ -173,6 +173,28 @@ describe('판정 — High 있음', () => {
     expect(j.reasons.join()).toContain('권한 거부 1/2');
   });
 
+  it('의존성은 critical·high 만 막는다 — moderate·low 만 있으면 통과하고 「기록」으로 남는다', () => {
+    const root = setup();
+    passingSecurityRound(root, '1.0.0', {
+      'deps.json': { advisories: [{ package: 'a', severity: 'moderate', title: 'ReDoS' }, { package: 'b', severity: 'low', title: 'x' }], counts: { moderate: 1, low: 1 } },
+    });
+    const v = securityVerdict(root);
+    expect(v.reasons).toEqual([]);
+    expect(v.ok).toBe(true);
+    expect(v.judgement!.findings.filter(f => f.source === 'deps').map(f => `${f.key} ${f.severity} ${f.status}`)).toEqual(['dep:a Medium recorded', 'dep:b Low recorded']);
+    expect(defectCommands(v.judgement!, root)).toEqual([]);
+  });
+
+  it('의존성 high · critical 은 판정을 막는다', () => {
+    for (const severity of ['high', 'critical']) {
+      const root = setup();
+      passingSecurityRound(root, '1.0.0', { 'deps.json': { advisories: [{ package: 'c', severity, title: 'RCE' }], counts: { [severity]: 1 } } });
+      const v = securityVerdict(root);
+      expect(v.ok, severity).toBe(false);
+      expect(v.reasons.join()).toContain('SEC-1.0.0-dep-c');
+    }
+  });
+
   it('High 는 수용할 수 없다 — 수정이나 오탐만 해결로 본다', () => {
     const root = setup();
     const dir = passingSecurityRound(root, '1.0.0', highZap);

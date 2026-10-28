@@ -8603,6 +8603,8 @@ ${f2.where}`;
     const sev = depSeverity(a.severity);
     if (sev === "Info") continue;
     add({ key: `dep:${a.package}`, severity: sev, source: "deps", title: `${a.package}: ${a.title ?? a.severity}`, where: a.range ?? "", evidence: "deps.json" });
+    const rec = out.get(`dep:${a.package}`);
+    rec.status = rec.severity === "High" ? "open" : "recorded";
   }
   for (const h of headers?.rows ?? []) {
     if (h.verdict !== "fail") continue;
@@ -8663,7 +8665,7 @@ function judgeRound(root, dir, version) {
   }
   const unresolved = (sev, ok2) => findings.filter((f2) => f2.severity === sev && !ok2.includes(f2.status));
   const highOpen = unresolved("High", ["fixed", "false-positive"]);
-  const medOpen = unresolved("Medium", ["fixed", "accepted", "false-positive"]);
+  const medOpen = unresolved("Medium", ["fixed", "accepted", "false-positive", "recorded"]);
   const { run, deps, headers, authz, manual } = readRound(dir);
   const step = (name) => run?.steps?.find((s) => s.name === name);
   const authzRows = authz?.rows ?? [];

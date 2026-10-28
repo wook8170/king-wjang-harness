@@ -21,6 +21,9 @@ The pass criteria are fixed in the core and cannot be configured:
 | Authorization denial | 100% of unprivileged-role calls on the selected routes are refused |
 | Results workbook | `security-results-<version>.xlsx` exists and was built from the current results |
 
+Dependency advisories block only at critical/high (they become High findings). Moderate and low
+advisories are listed in the workbook with status `recorded` and do not block.
+
 Plus: every step (deps, headers, authz, manual, zap-baseline, zap-active) must have completed.
 "No result" is not a pass.
 

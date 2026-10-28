@@ -428,7 +428,11 @@ export function inputsHash(dir: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Severity = 'High' | 'Medium' | 'Low' | 'Info';
-export type FindingStatus = 'open' | 'fixed' | 'accepted' | 'false-positive';
+/**
+ * `recorded`(기록)는 사람이 고르는 상태가 아니라 판정이 붙이는 상태다 — 의존성 moderate·low 는
+ * 결과서에 남기되 판정은 막지 않는다(오너 결정 10-28, gstudio 와 같은 기준: critical·high 만 막는다).
+ */
+export type FindingStatus = 'open' | 'fixed' | 'accepted' | 'false-positive' | 'recorded';
 const SEV_ORDER: Severity[] = ['High', 'Medium', 'Low', 'Info'];
 
 export interface Finding {
@@ -551,6 +555,9 @@ function rawFindings(dir: string, version: string): Finding[] {
     const sev = depSeverity(a.severity);
     if (sev === 'Info') continue;
     add({ key: `dep:${a.package}`, severity: sev, source: 'deps', title: `${a.package}: ${a.title ?? a.severity}`, where: a.range ?? '', evidence: 'deps.json' });
+    // 의존성은 critical·high(→ High)만 판정을 막는다. moderate·low 는 기록으로 남긴다.
+    const rec = out.get(`dep:${a.package}`)!;
+    rec.status = rec.severity === 'High' ? 'open' : 'recorded';
   }
   for (const h of headers?.rows ?? []) {
     if (h.verdict !== 'fail') continue;
@@ -598,7 +605,7 @@ export function judgeRound(root: string, dir: string, version: string): RoundJud
   }
   const unresolved = (sev: Severity, ok: FindingStatus[]) => findings.filter(f => f.severity === sev && !ok.includes(f.status));
   const highOpen = unresolved('High', ['fixed', 'false-positive']);
-  const medOpen = unresolved('Medium', ['fixed', 'accepted', 'false-positive']);
+  const medOpen = unresolved('Medium', ['fixed', 'accepted', 'false-positive', 'recorded']);
 
   const { run, deps, headers, authz, manual } = readRound(dir);
   const step = (name: string) => run?.steps?.find(s => s.name === name);
@@ -730,7 +737,7 @@ function sheets(root: string, j: RoundJudgement, cfg: SecurityConfig, t: Tr): Sh
     triage: { en: 'Every triage decision has its reason and evidence', ko: '판정 기록마다 사유 · 근거가 있다' },
     authz: { en: 'Authorization denial = 100% for unprivileged roles', ko: '권한 없는 역할 거부 100%' },
     manual: { en: 'Manual scenarios: 0 failed · 0 errors', ko: '수동 시나리오 실패 · 오류 0건' },
-    deps: { en: 'Dependency audit ran', ko: '의존성 감사 실행' },
+    deps: { en: 'Dependency audit ran — critical/high block as High; moderate/low are recorded only', ko: '의존성 감사 실행 — critical·high 는 High 로 막고, moderate·low 는 기록만 한다' },
     headers: { en: 'Security header check ran', ko: '보안 헤더 점검 실행' },
     scans: { en: 'ZAP baseline and authenticated active scan completed', ko: 'ZAP baseline · 인증 active 점검 완료' },
   };
@@ -815,7 +822,7 @@ export function defectCommands(j: RoundJudgement, root?: string): string[] {
   const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
   return j.findings
     .filter(f => (f.severity === 'High' && !['fixed', 'false-positive'].includes(f.status))
-      || (f.severity === 'Medium' && !['fixed', 'accepted', 'false-positive'].includes(f.status)))
+      || (f.severity === 'Medium' && !['fixed', 'accepted', 'false-positive', 'recorded'].includes(f.status)))
     .map(f => `harness ship defect add --id ${f.id} --severity ${f.severity === 'High' ? 'high' : 'medium'} `
       + `--title ${q(f.title.slice(0, 160))} --evidence ${q(where(path.join(j.dir, f.evidence.split(' · ')[0])))}`);
 }

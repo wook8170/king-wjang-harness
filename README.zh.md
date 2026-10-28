@@ -271,7 +271,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 
 | 检查 | 内容 |
 |---|---|
-| 依赖审计 | 按锁文件选择包管理器（npm、pnpm、yarn、cargo、pip-audit、govulncheck），可用 `deps.command` 覆盖 |
+| 依赖审计 | 按锁文件选择包管理器（npm、pnpm、yarn、cargo、pip-audit、govulncheck），可用 `deps.command` 覆盖。critical/high 作为 High 拦截，moderate/low 只记录在工作簿中、不拦截 |
 | 安全响应头 | CSP、`X-Content-Type-Options`、`X-Frame-Options`（CSP `frame-ancestors` 可替代）、`Referrer-Policy`、https 下的 HSTS、Cookie 属性、`Server` 版本暴露 |
 | 动态扫描 | ZAP baseline 加上已登录角色的 active 扫描。镜像必须固定到标签或摘要；关闭外部回调（OAST）和更新检查 |
 | 权限拒绝全量检查 | 读取路由列表命令的输出，用每个无权限角色调用所有选中的路由。新 API 会在下一轮自动加入 |

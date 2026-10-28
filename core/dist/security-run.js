@@ -8122,6 +8122,8 @@ ${f.where}`;
     const sev = depSeverity(a.severity);
     if (sev === "Info") continue;
     add({ key: `dep:${a.package}`, severity: sev, source: "deps", title: `${a.package}: ${a.title ?? a.severity}`, where: a.range ?? "", evidence: "deps.json" });
+    const rec = out.get(`dep:${a.package}`);
+    rec.status = rec.severity === "High" ? "open" : "recorded";
   }
   for (const h of headers?.rows ?? []) {
     if (h.verdict !== "fail") continue;
@@ -8182,7 +8184,7 @@ function judgeRound(root, dir, version) {
   }
   const unresolved = (sev, ok) => findings.filter((f) => f.severity === sev && !ok.includes(f.status));
   const highOpen = unresolved("High", ["fixed", "false-positive"]);
-  const medOpen = unresolved("Medium", ["fixed", "accepted", "false-positive"]);
+  const medOpen = unresolved("Medium", ["fixed", "accepted", "false-positive", "recorded"]);
   const { run, deps, headers, authz, manual } = readRound(dir);
   const step = (name) => run?.steps?.find((s) => s.name === name);
   const authzRows = authz?.rows ?? [];
@@ -8320,7 +8322,7 @@ function sheets(root, j, cfg, t) {
     triage: { en: "Every triage decision has its reason and evidence", ko: "\uD310\uC815 \uAE30\uB85D\uB9C8\uB2E4 \uC0AC\uC720 \xB7 \uADFC\uAC70\uAC00 \uC788\uB2E4" },
     authz: { en: "Authorization denial = 100% for unprivileged roles", ko: "\uAD8C\uD55C \uC5C6\uB294 \uC5ED\uD560 \uAC70\uBD80 100%" },
     manual: { en: "Manual scenarios: 0 failed \xB7 0 errors", ko: "\uC218\uB3D9 \uC2DC\uB098\uB9AC\uC624 \uC2E4\uD328 \xB7 \uC624\uB958 0\uAC74" },
-    deps: { en: "Dependency audit ran", ko: "\uC758\uC874\uC131 \uAC10\uC0AC \uC2E4\uD589" },
+    deps: { en: "Dependency audit ran \u2014 critical/high block as High; moderate/low are recorded only", ko: "\uC758\uC874\uC131 \uAC10\uC0AC \uC2E4\uD589 \u2014 critical\xB7high \uB294 High \uB85C \uB9C9\uACE0, moderate\xB7low \uB294 \uAE30\uB85D\uB9CC \uD55C\uB2E4" },
     headers: { en: "Security header check ran", ko: "\uBCF4\uC548 \uD5E4\uB354 \uC810\uAC80 \uC2E4\uD589" },
     scans: { en: "ZAP baseline and authenticated active scan completed", ko: "ZAP baseline \xB7 \uC778\uC99D active \uC810\uAC80 \uC644\uB8CC" }
   };
@@ -8418,7 +8420,7 @@ function sheets(root, j, cfg, t) {
 function defectCommands(j, root) {
   const where = (p) => root ? path3.relative(root, p) : p;
   const q = (s) => `'${s.replace(/'/g, "'\\''")}'`;
-  return j.findings.filter((f) => f.severity === "High" && !["fixed", "false-positive"].includes(f.status) || f.severity === "Medium" && !["fixed", "accepted", "false-positive"].includes(f.status)).map((f) => `harness ship defect add --id ${f.id} --severity ${f.severity === "High" ? "high" : "medium"} --title ${q(f.title.slice(0, 160))} --evidence ${q(where(path3.join(j.dir, f.evidence.split(" \xB7 ")[0])))}`);
+  return j.findings.filter((f) => f.severity === "High" && !["fixed", "false-positive"].includes(f.status) || f.severity === "Medium" && !["fixed", "accepted", "false-positive", "recorded"].includes(f.status)).map((f) => `harness ship defect add --id ${f.id} --severity ${f.severity === "High" ? "high" : "medium"} --title ${q(f.title.slice(0, 160))} --evidence ${q(where(path3.join(j.dir, f.evidence.split(" \xB7 ")[0])))}`);
 }
 function writeSecurityReport(root, cfg, version) {
   const dir = roundDir(root, cfg, version);

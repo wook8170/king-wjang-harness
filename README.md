@@ -277,7 +277,7 @@ The ship track opens only when **the current version's security check has passed
 
 | Check | What it does |
 |---|---|
-| Dependency audit | Picks the package manager from the lockfile (npm, pnpm, yarn, cargo, pip-audit, govulncheck); override with `deps.command` |
+| Dependency audit | Picks the package manager from the lockfile (npm, pnpm, yarn, cargo, pip-audit, govulncheck); override with `deps.command`. Critical/high block as High findings; moderate/low are recorded in the workbook but do not block |
 | Security headers | CSP, `X-Content-Type-Options`, `X-Frame-Options` (CSP `frame-ancestors` counts), `Referrer-Policy`, HSTS on https, cookie attributes, `Server` version leaks |
 | Dynamic scan | ZAP baseline plus an authenticated active scan. The image must be pinned to a tag or digest; external callbacks (OAST) and update checks are off |
 | Authorization denial sweep | Reads the output of your route-listing command and calls every selected route as each unprivileged role. New APIs join the next round automatically |
