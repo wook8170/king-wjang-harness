@@ -405,7 +405,7 @@ export function loadProfile(root: string, name?: string): Profile {
  * 이 저장소의 런타임 의존은 `yaml` 하나뿐이고 그건 의도다 — 훅이 npm 트리에 인질로 잡히면
  * 강제가 설치 환경에 따라 살았다 죽었다 한다.
  */
-function globToRegExp(pattern: string): RegExp {
+export function globToRegExp(pattern: string): RegExp {
   let re = '';
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];

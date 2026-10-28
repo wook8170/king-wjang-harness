@@ -33,6 +33,7 @@ import { harnessDir } from './paths';
 import { tr, langFor } from './tr';
 import { pick, type Lang, type Msg } from './i18n';
 import { buildXlsx, readXlsx, type Cell, type Sheet } from './xlsx';
+import { globToRegExp } from './profile';
 
 type Tr = (m: Msg) => string;
 const trFor = (lang: Lang): Tr => (m: Msg) => pick(m, lang);
@@ -685,7 +686,7 @@ export function e2eSecurityCases(root: string, globs: string[]): Record<string, 
     const abs = path.resolve(root, g);
     const dir = path.dirname(abs);
     const base = path.basename(abs);
-    const re = new RegExp(`^${base.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`);
+    const re = globToRegExp(base);
     let files: string[] = [];
     try { files = fs.readdirSync(dir).filter(f => re.test(f)).sort(); } catch { files = []; }
     for (const f of files) {
@@ -935,10 +936,12 @@ export function securityGateViolation(root: string, phase: string): string | nul
   if (phase !== 'P10' && phase !== 'P12') return null;
   const v = securityVerdict(root);
   if (v.ok) return null;
+  const head = v.reasons.slice(0, 5).join(' / ');
+  const more = v.reasons.length - 5;
   return tr(root, {
     en: `Gate ${phase} needs a passing security result for the current version${v.version ? ` (${v.version})` : ''}: `
-      + `${v.reasons.slice(0, 5).join(' / ')}${v.reasons.length > 5 ? ` / … +${v.reasons.length - 5}` : ''}`,
+      + head + (more > 0 ? ` (+${more} more)` : ''),
     ko: `게이트 ${phase} 는 현재 버전${v.version ? `(${v.version})` : ''}의 보안 결과 통과가 필요하다: `
-      + `${v.reasons.slice(0, 5).join(' / ')}${v.reasons.length > 5 ? ` / … 외 ${v.reasons.length - 5}건` : ''}`,
+      + head + (more > 0 ? ` (외 ${more}건)` : ''),
   });
 }

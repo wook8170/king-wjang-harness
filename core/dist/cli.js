@@ -4644,7 +4644,7 @@ var require_resolve_flow_scalar = __commonJS({
       const { offset, type, source, end } = scalar;
       let _type;
       let value;
-      const _onError = (rel, code, msg) => onError(offset + rel, code, msg);
+      const _onError = (rel2, code, msg) => onError(offset + rel2, code, msg);
       switch (type) {
         case "scalar":
           _type = Scalar.Scalar.PLAIN;
@@ -8878,8 +8878,8 @@ function realOrNearest(p) {
   }
 }
 function isInsideRoot(root, p) {
-  const rel = path.relative(realOrNearest(root), realOrNearest(path.resolve(root, p)));
-  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  const rel2 = path.relative(realOrNearest(root), realOrNearest(path.resolve(root, p)));
+  return rel2 !== ".." && !rel2.startsWith(`..${path.sep}`) && !path.isAbsolute(rel2);
 }
 
 // core/src/config.ts
@@ -10021,8 +10021,8 @@ function findRawValues(source) {
 }
 function relFromRoot(root, p) {
   if (typeof p !== "string" || p.length === 0) return null;
-  const rel = path5.isAbsolute(p) ? path5.relative(root, p) : path5.normalize(p);
-  const posix = rel.split(path5.sep).join("/");
+  const rel2 = path5.isAbsolute(p) ? path5.relative(root, p) : path5.normalize(p);
+  const posix = rel2.split(path5.sep).join("/");
   if (posix === "" || posix === ".." || posix.startsWith("../")) return null;
   return posix;
 }
@@ -10255,9 +10255,9 @@ function readCanvasContent(root, from) {
   }
 }
 function relFromRoot2(root, abs) {
-  const rel = path6.relative(root, abs);
-  if (!rel || rel === ".." || rel.startsWith(`..${path6.sep}`) || path6.isAbsolute(rel)) return null;
-  return rel.split(path6.sep).join("/");
+  const rel2 = path6.relative(root, abs);
+  if (!rel2 || rel2 === ".." || rel2.startsWith(`..${path6.sep}`) || path6.isAbsolute(rel2)) return null;
+  return rel2.split(path6.sep).join("/");
 }
 function recordBaseline(root, uxNodeId, pngPath) {
   requireUxId(root, uxNodeId);
@@ -11502,12 +11502,12 @@ function renderAdrPacket(rec, lang = DEFAULT_LANG) {
 var crypto2 = __toESM(require("crypto"));
 
 // core/src/hash.ts
-function updateHashEntry(h, rel, content) {
+function updateHashEntry(h, rel2, content) {
   if (content === null) {
-    h.update(`${rel}\0unreadable\0`);
+    h.update(`${rel2}\0unreadable\0`);
     return;
   }
-  h.update(`${rel}\0${content.length}\0`);
+  h.update(`${rel2}\0${content.length}\0`);
   h.update(content);
 }
 
@@ -11543,9 +11543,9 @@ function collect(root, dir, out) {
 }
 function listPolicyFiles(root) {
   const out = [];
-  for (const rel of POLICY_FILES) {
+  for (const rel2 of POLICY_FILES) {
     try {
-      if (fs13.statSync(path10.join(root, rel)).isFile()) out.push(rel);
+      if (fs13.statSync(path10.join(root, rel2)).isFile()) out.push(rel2);
     } catch {
     }
   }
@@ -11555,14 +11555,14 @@ function listPolicyFiles(root) {
 function computePolicyHash(root) {
   const files = listPolicyFiles(root);
   const h = crypto2.createHash("sha256");
-  for (const rel of files) {
+  for (const rel2 of files) {
     let content = null;
     try {
-      content = fs13.readFileSync(path10.join(root, rel));
+      content = fs13.readFileSync(path10.join(root, rel2));
     } catch {
       content = null;
     }
-    updateHashEntry(h, rel, content);
+    updateHashEntry(h, rel2, content);
   }
   return { hash: h.digest("hex"), files };
 }
@@ -12432,14 +12432,14 @@ function buildVerifierBrief(root, waveId) {
 }
 
 // core/src/ship.ts
-var fs20 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
-var YAML8 = __toESM(require_dist());
+var fs21 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
+var YAML9 = __toESM(require_dist());
 
 // core/src/gate.ts
 var crypto5 = __toESM(require("crypto"));
-var fs18 = __toESM(require("fs"));
-var path14 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
 
 // core/src/registry.ts
 var fs16 = __toESM(require("fs"));
@@ -12677,10 +12677,10 @@ function docsForPhase(root, phase) {
 }
 
 // core/src/security.ts
-var fs17 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
+var fs18 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
 var crypto4 = __toESM(require("crypto"));
-var YAML7 = __toESM(require_dist());
+var YAML8 = __toESM(require_dist());
 
 // core/src/xlsx.ts
 var zlib = __toESM(require("zlib"));
@@ -12760,15 +12760,22 @@ function cellXml(ref, v, style) {
   if (s.length > CELL_MAX) s = `${s.slice(0, CELL_MAX - 1)}\u2026`;
   return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(s)}</t></is></c>`;
 }
+var XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+var OOXML = "http://schemas.openxmlformats.org";
+var NS_MAIN = `${OOXML}/spreadsheetml/2006/main`;
+var NS_PKG = (what) => `${OOXML}/package/2006/${what}`;
+var REL_TYPE = (what) => `${OOXML}/officeDocument/2006/relationships${what ? `/${what}` : ""}`;
+var CT = (what) => `application/vnd.openxmlformats-${what}+xml`;
+var SHEET_PART = (i) => `worksheets/sheet${i + 1}.xml`;
+var each = (xs, f2) => xs.map(f2).join("");
+var rel = (id, type, target) => `<Relationship Id="${id}" Type="${REL_TYPE(type)}" Target="${target}"/>`;
+var font = (bold) => `<font>${bold ? "<b/>" : ""}<sz val="10"/><name val="Calibri"/></font>`;
 function sheetXml(sh) {
   const rows = [sh.header, ...sh.rows];
-  const body = rows.map((r, ri) => {
-    const style = ri === 0 ? 1 : 2;
-    const cells = r.map((v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, style)).join("");
-    return `<row r="${ri + 1}">${cells}</row>`;
-  }).join("");
-  const cols = (sh.widths ?? []).length ? `<cols>${(sh.widths ?? []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
+  const body = each(rows, (r, ri) => `<row r="${ri + 1}">${each(r, (v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, ri === 0 ? 1 : 2))}</row>`);
+  const widths = sh.widths ?? [];
+  const cols = widths.length ? `<cols>${each(widths, (w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)}</cols>` : "";
+  return `${XML_HEAD}<worksheet xmlns="${NS_MAIN}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
 }
 function sheetNames(sheets2) {
   const seen = /* @__PURE__ */ new Set();
@@ -12779,17 +12786,18 @@ function sheetNames(sheets2) {
     return n;
   });
 }
-var STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="10"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+var STYLES = `${XML_HEAD}<styleSheet xmlns="${NS_MAIN}"><fonts count="2">${font(false)}${font(true)}</fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 function buildXlsx(sheets2) {
   const names = sheetNames(sheets2);
   const files = [];
-  const add = (name, s) => files.push({ name, data: Buffer.from(s, "utf8") });
-  add("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets2.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") + "</Types>");
-  add("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-  add("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`);
-  add("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets2.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("") + `<Relationship Id="rId${sheets2.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
-  add("xl/styles.xml", STYLES);
-  sheets2.forEach((s, i) => add(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)));
+  const add = (name, s) => files.push({ name, data: Buffer.from(XML_HEAD + s, "utf8") });
+  const override = (part, type) => `<Override PartName="/xl/${part}" ContentType="${CT(type)}"/>`;
+  add("[Content_Types].xml", `<Types xmlns="${NS_PKG("content-types")}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>` + override("workbook.xml", "officedocument.spreadsheetml.sheet.main") + override("styles.xml", "officedocument.spreadsheetml.styles") + each(sheets2, (_, i) => override(SHEET_PART(i), "officedocument.spreadsheetml.worksheet")) + "</Types>");
+  add("_rels/.rels", `<Relationships xmlns="${NS_PKG("relationships")}">${rel("rId1", "officeDocument", "xl/workbook.xml")}</Relationships>`);
+  add("xl/workbook.xml", `<workbook xmlns="${NS_MAIN}" xmlns:r="${REL_TYPE("")}"><sheets>${each(names, (n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)}</sheets></workbook>`);
+  add("xl/_rels/workbook.xml.rels", `<Relationships xmlns="${NS_PKG("relationships")}">` + each(sheets2, (_, i) => rel(`rId${i + 1}`, "worksheet", SHEET_PART(i))) + rel(`rId${sheets2.length + 1}`, "styles", "styles.xml") + "</Relationships>");
+  files.push({ name: "xl/styles.xml", data: Buffer.from(STYLES, "utf8") });
+  sheets2.forEach((s, i) => files.push({ name: `xl/${SHEET_PART(i)}`, data: Buffer.from(sheetXml(s), "utf8") }));
   return zip(files);
 }
 function readXlsx(buf) {
@@ -12810,7 +12818,7 @@ function readXlsx(buf) {
   const unxml = (s) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
   const names = [...wb.matchAll(/<sheet name="([^"]*)"/g)].map((m) => unxml(m[1]));
   return names.map((name, i) => {
-    const xmlText = entries.get(`xl/worksheets/sheet${i + 1}.xml`)?.toString("utf8") ?? "";
+    const xmlText = entries.get(`xl/${SHEET_PART(i)}`)?.toString("utf8") ?? "";
     const rows = [...xmlText.matchAll(/<row [^>]*>([\s\S]*?)<\/row>/g)].map((rm) => {
       const out = [];
       for (const cm of rm[1].matchAll(/<c r="([A-Z]+)\d+"[^>]*>([\s\S]*?)<\/c>/g)) {
@@ -12825,9 +12833,329 @@ function readXlsx(buf) {
   });
 }
 
-// core/src/security.ts
+// core/src/profile.ts
+var fs17 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
+var YAML7 = __toESM(require_dist());
 var trFor3 = (lang) => (m) => pick(m, lang);
-var securityConfigPath = (root) => path13.join(harnessDir(root), "profile", "security.yaml");
+var GENERIC = "generic";
+var GENERIC_FLOOR = Object.freeze({
+  name: GENERIC,
+  description: "Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.",
+  sourceGlobs: Object.freeze(["src/**", "lib/**", "app/**"]),
+  // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
+  // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
+  /**
+   * [API-09] **정본은 한 곳이다 — 여기서 베끼지 않고 가져온다.**
+   *
+   * 예전에는 같은 21개 목록이 세 곳(`config.ts` · 여기 · `profiles/generic/profile.yaml`)에
+   * 리터럴로 있었고, 테스트는 **뒤의 두 벌만** 이었다. 세 값이 «우연히» 같았을 뿐이고,
+   * 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 배포 차단에 구멍이 난다.
+   * 목록이 셋이면 언제나 하나가 낡는다 — 그래서 `DEFAULT_CONFIG` 를 정본으로 삼는다.
+   * `profile.yaml` 은 남은 한 벌이고, 그 동치는 `profile.test.ts` 가 이미 지킨다.
+   */
+  deployCommands: Object.freeze([...DEFAULT_CONFIG.design_blocked_bash]),
+  commands: Object.freeze({}),
+  designSystemRoots: Object.freeze([]),
+  origin: "floor",
+  dir: ""
+});
+var localProfileDir = (root) => path13.join(harnessDir(root), "profile");
+function bundledProfilesDir() {
+  return path13.resolve(__dirname, "..", "..", "profiles");
+}
+var errMsg = (e) => e instanceof Error ? e.message : String(e);
+function isDir(p) {
+  try {
+    return fs17.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+var isSafeName = (n) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(n) && n !== "." && n !== "..";
+function strList(v) {
+  if (!Array.isArray(v)) return null;
+  const list = v.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean);
+  return { list, dropped: v.length - list.length };
+}
+function readList(m, key, fallback, yamlPath, problems, required, t) {
+  if (!(key in m) || m[key] === null || m[key] === void 0) {
+    if (required) {
+      problems.push(t({
+        en: `${yamlPath}: \`${key}\` is missing \u2014 filling in the generic default. Leaving it empty opens that block (\xA74-2) entirely. Put the values your stack needs`,
+        ko: `${yamlPath}: \`${key}\` \uAC00 \uC5C6\uB2E4 \u2014 generic \uAE30\uBCF8\uAC12\uC73C\uB85C \uBA54\uC6B4\uB2E4. \uBE44\uC6CC\uB450\uBA74 \uD574\uB2F9 \uCC28\uB2E8(\xA74-2)\uC774 \uD1B5\uC9F8\uB85C \uC5F4\uB9B0\uB2E4. \uC2A4\uD0DD\uC5D0 \uB9DE\uB294 \uAC12\uC744 \uCC44\uC6CC\uB77C`
+      }));
+    }
+    return [...fallback];
+  }
+  const parsed = strList(m[key]);
+  if (!parsed) {
+    problems.push(t({
+      en: `${yamlPath}: \`${key}\` must be a list of strings (currently ${typeof m[key]}) \u2014 continuing with ${required ? "the generic default" : "an empty list"}`,
+      ko: `${yamlPath}: \`${key}\` \uB294 \uBB38\uC790\uC5F4 \uBAA9\uB85D\uC774\uC5B4\uC57C \uD55C\uB2E4(\uD604\uC7AC ${typeof m[key]}) \u2014 ${required ? "generic \uAE30\uBCF8\uAC12" : "\uBE48 \uBAA9\uB85D"}\uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4`
+    }));
+    return required ? [...fallback] : [];
+  }
+  if (parsed.dropped > 0) {
+    problems.push(t({
+      en: `${yamlPath}: ignored ${parsed.dropped} non-string entrie(s) under \`${key}\``,
+      ko: `${yamlPath}: \`${key}\` \uC758 \uBB38\uC790\uC5F4 \uC544\uB2CC \uD56D\uBAA9 ${parsed.dropped}\uAC1C\uB97C \uBB34\uC2DC\uD588\uB2E4`
+    }));
+  }
+  return parsed.list;
+}
+function readCommands(dir, problems, t) {
+  const p = path13.join(dir, "commands.yaml");
+  let text;
+  try {
+    text = fs17.readFileSync(p, "utf8");
+  } catch {
+    problems.push(t({
+      en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
+      ko: `${p} \uAC00 \uC5C6\uB2E4 \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4. \uCF54\uC5B4\uAC00 \uD14C\uC2A4\uD2B8\xB7\uBE4C\uB4DC\xB7\uBC30\uD3EC \uBA85\uB839\uC744 \uBB3C\uC73C\uBA74 "\uBBF8\uC815\uC758"\uB85C \uB2F5\uD558\uAC8C \uB418\uACE0, P7~P9 \uC790\uB3D9 \uD310\uC815\uC774 \uC804\uBD80 \uC0AC\uB78C\uC5D0\uAC8C \uB118\uC5B4\uC628\uB2E4`
+    }));
+    return {};
+  }
+  let raw;
+  try {
+    raw = YAML7.parse(text);
+  } catch (e) {
+    problems.push(t({
+      en: `failed to parse ${p} (${errMsg(e)}) \u2014 continuing without a command mapping`,
+      ko: `${p} \uD30C\uC2F1 \uC2E4\uD328(${errMsg(e)}) \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4`
+    }));
+    return {};
+  }
+  if (raw === null || raw === void 0) return {};
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    problems.push(t({
+      en: `${p}: the top level is not a \`key: command\` mapping \u2014 continuing without a command mapping`,
+      ko: `${p}: \uCD5C\uC0C1\uC704\uAC00 \`\uD0A4: \uBA85\uB839\` \uB9E4\uD551\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4`
+    }));
+    return {};
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "string") {
+      const cmd = v.trim();
+      if (cmd) out[k] = cmd;
+      continue;
+    }
+    if (v === null || v === void 0) continue;
+    problems.push(t({
+      en: `${p}: \`${k}\` must be a command string (currently ${typeof v}) \u2014 ignored`,
+      ko: `${p}: \`${k}\` \uB294 \uBA85\uB839 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD55C\uB2E4(\uD604\uC7AC ${typeof v}) \u2014 \uBB34\uC2DC\uD588\uB2E4`
+    }));
+  }
+  return out;
+}
+function readProfileDir(dir, origin, problems, t) {
+  const yamlPath = path13.join(dir, "profile.yaml");
+  let text;
+  try {
+    text = fs17.readFileSync(yamlPath, "utf8");
+  } catch (e) {
+    if (fs17.existsSync(path13.join(dir, "commands.yaml"))) {
+      text = "name: local";
+    } else if (origin === "local" && fs17.existsSync(path13.join(dir, "security.yaml"))) {
+      return null;
+    } else {
+      problems.push(t({
+        en: `cannot read ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
+        ko: `${yamlPath} \uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
+      }));
+      return null;
+    }
+  }
+  let raw;
+  try {
+    raw = YAML7.parse(text);
+  } catch (e) {
+    problems.push(t({
+      en: `failed to parse ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
+      ko: `${yamlPath} \uD30C\uC2F1 \uC2E4\uD328(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
+    }));
+    return null;
+  }
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    problems.push(t({
+      en: `${yamlPath}: the top level is not a mapping \u2014 skipping this profile`,
+      ko: `${yamlPath}: \uCD5C\uC0C1\uC704\uAC00 \uB9E4\uD551\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
+    }));
+    return null;
+  }
+  const m = raw;
+  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path13.basename(dir);
+  const description = typeof m.description === "string" ? m.description.trim() : void 0;
+  return {
+    name,
+    ...description ? { description } : {},
+    // 소스·배포는 비면 차단이 열리는 쪽이라 generic 기본값으로 메운다(+보고).
+    sourceGlobs: readList(m, "source_globs", GENERIC_FLOOR.sourceGlobs, yamlPath, problems, true, t),
+    deployCommands: readList(m, "deploy_commands", GENERIC_FLOOR.deployCommands, yamlPath, problems, true, t),
+    // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
+    designSystemRoots: readList(m, "design_system_roots", [], yamlPath, problems, false, t),
+    commands: readCommands(dir, problems, t),
+    origin,
+    dir
+  };
+}
+function floorProfile() {
+  return {
+    ...GENERIC_FLOOR,
+    sourceGlobs: [...GENERIC_FLOOR.sourceGlobs],
+    deployCommands: [...GENERIC_FLOOR.deployCommands],
+    designSystemRoots: [...GENERIC_FLOOR.designSystemRoots],
+    commands: { ...GENERIC_FLOOR.commands }
+  };
+}
+function resolve5(root, name, lang = DEFAULT_LANG) {
+  const t = trFor3(lang);
+  const problems = [];
+  const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
+  const local = localProfileDir(root);
+  if (fs17.existsSync(local)) {
+    if (!isDir(local)) {
+      problems.push(t({
+        en: `${local} is not a directory \u2014 skipping the project-local profile`,
+        ko: `${local} \uAC00 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
+      }));
+    } else {
+      const p = readProfileDir(local, "local", problems, t);
+      if (p) return { profile: p, problems };
+    }
+  }
+  const bundled = bundledProfilesDir();
+  if (!isSafeName(wanted)) {
+    problems.push(
+      t({
+        en: `The profile name '${wanted}' is invalid (only alphanumerics and . _ - are allowed) \u2014 continuing with generic. Fix \`profile\` in \`.harness/config.yaml\``,
+        ko: `\uD504\uB85C\uD30C\uC77C \uC774\uB984 '${wanted}' \uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4(\uC601\uC22B\uC790\xB7. _ - \uB9CC \uD5C8\uC6A9) \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \`.harness/config.yaml\` \uC758 \`profile\` \uC744 \uACE0\uCCD0\uB77C`
+      })
+    );
+  } else if (isDir(path13.join(bundled, wanted))) {
+    const p = readProfileDir(path13.join(bundled, wanted), "bundled", problems, t);
+    if (p) return { profile: p, problems };
+  } else {
+    problems.push(
+      t({
+        en: `Profile '${wanted}' was not found in ${bundled} \u2014 continuing with generic. Check the bundled list, or for a stack outside the bundles put a project-local profile in \`.harness/profile/\``,
+        ko: `\uD504\uB85C\uD30C\uC77C '${wanted}' \uB97C ${bundled} \uC5D0\uC11C \uCC3E\uC744 \uC218 \uC5C6\uB2E4 \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \uBC88\uB4E4 \uBAA9\uB85D\uC744 \uD655\uC778\uD558\uAC70\uB098, \uBC88\uB4E4 \uBC16 \uC2A4\uD0DD\uC774\uBA74 \`.harness/profile/\` \uC5D0 \uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \uD504\uB85C\uD30C\uC77C\uC744 \uB450\uC5B4\uB77C`
+      })
+    );
+  }
+  if (wanted !== GENERIC && isDir(path13.join(bundled, GENERIC))) {
+    const p = readProfileDir(path13.join(bundled, GENERIC), "bundled", problems, t);
+    if (p) return { profile: p, problems };
+  }
+  problems.push(
+    t({
+      en: `Could not read the generic profile in ${bundled} \u2014 continuing with the built-in floor values. Check that the plugin installation is intact`,
+      ko: `${bundled} \uC758 generic \uD504\uB85C\uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uB2E4 \u2014 \uCF54\uB4DC \uB0B4\uC7A5 \uBC14\uB2E5\uAC12\uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \uD50C\uB7EC\uADF8\uC778 \uC124\uCE58\uBCF8\uC774 \uC628\uC804\uD55C\uC9C0 \uD655\uC778\uD558\uB77C`
+    })
+  );
+  return { profile: floorProfile(), problems };
+}
+function inspectProfile(root, name) {
+  let lang = DEFAULT_LANG;
+  try {
+    lang = loadConfig(root).lang;
+  } catch {
+  }
+  try {
+    return resolve5(root, name, lang);
+  } catch (e) {
+    return {
+      profile: floorProfile(),
+      problems: [trFor3(lang)({
+        en: `exception while resolving the profile (${errMsg(e)}) \u2014 using the floor profile`,
+        ko: `\uD504\uB85C\uD30C\uC77C \uD574\uC11D \uC911 \uC608\uC678(${errMsg(e)}) \u2014 \uBC14\uB2E5\uAC12 \uC0AC\uC6A9`
+      })]
+    };
+  }
+}
+function loadProfile(root, name) {
+  return inspectProfile(root, name).profile;
+}
+function globToRegExp(pattern) {
+  let re = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        i++;
+        if (pattern[i + 1] === "/") {
+          i++;
+          re += "(?:[^/]*/)*";
+        } else {
+          re += ".*";
+        }
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else {
+      re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+function normRel(p) {
+  if (typeof p !== "string") return "";
+  let s = p.replace(/\\/g, "/").trim().replace(/\/{2,}/g, "/");
+  while (s.startsWith("./")) s = s.slice(2);
+  return s.replace(/^\/+/, "");
+}
+function isSourcePath(profile, relPath2) {
+  try {
+    const rel2 = normRel(relPath2);
+    if (!rel2) return false;
+    return (profile.sourceGlobs ?? []).some((g) => {
+      const pat = normRel(g);
+      return pat ? globToRegExp(pat).test(rel2) : false;
+    });
+  } catch {
+    return false;
+  }
+}
+function isSourceTree(profile, relPath2) {
+  try {
+    const rel2 = normRel(relPath2).replace(/\/+$/, "");
+    if (!rel2) return false;
+    return (profile.sourceGlobs ?? []).some((g) => {
+      const pat = normRel(g);
+      if (!pat) return false;
+      const literal = pat.split(/[*?[]/)[0].replace(/\/+$/, "");
+      return literal !== "" && (literal === rel2 || literal.startsWith(`${rel2}/`));
+    });
+  } catch {
+    return false;
+  }
+}
+var normCmd = (s) => typeof s === "string" ? s.replace(/\s+/g, " ").trim().toLowerCase() : "";
+function isDeployCommand(profile, command) {
+  try {
+    const cmd = normCmd(command);
+    if (!cmd) return false;
+    const lines = judgeableLines(String(command)).map(normCmd).filter((l) => l !== "");
+    if (lines.length === 0) return false;
+    return (profile.deployCommands ?? []).some((d) => {
+      const needle = normCmd(d);
+      return needle.length > 0 && lines.some((l) => runsCommand(l, needle));
+    });
+  } catch {
+    return false;
+  }
+}
+function commandFor(profile, key) {
+  const v = (profile.commands ?? {})[key];
+  return typeof v === "string" && v.trim().length > 0 ? v : void 0;
+}
+
+// core/src/security.ts
+var trFor4 = (lang) => (m) => pick(m, lang);
+var securityConfigPath = (root) => path14.join(harnessDir(root), "profile", "security.yaml");
 var DEFAULT_RESULTS_DIR = ".harness/security";
 var LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"];
 var DEFAULT_DENY_STATUSES = [401, 403, 404];
@@ -13000,10 +13328,10 @@ function isPinnedImage(image) {
 }
 function loadSecurityConfig(root) {
   const p = securityConfigPath(root);
-  if (!fs17.existsSync(p)) return { status: "absent", path: p };
+  if (!fs18.existsSync(p)) return { status: "absent", path: p };
   let raw;
   try {
-    raw = YAML7.parse(fs17.readFileSync(p, "utf8"));
+    raw = YAML8.parse(fs18.readFileSync(p, "utf8"));
   } catch (e) {
     return { status: "invalid", path: p, errors: [e.message] };
   }
@@ -13073,10 +13401,10 @@ function parseRoutes(text) {
   }).sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
 }
 function currentVersion(root, cfg) {
-  const p = path13.resolve(root, cfg.version_from);
+  const p = path14.resolve(root, cfg.version_from);
   let text;
   try {
-    text = fs17.readFileSync(p, "utf8");
+    text = fs18.readFileSync(p, "utf8");
   } catch {
     throw new Error(tr(root, {
       en: `Cannot read the version from ${cfg.version_from} \u2014 set \`version_from\` in .harness/profile/security.yaml`,
@@ -13105,20 +13433,20 @@ function assertVersion(root, v, from) {
   }
   return s;
 }
-var roundDir = (root, cfg, version) => path13.resolve(root, cfg.results_dir, version);
+var roundDir = (root, cfg, version) => path14.resolve(root, cfg.results_dir, version);
 var xlsxName = (version) => `security-results-${version}.xlsx`;
 var INPUT_FILES = ["run.json", "deps.json", "headers.json", "authz.json", "manual.json", "triage.yaml"];
 function inputsHash(dir) {
   const h = crypto4.createHash("sha256");
   const files = [...INPUT_FILES];
-  const zapDir = path13.join(dir, "zap");
-  if (fs17.existsSync(zapDir)) {
-    for (const f2 of fs17.readdirSync(zapDir).filter((f3) => f3.endsWith(".json")).sort()) files.push(`zap/${f2}`);
+  const zapDir = path14.join(dir, "zap");
+  if (fs18.existsSync(zapDir)) {
+    for (const f2 of fs18.readdirSync(zapDir).filter((f3) => f3.endsWith(".json")).sort()) files.push(`zap/${f2}`);
   }
   for (const f2 of files) {
     let data = null;
     try {
-      data = fs17.readFileSync(path13.join(dir, f2));
+      data = fs18.readFileSync(path14.join(dir, f2));
     } catch {
       data = null;
     }
@@ -13129,25 +13457,25 @@ function inputsHash(dir) {
 var SEV_ORDER = ["High", "Medium", "Low", "Info"];
 var readJson = (p) => {
   try {
-    return JSON.parse(fs17.readFileSync(p, "utf8"));
+    return JSON.parse(fs18.readFileSync(p, "utf8"));
   } catch {
     return void 0;
   }
 };
 function readRound(dir) {
   return {
-    run: readJson(path13.join(dir, "run.json")),
-    deps: readJson(path13.join(dir, "deps.json")),
-    headers: readJson(path13.join(dir, "headers.json")),
-    authz: readJson(path13.join(dir, "authz.json")),
-    manual: readJson(path13.join(dir, "manual.json"))
+    run: readJson(path14.join(dir, "run.json")),
+    deps: readJson(path14.join(dir, "deps.json")),
+    headers: readJson(path14.join(dir, "headers.json")),
+    authz: readJson(path14.join(dir, "authz.json")),
+    manual: readJson(path14.join(dir, "manual.json"))
   };
 }
 function readTriage(dir) {
-  const p = path13.join(dir, "triage.yaml");
-  if (!fs17.existsSync(p)) return { decisions: [] };
+  const p = path14.join(dir, "triage.yaml");
+  if (!fs18.existsSync(p)) return { decisions: [] };
   try {
-    const doc = YAML7.parse(fs17.readFileSync(p, "utf8"));
+    const doc = YAML8.parse(fs18.readFileSync(p, "utf8"));
     const list = Array.isArray(doc?.decisions) ? doc.decisions : [];
     return {
       decisions: list.map((d) => ({
@@ -13185,8 +13513,8 @@ ${f2.where}`;
     out.set(f2.key, { ...f2, id: `SEC-${version}-${slug(f2.key.replace(/^[a-z]+:/, (m) => m.slice(0, -1) + "-"))}`, status: "open" });
   };
   for (const s of run2?.scans ?? []) {
-    const rel = `zap/${s.file}`;
-    const rep = readJson(path13.join(dir, rel));
+    const rel2 = `zap/${s.file}`;
+    const rep = readJson(path14.join(dir, rel2));
     for (const site of rep?.site ?? []) {
       for (const a of site.alerts ?? []) {
         const sev = zapSeverity(a.riskcode);
@@ -13197,7 +13525,7 @@ ${f2.where}`;
           source: "zap",
           title: `${a.name} (ZAP ${a.pluginid})`,
           where: `${s.name}: ${(a.instances ?? []).slice(0, 3).map((i) => i.uri).join(" \xB7 ")}`,
-          evidence: rel
+          evidence: rel2
         });
       }
     }
@@ -13223,7 +13551,7 @@ ${f2.where}`;
   return [...out.values()].sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity) || a.key.localeCompare(b.key));
 }
 function judgeRound(root, dir, version) {
-  const t = trFor3(langFor(root));
+  const t = trFor4(langFor(root));
   const reasons = [];
   const triageErrors = [];
   const findings = rawFindings(dir, version);
@@ -13349,18 +13677,18 @@ var E2E_SECURITY_RE = /\b(?:auth|csrf|xss|ssrf|csp|cors|injection|permission|for
 function e2eSecurityCases(root, globs) {
   const out = [];
   for (const g of globs) {
-    const abs = path13.resolve(root, g);
-    const dir = path13.dirname(abs);
-    const base = path13.basename(abs);
-    const re = new RegExp(`^${base.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
+    const abs = path14.resolve(root, g);
+    const dir = path14.dirname(abs);
+    const base = path14.basename(abs);
+    const re = globToRegExp(base);
     let files = [];
     try {
-      files = fs17.readdirSync(dir).filter((f2) => re.test(f2)).sort();
+      files = fs18.readdirSync(dir).filter((f2) => re.test(f2)).sort();
     } catch {
       files = [];
     }
     for (const f2 of files) {
-      const doc = readJson(path13.join(dir, f2));
+      const doc = readJson(path14.join(dir, f2));
       const cases = Array.isArray(doc) ? doc : Array.isArray(doc?.cases) ? doc.cases : [];
       for (const c of cases) {
         const tags = Array.isArray(c.tags) ? c.tags.map(String) : [];
@@ -13368,11 +13696,11 @@ function e2eSecurityCases(root, globs) {
         if (c.security === true || tags.includes("security") || c.module === "security" || E2E_SECURITY_RE.test(text)) {
           out.push({
             id: String(c.id ?? ""),
-            module: String(c.module ?? path13.basename(f2).split(".")[0]),
+            module: String(c.module ?? path14.basename(f2).split(".")[0]),
             scenario: String(c.scenario ?? c.title ?? c.feature ?? ""),
             expected: String(c.expected ?? ""),
             spec: String(c.spec ?? ""),
-            file: path13.relative(root, path13.join(dir, f2))
+            file: path14.relative(root, path14.join(dir, f2))
           });
         }
       }
@@ -13448,7 +13776,7 @@ function sheets(root, j, cfg, t) {
   };
   const scanRows = [];
   for (const s of run2?.scans ?? []) {
-    const rep = readJson(path13.join(j.dir, "zap", s.file));
+    const rep = readJson(path14.join(j.dir, "zap", s.file));
     for (const site of rep?.site ?? []) {
       for (const a of site.alerts ?? []) {
         const uris = [...new Set((a.instances ?? []).map((i) => i.uri))].sort();
@@ -13500,24 +13828,24 @@ function sheets(root, j, cfg, t) {
   return out;
 }
 function defectCommands(j, root) {
-  const where = (p) => root ? path13.relative(root, p) : p;
+  const where = (p) => root ? path14.relative(root, p) : p;
   const q2 = (s) => `'${s.replace(/'/g, "'\\''")}'`;
-  return j.findings.filter((f2) => f2.severity === "High" && !["fixed", "false-positive"].includes(f2.status) || f2.severity === "Medium" && !["fixed", "accepted", "false-positive"].includes(f2.status)).map((f2) => `harness ship defect add --id ${f2.id} --severity ${f2.severity === "High" ? "high" : "medium"} --title ${q2(f2.title.slice(0, 160))} --evidence ${q2(where(path13.join(j.dir, f2.evidence.split(" \xB7 ")[0])))}`);
+  return j.findings.filter((f2) => f2.severity === "High" && !["fixed", "false-positive"].includes(f2.status) || f2.severity === "Medium" && !["fixed", "accepted", "false-positive"].includes(f2.status)).map((f2) => `harness ship defect add --id ${f2.id} --severity ${f2.severity === "High" ? "high" : "medium"} --title ${q2(f2.title.slice(0, 160))} --evidence ${q2(where(path14.join(j.dir, f2.evidence.split(" \xB7 ")[0])))}`);
 }
 function writeSecurityReport(root, cfg, version) {
   const dir = roundDir(root, cfg, version);
-  if (!fs17.existsSync(dir)) {
+  if (!fs18.existsSync(dir)) {
     throw new Error(tr(root, {
       en: `No results folder for ${version}: ${dir} \u2014 run the security check first (skill security-verify)`,
       ko: `${version} \uC758 \uACB0\uACFC \uD3F4\uB354\uAC00 \uC5C6\uB2E4: ${dir} \u2014 \uBCF4\uC548 \uC810\uAC80\uC744 \uBA3C\uC800 \uB3CC\uB824\uB77C(\uC2A4\uD0AC security-verify)`
     }));
   }
-  const t = trFor3(langFor(root));
+  const t = trFor4(langFor(root));
   const j = judgeRound(root, dir, version);
-  const xlsx = path13.join(dir, xlsxName(version));
-  fs17.writeFileSync(xlsx, buildXlsx(sheets(root, j, cfg, t)));
-  const summary = path13.join(dir, "summary.json");
-  fs17.writeFileSync(summary, `${JSON.stringify({
+  const xlsx = path14.join(dir, xlsxName(version));
+  fs18.writeFileSync(xlsx, buildXlsx(sheets(root, j, cfg, t)));
+  const summary = path14.join(dir, "summary.json");
+  fs18.writeFileSync(summary, `${JSON.stringify({
     schema: "security-summary/1",
     version,
     date: readRound(dir).run?.date ?? "",
@@ -13531,9 +13859,9 @@ function writeSecurityReport(root, cfg, version) {
     disclaimer: t(DISCLAIMER)
   }, null, 1)}
 `);
-  const defects = path13.join(dir, "defects.md");
+  const defects = path14.join(dir, "defects.md");
   const cmds = defectCommands(j, root);
-  fs17.writeFileSync(defects, [
+  fs18.writeFileSync(defects, [
     `# ${t({ en: "Defect drafts", ko: "\uACB0\uD568 \uCD08\uC548" })} \u2014 ${version}`,
     "",
     t({
@@ -13547,7 +13875,7 @@ function writeSecurityReport(root, cfg, version) {
   return { judgement: j, xlsx, summary, defects };
 }
 function securityVerdict(root, versionOverride) {
-  const t = trFor3(langFor(root));
+  const t = trFor4(langFor(root));
   const loaded = loadSecurityConfig(root);
   if (loaded.status === "absent") {
     return {
@@ -13571,32 +13899,32 @@ function securityVerdict(root, versionOverride) {
     return { ok: false, applies: true, reasons: [e.message] };
   }
   const dir = roundDir(root, cfg, version);
-  if (!fs17.existsSync(dir)) {
+  if (!fs18.existsSync(dir)) {
     return {
       ok: false,
       applies: true,
       version,
       dir,
       reasons: [t({
-        en: `no security result for version ${version} (${path13.relative(root, dir)}) \u2014 the version changed since the last check, or the check never ran. Run it for this version (skill security-verify)`,
-        ko: `\uBC84\uC804 ${version} \uC758 \uBCF4\uC548 \uACB0\uACFC\uAC00 \uC5C6\uB2E4 (${path13.relative(root, dir)}) \u2014 \uB9C8\uC9C0\uB9C9 \uC810\uAC80 \uB4A4 \uBC84\uC804\uC774 \uBC14\uB00C\uC5C8\uAC70\uB098 \uC810\uAC80\uC744 \uB3CC\uB9B0 \uC801\uC774 \uC5C6\uB2E4. \uC774 \uBC84\uC804\uC73C\uB85C \uB2E4\uC2DC \uB3CC\uB824\uB77C(\uC2A4\uD0AC security-verify)`
+        en: `no security result for version ${version} (${path14.relative(root, dir)}) \u2014 the version changed since the last check, or the check never ran. Run it for this version (skill security-verify)`,
+        ko: `\uBC84\uC804 ${version} \uC758 \uBCF4\uC548 \uACB0\uACFC\uAC00 \uC5C6\uB2E4 (${path14.relative(root, dir)}) \u2014 \uB9C8\uC9C0\uB9C9 \uC810\uAC80 \uB4A4 \uBC84\uC804\uC774 \uBC14\uB00C\uC5C8\uAC70\uB098 \uC810\uAC80\uC744 \uB3CC\uB9B0 \uC801\uC774 \uC5C6\uB2E4. \uC774 \uBC84\uC804\uC73C\uB85C \uB2E4\uC2DC \uB3CC\uB824\uB77C(\uC2A4\uD0AC security-verify)`
       })]
     };
   }
   const j = judgeRound(root, dir, version);
   const reasons = [...j.reasons];
-  const xlsx = path13.join(dir, xlsxName(version));
-  const summary = readJson(path13.join(dir, "summary.json"));
+  const xlsx = path14.join(dir, xlsxName(version));
+  const summary = readJson(path14.join(dir, "summary.json"));
   let readable = false;
   try {
-    readable = readXlsx(fs17.readFileSync(xlsx)).length > 0;
+    readable = readXlsx(fs18.readFileSync(xlsx)).length > 0;
   } catch {
     readable = false;
   }
   if (!readable) {
     reasons.push(t({
-      en: `the results workbook is missing or unreadable: ${path13.relative(root, xlsx)} \u2014 run \`harness security report\``,
-      ko: `\uACB0\uACFC\uC11C(\uC5D1\uC140)\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${path13.relative(root, xlsx)} \u2014 \`harness security report\` \uB97C \uC2E4\uD589\uD558\uB77C`
+      en: `the results workbook is missing or unreadable: ${path14.relative(root, xlsx)} \u2014 run \`harness security report\``,
+      ko: `\uACB0\uACFC\uC11C(\uC5D1\uC140)\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${path14.relative(root, xlsx)} \u2014 \`harness security report\` \uB97C \uC2E4\uD589\uD558\uB77C`
     }));
   } else if (summary?.inputsHash !== inputsHash(dir)) {
     reasons.push(t({
@@ -13610,21 +13938,23 @@ function securityGateViolation(root, phase) {
   if (phase !== "P10" && phase !== "P12") return null;
   const v = securityVerdict(root);
   if (v.ok) return null;
+  const head = v.reasons.slice(0, 5).join(" / ");
+  const more = v.reasons.length - 5;
   return tr(root, {
-    en: `Gate ${phase} needs a passing security result for the current version${v.version ? ` (${v.version})` : ""}: ${v.reasons.slice(0, 5).join(" / ")}${v.reasons.length > 5 ? ` / \u2026 +${v.reasons.length - 5}` : ""}`,
-    ko: `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uD604\uC7AC \uBC84\uC804${v.version ? `(${v.version})` : ""}\uC758 \uBCF4\uC548 \uACB0\uACFC \uD1B5\uACFC\uAC00 \uD544\uC694\uD558\uB2E4: ${v.reasons.slice(0, 5).join(" / ")}${v.reasons.length > 5 ? ` / \u2026 \uC678 ${v.reasons.length - 5}\uAC74` : ""}`
+    en: `Gate ${phase} needs a passing security result for the current version${v.version ? ` (${v.version})` : ""}: ` + head + (more > 0 ? ` (+${more} more)` : ""),
+    ko: `\uAC8C\uC774\uD2B8 ${phase} \uB294 \uD604\uC7AC \uBC84\uC804${v.version ? `(${v.version})` : ""}\uC758 \uBCF4\uC548 \uACB0\uACFC \uD1B5\uACFC\uAC00 \uD544\uC694\uD558\uB2E4: ` + head + (more > 0 ? ` (\uC678 ${more}\uAC74)` : "")
   });
 }
 
 // core/src/gate.ts
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
-function canonicalRel(root, rel) {
+function canonicalRel(root, rel2) {
   try {
-    const real = fs18.realpathSync(path14.resolve(root, rel));
-    const r = path14.relative(fs18.realpathSync(root), real);
-    return r && !r.startsWith(`..${path14.sep}`) && r !== ".." && !path14.isAbsolute(r) ? r : rel;
+    const real = fs19.realpathSync(path15.resolve(root, rel2));
+    const r = path15.relative(fs19.realpathSync(root), real);
+    return r && !r.startsWith(`..${path15.sep}`) && r !== ".." && !path15.isAbsolute(r) ? r : rel2;
   } catch {
-    return rel;
+    return rel2;
   }
 }
 function normalizePaths(root, relPaths) {
@@ -13642,23 +13972,23 @@ function wordCount(text) {
 }
 var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
-function readArtifact(root, rel) {
+function readArtifact(root, rel2) {
   try {
-    return fs18.readFileSync(path14.resolve(root, rel));
+    return fs19.readFileSync(path15.resolve(root, rel2));
   } catch {
     throw new Error(
       tr(root, {
-        en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+        en: `Cannot read the artifact under review: ${rel2} \u2014 check the path, or write the document first`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel2} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
       })
     );
   }
 }
 function readArtifacts(root, relPaths) {
-  return relPaths.map((rel) => {
-    const text = readArtifact(root, rel).toString("utf8");
+  return relPaths.map((rel2) => {
+    const text = readArtifact(root, rel2).toString("utf8");
     return {
-      rel,
+      rel: rel2,
       text,
       substance: text.replace(/\s+/gu, "").length,
       binary: text.includes("\uFFFD") || text.includes("\0")
@@ -13709,9 +14039,9 @@ function assertSubstantive(root, arts) {
   }
 }
 function contentDigest(root, relPaths) {
-  const each = relPaths.map((rel) => crypto5.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
+  const each2 = relPaths.map((rel2) => crypto5.createHash("sha256").update(readArtifact(root, rel2)).digest("hex"));
   const h = crypto5.createHash("sha256");
-  for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
+  for (const d of [...new Set(each2)].sort()) h.update(`${d}\0`);
   return h.digest("hex");
 }
 function latestSubmissions(root) {
@@ -13793,12 +14123,12 @@ function assertNewMaterial(root, phase, paths, gates) {
     );
   }
 }
-var normRel = (p) => path14.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel2 = (p) => path15.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
-  const want = new Set(paths.map(normRel));
-  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
+  const want = new Set(paths.map(normRel2));
+  const known = loadRegistry(root).docs.filter((d) => want.has(normRel2(d.path)));
   if (known.length === 0) return;
-  if (new Set(known.map((d) => normRel(d.path))).size < want.size) return;
+  if (new Set(known.map((d) => normRel2(d.path))).size < want.size) return;
   if (known.some((d) => d.phase === phase)) return;
   const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
   throw new Error(
@@ -13821,8 +14151,8 @@ function assertInsideRoot(root, paths) {
 }
 function computeArtifactHash(root, relPaths) {
   const h = crypto5.createHash("sha256");
-  for (const rel of normalizePaths(root, relPaths)) {
-    updateHashEntry(h, rel, readArtifact(root, rel));
+  for (const rel2 of normalizePaths(root, relPaths)) {
+    updateHashEntry(h, rel2, readArtifact(root, rel2));
   }
   return h.digest("hex");
 }
@@ -13833,15 +14163,15 @@ function recordedPaths(root, phase) {
 function submissionSignals(root, phase) {
   const rels = recordedPaths(root, phase);
   if (!rels) return null;
-  const paths = rels.map((rel) => {
+  const paths = rels.map((rel2) => {
     let text;
     try {
-      text = fs18.readFileSync(path14.resolve(root, rel)).toString("utf8");
+      text = fs19.readFileSync(path15.resolve(root, rel2)).toString("utf8");
     } catch {
-      return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
+      return { rel: rel2, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
     return {
-      rel,
+      rel: rel2,
       missing: false,
       binary: text.includes("\uFFFD") || text.includes("\0"),
       substance: text.replace(/\s+/gu, "").length,
@@ -13959,7 +14289,7 @@ function approveGate(root, phase) {
   return record;
 }
 function feedbackPath(root, phase) {
-  return path14.join(packetsDir(root), `${phase}.feedback.md`);
+  return path15.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function recordGateFeedback(root, phase, raw) {
   const stripBullet = (l) => l.replace(/^\s*[-*+]\s+/, "");
@@ -13973,8 +14303,8 @@ function recordGateFeedback(root, phase, raw) {
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs18.mkdirSync(packetsDir(root), { recursive: true });
-  fs18.appendFileSync(
+  fs19.mkdirSync(packetsDir(root), { recursive: true });
+  fs19.appendFileSync(
     feedbackPath(root, phase),
     `
 ## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
@@ -13986,7 +14316,7 @@ ${lines.map((l) => `- ${l}`).join("\n")}
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs18.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs19.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -14082,9 +14412,9 @@ function setPhaseViaGate(root, phase) {
 }
 
 // core/src/report.ts
-var fs19 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
-var trFor4 = (lang) => (m) => pick(m, lang);
+var fs20 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
+var trFor5 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
   registryUnreadable: { en: "cannot read the artifact registry", ko: "\uC0B0\uCD9C\uBB3C \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -14128,10 +14458,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs19.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs19.readdirSync(wavesDir(root));
+    files = fs20.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -14147,14 +14477,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs19.readdirSync(dir);
+    files = fs20.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs19.statSync(path15.join(dir, f2));
+      const st = fs20.statSync(path16.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -14257,7 +14587,7 @@ function unreadableSection(unreadable, t) {
   ];
 }
 function renderRtm(root) {
-  const t = trFor4(langFor(root));
+  const t = trFor5(langFor(root));
   const { rows, unreadable } = collectRtm(root, t);
   const out = [
     `# ${t({ en: "Requirements Traceability Matrix (RTM)", ko: "\uC694\uAD6C\uC0AC\uD56D \uCD94\uC801 \uB9E4\uD2B8\uB9AD\uC2A4(RTM)" })}`,
@@ -14332,7 +14662,7 @@ function gateLines(root, phase, t) {
   return { lines, unreadable: [] };
 }
 function buildReviewPacket(root, phase) {
-  const t = trFor4(langFor(root));
+  const t = trFor5(langFor(root));
   const out = [
     `# ${t({ en: "Review packet", ko: "\uB9AC\uBDF0 \uD328\uD0B7" })} \u2014 ${phase}`,
     "",
@@ -14481,7 +14811,7 @@ function buildReviewPacket(root, phase) {
   return out.join("\n") + "\n";
 }
 function buildHub(root) {
-  const t = trFor4(langFor(root));
+  const t = trFor5(langFor(root));
   const out = [`# ${t({ en: "Project hub", ko: "\uD504\uB85C\uC81D\uD2B8 \uD5C8\uBE0C" })}`, "", generatedAt(t), ""];
   const unreadable = [];
   const reg = inspectRegistry(root);
@@ -14548,10 +14878,10 @@ function buildHub(root) {
   return out.join("\n") + "\n";
 }
 function renderDenials(root, limit = 20) {
-  const t = trFor4(langFor(root));
+  const t = trFor5(langFor(root));
   let raw;
   try {
-    raw = fs19.readFileSync(denialsPath(root), "utf8");
+    raw = fs20.readFileSync(denialsPath(root), "utf8");
   } catch {
     return t({
       en: "No denials recorded yet \u2014 nothing has been blocked in this project since the harness was installed. This file only appears the first time a tool call is denied.",
@@ -14579,24 +14909,24 @@ function renderDenials(root, limit = 20) {
 }
 
 // core/src/ship.ts
-var trFor5 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path16.join(harnessDir(root), "ship");
-var defectsPath = (root) => path16.join(shipDir(root), "defects.yaml");
-var readinessPath = (root) => path16.join(shipDir(root), "readiness.md");
-var deploymentsPath = (root) => path16.join(shipDir(root), "deployments.yaml");
+var trFor6 = (lang) => (m) => pick(m, lang);
+var shipDir = (root) => path17.join(harnessDir(root), "ship");
+var defectsPath = (root) => path17.join(shipDir(root), "defects.yaml");
+var readinessPath = (root) => path17.join(shipDir(root), "readiness.md");
+var deploymentsPath = (root) => path17.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 function writeAtomic(target, content) {
-  fs20.mkdirSync(path16.dirname(target), { recursive: true });
+  fs21.mkdirSync(path17.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs20.writeFileSync(tmp, content);
-  fs20.renameSync(tmp, target);
+  fs21.writeFileSync(tmp, content);
+  fs21.renameSync(tmp, target);
 }
 function readRecords(root, file, key, to) {
-  if (!fs20.existsSync(file)) return [];
+  if (!fs21.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML8.parse(fs20.readFileSync(file, "utf8"));
+    doc = YAML9.parse(fs21.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -14639,8 +14969,8 @@ function listDefects(root) {
   return readRecords(root, defectsPath(root), "defects", toDefect);
 }
 function saveDefects(root, defects) {
-  writeAtomic(defectsPath(root), YAML8.stringify({ defects }));
-  writeAtomic(readinessPath(root), renderLedger(defects, trFor5(langFor(root))));
+  writeAtomic(defectsPath(root), YAML9.stringify({ defects }));
+  writeAtomic(readinessPath(root), renderLedger(defects, trFor6(langFor(root))));
 }
 function assertDeferReason(root, rec) {
   if (rec.status === "deferred" && !rec.deferReason) {
@@ -14803,7 +15133,7 @@ var LEDGER_TABLE_HEAD = {
   ko: "| ID | \uC2EC\uAC01\uB3C4 | \uD55C \uC904 | \uC0C1\uD0DC | \uADFC\uAC70 | \uBBF8\uB8EC \uC0AC\uC720 |"
 };
 function renderDefectLedger(root) {
-  return renderLedger(listDefects(root), trFor5(langFor(root)));
+  return renderLedger(listDefects(root), trFor6(langFor(root)));
 }
 function toDeployment(v) {
   if (typeof v !== "object" || v === null) return null;
@@ -14865,7 +15195,7 @@ function recordDeployment(root, input) {
     environment,
     evidence
   });
-  writeAtomic(deploymentsPath(root), YAML8.stringify({ deployments: [...listDeployments(root), rec] }));
+  writeAtomic(deploymentsPath(root), YAML9.stringify({ deployments: [...listDeployments(root), rec] }));
   return rec;
 }
 function attempt2(fn) {
@@ -14878,16 +15208,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs21.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs20.readdirSync(wavesDir(root));
+    files = fs21.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs20.readFileSync(path16.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs21.readFileSync(path17.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -14899,7 +15229,7 @@ function waveEntries2(root, t) {
   return { entries, unreadable };
 }
 function shipVerdict(root) {
-  const t = trFor5(langFor(root));
+  const t = trFor6(langFor(root));
   const reasons = [];
   const defects = attempt2(() => listDefects(root));
   if (!defects.ok) {
@@ -14969,7 +15299,7 @@ function shipVerdict(root) {
 }
 var generatedAt2 = (t) => `${t({ en: "Generated", ko: "\uC0DD\uC131" })}: ${(/* @__PURE__ */ new Date()).toISOString()}`;
 function renderReleaseChecklist(root) {
-  const t = trFor5(langFor(root));
+  const t = trFor6(langFor(root));
   const verdict = shipVerdict(root);
   const out = [
     `# ${t({ en: "Release checklist", ko: "\uCD9C\uD558 \uCCB4\uD06C\uB9AC\uC2A4\uD2B8" })} \u2014 P12 SHIP`,
@@ -15470,10 +15800,10 @@ var fs23 = __toESM(require("fs"));
 var path19 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs21 = __toESM(require("fs"));
-var path17 = __toESM(require("path"));
+var fs22 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
-var tierFile = (root) => path17.join(runtimeDir(root), "usage-tier");
+var tierFile = (root) => path18.join(runtimeDir(root), "usage-tier");
 function tierFor(percent) {
   if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
   if (percent >= 99) return "final-handoff";
@@ -15506,336 +15836,16 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs21.mkdirSync(runtimeDir(root), { recursive: true });
-  fs21.writeFileSync(tierFile(root), tier + "\n");
+  fs22.mkdirSync(runtimeDir(root), { recursive: true });
+  fs22.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs21.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs22.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
   }
-}
-
-// core/src/profile.ts
-var fs22 = __toESM(require("fs"));
-var path18 = __toESM(require("path"));
-var YAML9 = __toESM(require_dist());
-var trFor6 = (lang) => (m) => pick(m, lang);
-var GENERIC = "generic";
-var GENERIC_FLOOR = Object.freeze({
-  name: GENERIC,
-  description: "Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.",
-  sourceGlobs: Object.freeze(["src/**", "lib/**", "app/**"]),
-  // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
-  // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
-  /**
-   * [API-09] **정본은 한 곳이다 — 여기서 베끼지 않고 가져온다.**
-   *
-   * 예전에는 같은 21개 목록이 세 곳(`config.ts` · 여기 · `profiles/generic/profile.yaml`)에
-   * 리터럴로 있었고, 테스트는 **뒤의 두 벌만** 이었다. 세 값이 «우연히» 같았을 뿐이고,
-   * 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 배포 차단에 구멍이 난다.
-   * 목록이 셋이면 언제나 하나가 낡는다 — 그래서 `DEFAULT_CONFIG` 를 정본으로 삼는다.
-   * `profile.yaml` 은 남은 한 벌이고, 그 동치는 `profile.test.ts` 가 이미 지킨다.
-   */
-  deployCommands: Object.freeze([...DEFAULT_CONFIG.design_blocked_bash]),
-  commands: Object.freeze({}),
-  designSystemRoots: Object.freeze([]),
-  origin: "floor",
-  dir: ""
-});
-var localProfileDir = (root) => path18.join(harnessDir(root), "profile");
-function bundledProfilesDir() {
-  return path18.resolve(__dirname, "..", "..", "profiles");
-}
-var errMsg = (e) => e instanceof Error ? e.message : String(e);
-function isDir(p) {
-  try {
-    return fs22.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-var isSafeName = (n) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(n) && n !== "." && n !== "..";
-function strList(v) {
-  if (!Array.isArray(v)) return null;
-  const list = v.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean);
-  return { list, dropped: v.length - list.length };
-}
-function readList(m, key, fallback, yamlPath, problems, required, t) {
-  if (!(key in m) || m[key] === null || m[key] === void 0) {
-    if (required) {
-      problems.push(t({
-        en: `${yamlPath}: \`${key}\` is missing \u2014 filling in the generic default. Leaving it empty opens that block (\xA74-2) entirely. Put the values your stack needs`,
-        ko: `${yamlPath}: \`${key}\` \uAC00 \uC5C6\uB2E4 \u2014 generic \uAE30\uBCF8\uAC12\uC73C\uB85C \uBA54\uC6B4\uB2E4. \uBE44\uC6CC\uB450\uBA74 \uD574\uB2F9 \uCC28\uB2E8(\xA74-2)\uC774 \uD1B5\uC9F8\uB85C \uC5F4\uB9B0\uB2E4. \uC2A4\uD0DD\uC5D0 \uB9DE\uB294 \uAC12\uC744 \uCC44\uC6CC\uB77C`
-      }));
-    }
-    return [...fallback];
-  }
-  const parsed = strList(m[key]);
-  if (!parsed) {
-    problems.push(t({
-      en: `${yamlPath}: \`${key}\` must be a list of strings (currently ${typeof m[key]}) \u2014 continuing with ${required ? "the generic default" : "an empty list"}`,
-      ko: `${yamlPath}: \`${key}\` \uB294 \uBB38\uC790\uC5F4 \uBAA9\uB85D\uC774\uC5B4\uC57C \uD55C\uB2E4(\uD604\uC7AC ${typeof m[key]}) \u2014 ${required ? "generic \uAE30\uBCF8\uAC12" : "\uBE48 \uBAA9\uB85D"}\uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4`
-    }));
-    return required ? [...fallback] : [];
-  }
-  if (parsed.dropped > 0) {
-    problems.push(t({
-      en: `${yamlPath}: ignored ${parsed.dropped} non-string entrie(s) under \`${key}\``,
-      ko: `${yamlPath}: \`${key}\` \uC758 \uBB38\uC790\uC5F4 \uC544\uB2CC \uD56D\uBAA9 ${parsed.dropped}\uAC1C\uB97C \uBB34\uC2DC\uD588\uB2E4`
-    }));
-  }
-  return parsed.list;
-}
-function readCommands(dir, problems, t) {
-  const p = path18.join(dir, "commands.yaml");
-  let text;
-  try {
-    text = fs22.readFileSync(p, "utf8");
-  } catch {
-    problems.push(t({
-      en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
-      ko: `${p} \uAC00 \uC5C6\uB2E4 \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4. \uCF54\uC5B4\uAC00 \uD14C\uC2A4\uD2B8\xB7\uBE4C\uB4DC\xB7\uBC30\uD3EC \uBA85\uB839\uC744 \uBB3C\uC73C\uBA74 "\uBBF8\uC815\uC758"\uB85C \uB2F5\uD558\uAC8C \uB418\uACE0, P7~P9 \uC790\uB3D9 \uD310\uC815\uC774 \uC804\uBD80 \uC0AC\uB78C\uC5D0\uAC8C \uB118\uC5B4\uC628\uB2E4`
-    }));
-    return {};
-  }
-  let raw;
-  try {
-    raw = YAML9.parse(text);
-  } catch (e) {
-    problems.push(t({
-      en: `failed to parse ${p} (${errMsg(e)}) \u2014 continuing without a command mapping`,
-      ko: `${p} \uD30C\uC2F1 \uC2E4\uD328(${errMsg(e)}) \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4`
-    }));
-    return {};
-  }
-  if (raw === null || raw === void 0) return {};
-  if (typeof raw !== "object" || Array.isArray(raw)) {
-    problems.push(t({
-      en: `${p}: the top level is not a \`key: command\` mapping \u2014 continuing without a command mapping`,
-      ko: `${p}: \uCD5C\uC0C1\uC704\uAC00 \`\uD0A4: \uBA85\uB839\` \uB9E4\uD551\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBA85\uB839 \uB9E4\uD551 \uC5C6\uC774 \uC9C4\uD589\uD55C\uB2E4`
-    }));
-    return {};
-  }
-  const out = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === "string") {
-      const cmd = v.trim();
-      if (cmd) out[k] = cmd;
-      continue;
-    }
-    if (v === null || v === void 0) continue;
-    problems.push(t({
-      en: `${p}: \`${k}\` must be a command string (currently ${typeof v}) \u2014 ignored`,
-      ko: `${p}: \`${k}\` \uB294 \uBA85\uB839 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD55C\uB2E4(\uD604\uC7AC ${typeof v}) \u2014 \uBB34\uC2DC\uD588\uB2E4`
-    }));
-  }
-  return out;
-}
-function readProfileDir(dir, origin, problems, t) {
-  const yamlPath = path18.join(dir, "profile.yaml");
-  let text;
-  try {
-    text = fs22.readFileSync(yamlPath, "utf8");
-  } catch (e) {
-    if (fs22.existsSync(path18.join(dir, "commands.yaml"))) {
-      text = "name: local";
-    } else if (origin === "local" && fs22.existsSync(path18.join(dir, "security.yaml"))) {
-      return null;
-    } else {
-      problems.push(t({
-        en: `cannot read ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
-        ko: `${yamlPath} \uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
-      }));
-      return null;
-    }
-  }
-  let raw;
-  try {
-    raw = YAML9.parse(text);
-  } catch (e) {
-    problems.push(t({
-      en: `failed to parse ${yamlPath} (${errMsg(e)}) \u2014 skipping this profile`,
-      ko: `${yamlPath} \uD30C\uC2F1 \uC2E4\uD328(${errMsg(e)}) \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
-    }));
-    return null;
-  }
-  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    problems.push(t({
-      en: `${yamlPath}: the top level is not a mapping \u2014 skipping this profile`,
-      ko: `${yamlPath}: \uCD5C\uC0C1\uC704\uAC00 \uB9E4\uD551\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC774 \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
-    }));
-    return null;
-  }
-  const m = raw;
-  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path18.basename(dir);
-  const description = typeof m.description === "string" ? m.description.trim() : void 0;
-  return {
-    name,
-    ...description ? { description } : {},
-    // 소스·배포는 비면 차단이 열리는 쪽이라 generic 기본값으로 메운다(+보고).
-    sourceGlobs: readList(m, "source_globs", GENERIC_FLOOR.sourceGlobs, yamlPath, problems, true, t),
-    deployCommands: readList(m, "deploy_commands", GENERIC_FLOOR.deployCommands, yamlPath, problems, true, t),
-    // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
-    designSystemRoots: readList(m, "design_system_roots", [], yamlPath, problems, false, t),
-    commands: readCommands(dir, problems, t),
-    origin,
-    dir
-  };
-}
-function floorProfile() {
-  return {
-    ...GENERIC_FLOOR,
-    sourceGlobs: [...GENERIC_FLOOR.sourceGlobs],
-    deployCommands: [...GENERIC_FLOOR.deployCommands],
-    designSystemRoots: [...GENERIC_FLOOR.designSystemRoots],
-    commands: { ...GENERIC_FLOOR.commands }
-  };
-}
-function resolve7(root, name, lang = DEFAULT_LANG) {
-  const t = trFor6(lang);
-  const problems = [];
-  const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
-  const local = localProfileDir(root);
-  if (fs22.existsSync(local)) {
-    if (!isDir(local)) {
-      problems.push(t({
-        en: `${local} is not a directory \u2014 skipping the project-local profile`,
-        ko: `${local} \uAC00 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \uD504\uB85C\uD30C\uC77C\uC744 \uAC74\uB108\uB6F4\uB2E4`
-      }));
-    } else {
-      const p = readProfileDir(local, "local", problems, t);
-      if (p) return { profile: p, problems };
-    }
-  }
-  const bundled = bundledProfilesDir();
-  if (!isSafeName(wanted)) {
-    problems.push(
-      t({
-        en: `The profile name '${wanted}' is invalid (only alphanumerics and . _ - are allowed) \u2014 continuing with generic. Fix \`profile\` in \`.harness/config.yaml\``,
-        ko: `\uD504\uB85C\uD30C\uC77C \uC774\uB984 '${wanted}' \uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4(\uC601\uC22B\uC790\xB7. _ - \uB9CC \uD5C8\uC6A9) \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \`.harness/config.yaml\` \uC758 \`profile\` \uC744 \uACE0\uCCD0\uB77C`
-      })
-    );
-  } else if (isDir(path18.join(bundled, wanted))) {
-    const p = readProfileDir(path18.join(bundled, wanted), "bundled", problems, t);
-    if (p) return { profile: p, problems };
-  } else {
-    problems.push(
-      t({
-        en: `Profile '${wanted}' was not found in ${bundled} \u2014 continuing with generic. Check the bundled list, or for a stack outside the bundles put a project-local profile in \`.harness/profile/\``,
-        ko: `\uD504\uB85C\uD30C\uC77C '${wanted}' \uB97C ${bundled} \uC5D0\uC11C \uCC3E\uC744 \uC218 \uC5C6\uB2E4 \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \uBC88\uB4E4 \uBAA9\uB85D\uC744 \uD655\uC778\uD558\uAC70\uB098, \uBC88\uB4E4 \uBC16 \uC2A4\uD0DD\uC774\uBA74 \`.harness/profile/\` \uC5D0 \uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \uD504\uB85C\uD30C\uC77C\uC744 \uB450\uC5B4\uB77C`
-      })
-    );
-  }
-  if (wanted !== GENERIC && isDir(path18.join(bundled, GENERIC))) {
-    const p = readProfileDir(path18.join(bundled, GENERIC), "bundled", problems, t);
-    if (p) return { profile: p, problems };
-  }
-  problems.push(
-    t({
-      en: `Could not read the generic profile in ${bundled} \u2014 continuing with the built-in floor values. Check that the plugin installation is intact`,
-      ko: `${bundled} \uC758 generic \uD504\uB85C\uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uB2E4 \u2014 \uCF54\uB4DC \uB0B4\uC7A5 \uBC14\uB2E5\uAC12\uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \uD50C\uB7EC\uADF8\uC778 \uC124\uCE58\uBCF8\uC774 \uC628\uC804\uD55C\uC9C0 \uD655\uC778\uD558\uB77C`
-    })
-  );
-  return { profile: floorProfile(), problems };
-}
-function inspectProfile(root, name) {
-  let lang = DEFAULT_LANG;
-  try {
-    lang = loadConfig(root).lang;
-  } catch {
-  }
-  try {
-    return resolve7(root, name, lang);
-  } catch (e) {
-    return {
-      profile: floorProfile(),
-      problems: [trFor6(lang)({
-        en: `exception while resolving the profile (${errMsg(e)}) \u2014 using the floor profile`,
-        ko: `\uD504\uB85C\uD30C\uC77C \uD574\uC11D \uC911 \uC608\uC678(${errMsg(e)}) \u2014 \uBC14\uB2E5\uAC12 \uC0AC\uC6A9`
-      })]
-    };
-  }
-}
-function loadProfile(root, name) {
-  return inspectProfile(root, name).profile;
-}
-function globToRegExp(pattern) {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*") {
-      if (pattern[i + 1] === "*") {
-        i++;
-        if (pattern[i + 1] === "/") {
-          i++;
-          re += "(?:[^/]*/)*";
-        } else {
-          re += ".*";
-        }
-      } else {
-        re += "[^/]*";
-      }
-    } else if (c === "?") {
-      re += "[^/]";
-    } else {
-      re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-    }
-  }
-  return new RegExp(`^${re}$`);
-}
-function normRel2(p) {
-  if (typeof p !== "string") return "";
-  let s = p.replace(/\\/g, "/").trim().replace(/\/{2,}/g, "/");
-  while (s.startsWith("./")) s = s.slice(2);
-  return s.replace(/^\/+/, "");
-}
-function isSourcePath(profile, relPath2) {
-  try {
-    const rel = normRel2(relPath2);
-    if (!rel) return false;
-    return (profile.sourceGlobs ?? []).some((g) => {
-      const pat = normRel2(g);
-      return pat ? globToRegExp(pat).test(rel) : false;
-    });
-  } catch {
-    return false;
-  }
-}
-function isSourceTree(profile, relPath2) {
-  try {
-    const rel = normRel2(relPath2).replace(/\/+$/, "");
-    if (!rel) return false;
-    return (profile.sourceGlobs ?? []).some((g) => {
-      const pat = normRel2(g);
-      if (!pat) return false;
-      const literal = pat.split(/[*?[]/)[0].replace(/\/+$/, "");
-      return literal !== "" && (literal === rel || literal.startsWith(`${rel}/`));
-    });
-  } catch {
-    return false;
-  }
-}
-var normCmd = (s) => typeof s === "string" ? s.replace(/\s+/g, " ").trim().toLowerCase() : "";
-function isDeployCommand(profile, command) {
-  try {
-    const cmd = normCmd(command);
-    if (!cmd) return false;
-    const lines = judgeableLines(String(command)).map(normCmd).filter((l) => l !== "");
-    if (lines.length === 0) return false;
-    return (profile.deployCommands ?? []).some((d) => {
-      const needle = normCmd(d);
-      return needle.length > 0 && lines.some((l) => runsCommand(l, needle));
-    });
-  } catch {
-    return false;
-  }
-}
-function commandFor(profile, key) {
-  const v = (profile.commands ?? {})[key];
-  return typeof v === "string" && v.trim().length > 0 ? v : void 0;
 }
 
 // core/src/hook.ts
@@ -16040,23 +16050,23 @@ var SOURCE_EXTS = /* @__PURE__ */ new Set([
   "hs"
 ]);
 var TEST_FILE_RE = /(^|[.\-_])(test|spec)s?\.[^.]+$|^(test|spec)_[^/]+$|[A-Za-z0-9](Test|Tests|Spec)\.[^.]+$|^conftest\.py$/i;
-function looksLikeTestPath(rel) {
-  return TEST_FILE_RE.test(rel.split("/").pop() ?? "");
+function looksLikeTestPath(rel2) {
+  return TEST_FILE_RE.test(rel2.split("/").pop() ?? "");
 }
 var CONFIG_FILE_RE = /(^|[.\-_])(config|conf)\.[^.]+$|^\.?[a-z0-9-]*rc\.[cm]?[jt]s$|^(gulpfile|gruntfile|knexfile)\.[^.]+$/i;
-function looksLikeConfigPath(rel) {
-  return CONFIG_FILE_RE.test(rel.split("/").pop() ?? "");
+function looksLikeConfigPath(rel2) {
+  return CONFIG_FILE_RE.test(rel2.split("/").pop() ?? "");
 }
-function implementationReason(profile, rel) {
-  if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+function implementationReason(profile, rel2) {
+  if (isSourcePath(profile, rel2) || isSourceTree(profile, rel2)) {
     const globs = (profile.sourceGlobs ?? []).join(", ");
     return {
       en: `it matches the source paths this project's profile declares (profile ${profile.name}, source_globs: ${globs})`,
       ko: `\uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uAC78\uB9B0\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${globs})`
     };
   }
-  if (looksLikeTestPath(rel) || looksLikeConfigPath(rel)) return null;
-  const base = rel.split("/").pop() ?? "";
+  if (looksLikeTestPath(rel2) || looksLikeConfigPath(rel2)) return null;
+  const base = rel2.split("/").pop() ?? "";
   const dot = base.lastIndexOf(".");
   const ext = dot > 0 ? base.slice(dot + 1).toLowerCase() : "";
   if (ext && SOURCE_EXTS.has(ext)) {
@@ -16223,8 +16233,8 @@ function realRelPath(root, p) {
   const abs = path19.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
   return path19.relative(realOrSelf(root), realOrSelf(abs));
 }
-function isOutsideRoot(rel) {
-  return rel === ".." || rel.startsWith(`..${path19.sep}`) || path19.isAbsolute(rel);
+function isOutsideRoot(rel2) {
+  return rel2 === ".." || rel2.startsWith(`..${path19.sep}`) || path19.isAbsolute(rel2);
 }
 var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
 var DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join("|")})$`);
@@ -16250,8 +16260,8 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
     seen.add(candidate);
     if (m[1] === void 0 && !DIRECT_SCRIPT_EXT.test(candidate)) continue;
     try {
-      const rel = relPath(root, candidate);
-      if (isOutsideRoot(rel)) {
+      const rel2 = relPath(root, candidate);
+      if (isOutsideRoot(rel2)) {
         if (atLimit) {
           tooDeep.push(candidate);
           continue;
@@ -16348,8 +16358,8 @@ var PATCH_READ_CAP = 1e6;
 function readPatchTargets(root, files) {
   if (files.length === 0) return null;
   const out = [];
-  for (const rel of files) {
-    const abs = path19.isAbsolute(rel) ? rel : path19.resolve(root, rel);
+  for (const rel2 of files) {
+    const abs = path19.isAbsolute(rel2) ? rel2 : path19.resolve(root, rel2);
     let body;
     try {
       if (fs23.statSync(abs).size > PATCH_READ_CAP) return null;
@@ -16500,9 +16510,9 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   const L = (en, ko) => pick({ en, ko }, lang);
   const raw = rawPath.trim();
   if (!raw) return null;
-  const rel = relPath(root, raw);
+  const rel2 = relPath(root, raw);
   const realRel = realRelPath(root, raw);
-  if (hasControlChars(raw) && !isOutsideRoot(rel)) {
+  if (hasControlChars(raw) && !isOutsideRoot(rel2)) {
     return deny(L(
       "This path contains a control character (a newline, tab, or escape) in the middle, so the hook cannot tell which file it names \u2014 and a path it cannot classify is not a path it may allow. Write the path out as plain text.",
       "\uC774 \uACBD\uB85C \uAC00\uC6B4\uB370\uC5D0 \uC81C\uC5B4\uBB38\uC790(\uAC1C\uD589\xB7\uD0ED\xB7\uC774\uC2A4\uCF00\uC774\uD504)\uAC00 \uC788\uC5B4 \uC5B4\uB290 \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uB294\uC9C0 \uD310\uC815\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uBD84\uB958\uD558\uC9C0 \uBABB\uD55C \uACBD\uB85C\uB294 \uD1B5\uACFC\uC2DC\uD0AC \uC218 \uC788\uB294 \uACBD\uB85C\uAC00 \uC544\uB2C8\uB2E4. \uACBD\uB85C\uB97C \uD3C9\uBB38\uC73C\uB85C \uC801\uC5B4\uB77C."
@@ -16512,8 +16522,8 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     const t = target.replace(/\/+$/, "");
     return t !== "" && (protectedPath === t || protectedPath.startsWith(`${t}/`));
   };
-  const spaces = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r));
-  const globbed = [rel, realRel, rawPath].map(protectedByGlob).find(Boolean);
+  const spaces = [rel2, realRel].filter((r) => r !== "" && !isOutsideRoot(r));
+  const globbed = [rel2, realRel, rawPath].map(protectedByGlob).find(Boolean);
   if (globbed) {
     return deny(
       L(
@@ -16562,8 +16572,8 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
-  const stateFile = [rel, realRel].find((r) => STATE_FILES2.includes(r)) ?? STATE_FILES2.find((sf) => spaces.some((r) => coversPath(r, sf)));
-  const namesFileDirectly = [rel, realRel].some((r) => STATE_FILES2.includes(r));
+  const stateFile = [rel2, realRel].find((r) => STATE_FILES2.includes(r)) ?? STATE_FILES2.find((sf) => spaces.some((r) => coversPath(r, sf)));
+  const namesFileDirectly = [rel2, realRel].some((r) => STATE_FILES2.includes(r));
   const removesHarness = stateFile !== void 0 && !namesFileDirectly;
   if (stateFile) {
     return deny(
@@ -16594,7 +16604,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
       lang
     );
   }
-  const policyFile = [rel, realRel].find(
+  const policyFile = [rel2, realRel].find(
     (r) => POLICY_FILES.includes(r) || POLICY_PREFIXES.some((pre) => r !== "" && r.startsWith(pre))
   ) ?? POLICY_FILES.find((pf) => spaces.some((r) => coversPath(r, pf))) ?? POLICY_PREFIXES.find((pre) => spaces.some((r) => coversPath(r, pre.replace(/\/+$/, ""))));
   if (policyFile) {
@@ -16608,8 +16618,8 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     );
   }
   if (!coreOnly && SHIP_PHASES.includes(state.phase)) {
-    const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
-    const target = !isOutsideRoot(rel) ? rel : realRel;
+    const inRoot = !isOutsideRoot(rel2) || !isOutsideRoot(realRel);
+    const target = !isOutsideRoot(rel2) ? rel2 : realRel;
     const isNew = inRoot && target !== "" && !fs23.existsSync(path19.join(root, target));
     if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
@@ -16623,7 +16633,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     }
   }
   if (!DESIGN_PHASES.includes(state.phase) && !state.backtrack) {
-    const designDoc = [rel, realRel].some((r) => r !== "" && r.startsWith(".harness/design/"));
+    const designDoc = [rel2, realRel].some((r) => r !== "" && r.startsWith(".harness/design/"));
     if (designDoc) {
       return deny(L(
         `Design documents cannot be edited outside the design track (${state.phase}) without backtracking \u2014 that is what keeps implementation and design from silently diverging. Use \`harness backtrack <phase> --reason "<why>"\` first.`,
@@ -16633,15 +16643,15 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   }
   if (!DESIGN_PHASES.includes(state.phase)) return null;
   if (coreOnly) return null;
-  const allowed = [rel, realRel].some(
+  const allowed = [rel2, realRel].some(
     (r) => r !== "" && (allowList(config).some((pre) => r.startsWith(pre)) || /^[^/]+\.md$/.test(r))
   );
   if (allowed) {
-    if (rel === realRel) return null;
-    const escaped = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).some((r) => implementationReason(getProfile(), r) !== null);
+    if (rel2 === realRel) return null;
+    const escaped = [rel2, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).some((r) => implementationReason(getProfile(), r) !== null);
     if (!escaped) return null;
   }
-  const outside = isOutsideRoot(rel) && isOutsideRoot(realRel);
+  const outside = isOutsideRoot(rel2) && isOutsideRoot(realRel);
   if (outside) {
     if (fromBash) return null;
     if (isUnderTempDir(raw) && !isUnderTempDir(root)) return null;
@@ -16651,11 +16661,11 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     ), degraded, lang);
   }
   const profile = getProfile();
-  const hit = [rel, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).map((r) => ({ r, why: implementationReason(profile, r) })).find((x) => x.why !== null);
+  const hit = [rel2, realRel].filter((r) => r !== "" && !isOutsideRoot(r)).map((r) => ({ r, why: implementationReason(profile, r) })).find((x) => x.why !== null);
   if (!hit) return null;
   const why = hit.why;
-  const via = hit.r !== rel ? ` \u2192 ${sanitizeUntrusted(hit.r)}` : "";
-  const looksLikeTest = looksLikeTestPath(rel);
+  const via = hit.r !== rel2 ? ` \u2192 ${sanitizeUntrusted(hit.r)}` : "";
+  const looksLikeTest = looksLikeTestPath(rel2);
   const priority = looksLikeTest ? {
     en: " This file **is** named like a test, but the profile's source paths win over the naming rule \u2014 move it outside the source globs (a `test/` tree of its own) if it is really a test.",
     ko: " \uC774 \uD30C\uC77C\uC740 **\uC774\uB984\uC774 \uD14C\uC2A4\uD2B8\uAC00 \uB9DE\uC9C0\uB9CC**, \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uAC00 \uC774\uB984 \uADDC\uCE59\uBCF4\uB2E4 \uC55E\uC120\uB2E4 \u2014 \uC9C4\uC9DC \uD14C\uC2A4\uD2B8\uB77C\uBA74 \uC18C\uC2A4 \uAE00\uB86D \uBC16(\uBCC4\uB3C4 `test/` \uD2B8\uB9AC)\uC73C\uB85C \uC62E\uACA8\uB77C."
@@ -16703,7 +16713,7 @@ function preTool(root, state, config, input, degraded) {
   const strong = uniq(strongTargets);
   const weak = uniq(weakTargets).filter((w) => !strong.includes(w));
   const raw = namedTarget !== "" ? namedTarget : strong[0] ?? weak[0] ?? "";
-  const rel = raw ? relPath(root, raw) : "";
+  const rel2 = raw ? relPath(root, raw) : "";
   const realRel = raw ? realRelPath(root, raw) : "";
   let profileCache = null;
   const getProfile = () => profileCache ??= loadProfile(root);
@@ -16955,15 +16965,15 @@ function preTool(root, state, config, input, degraded) {
   if (isWrite && raw.trim()) {
     const frozen = config.design_system_frozen_roots;
     if (frozen.length > 0 && !state.backtrack) {
-      const hit = [rel, realRel].some((r) => r !== "" && isFrozenPath(root, r, { frozenRoots: frozen }));
-      if (hit && !isTokenFile(root, rel)) {
+      const hit = [rel2, realRel].some((r) => r !== "" && isFrozenPath(root, r, { frozenRoots: frozen }));
+      if (hit && !isTokenFile(root, rel2)) {
         return deny(L(
           `This is a frozen design-system path (${frozen.join(", ")}) \u2014 adding or changing a component is a ledger revision. Go back officially with \`harness backtrack P4 --reason "<why>"\` first.`,
           `\uB3D9\uACB0\uB41C \uB514\uC790\uC778 \uC2DC\uC2A4\uD15C \uACBD\uB85C\uB2E4(${frozen.join(", ")}) \u2014 \uCEF4\uD3EC\uB10C\uD2B8 \uC2E0\uC124\xB7\uC218\uC815\uC740 \uC6D0\uC7A5 \uAC1C\uC815\uC774\uB2E4. \`harness backtrack P4 --reason "<\uC0AC\uC720>"\` \uB85C \uACF5\uC2DD \uC5ED\uD589\uD55C \uB4A4 \uC218\uC815\uD558\uB77C.`
         ), degraded, lang);
       }
     }
-    if (config.block_raw_values && !isTokenFile(root, rel)) {
+    if (config.block_raw_values && !isTokenFile(root, rel2)) {
       const content = String(input.tool_input?.content ?? input.tool_input?.new_string ?? "");
       const hits = findRawValues(content);
       if (hits.length > 0) {
@@ -17299,11 +17309,11 @@ function assertOutputAllowed(root, out, targets, lang, what) {
     ));
   }
   for (const t of targets) {
-    const rel = path21.relative(root, path21.resolve(root, t));
-    if (OWNED_FILES.includes(rel)) {
+    const rel2 = path21.relative(root, path21.resolve(root, t));
+    if (OWNED_FILES.includes(rel2)) {
       throw new Error(L(
-        `${what.en} would overwrite \`${rel}\`, which only harness commands may change \u2014 the journal is the audit trail and the state store is derived from it. Choose a different --out path.`,
-        `${what.ko} \`${rel}\` \uB97C \uB36E\uAC8C \uB41C\uB2E4 \u2014 \uC774 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uB010\uB2E4. \uC800\uB110\uC740 \uAC10\uC0AC \uAE30\uB85D\uC774\uACE0 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uADF8\uAC83\uC5D0\uC11C \uD30C\uC0DD\uB41C\uB2E4. --out \uACBD\uB85C\uB97C \uB2E4\uB978 \uACF3\uC73C\uB85C \uC7A1\uC544\uB77C.`
+        `${what.en} would overwrite \`${rel2}\`, which only harness commands may change \u2014 the journal is the audit trail and the state store is derived from it. Choose a different --out path.`,
+        `${what.ko} \`${rel2}\` \uB97C \uB36E\uAC8C \uB41C\uB2E4 \u2014 \uC774 \uD30C\uC77C\uC740 harness \uBA85\uB839\uC73C\uB85C\uB9CC \uBC14\uB010\uB2E4. \uC800\uB110\uC740 \uAC10\uC0AC \uAE30\uB85D\uC774\uACE0 \uC0C1\uD0DC \uC800\uC7A5\uC18C\uB294 \uADF8\uAC83\uC5D0\uC11C \uD30C\uC0DD\uB41C\uB2E4. --out \uACBD\uB85C\uB97C \uB2E4\uB978 \uACF3\uC73C\uB85C \uC7A1\uC544\uB77C.`
       ));
     }
   }
@@ -17311,11 +17321,11 @@ function assertOutputAllowed(root, out, targets, lang, what) {
   if (!DESIGN_PHASES.includes(phase)) return;
   const profile = loadProfile(root);
   for (const t of targets) {
-    const rel = path21.relative(root, path21.resolve(root, t));
-    if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
+    const rel2 = path21.relative(root, path21.resolve(root, t));
+    if (isSourcePath(profile, rel2) || isSourceTree(profile, rel2)) {
       throw new Error(L(
-        `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
-        `\uC124\uACC4 \uD2B8\uB799(${phase})\uC5D0\uC11C\uB294 ${rel} \uC744(\uB97C) \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). \uC124\uACC4 \uC601\uC5ED\uC5D0 \uB0B4\uAC70\uB098, \uAD6C\uCD95 \uD2B8\uB799\uC73C\uB85C \uB118\uC5B4\uAC04 \uB4A4\uC5D0 \uC2E4\uD589\uD558\uB77C.`
+        `Cannot write ${rel2} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
+        `\uC124\uACC4 \uD2B8\uB799(${phase})\uC5D0\uC11C\uB294 ${rel2} \uC744(\uB97C) \uC4F8 \uC218 \uC5C6\uB2E4 \u2014 \uC774 \uD504\uB85C\uC81D\uD2B8 \uD504\uB85C\uD30C\uC77C\uC774 \uC120\uC5B8\uD55C \uC18C\uC2A4 \uACBD\uB85C\uC5D0 \uB5A8\uC5B4\uC9C4\uB2E4 (\uD504\uB85C\uD30C\uC77C ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). \uC124\uACC4 \uC601\uC5ED\uC5D0 \uB0B4\uAC70\uB098, \uAD6C\uCD95 \uD2B8\uB799\uC73C\uB85C \uB118\uC5B4\uAC04 \uB4A4\uC5D0 \uC2E4\uD589\uD558\uB77C.`
       ));
     }
   }
@@ -17337,9 +17347,9 @@ function requirePhase(raw, cmd, lang) {
   ));
 }
 function harnessVersion() {
-  for (const rel of ["../../package.json", "../package.json"]) {
+  for (const rel2 of ["../../package.json", "../package.json"]) {
     try {
-      const v = JSON.parse(fs25.readFileSync(path21.resolve(__dirname, rel), "utf8")).version;
+      const v = JSON.parse(fs25.readFileSync(path21.resolve(__dirname, rel2), "utf8")).version;
       if (typeof v === "string" && v) return `v${v}`;
     } catch {
     }

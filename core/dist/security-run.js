@@ -125,17 +125,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path4) {
-      const ctrl = callVisitor(key, node, visitor, path4);
+    function visit_(key, node, visitor, path5) {
+      const ctrl = callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visit_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visit_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path4);
+            const ci = visit_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -146,13 +146,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = visit_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = visit_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path4);
+          const cv = visit_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -173,17 +173,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path4) {
-      const ctrl = await callVisitor(key, node, visitor, path4);
+    async function visitAsync_(key, node, visitor, path5) {
+      const ctrl = await callVisitor(key, node, visitor, path5);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visitAsync_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visitAsync_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path4);
+            const ci = await visitAsync_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -194,13 +194,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path4);
+          const cv = await visitAsync_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -227,23 +227,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path4) {
+    function callVisitor(key, node, visitor, path5) {
       if (typeof visitor === "function")
-        return visitor(key, node, path4);
+        return visitor(key, node, path5);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path4);
+        return visitor.Map?.(key, node, path5);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path4);
+        return visitor.Seq?.(key, node, path5);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path4);
+        return visitor.Pair?.(key, node, path5);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path4);
+        return visitor.Scalar?.(key, node, path5);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path4);
+        return visitor.Alias?.(key, node, path5);
       return void 0;
     }
-    function replaceNode(key, path4, node) {
-      const parent = path4[path4.length - 1];
+    function replaceNode(key, path5, node) {
+      const parent = path5[path5.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -853,10 +853,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path4, value) {
+    function collectionFromPath(schema, path5, value) {
       let v = value;
-      for (let i = path4.length - 1; i >= 0; --i) {
-        const k = path4[i];
+      for (let i = path5.length - 1; i >= 0; --i) {
+        const k = path5[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -875,7 +875,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path4) => path4 == null || typeof path4 === "object" && !!path4[Symbol.iterator]().next().done;
+    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -905,11 +905,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path4, value) {
-        if (isEmptyPath(path4))
+      addIn(path5, value) {
+        if (isEmptyPath(path5))
           this.add(value);
         else {
-          const [key, ...rest] = path4;
+          const [key, ...rest] = path5;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -923,8 +923,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        const [key, ...rest] = path4;
+      deleteIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -938,8 +938,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        const [key, ...rest] = path4;
+      getIn(path5, keepScalar) {
+        const [key, ...rest] = path5;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path4) {
-        const [key, ...rest] = path4;
+      hasIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -968,8 +968,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        const [key, ...rest] = path4;
+      setIn(path5, value) {
+        const [key, ...rest] = path5;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3484,9 +3484,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path4, value) {
+      addIn(path5, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path4, value);
+          this.contents.addIn(path5, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3561,14 +3561,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        if (Collection.isEmptyPath(path4)) {
+      deleteIn(path5) {
+        if (Collection.isEmptyPath(path5)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path4) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3583,10 +3583,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        if (Collection.isEmptyPath(path4))
+      getIn(path5, keepScalar) {
+        if (Collection.isEmptyPath(path5))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path4, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3597,10 +3597,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path4) {
-        if (Collection.isEmptyPath(path4))
+      hasIn(path5) {
+        if (Collection.isEmptyPath(path5))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path4) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3617,13 +3617,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        if (Collection.isEmptyPath(path4)) {
+      setIn(path5, value) {
+        if (Collection.isEmptyPath(path5)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path4), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path4, value);
+          this.contents.setIn(path5, value);
         }
       }
       /**
@@ -4644,7 +4644,7 @@ var require_resolve_flow_scalar = __commonJS({
       const { offset, type, source, end } = scalar;
       let _type;
       let value;
-      const _onError = (rel, code, msg) => onError(offset + rel, code, msg);
+      const _onError = (rel2, code, msg) => onError(offset + rel2, code, msg);
       switch (type) {
         case "scalar":
           _type = Scalar.Scalar.PLAIN;
@@ -5583,9 +5583,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path4) => {
+    visit.itemAtPath = (cst, path5) => {
       let item = cst;
-      for (const [field, index] of path4) {
+      for (const [field, index] of path5) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5594,23 +5594,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path4) => {
-      const parent = visit.itemAtPath(cst, path4.slice(0, -1));
-      const field = path4[path4.length - 1][0];
+    visit.parentCollection = (cst, path5) => {
+      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
+      const field = path5[path5.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path4, item, visitor) {
-      let ctrl = visitor(item, path4);
+    function _visit(path5, item, visitor) {
+      let ctrl = visitor(item, path5);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path4.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5621,10 +5621,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path4);
+            ctrl = ctrl(item, path5);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path4) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6926,14 +6926,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs5 = this.flowScalar(this.type);
+              const fs6 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs5, sep: [] });
+                map.items.push({ start, key: fs6, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs5);
+                this.stack.push(fs6);
               } else {
-                Object.assign(it, { key: fs5, sep: [] });
+                Object.assign(it, { key: fs6, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7061,13 +7061,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs5 = this.flowScalar(this.type);
+              const fs6 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs5, sep: [] });
+                fc.items.push({ start: [], key: fs6, sep: [] });
               else if (it.sep)
-                this.stack.push(fs5);
+                this.stack.push(fs6);
               else
-                Object.assign(it, { key: fs5, sep: [] });
+                Object.assign(it, { key: fs6, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7275,7 +7275,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse3(src, reviver, options) {
+    function parse4(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -7316,7 +7316,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse3;
+    exports2.parse = parse4;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
     exports2.stringify = stringify;
@@ -7394,17 +7394,17 @@ __export(security_run_exports, {
   zapNetwork: () => zapNetwork
 });
 module.exports = __toCommonJS(security_run_exports);
-var fs4 = __toESM(require("fs"));
-var path3 = __toESM(require("path"));
+var fs5 = __toESM(require("fs"));
+var path4 = __toESM(require("path"));
 var http = __toESM(require("http"));
 var https = __toESM(require("https"));
 var import_node_child_process = require("child_process");
 
 // core/src/security.ts
-var fs3 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs4 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
 var crypto = __toESM(require("crypto"));
-var YAML2 = __toESM(require_dist());
+var YAML3 = __toESM(require_dist());
 
 // core/src/paths.ts
 var fs = __toESM(require("fs"));
@@ -7603,15 +7603,22 @@ function cellXml(ref, v, style) {
   if (s.length > CELL_MAX) s = `${s.slice(0, CELL_MAX - 1)}\u2026`;
   return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(s)}</t></is></c>`;
 }
+var XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+var OOXML = "http://schemas.openxmlformats.org";
+var NS_MAIN = `${OOXML}/spreadsheetml/2006/main`;
+var NS_PKG = (what) => `${OOXML}/package/2006/${what}`;
+var REL_TYPE = (what) => `${OOXML}/officeDocument/2006/relationships${what ? `/${what}` : ""}`;
+var CT = (what) => `application/vnd.openxmlformats-${what}+xml`;
+var SHEET_PART = (i) => `worksheets/sheet${i + 1}.xml`;
+var each = (xs, f) => xs.map(f).join("");
+var rel = (id, type, target) => `<Relationship Id="${id}" Type="${REL_TYPE(type)}" Target="${target}"/>`;
+var font = (bold) => `<font>${bold ? "<b/>" : ""}<sz val="10"/><name val="Calibri"/></font>`;
 function sheetXml(sh) {
   const rows = [sh.header, ...sh.rows];
-  const body = rows.map((r, ri) => {
-    const style = ri === 0 ? 1 : 2;
-    const cells = r.map((v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, style)).join("");
-    return `<row r="${ri + 1}">${cells}</row>`;
-  }).join("");
-  const cols = (sh.widths ?? []).length ? `<cols>${(sh.widths ?? []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
+  const body = each(rows, (r, ri) => `<row r="${ri + 1}">${each(r, (v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, ri === 0 ? 1 : 2))}</row>`);
+  const widths = sh.widths ?? [];
+  const cols = widths.length ? `<cols>${each(widths, (w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)}</cols>` : "";
+  return `${XML_HEAD}<worksheet xmlns="${NS_MAIN}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
 }
 function sheetNames(sheets2) {
   const seen = /* @__PURE__ */ new Set();
@@ -7622,23 +7629,111 @@ function sheetNames(sheets2) {
     return n;
   });
 }
-var STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="10"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+var STYLES = `${XML_HEAD}<styleSheet xmlns="${NS_MAIN}"><fonts count="2">${font(false)}${font(true)}</fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 function buildXlsx(sheets2) {
   const names = sheetNames(sheets2);
   const files = [];
-  const add = (name, s) => files.push({ name, data: Buffer.from(s, "utf8") });
-  add("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets2.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") + "</Types>");
-  add("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-  add("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`);
-  add("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + sheets2.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("") + `<Relationship Id="rId${sheets2.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
-  add("xl/styles.xml", STYLES);
-  sheets2.forEach((s, i) => add(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)));
+  const add = (name, s) => files.push({ name, data: Buffer.from(XML_HEAD + s, "utf8") });
+  const override = (part, type) => `<Override PartName="/xl/${part}" ContentType="${CT(type)}"/>`;
+  add("[Content_Types].xml", `<Types xmlns="${NS_PKG("content-types")}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>` + override("workbook.xml", "officedocument.spreadsheetml.sheet.main") + override("styles.xml", "officedocument.spreadsheetml.styles") + each(sheets2, (_, i) => override(SHEET_PART(i), "officedocument.spreadsheetml.worksheet")) + "</Types>");
+  add("_rels/.rels", `<Relationships xmlns="${NS_PKG("relationships")}">${rel("rId1", "officeDocument", "xl/workbook.xml")}</Relationships>`);
+  add("xl/workbook.xml", `<workbook xmlns="${NS_MAIN}" xmlns:r="${REL_TYPE("")}"><sheets>${each(names, (n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)}</sheets></workbook>`);
+  add("xl/_rels/workbook.xml.rels", `<Relationships xmlns="${NS_PKG("relationships")}">` + each(sheets2, (_, i) => rel(`rId${i + 1}`, "worksheet", SHEET_PART(i))) + rel(`rId${sheets2.length + 1}`, "styles", "styles.xml") + "</Relationships>");
+  files.push({ name: "xl/styles.xml", data: Buffer.from(STYLES, "utf8") });
+  sheets2.forEach((s, i) => files.push({ name: `xl/${SHEET_PART(i)}`, data: Buffer.from(sheetXml(s), "utf8") }));
   return zip(files);
+}
+
+// core/src/profile.ts
+var fs3 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+var YAML2 = __toESM(require_dist());
+
+// core/src/budget.ts
+var HOOK_BUDGET_MS = 1e4;
+var DEFAULT_DEADLINE_MS = HOOK_BUDGET_MS * 0.6;
+
+// core/src/bashwrite.ts
+var SHELLS_TAKING_C = [
+  "sh",
+  "bash",
+  "zsh",
+  "dash",
+  "ksh",
+  "fish",
+  "ash",
+  "busybox"
+];
+var INTERPRETERS = /* @__PURE__ */ new Set([
+  ...SHELLS_TAKING_C,
+  "node",
+  "nodejs",
+  "deno",
+  "bun",
+  "python",
+  "python2",
+  "python3",
+  "perl",
+  "ruby",
+  "php",
+  "osascript",
+  "tclsh",
+  "lua",
+  "Rscript"
+]);
+var SCRIPT_INTERP = new Set([...INTERPRETERS].filter((n) => !SHELLS_TAKING_C.includes(n)));
+
+// core/src/profile.ts
+var GENERIC = "generic";
+var GENERIC_FLOOR = Object.freeze({
+  name: GENERIC,
+  description: "Minimal profile for an undecided stack, or one outside the bundled profiles. The command mapping is left for you to fill in.",
+  sourceGlobs: Object.freeze(["src/**", "lib/**", "app/**"]),
+  // config.ts 의 DEFAULT_CONFIG.design_blocked_bash 와 **같은 목록을 유지한다** —
+  // 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 정본이 사라진다.
+  /**
+   * [API-09] **정본은 한 곳이다 — 여기서 베끼지 않고 가져온다.**
+   *
+   * 예전에는 같은 21개 목록이 세 곳(`config.ts` · 여기 · `profiles/generic/profile.yaml`)에
+   * 리터럴로 있었고, 테스트는 **뒤의 두 벌만** 이었다. 세 값이 «우연히» 같았을 뿐이고,
+   * 갈라지면 「config 로는 막히는데 프로파일로는 안 막힌다」가 되어 배포 차단에 구멍이 난다.
+   * 목록이 셋이면 언제나 하나가 낡는다 — 그래서 `DEFAULT_CONFIG` 를 정본으로 삼는다.
+   * `profile.yaml` 은 남은 한 벌이고, 그 동치는 `profile.test.ts` 가 이미 지킨다.
+   */
+  deployCommands: Object.freeze([...DEFAULT_CONFIG.design_blocked_bash]),
+  commands: Object.freeze({}),
+  designSystemRoots: Object.freeze([]),
+  origin: "floor",
+  dir: ""
+});
+function globToRegExp(pattern) {
+  let re = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") {
+      if (pattern[i + 1] === "*") {
+        i++;
+        if (pattern[i + 1] === "/") {
+          i++;
+          re += "(?:[^/]*/)*";
+        } else {
+          re += ".*";
+        }
+      } else {
+        re += "[^/]*";
+      }
+    } else if (c === "?") {
+      re += "[^/]";
+    } else {
+      re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${re}$`);
 }
 
 // core/src/security.ts
 var trFor = (lang) => (m) => pick(m, lang);
-var securityConfigPath = (root) => path2.join(harnessDir(root), "profile", "security.yaml");
+var securityConfigPath = (root) => path3.join(harnessDir(root), "profile", "security.yaml");
 var DEFAULT_RESULTS_DIR = ".harness/security";
 var LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"];
 var DEFAULT_DENY_STATUSES = [401, 403, 404];
@@ -7811,10 +7906,10 @@ function isPinnedImage(image) {
 }
 function loadSecurityConfig(root) {
   const p = securityConfigPath(root);
-  if (!fs3.existsSync(p)) return { status: "absent", path: p };
+  if (!fs4.existsSync(p)) return { status: "absent", path: p };
   let raw;
   try {
-    raw = YAML2.parse(fs3.readFileSync(p, "utf8"));
+    raw = YAML3.parse(fs4.readFileSync(p, "utf8"));
   } catch (e) {
     return { status: "invalid", path: p, errors: [e.message] };
   }
@@ -7894,10 +7989,10 @@ function selectRoutes(routes, include = [], exclude = []) {
 }
 var fillPathParams = (p) => p.replace(/\{[^}]+\}/g, "x").replace(/\[[^\]]+\]/g, "x").replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "x");
 function currentVersion(root, cfg) {
-  const p = path2.resolve(root, cfg.version_from);
+  const p = path3.resolve(root, cfg.version_from);
   let text;
   try {
-    text = fs3.readFileSync(p, "utf8");
+    text = fs4.readFileSync(p, "utf8");
   } catch {
     throw new Error(tr(root, {
       en: `Cannot read the version from ${cfg.version_from} \u2014 set \`version_from\` in .harness/profile/security.yaml`,
@@ -7926,20 +8021,20 @@ function assertVersion(root, v, from) {
   }
   return s;
 }
-var roundDir = (root, cfg, version) => path2.resolve(root, cfg.results_dir, version);
+var roundDir = (root, cfg, version) => path3.resolve(root, cfg.results_dir, version);
 var xlsxName = (version) => `security-results-${version}.xlsx`;
 var INPUT_FILES = ["run.json", "deps.json", "headers.json", "authz.json", "manual.json", "triage.yaml"];
 function inputsHash(dir) {
   const h = crypto.createHash("sha256");
   const files = [...INPUT_FILES];
-  const zapDir = path2.join(dir, "zap");
-  if (fs3.existsSync(zapDir)) {
-    for (const f of fs3.readdirSync(zapDir).filter((f2) => f2.endsWith(".json")).sort()) files.push(`zap/${f}`);
+  const zapDir = path3.join(dir, "zap");
+  if (fs4.existsSync(zapDir)) {
+    for (const f of fs4.readdirSync(zapDir).filter((f2) => f2.endsWith(".json")).sort()) files.push(`zap/${f}`);
   }
   for (const f of files) {
     let data = null;
     try {
-      data = fs3.readFileSync(path2.join(dir, f));
+      data = fs4.readFileSync(path3.join(dir, f));
     } catch {
       data = null;
     }
@@ -7950,25 +8045,25 @@ function inputsHash(dir) {
 var SEV_ORDER = ["High", "Medium", "Low", "Info"];
 var readJson = (p) => {
   try {
-    return JSON.parse(fs3.readFileSync(p, "utf8"));
+    return JSON.parse(fs4.readFileSync(p, "utf8"));
   } catch {
     return void 0;
   }
 };
 function readRound(dir) {
   return {
-    run: readJson(path2.join(dir, "run.json")),
-    deps: readJson(path2.join(dir, "deps.json")),
-    headers: readJson(path2.join(dir, "headers.json")),
-    authz: readJson(path2.join(dir, "authz.json")),
-    manual: readJson(path2.join(dir, "manual.json"))
+    run: readJson(path3.join(dir, "run.json")),
+    deps: readJson(path3.join(dir, "deps.json")),
+    headers: readJson(path3.join(dir, "headers.json")),
+    authz: readJson(path3.join(dir, "authz.json")),
+    manual: readJson(path3.join(dir, "manual.json"))
   };
 }
 function readTriage(dir) {
-  const p = path2.join(dir, "triage.yaml");
-  if (!fs3.existsSync(p)) return { decisions: [] };
+  const p = path3.join(dir, "triage.yaml");
+  if (!fs4.existsSync(p)) return { decisions: [] };
   try {
-    const doc = YAML2.parse(fs3.readFileSync(p, "utf8"));
+    const doc = YAML3.parse(fs4.readFileSync(p, "utf8"));
     const list = Array.isArray(doc?.decisions) ? doc.decisions : [];
     return {
       decisions: list.map((d) => ({
@@ -8006,8 +8101,8 @@ ${f.where}`;
     out.set(f.key, { ...f, id: `SEC-${version}-${slug(f.key.replace(/^[a-z]+:/, (m) => m.slice(0, -1) + "-"))}`, status: "open" });
   };
   for (const s of run?.scans ?? []) {
-    const rel = `zap/${s.file}`;
-    const rep = readJson(path2.join(dir, rel));
+    const rel2 = `zap/${s.file}`;
+    const rep = readJson(path3.join(dir, rel2));
     for (const site of rep?.site ?? []) {
       for (const a of site.alerts ?? []) {
         const sev = zapSeverity(a.riskcode);
@@ -8018,7 +8113,7 @@ ${f.where}`;
           source: "zap",
           title: `${a.name} (ZAP ${a.pluginid})`,
           where: `${s.name}: ${(a.instances ?? []).slice(0, 3).map((i) => i.uri).join(" \xB7 ")}`,
-          evidence: rel
+          evidence: rel2
         });
       }
     }
@@ -8170,18 +8265,18 @@ var E2E_SECURITY_RE = /\b(?:auth|csrf|xss|ssrf|csp|cors|injection|permission|for
 function e2eSecurityCases(root, globs) {
   const out = [];
   for (const g of globs) {
-    const abs = path2.resolve(root, g);
-    const dir = path2.dirname(abs);
-    const base = path2.basename(abs);
-    const re = new RegExp(`^${base.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
+    const abs = path3.resolve(root, g);
+    const dir = path3.dirname(abs);
+    const base = path3.basename(abs);
+    const re = globToRegExp(base);
     let files = [];
     try {
-      files = fs3.readdirSync(dir).filter((f) => re.test(f)).sort();
+      files = fs4.readdirSync(dir).filter((f) => re.test(f)).sort();
     } catch {
       files = [];
     }
     for (const f of files) {
-      const doc = readJson(path2.join(dir, f));
+      const doc = readJson(path3.join(dir, f));
       const cases = Array.isArray(doc) ? doc : Array.isArray(doc?.cases) ? doc.cases : [];
       for (const c of cases) {
         const tags = Array.isArray(c.tags) ? c.tags.map(String) : [];
@@ -8189,11 +8284,11 @@ function e2eSecurityCases(root, globs) {
         if (c.security === true || tags.includes("security") || c.module === "security" || E2E_SECURITY_RE.test(text)) {
           out.push({
             id: String(c.id ?? ""),
-            module: String(c.module ?? path2.basename(f).split(".")[0]),
+            module: String(c.module ?? path3.basename(f).split(".")[0]),
             scenario: String(c.scenario ?? c.title ?? c.feature ?? ""),
             expected: String(c.expected ?? ""),
             spec: String(c.spec ?? ""),
-            file: path2.relative(root, path2.join(dir, f))
+            file: path3.relative(root, path3.join(dir, f))
           });
         }
       }
@@ -8269,7 +8364,7 @@ function sheets(root, j, cfg, t) {
   };
   const scanRows = [];
   for (const s of run?.scans ?? []) {
-    const rep = readJson(path2.join(j.dir, "zap", s.file));
+    const rep = readJson(path3.join(j.dir, "zap", s.file));
     for (const site of rep?.site ?? []) {
       for (const a of site.alerts ?? []) {
         const uris = [...new Set((a.instances ?? []).map((i) => i.uri))].sort();
@@ -8321,13 +8416,13 @@ function sheets(root, j, cfg, t) {
   return out;
 }
 function defectCommands(j, root) {
-  const where = (p) => root ? path2.relative(root, p) : p;
+  const where = (p) => root ? path3.relative(root, p) : p;
   const q = (s) => `'${s.replace(/'/g, "'\\''")}'`;
-  return j.findings.filter((f) => f.severity === "High" && !["fixed", "false-positive"].includes(f.status) || f.severity === "Medium" && !["fixed", "accepted", "false-positive"].includes(f.status)).map((f) => `harness ship defect add --id ${f.id} --severity ${f.severity === "High" ? "high" : "medium"} --title ${q(f.title.slice(0, 160))} --evidence ${q(where(path2.join(j.dir, f.evidence.split(" \xB7 ")[0])))}`);
+  return j.findings.filter((f) => f.severity === "High" && !["fixed", "false-positive"].includes(f.status) || f.severity === "Medium" && !["fixed", "accepted", "false-positive"].includes(f.status)).map((f) => `harness ship defect add --id ${f.id} --severity ${f.severity === "High" ? "high" : "medium"} --title ${q(f.title.slice(0, 160))} --evidence ${q(where(path3.join(j.dir, f.evidence.split(" \xB7 ")[0])))}`);
 }
 function writeSecurityReport(root, cfg, version) {
   const dir = roundDir(root, cfg, version);
-  if (!fs3.existsSync(dir)) {
+  if (!fs4.existsSync(dir)) {
     throw new Error(tr(root, {
       en: `No results folder for ${version}: ${dir} \u2014 run the security check first (skill security-verify)`,
       ko: `${version} \uC758 \uACB0\uACFC \uD3F4\uB354\uAC00 \uC5C6\uB2E4: ${dir} \u2014 \uBCF4\uC548 \uC810\uAC80\uC744 \uBA3C\uC800 \uB3CC\uB824\uB77C(\uC2A4\uD0AC security-verify)`
@@ -8335,10 +8430,10 @@ function writeSecurityReport(root, cfg, version) {
   }
   const t = trFor(langFor(root));
   const j = judgeRound(root, dir, version);
-  const xlsx = path2.join(dir, xlsxName(version));
-  fs3.writeFileSync(xlsx, buildXlsx(sheets(root, j, cfg, t)));
-  const summary = path2.join(dir, "summary.json");
-  fs3.writeFileSync(summary, `${JSON.stringify({
+  const xlsx = path3.join(dir, xlsxName(version));
+  fs4.writeFileSync(xlsx, buildXlsx(sheets(root, j, cfg, t)));
+  const summary = path3.join(dir, "summary.json");
+  fs4.writeFileSync(summary, `${JSON.stringify({
     schema: "security-summary/1",
     version,
     date: readRound(dir).run?.date ?? "",
@@ -8352,9 +8447,9 @@ function writeSecurityReport(root, cfg, version) {
     disclaimer: t(DISCLAIMER)
   }, null, 1)}
 `);
-  const defects = path2.join(dir, "defects.md");
+  const defects = path3.join(dir, "defects.md");
   const cmds = defectCommands(j, root);
-  fs3.writeFileSync(defects, [
+  fs4.writeFileSync(defects, [
     `# ${t({ en: "Defect drafts", ko: "\uACB0\uD568 \uCD08\uC548" })} \u2014 ${version}`,
     "",
     t({
@@ -8379,7 +8474,7 @@ function request(cfg, method, url, headers = {}, body, timeoutMs = 3e4) {
   if (!c.ok) return Promise.reject(new TargetRefused(c.reason));
   const u = new URL(url);
   const mod = u.protocol === "https:" ? https : http;
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     const req = mod.request(u, {
       method,
       headers: { ...body !== void 0 ? { "content-type": "application/json" } : {}, ...headers },
@@ -8390,7 +8485,7 @@ function request(cfg, method, url, headers = {}, body, timeoutMs = 3e4) {
       res.on("data", (d) => {
         if (chunks.reduce((n, b) => n + b.length, 0) < 65536) chunks.push(d);
       });
-      res.on("end", () => resolve4({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }));
+      res.on("end", () => resolve5({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }));
     });
     req.on("timeout", () => req.destroy(new Error(`timeout ${method} ${url}`)));
     req.on("error", reject);
@@ -8412,14 +8507,14 @@ function scrubDir(dir, values = secrets) {
   if (list.length === 0) return 0;
   let n = 0;
   const walk = (d) => {
-    for (const e of fs4.readdirSync(d, { withFileTypes: true })) {
-      const p = path3.join(d, e.name);
+    for (const e of fs5.readdirSync(d, { withFileTypes: true })) {
+      const p = path4.join(d, e.name);
       if (e.isDirectory()) {
         walk(p);
         continue;
       }
       if (!/\.(json|html|md|txt|ya?ml|log|xml)$/i.test(e.name)) continue;
-      let s = fs4.readFileSync(p, "utf8");
+      let s = fs5.readFileSync(p, "utf8");
       let changed = false;
       for (const v of list) {
         if (s.includes(v)) {
@@ -8428,7 +8523,7 @@ function scrubDir(dir, values = secrets) {
           changed = true;
         }
       }
-      if (changed) fs4.writeFileSync(p, s);
+      if (changed) fs5.writeFileSync(p, s);
     }
   };
   walk(dir);
@@ -8463,7 +8558,7 @@ async function loginHeaders(cfg, role) {
   const i = line.indexOf(":");
   return { [line.slice(0, i).trim()]: line.slice(i + 1).trim() };
 }
-var write = (dir, name, v) => fs4.writeFileSync(path3.join(dir, name), `${JSON.stringify(v, null, 1)}
+var write = (dir, name, v) => fs5.writeFileSync(path4.join(dir, name), `${JSON.stringify(v, null, 1)}
 `);
 var targetUrl = (cfg, name) => {
   const t = name ? cfg.targets.find((x) => x.name === name) : cfg.targets[0];
@@ -8471,12 +8566,12 @@ var targetUrl = (cfg, name) => {
   return t.url.replace(/\/$/, "");
 };
 function detectDepsCommand(root) {
-  if (fs4.existsSync(path3.join(root, "pnpm-lock.yaml"))) return { manager: "pnpm", command: "pnpm audit --prod --json" };
-  if (fs4.existsSync(path3.join(root, "package-lock.json"))) return { manager: "npm", command: "npm audit --omit=dev --json" };
-  if (fs4.existsSync(path3.join(root, "yarn.lock"))) return { manager: "yarn", command: "yarn npm audit --environment production --json" };
-  if (fs4.existsSync(path3.join(root, "Cargo.lock"))) return { manager: "cargo", command: "cargo audit --json" };
-  if (fs4.existsSync(path3.join(root, "requirements.txt"))) return { manager: "pip", command: "pip-audit -r requirements.txt -f json" };
-  if (fs4.existsSync(path3.join(root, "go.sum"))) return { manager: "go", command: "govulncheck -json ./..." };
+  if (fs5.existsSync(path4.join(root, "pnpm-lock.yaml"))) return { manager: "pnpm", command: "pnpm audit --prod --json" };
+  if (fs5.existsSync(path4.join(root, "package-lock.json"))) return { manager: "npm", command: "npm audit --omit=dev --json" };
+  if (fs5.existsSync(path4.join(root, "yarn.lock"))) return { manager: "yarn", command: "yarn npm audit --environment production --json" };
+  if (fs5.existsSync(path4.join(root, "Cargo.lock"))) return { manager: "cargo", command: "cargo audit --json" };
+  if (fs5.existsSync(path4.join(root, "requirements.txt"))) return { manager: "pip", command: "pip-audit -r requirements.txt -f json" };
+  if (fs5.existsSync(path4.join(root, "go.sum"))) return { manager: "go", command: "govulncheck -json ./..." };
   return null;
 }
 function parseAudit(text) {
@@ -8577,7 +8672,7 @@ async function stepAuthz(root, cfg, dir, auth) {
     if (r.code !== 0) return { name: "authz", status: "error", detail: `routes.command exited ${r.code}: ${r.stderr.slice(0, 300)}` };
     text = r.stdout;
   } else {
-    text = fs4.readFileSync(path3.resolve(root, rc.file), "utf8");
+    text = fs5.readFileSync(path4.resolve(root, rc.file), "utf8");
   }
   const all = parseRoutes(text);
   const roles = cfg.roles.filter((r) => !r.privileged);
@@ -8605,7 +8700,7 @@ async function stepAuthz(root, cfg, dir, auth) {
 }
 async function stepManual(root, cfg, dir, auth) {
   if (!cfg.manual?.file) return { name: "manual", status: "error", detail: "manual.file is not set" };
-  const list = JSON.parse(fs4.readFileSync(path3.resolve(root, cfg.manual.file), "utf8"));
+  const list = JSON.parse(fs5.readFileSync(path4.resolve(root, cfg.manual.file), "utf8"));
   const scenarios = Array.isArray(list) ? list : list.scenarios;
   const rows = [];
   for (const s of scenarios) {
@@ -8664,7 +8759,7 @@ function runZap(cfg, dir, script, scriptArgs, minutes) {
     ...cfg.zap?.cpus ? ["--cpus", String(cfg.zap.cpus)] : [],
     ...net.args,
     "-v",
-    `${path3.join(dir, "zap")}:/zap/wrk:rw`,
+    `${path4.join(dir, "zap")}:/zap/wrk:rw`,
     cfg.zap.image,
     script,
     ...scriptArgs
@@ -8689,8 +8784,8 @@ async function stepZapBaseline(cfg, dir, scans) {
     const file = `baseline-${n}.json`;
     const minutes = z.baseline_minutes ?? 1;
     const r = runZap(cfg, dir, "zap-baseline.py", ["-t", net.rewrite(url), "-m", String(minutes), "-I", "-J", file, "-r", `baseline-${n}.html`, "-z", ZAP_QUIET.join(" ")], minutes);
-    fs4.writeFileSync(path3.join(dir, "zap", `baseline-${n}.log`), r.log);
-    if (r.code >= 3 || r.code < 0 || !fs4.existsSync(path3.join(dir, "zap", file))) fails.push(`${n} exit ${r.code}`);
+    fs5.writeFileSync(path4.join(dir, "zap", `baseline-${n}.log`), r.log);
+    if (r.code >= 3 || r.code < 0 || !fs5.existsSync(path4.join(dir, "zap", file))) fails.push(`${n} exit ${r.code}`);
     else scans.push({ key: `baseline-${n}`, file, name: n, kind: "baseline", target: url, note: `spider ${minutes}m \xB7 passive rules` });
   }
   return fails.length ? { name: "zap-baseline", status: "error", detail: fails.join(", ") } : { name: "zap-baseline", status: "ok", detail: z.image };
@@ -8721,22 +8816,22 @@ async function stepZapActive(root, cfg, dir, auth, scans) {
   const file = `active-${a.target}.json`;
   let r;
   if (a.openapi) {
-    const spec = JSON.parse(fs4.readFileSync(path3.resolve(root, a.openapi), "utf8"));
+    const spec = JSON.parse(fs5.readFileSync(path4.resolve(root, a.openapi), "utf8"));
     spec.servers = [{ url: net.rewrite(base) }];
-    fs4.writeFileSync(path3.join(dir, "zap", "openapi-target.json"), JSON.stringify(spec));
+    fs5.writeFileSync(path4.join(dir, "zap", "openapi-target.json"), JSON.stringify(spec));
     r = runZap(cfg, dir, "zap-api-scan.py", ["-t", "/zap/wrk/openapi-target.json", "-f", "openapi", "-I", "-J", file, "-r", `active-${a.target}.html`, "-z", z.join(" ")], minutes);
   } else {
     r = runZap(cfg, dir, "zap-full-scan.py", ["-t", net.rewrite(`${base}/`), "-m", "1", "-I", "-J", file, "-r", `active-${a.target}.html`, "-z", z.join(" ")], minutes);
   }
-  fs4.writeFileSync(path3.join(dir, "zap", `active-${a.target}.log`), r.log);
-  if (r.code >= 3 || r.code < 0 || !fs4.existsSync(path3.join(dir, "zap", file))) return { name: "zap-active", status: "error", detail: `exit ${r.code}` };
+  fs5.writeFileSync(path4.join(dir, "zap", `active-${a.target}.log`), r.log);
+  if (r.code >= 3 || r.code < 0 || !fs5.existsSync(path4.join(dir, "zap", file))) return { name: "zap-active", status: "error", detail: `exit ${r.code}` };
   scans.push({ key: `active-${a.target}`, file, name: a.target, kind: "active", target: base, note: `${a.openapi ? "OpenAPI" : "spider"} \xB7 role ${a.role ?? "anonymous"} \xB7 ${minutes}m cap \xB7 OAST off` });
   return { name: "zap-active", status: "ok", detail: cfg.zap.image };
 }
 async function stackUp(root, cfg, dir) {
   const s = cfg.stack;
   if (!s?.up) return null;
-  const out = fs4.openSync(path3.join(dir, "stack.log"), "a");
+  const out = fs5.openSync(path4.join(dir, "stack.log"), "a");
   const child = (0, import_node_child_process.spawn)("sh", ["-c", s.up], { cwd: root, detached: true, stdio: ["ignore", out, out], env: process.env });
   log(`stack up pid ${child.pid}: ${s.up}`);
   if (s.ready_url) {
@@ -8785,9 +8880,9 @@ async function runSecurity(root, argv) {
   const skip = (flagVal(argv, "skip") ?? "").split(",").filter(Boolean);
   const want = (s) => (only.length === 0 || only.includes(s)) && !skip.includes(s);
   const dir = roundDir(root, cfg, version);
-  fs4.mkdirSync(path3.join(dir, "zap"), { recursive: true });
-  const runPath = path3.join(dir, "run.json");
-  const prev = fs4.existsSync(runPath) ? JSON.parse(fs4.readFileSync(runPath, "utf8")) : {};
+  fs5.mkdirSync(path4.join(dir, "zap"), { recursive: true });
+  const runPath = path4.join(dir, "run.json");
+  const prev = fs5.existsSync(runPath) ? JSON.parse(fs5.readFileSync(runPath, "utf8")) : {};
   const steps = new Map((prev.steps ?? []).map((s) => [s.name, s]));
   const scans = [];
   const keepScans = (prev.scans ?? []).filter((s) => !(want("zap-baseline") && s.key.startsWith("baseline-")) && !(want("zap-active") && s.key.startsWith("active-")));
@@ -8844,7 +8939,7 @@ async function runSecurity(root, argv) {
   if (scrubbed) log(`redacted ${scrubbed} secret occurrence(s) from the results`);
   if (code !== 0) return code;
   const rep = writeSecurityReport(root, cfg, version);
-  log(`${rep.judgement.ok ? "PASSED" : "NOT PASSED"} \u2014 ${path3.relative(root, rep.xlsx)}`);
+  log(`${rep.judgement.ok ? "PASSED" : "NOT PASSED"} \u2014 ${path4.relative(root, rep.xlsx)}`);
   for (const r of rep.judgement.reasons) log(`  - ${r}`);
   return rep.judgement.ok ? 0 : 2;
 }

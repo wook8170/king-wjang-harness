@@ -118,18 +118,26 @@ function cellXml(ref: string, v: Cell, style: number): string {
   return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(s)}</t></is></c>`;
 }
 
+// 네임스페이스·관계 유형 — 같은 주소를 여러 곳에 적지 않도록 한 곳에서 만든다.
+const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+const OOXML = 'http://schemas.openxmlformats.org';
+const NS_MAIN = `${OOXML}/spreadsheetml/2006/main`;
+const NS_PKG = (what: string) => `${OOXML}/package/2006/${what}`;
+const REL_TYPE = (what: string) => `${OOXML}/officeDocument/2006/relationships${what ? `/${what}` : ''}`;
+const CT = (what: string) => `application/vnd.openxmlformats-${what}+xml`;
+const SHEET_PART = (i: number) => `worksheets/sheet${i + 1}.xml`;
+const each = <T>(xs: T[], f: (x: T, i: number) => string) => xs.map(f).join('');
+const rel = (id: string, type: string, target: string) => `<Relationship Id="${id}" Type="${REL_TYPE(type)}" Target="${target}"/>`;
+const font = (bold: boolean) => `<font>${bold ? '<b/>' : ''}<sz val="10"/><name val="Calibri"/></font>`;
+
 function sheetXml(sh: Sheet): string {
   const rows = [sh.header as Cell[], ...sh.rows];
-  const body = rows.map((r, ri) => {
-    const style = ri === 0 ? 1 : 2;
-    const cells = r.map((v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, style)).join('');
-    return `<row r="${ri + 1}">${cells}</row>`;
-  }).join('');
-  const cols = (sh.widths ?? []).length
-    ? `<cols>${(sh.widths ?? []).map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+  const body = each(rows, (r, ri) => `<row r="${ri + 1}">${each(r, (v, ci) => cellXml(`${colName(ci)}${ri + 1}`, v, ri === 0 ? 1 : 2))}</row>`);
+  const widths = sh.widths ?? [];
+  const cols = widths.length
+    ? `<cols>${each(widths, (w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)}</cols>`
     : '';
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+  return `${XML_HEAD}<worksheet xmlns="${NS_MAIN}">`
     + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
     + `${cols}<sheetData>${body}</sheetData></worksheet>`;
 }
@@ -145,9 +153,8 @@ function sheetNames(sheets: Sheet[]): string[] {
   });
 }
 
-const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-  + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-  + '<fonts count="2"><font><sz val="10"/><name val="Calibri"/></font><font><b/><sz val="10"/><name val="Calibri"/></font></fonts>'
+const STYLES = `${XML_HEAD}<styleSheet xmlns="${NS_MAIN}">`
+  + `<fonts count="2">${font(false)}${font(true)}</fonts>`
   + '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
   + '<fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF7"/><bgColor indexed="64"/></patternFill></fill></fills>'
   + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
@@ -162,29 +169,24 @@ const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 export function buildXlsx(sheets: Sheet[]): Buffer {
   const names = sheetNames(sheets);
   const files: { name: string; data: Buffer }[] = [];
-  const add = (name: string, s: string) => files.push({ name, data: Buffer.from(s, 'utf8') });
-  add('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+  const add = (name: string, s: string) => files.push({ name, data: Buffer.from(XML_HEAD + s, 'utf8') });
+  const override = (part: string, type: string) => `<Override PartName="/xl/${part}" ContentType="${CT(type)}"/>`;
+  add('[Content_Types].xml', `<Types xmlns="${NS_PKG('content-types')}">`
+    + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
     + '<Default Extension="xml" ContentType="application/xml"/>'
-    + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-    + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
-    + sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
+    + override('workbook.xml', 'officedocument.spreadsheetml.sheet.main')
+    + override('styles.xml', 'officedocument.spreadsheetml.styles')
+    + each(sheets, (_, i) => override(SHEET_PART(i), 'officedocument.spreadsheetml.worksheet'))
     + '</Types>');
-  add('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+  add('_rels/.rels', `<Relationships xmlns="${NS_PKG('relationships')}">${rel('rId1', 'officeDocument', 'xl/workbook.xml')}</Relationships>`);
+  add('xl/workbook.xml', `<workbook xmlns="${NS_MAIN}" xmlns:r="${REL_TYPE('')}">`
+    + `<sheets>${each(names, (n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)}</sheets></workbook>`);
+  add('xl/_rels/workbook.xml.rels', `<Relationships xmlns="${NS_PKG('relationships')}">`
+    + each(sheets, (_, i) => rel(`rId${i + 1}`, 'worksheet', SHEET_PART(i)))
+    + rel(`rId${sheets.length + 1}`, 'styles', 'styles.xml')
     + '</Relationships>');
-  add('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-    + `<sheets>${names.map((n, i) => `<sheet name="${xml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
-  add('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
-    + `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
-    + '</Relationships>');
-  add('xl/styles.xml', STYLES);
-  sheets.forEach((s, i) => add(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)));
+  files.push({ name: 'xl/styles.xml', data: Buffer.from(STYLES, 'utf8') });
+  sheets.forEach((s, i) => files.push({ name: `xl/${SHEET_PART(i)}`, data: Buffer.from(sheetXml(s), 'utf8') }));
   return zip(files);
 }
 
@@ -210,7 +212,7 @@ export function readXlsx(buf: Buffer): { name: string; rows: string[][] }[] {
   const unxml = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   const names = [...wb.matchAll(/<sheet name="([^"]*)"/g)].map(m => unxml(m[1]));
   return names.map((name, i) => {
-    const xmlText = entries.get(`xl/worksheets/sheet${i + 1}.xml`)?.toString('utf8') ?? '';
+    const xmlText = entries.get(`xl/${SHEET_PART(i)}`)?.toString('utf8') ?? '';
     const rows = [...xmlText.matchAll(/<row [^>]*>([\s\S]*?)<\/row>/g)].map((rm) => {
       const out: string[] = [];
       for (const cm of rm[1].matchAll(/<c r="([A-Z]+)\d+"[^>]*>([\s\S]*?)<\/c>/g)) {
