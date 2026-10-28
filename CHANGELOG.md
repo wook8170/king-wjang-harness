@@ -8,6 +8,45 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — a security round per version, with a results workbook (`security`)
+
+The ship track now asks whether **the current version** passed a security check. One round per
+version collects everything in `.harness/security/<version>/`:
+
+- dependency audit (package manager detected from the lockfile), security headers and cookie
+  attributes, ZAP baseline plus an authenticated active scan (image pinned to a tag or digest,
+  external callbacks off), an authorization-denial sweep over the routes printed by the project's
+  route-listing command, and the project's manual scenarios;
+- `security-results-<version>.xlsx` — Cover · Summary · Findings · Manual scenarios · Authorization
+  denial · Automated scans · Security headers · Dependencies · E2E security cases (when an e2e case
+  ledger is configured). The cover states that this is a self-assessment and does not replace a
+  third-party assessment;
+- `summary.json` and `defects.md` — unresolved High/Medium as `harness ship defect add` lines.
+
+Pass criteria are fixed in the core: unresolved High 0 · unaddressed Medium 0 · authorization
+denial 100% · results workbook present and built from the current results. False positives and
+accepted risks go in the round's `triage.yaml` with reason and evidence; a High cannot be accepted,
+and an accepted Medium needs a named approver.
+
+New: `harness security verdict|report|defects|target|routes`, the runner
+`core/dist/security-run.js` (a separate entry point — the CLI and hooks still never touch the network),
+the `security-verify` skill, and `.harness/profile/security.yaml` (policy area, so agents cannot widen
+the target allowlist). The allowlist accepts loopback, private ranges and test names only;
+production and external hosts cannot be allowed even by configuration. Test secrets come from
+environment variables and are redacted, together with issued tokens, from the round folder.
+
+The workbook is written by a small built-in OOXML writer (Node built-ins only) — no new runtime
+dependency, and the same input gives the same bytes.
+
+### Changed — P10 and P12 approval require the current version's security result
+
+`harness gate approve P10`, `harness gate approve P12` and `harness ship verdict` refuse until
+`harness security verdict` passes for the version read from `version_from` (default
+`package.json`). Bumping the version blocks them again until the round runs for that version. A
+product with no network surface opts out with `applies: false` and a `reason` in
+`.harness/profile/security.yaml`. **Existing projects at P10 or later need that file before their
+next ship-track approval.**
+
 ### Changed — exit codes now separate "the verdict is no" from "the command did not run" ([API-05])
 
 Both used to be `1`. A release script running `harness ship verdict` could not tell

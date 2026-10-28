@@ -11,6 +11,7 @@ import {
   invalidateStaleGates, canEnterPhase, setPhaseViaGate, MIN_SUBSTANCE_CHARS,
   distinctCharCount, wordCount, submissionSignals,
 } from '../src/gate';
+import { passingSecurityRound } from './security-fixture';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -215,6 +216,7 @@ describe('approveGate', () => {
     const root = setup();
     writeDoc(root, 'docs/a.md', body('A'));
     submitGate(root, 'P10', { paths: ['docs/a.md'], evidence: 'measured' });
+    passingSecurityRound(root); // P10 은 현재 버전의 보안 결과 통과도 요구한다
     expect(approveGate(root, 'P10').status).toBe('approved');
   });
 

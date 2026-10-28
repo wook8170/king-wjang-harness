@@ -242,6 +242,10 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
     // 명령 매핑만 덮어쓰는 것은 정당한 사용법이므로, 그때는 이름 없는 최소 프로파일로 계속한다.
     if (fs.existsSync(path.join(dir, 'commands.yaml'))) {
       text = 'name: local';
+    } else if (origin === 'local' && fs.existsSync(path.join(dir, 'security.yaml'))) {
+      // 보안 점검 설정(security.yaml)만 둔 로컬 디렉토리는 프로파일을 덮지 않는다 — 조용히
+      // 번들 프로파일로 넘어간다. 그 파일을 두라고 안내한 것이 하네스 자신이므로 문제로 보고하지 않는다.
+      return null;
     } else {
       problems.push(t({
         en: `cannot read ${yamlPath} (${errMsg(e)}) — skipping this profile`,

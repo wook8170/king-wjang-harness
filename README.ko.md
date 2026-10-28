@@ -118,7 +118,7 @@ flowchart LR
 | 지표 | 값 |
 |---|---|
 | 훅 지연 (p95) | 두 표면이고 **둘 다 `npm run bench:hook` 이 찍는다**. *인프로세스*(번들이 이미 올라온 상태에서 판정 자체): 정상 **0.9 ms**, 10만 건(15 MB) 저널 재생 폴백 중 **18.6 ms**. *wall-time*(도구 호출이 실제로 기다리는 값), 같은 실행: **77 ms** / **102 ms** — 그중 **40 ms 가 그 머신의 `node` 기동**이다. wall-time 절대값은 머신의 성질이고, 게이트는 폴백이 **더하는 값**에 걸린다(인프로세스 +17.7 ms · wall-time +24.7 ms · 문턱 50 ms). |
-| 테스트 스위트 | **1596 tests** (68 파일) — **배포본에서 1572건 통과**(나머지는 배포본에서 빠지는 리포 내부 문서를 보는 검사다, `git archive` 실측). 시간 단언 2건은 바쁜 머신에서 판정 대신 **「측정 불가」와 그때의 부하**를 적는다 |
+| 테스트 스위트 | **1596 tests** (69 파일) — **배포본에서 1572건 통과**(나머지는 배포본에서 빠지는 리포 내부 문서를 보는 검사다, `git archive` 실측). 시간 단언 2건은 바쁜 머신에서 판정 대신 **「측정 불가」와 그때의 부하**를 적는다 |
 | 세션당 추가 컨텍스트 | 하네스가 켜졌을 때 **~260 토큰** · `.harness/` 없는 프로젝트는 **0**. 재측정: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — 주입되는 브리핑이 ~1KB 이고(프로젝트 경로가 들어가므로 정확한 크기는 조금씩 다르다), 4로 나누면 토큰 추정치다 |
 | 런타임 의존성 | **1** (`yaml`, 번들) |
 | 결정성 | 3× 실행 동일 판정 |
@@ -225,7 +225,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 |---|---|
 | `0` | 성공 — 또는 판정이 「예」 |
 | `1` | 사용법·환경 오류(하위명령 오타, 여기엔 `.harness/` 가 없음, 인자 누락) |
-| `2` | **판정이 「아니오」** — `ship verdict` NO-GO · `doctor` 진단 실패 · `gate verify` 드리프트 · `evidence check` 미달 |
+| `2` | **판정이 「아니오」** — `ship verdict` NO-GO · `doctor` 진단 실패 · `gate verify` 드리프트 · `evidence check` 미달 · `security verdict` 미통과 |
 
 0 이 아니면 여전히 `cmd || exit 1` 스크립트가 걸린다 — 바뀐 것은 **둘을 구분할 수 있게 된 것**뿐이다.
 
@@ -269,6 +269,36 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 
 ---
 
+## 보안 점검 — 버전마다 한 번
+
+출하 트랙은 **현재 버전의 보안 점검 결과**가 통과해야 열린다. `harness gate approve P10`·`P12` 와 `harness ship verdict` 가 같은 조건을 본다. 버전을 올리면 그 버전으로 다시 돌리기 전까지 막힌다.
+
+| 점검 | 내용 |
+|---|---|
+| 의존성 감사 | 잠금 파일로 패키지 관리자를 고른다(npm·pnpm·yarn·cargo·pip-audit·govulncheck). `deps.command` 로 바꿀 수 있다 |
+| 보안 헤더 | CSP·`X-Content-Type-Options`·`X-Frame-Options`(CSP `frame-ancestors` 로 대신 가능)·`Referrer-Policy`, https 면 HSTS, 쿠키 속성, `Server` 버전 노출 |
+| 동적 점검 | ZAP baseline 과 로그인한 역할의 active 점검. 이미지는 태그·다이제스트로 고정해야 하고, 외부 콜백(OAST)과 업데이트 확인을 끈다 |
+| 권한 거부 전수 | 라우트 목록 명령의 출력을 읽어, 권한 없는 역할로 모든 대상 라우트를 호출한다. 새 API 는 다음 회차에 자동으로 포함된다 |
+| 수동 시나리오 | 프로젝트가 쓴 시나리오 파일(JSON)을 그대로 실행한다 |
+
+**통과 기준(설정으로 바꿀 수 없다)**: 미해결 High 0 · 미조치 Medium 0 · 권한 거부 100% · 결과서(엑셀) 존재. High 는 수정이나 근거 있는 오탐으로만 닫힌다. Medium 은 승인자를 적은 수용도 인정한다. 오탐·수용은 회차 폴더의 `triage.yaml` 에 사유와 근거를 남긴다.
+
+**설정** — `.harness/profile/security.yaml`(정책 영역이라 에이전트가 고칠 수 없다). 대상 주소·포트, 역할과 로그인 방법(비밀번호는 `${ENV}` 로만), 라우트 목록 명령, 격리 스택 기동·종료 명령, ZAP 이미지를 적는다. 허용 대상은 루프백·사설 대역·시험용 이름만 받는다 — 운영·외부 주소는 설정으로도 열 수 없다. 네트워크 노출이 없는 제품은 `applies: false` 와 `reason` 을 적는다.
+
+**실행과 결과** — 점검은 `node <플러그인>/core/dist/security-run.js` 가 한다(CLI·훅은 네트워크를 타지 않는다). 결과는 `.harness/security/<버전>/` 한 폴더에 모인다: 원자료, `security-results-<버전>.xlsx`(표지 · 요약 · 발견 사항 · 수동 시나리오 · 권한 거부 · 자동 점검 · 보안 헤더 · 의존성 · e2e 보안성 케이스), `summary.json`, `defects.md`(`harness ship defect add` 로 그대로 옮길 명령). 결과서 표지에는 「자체 점검 — 제3자 진단을 대체하지 않음」이 들어간다. 시험용 비밀값과 받은 토큰은 결과 폴더에서 지운다.
+
+| 명령 | 하는 일 |
+|---|---|
+| `harness security verdict [--version <v>]` | 현재 버전 회차 판정(미통과면 종료 코드 `2`) |
+| `harness security report` | 원자료로 결과서 · 요약 · 결함 초안을 다시 만든다 |
+| `harness security defects` | 미해결 High·Medium 을 `ship defect add` 줄로 출력 |
+| `harness security target <url>` | 요청 전에 허용 대상인지 확인 |
+| `harness security routes --from <file>` | 라우트 목록(OpenAPI·JSON·`METHOD /path` 줄)을 JSON 으로 |
+
+절차 전체는 `security-verify` 스킬에 있다.
+
+---
+
 ## 상태 — 프로덕션 검증 완료
 
 **v0.1.2 — SHIP-READY.** 코어 엔진, 세 트랙, 열세 페이즈 전부가 구현되고 실측되어 있으며
@@ -308,7 +338,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 - ✅ 승인 **게이트** (`gate submit/approve/verify/sweep/feedback`) + 산출물 레지스트리 (`doc`) + RTM (`report rtm`)
 - ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`)
 - ✅ **디자인 서브시스템** — `design link/sync/baseline/html`, 인터랙티브 HTML 정본, 토큰 파이프라인 (`tokens gen/lint/swap`)
-- ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`)
+- ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`), 버전별 보안 점검과 결과서(`security`)
 
 ### 알려진 한계
 

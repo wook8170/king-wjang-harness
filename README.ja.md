@@ -118,7 +118,7 @@ flowchart LR
 | 指標 | 値 |
 |---|---|
 | フックレイテンシ (p95) | 二つの表面があり、**どちらも `npm run bench:hook` が出力する**。*インプロセス*（バンドル読込済みでの判定そのもの）: 通常 **0.9 ms**、10万件（15 MB）ジャーナル再生フォールバック中は **18.6 ms**。*実時間*（ツール呼び出しが実際に待つ値）は同じ実行で **77 ms** / **102 ms** —— そのうち **40 ms がそのマシンの `node` 起動**である。実時間の絶対値はマシンの性質であり、ゲートはフォールバックが**加える**値に掛かる（インプロセス +17.7 ms・実時間 +24.7 ms・閾値 50 ms）。 |
-| テストスイート | **1596 tests**（68ファイル）— **配布物では1572件がパス**（残りは配布物から除外されるリポジトリ内部文書を見る検査、`git archive` 実測）。時間の断定2件は、忙しいマシンでは判定の代わりに**「測定不能」とその時の負荷**を記録する |
+| テストスイート | **1596 tests**（69ファイル）— **配布物では1572件がパス**（残りは配布物から除外されるリポジトリ内部文書を見る検査、`git archive` 実測）。時間の断定2件は、忙しいマシンでは判定の代わりに**「測定不能」とその時の負荷**を記録する |
 | セッションあたりの追加コンテキスト | ハーネス有効時 **~260トークン**・`.harness/` の無いプロジェクトでは **0**。再測定: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` —— 注入されるブリーフィングは ~1KB で（プロジェクトパスを含むため正確な大きさは前後する）、4 で割るとトークン概算になる |
 | ランタイム依存 | **1件**（`yaml`、バンドル済み） |
 | 決定性 | 3回の実行で判定が完全一致 |
@@ -225,7 +225,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 |---|---|
 | `0` | 成功 —— または判定が「はい」 |
 | `1` | 使い方・環境のエラー（サブコマンドの誤字、ここに `.harness/` が無い、引数の欠落） |
-| `2` | **判定が「いいえ」** —— `ship verdict` NO-GO・`doctor` が問題を検出・`gate verify` のドリフト・`evidence check` 不足 |
+| `2` | **判定が「いいえ」** —— `ship verdict` NO-GO・`doctor` が問題を検出・`gate verify` のドリフト・`evidence check` 不足・`security verdict` 不合格 |
 
 0 以外なら `cmd || exit 1` は今も引っかかる。変わったのは**両者を区別できるようになったこと**だけだ。
 
@@ -269,6 +269,36 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 
 ---
 
+## セキュリティ点検 — バージョンごとに一度
+
+出荷トラックは **現在のバージョンのセキュリティ点検結果** が合格したときだけ開く。`harness gate approve P10`・`P12` と `harness ship verdict` が同じ条件を見る。バージョンを上げると、そのバージョンで点検し直すまで止まる。
+
+| 点検 | 内容 |
+|---|---|
+| 依存関係の監査 | ロックファイルからパッケージマネージャを選ぶ（npm・pnpm・yarn・cargo・pip-audit・govulncheck）。`deps.command` で変えられる |
+| セキュリティヘッダー | CSP・`X-Content-Type-Options`・`X-Frame-Options`（CSP `frame-ancestors` で代替可）・`Referrer-Policy`、https なら HSTS、Cookie 属性、`Server` のバージョン露出 |
+| 動的点検 | ZAP baseline とログインしたロールでの active 点検。イメージはタグかダイジェストで固定し、外部コールバック（OAST）と更新確認を切る |
+| 権限拒否の全数確認 | ルート一覧コマンドの出力を読み、権限のないロールで対象ルートをすべて呼ぶ。新しい API は次の回に自動で入る |
+| 手動シナリオ | プロジェクトが書いたシナリオファイル（JSON）をそのまま実行する |
+
+**合格基準（設定では変えられない）**: 未解決 High 0 · 未対応 Medium 0 · 権限拒否 100% · 結果書（Excel）あり。High は修正か根拠のある誤検知でしか閉じない。Medium は承認者を記した受容も認める。誤検知・受容は回のフォルダの `triage.yaml` に理由と根拠を残す。
+
+**設定** — `.harness/profile/security.yaml`（ポリシー領域のためエージェントは編集できない）。対象 URL・ポート、ロールとログイン方法（パスワードは `${ENV}` のみ）、ルート一覧コマンド、隔離スタックの起動・停止コマンド、ZAP イメージを書く。許可対象はループバック・プライベート帯域・テスト用の名前だけ — 本番・外部のアドレスは設定でも開けない。ネットワーク露出のない製品は `applies: false` と `reason` を書く。
+
+**実行と結果** — 点検は `node <プラグイン>/core/dist/security-run.js` が行う（CLI とフックはネットワークを使わない）。結果は `.harness/security/<バージョン>/` の一つのフォルダに集まる: 生データ、`security-results-<バージョン>.xlsx`（表紙 · 要約 · 発見事項 · 手動シナリオ · 権限拒否 · 自動点検 · セキュリティヘッダー · 依存関係 · e2e セキュリティケース）、`summary.json`、`defects.md`（`harness ship defect add` にそのまま移せるコマンド）。表紙には「自己点検 — 第三者診断の代わりにはならない」と入る。テスト用の秘密値と取得したトークンは結果フォルダから消す。
+
+| コマンド | 内容 |
+|---|---|
+| `harness security verdict [--version <v>]` | 現在のバージョンの回を判定（不合格なら終了コード `2`） |
+| `harness security report` | 生データから結果書 · 要約 · 欠陥の下書きを作り直す |
+| `harness security defects` | 未解決の High・Medium を `ship defect add` の行で出力 |
+| `harness security target <url>` | 送る前に許可対象かを確認 |
+| `harness security routes --from <file>` | ルート一覧（OpenAPI・JSON・`METHOD /path` 行）を JSON に |
+
+手順の全体は `security-verify` スキルにある。
+
+---
+
 ## ステータス —— 本番検証済み
 
 **v0.1.2 —— SHIP-READY。** コアエンジン、3つのトラック、13フェーズのすべてが実装され実測されており
@@ -309,7 +339,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 - ✅ 承認**ゲート**（`gate submit/approve/verify/sweep/feedback`）+ 成果物レジストリ（`doc`）+ RTM（`report rtm`）
 - ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）
 - ✅ **デザインサブシステム** —— `design link/sync/baseline/html`、インタラクティブHTMLの信頼できる情報源、トークンパイプライン（`tokens gen/lint/swap`）
-- ✅ **ビルド & 出荷トラック** —— スタックプロファイル（`profile`）、ウェーブループ（`loop`）、視覚的エビデンス（`evidence`）、出荷台帳と判定（`ship`）
+- ✅ **ビルド & 出荷トラック** —— スタックプロファイル（`profile`）、ウェーブループ（`loop`）、視覚的エビデンス（`evidence`）、出荷台帳と判定（`ship`）、バージョンごとのセキュリティ点検と結果書（`security`）
 
 ### 既知の限界（実測・未解決）
 

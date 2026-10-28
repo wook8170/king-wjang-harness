@@ -59,6 +59,7 @@ import { sanitizeUntrusted } from './untrusted';
 import { loadRegistry } from './registry';
 import { readState, writeState } from './state';
 import { PHASES, SHIP_PHASES, isEvidenceGrade } from './types';
+import { securityGateViolation } from './security';
 import type { EvidenceGrade, GateRecord, HarnessState, Phase } from './types';
 
 /**
@@ -669,6 +670,10 @@ export function approveGate(root: string, phase: Phase): GateRecord {
   }
   const notMeasured = measuredOnlyViolation(root, phase, current.evidence);
   if (notMeasured) throw new Error(notMeasured);
+  // P10·P12 는 현재 버전의 보안 결과 통과를 요구한다 — 버전을 올리면 그 버전으로 다시 돌려야 열린다.
+  // 사유 문장은 `ship verdict` 와 같은 한 벌이다(security.ts securityGateViolation).
+  const insecure = securityGateViolation(root, phase);
+  if (insecure) throw new Error(insecure);
   const paths = recordedPaths(root, phase);
   if (!paths) {
     throw new Error(

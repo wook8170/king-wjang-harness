@@ -118,7 +118,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1596 tests** (68 files) — **1572 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1596 tests** (69 files) — **1572 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -226,7 +226,7 @@ did not run at all" — the two used to share exit `1`.
 |---|---|
 | `0` | Success — or the verdict is yes |
 | `1` | Usage or environment error (unknown subcommand, no `.harness/` here, missing argument) |
-| `2` | **The verdict is no** — `ship verdict` NO-GO · `doctor` found problems · `gate verify` drift · `evidence check` short |
+| `2` | **The verdict is no** — `ship verdict` NO-GO · `doctor` found problems · `gate verify` drift · `evidence check` short · `security verdict` not passed |
 
 Anything non-zero still fails a `cmd || exit 1` script; what changed is that the two cases are now
 distinguishable.
@@ -268,6 +268,36 @@ block feels wrong for your stack, this is the dial, not the source code.
 `.harness/config.yaml` is itself a protected file — an agent cannot rewrite it to widen its own
 permissions ([SEC-136]); you edit it in your terminal. Run `harness doctor` afterwards: a policy
 change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy`.
+
+---
+
+## Security check — once per version
+
+The ship track opens only when **the current version's security check has passed**. `harness gate approve P10`/`P12` and `harness ship verdict` read the same condition. Bump the version and they block again until the check runs for the new version.
+
+| Check | What it does |
+|---|---|
+| Dependency audit | Picks the package manager from the lockfile (npm, pnpm, yarn, cargo, pip-audit, govulncheck); override with `deps.command` |
+| Security headers | CSP, `X-Content-Type-Options`, `X-Frame-Options` (CSP `frame-ancestors` counts), `Referrer-Policy`, HSTS on https, cookie attributes, `Server` version leaks |
+| Dynamic scan | ZAP baseline plus an authenticated active scan. The image must be pinned to a tag or digest; external callbacks (OAST) and update checks are off |
+| Authorization denial sweep | Reads the output of your route-listing command and calls every selected route as each unprivileged role. New APIs join the next round automatically |
+| Manual scenarios | Runs the scenario file (JSON) your project writes |
+
+**Pass criteria (not configurable)**: unresolved High 0 · unaddressed Medium 0 · authorization denial 100% · results workbook present. A High closes only by a fix or an evidenced false positive; a Medium may also be accepted with a named approver. False positives and acceptances go in the round's `triage.yaml` with reason and evidence.
+
+**Configuration** — `.harness/profile/security.yaml` (policy area, so agents cannot edit it): target URLs and ports, roles and how they log in (passwords only as `${ENV}`), the route-listing command, the isolated stack's start/stop commands, the ZAP image. Allowed targets accept loopback, private ranges and test names only — production and external hosts cannot be allowed even by configuration. A product with no network surface sets `applies: false` with a `reason`.
+
+**Running it and the results** — the scans run from `node <plugin>/core/dist/security-run.js` (the CLI and hooks never touch the network). Everything lands in one folder, `.harness/security/<version>/`: raw results, `security-results-<version>.xlsx` (Cover · Summary · Findings · Manual scenarios · Authorization denial · Automated scans · Security headers · Dependencies · E2E security cases), `summary.json`, and `defects.md` (lines to paste into `harness ship defect add`). The cover states "Self-assessment — does not replace a third-party security assessment". Test secrets and issued tokens are redacted from the folder.
+
+| Command | What it does |
+|---|---|
+| `harness security verdict [--version <v>]` | Judge the current version's round (exit `2` when not passed) |
+| `harness security report` | Rebuild the workbook, summary and defect drafts from the raw results |
+| `harness security defects` | Print unresolved High/Medium as `ship defect add` lines |
+| `harness security target <url>` | Check a URL is an allowed target before sending anything |
+| `harness security routes --from <file>` | Turn a route listing (OpenAPI, JSON, `METHOD /path` lines) into JSON |
+
+The full procedure is in the `security-verify` skill.
 
 ---
 
@@ -313,7 +343,7 @@ core — is a wall.
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
 - ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`)
 - ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
-- ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
+- ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`), per-version security check and results workbook (`security`)
 
 ### Known limits (measured, still open)
 

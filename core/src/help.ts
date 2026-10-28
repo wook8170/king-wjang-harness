@@ -191,6 +191,28 @@ export const COMMANDS: CommandGroup[] = [
     ],
   },
   {
+    name: 'security',
+    summary: M(
+      'Per-version security check — target allowlist, route extraction, verdict, results workbook. '
+      + 'The scans themselves run from core/dist/security-run.js (skill security-verify).',
+      '버전별 보안 점검 — 허용 대상 확인 · 라우트 추출 · 판정 · 결과서(엑셀). '
+      + '점검 실행은 core/dist/security-run.js 가 한다(스킬 security-verify).',
+    ),
+    note: M(
+      'Configuration lives in .harness/profile/security.yaml (policy area — agents cannot edit it). '
+      + 'Pass criteria are fixed: High 0 · unaddressed Medium 0 · authorization denial 100% · results workbook present.',
+      '설정은 .harness/profile/security.yaml(정책 영역 — 에이전트가 고칠 수 없다). '
+      + '통과 기준은 고정이다: High 0 · 미조치 Medium 0 · 권한 거부 100% · 결과서 존재.',
+    ),
+    subs: [
+      { name: 'verdict', args: '[--version <v>]', summary: M('Judge the current version\'s results folder (exit 2 when not passed).', '현재 버전의 결과 폴더를 판정한다(미통과면 종료 코드 2).') },
+      { name: 'report', args: '[--version <v>]', summary: M('Build the results workbook, summary.json and defect drafts from the raw results.', '원자료로 결과서(엑셀) · summary.json · 결함 초안을 만든다.') },
+      { name: 'defects', args: '[--version <v>]', summary: M('Print `ship defect add` lines for unresolved High/Medium findings.', '미해결 High · Medium 을 `ship defect add` 명령 줄로 출력한다.') },
+      { name: 'target', args: '<url>', summary: M('Check a URL against the allowed targets before sending anything to it (exit 2 when refused).', '요청을 보내기 전에 주소가 허용 대상인지 확인한다(밖이면 종료 코드 2).') },
+      { name: 'routes', args: '--from <file>', summary: M('Parse a route listing (OpenAPI, JSON or "METHOD /path" lines) into JSON.', '라우트 목록(OpenAPI · JSON · "METHOD /path" 줄)을 JSON 으로 편다.') },
+    ],
+  },
+  {
     name: 'profile',
     summary: M('Stack profile — what "build", "test", "deploy" mean here.', '스택 프로파일 — 이 저장소에서 빌드·테스트·배포가 무엇인지.'),
     subs: [

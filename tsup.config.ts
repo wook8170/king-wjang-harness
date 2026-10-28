@@ -38,7 +38,8 @@ function thirdPartyBanner(): string {
 
 export default defineConfig({
   // mcp 는 별도 진입점이다 — MCP 어댑터(mcp/server.js)가 CLI 번들 전체를 끌고 오지 않도록.
-  entry: { cli: 'core/src/cli.ts', mcp: 'core/src/mcp.ts' },
+  // security-run 도 별도 진입점이다 — 네트워크·도커를 타는 보안 점검 실행기라 CLI·훅 번들에 들이지 않는다(§1).
+  entry: { cli: 'core/src/cli.ts', mcp: 'core/src/mcp.ts', 'security-run': 'core/src/security-run.ts' },
   outDir: 'core/dist',
   format: ['cjs'],
   bundle: true,

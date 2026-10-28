@@ -116,7 +116,7 @@ one.
 |---|---|---|
 | Design | **P0–P6** | Implementation code and deploy-ish Bash are blocked. Writable: documents, assets, configuration, files *named* as tests, plus `.harness/`, the configured allow prefixes, and root `*.md` |
 | Build | **P7–P9** | Source is free. Editing design documents directly still requires a backtrack |
-| Ship | **P10–P12** | Same discipline as build, plus: no deploying without an approved gate |
+| Ship | **P10–P12** | Same discipline as build, plus: no deploying without an approved gate, and no P10/P12 approval without a passing security round for the current version (skill `security-verify`) |
 
 ## Handling a hook deny / block
 

@@ -118,7 +118,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 | 指标 | 数值 |
 |---|---|
 | 钩子延迟（p95） | 两个测量面，**都由 `npm run bench:hook` 打印**。*进程内*（捆绑包已加载时的判定本身）：正常 **0.9 ms**，10 万条（15 MB）日志重放回退路径生效时 **18.6 ms**。*挂钟*（一次工具调用真正等待的值），同一次运行：**77 ms** / **102 ms** —— 其中 **40 ms 是那台机器的 `node` 启动**。挂钟绝对值是机器的属性；关卡卡在回退路径**多加**的值上（进程内 +17.7 ms、挂钟 +24.7 ms、阈值 50 ms）。 |
-| 测试套件 | **1596 tests**（68 个文件）—— **发布包中 1572 项通过**（其余是查看仓库内部文档的检查，这些文档不随发布包分发；`git archive` 实测）。2 项墙钟断言在繁忙机器上不给判定，而是记录**「无法测量」与当时的负载** |
+| 测试套件 | **1596 tests**（69 个文件）—— **发布包中 1572 项通过**（其余是查看仓库内部文档的检查，这些文档不随发布包分发；`git archive` 实测）。2 项墙钟断言在繁忙机器上不给判定，而是记录**「无法测量」与当时的负载** |
 | 每会话新增上下文 | 启用时 **约 260 令牌**；没有 `.harness/` 的项目为 **0**。复测: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` —— 注入的简报约 1KB（其中包含项目路径，故实际大小略有出入），除以 4 即为令牌估算 |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
@@ -223,7 +223,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 |---|---|
 | `0` | 成功 —— 或判定为「是」 |
 | `1` | 用法或环境错误（子命令拼错、此处没有 `.harness/`、缺少参数） |
-| `2` | **判定为「否」** —— `ship verdict` NO-GO · `doctor` 发现问题 · `gate verify` 漂移 · `evidence check` 不足 |
+| `2` | **判定为「否」** —— `ship verdict` NO-GO · `doctor` 发现问题 · `gate verify` 漂移 · `evidence check` 不足 · `security verdict` 未通过 |
 
 只要非零，`cmd || exit 1` 依旧会拦住；改变的只是**两种情况现在可以区分**。
 
@@ -265,6 +265,36 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 
 ---
 
+## 安全检查 —— 每个版本一次
+
+只有 **当前版本的安全检查结果** 通过，发布轨道才会打开。`harness gate approve P10`/`P12` 和 `harness ship verdict` 检查同一个条件。版本号一变，在用新版本重新检查之前都会被拦下。
+
+| 检查 | 内容 |
+|---|---|
+| 依赖审计 | 按锁文件选择包管理器（npm、pnpm、yarn、cargo、pip-audit、govulncheck），可用 `deps.command` 覆盖 |
+| 安全响应头 | CSP、`X-Content-Type-Options`、`X-Frame-Options`（CSP `frame-ancestors` 可替代）、`Referrer-Policy`、https 下的 HSTS、Cookie 属性、`Server` 版本暴露 |
+| 动态扫描 | ZAP baseline 加上已登录角色的 active 扫描。镜像必须固定到标签或摘要；关闭外部回调（OAST）和更新检查 |
+| 权限拒绝全量检查 | 读取路由列表命令的输出，用每个无权限角色调用所有选中的路由。新 API 会在下一轮自动加入 |
+| 手工场景 | 执行项目编写的场景文件（JSON） |
+
+**通过标准（不可配置）**：未解决 High 0 · 未处理 Medium 0 · 权限拒绝 100% · 结果工作簿存在。High 只能通过修复或有依据的误报关闭；Medium 还可以由注明批准人的接受关闭。误报和接受记录在本轮文件夹的 `triage.yaml` 中，附理由和依据。
+
+**配置** —— `.harness/profile/security.yaml`（策略区域，代理不能修改）：目标地址和端口、角色及登录方式（密码只能写成 `${ENV}`）、路由列表命令、隔离环境的启动和停止命令、ZAP 镜像。允许的目标只接受回环、私有网段和测试用名称 —— 生产和外部地址即使写进配置也打不开。没有网络暴露面的产品写 `applies: false` 和 `reason`。
+
+**运行与结果** —— 扫描由 `node <插件>/core/dist/security-run.js` 执行（CLI 和钩子不访问网络）。结果集中在一个文件夹 `.harness/security/<版本>/`：原始数据、`security-results-<版本>.xlsx`（封面 · 摘要 · 发现项 · 手工场景 · 权限拒绝 · 自动扫描 · 安全响应头 · 依赖 · e2e 安全用例）、`summary.json`、`defects.md`（可直接用于 `harness ship defect add` 的命令）。封面写明「自查 —— 不能替代第三方安全评估」。测试用密钥和获取的令牌会从结果文件夹中抹除。
+
+| 命令 | 作用 |
+|---|---|
+| `harness security verdict [--version <v>]` | 判定当前版本这一轮（未通过时退出码 `2`） |
+| `harness security report` | 用原始数据重建工作簿、摘要和缺陷草稿 |
+| `harness security defects` | 把未解决的 High/Medium 输出为 `ship defect add` 命令行 |
+| `harness security target <url>` | 发送请求前确认地址是否为允许目标 |
+| `harness security routes --from <file>` | 把路由列表（OpenAPI、JSON、`METHOD /path` 行）转为 JSON |
+
+完整流程见 `security-verify` 技能。
+
+---
+
 ## 状态 —— 已通过生产就绪验证
 
 **v0.1.2 —— SHIP-READY（可出货）。** 核心引擎、三条轨道以及全部十三个阶段均已实现并实测
@@ -303,7 +333,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 - ✅ 审批**关卡**（`gate submit/approve/verify/sweep/feedback`）+ 制品注册表（`doc`）+ RTM（`report rtm`）
 - ✅ **阶段技能 —— 全部十三个阶段**（P0–P12：设计 `P0–P6`、构建 `P7–P9`、出货 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）
 - ✅ **设计子系统** —— `design link/sync/baseline/html`、作为唯一真相源的交互式 HTML、令牌管线（`tokens gen/lint/swap`）
-- ✅ **构建与出货轨道** —— 技术栈画像（`profile`）、波次循环（`loop`）、视觉证据（`evidence`）、出货台账与判定（`ship`）
+- ✅ **构建与出货轨道** —— 技术栈画像（`profile`）、波次循环（`loop`）、视觉证据（`evidence`）、出货台账与判定（`ship`）、每个版本的安全检查与结果工作簿（`security`）
 
 ### 已知限制（实测，仍未关闭）
 

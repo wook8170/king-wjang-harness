@@ -52,6 +52,7 @@ import { pick, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
 import { hasMeasuredEvidence } from './evidence';
 import { measuredOnlyViolation } from './gate';
+import { securityGateViolation } from './security';
 import { renderRtm } from './report';
 import { readState } from './state';
 import { parseWave, isWaveFile } from './wave';
@@ -595,6 +596,10 @@ export function shipVerdict(root: string): ShipVerdict {
     }
   }
 
+  // ── 현재 버전의 보안 점검 결과 (P10·P12 승인과 같은 문장 — security.ts 한 벌)
+  const insecure = securityGateViolation(root, 'P12');
+  if (insecure) reasons.push(insecure);
+
   // ── UX 참조 웨이브의 실주행 증적 (§3-5: E2E 실주행 증적 없으면 measured 불가)
   const waves = waveEntries(root, t);
   for (const { id, meta } of waves.entries) {
@@ -653,8 +658,8 @@ export function renderReleaseChecklist(root: string): string {
       }),
       '',
       t({
-        en: '- No open blocker · P10·P11 gates approved · ship gate evidence is measured · UX waves have real-run evidence',
-        ko: '- 열린 차단 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음',
+        en: '- No open blocker · P10·P11 gates approved · ship gate evidence is measured · UX waves have real-run evidence · the current version passed its security check',
+        ko: '- 열린 차단 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음 · 현재 버전 보안 점검 통과',
       }),
       '',
       t({

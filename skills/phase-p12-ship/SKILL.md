@@ -16,7 +16,7 @@ the verdict is produced fresh.
 
 ## The final verdict — `harness ship verdict`
 
-The machine checks four blocking conditions. Any one of them left standing is a NO-GO, and the reason
+The machine checks these blocking conditions. Any one of them left standing is a NO-GO, and the reason
 names **what to close and how**.
 
 | Blocking condition | How to close it |
@@ -26,6 +26,7 @@ names **what to close and how**.
 | The P10 or P11 gate is not approved | Go back to that phase, submit the artifacts, and get the user's approval |
 | A ship-track gate whose evidence is not `measured` | Attach real-run and measurement evidence and resubmit |
 | A UX-referencing wave with no real-run capture | `harness evidence check <wave>` → leave headless 2x screenshots |
+| No passing security round for the **current** version (e.g. the version was bumped after P10) | Run the `security-verify` skill for this version → `harness security verdict` |
 
 The verdict is decided from what is on disk alone — the same state gives the same verdict. **There is
 no path around a NO-GO.** To pass the verdict, change the state; do not change the verdict.

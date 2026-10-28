@@ -59,6 +59,7 @@ Get the re-verdict by **dispatching readiness-auditor afresh** (a session does n
 | Token swap drill | `harness tokens swap --with <alternate-theme.json>` → recapture every screen headless at 2x → **a screen that did not change is a hardcoded screen** | §7, the third enforcement |
 | E2E run evidence | `harness evidence check <wave>` passes for every UX-referencing wave (2x screenshots) | §3-5 |
 | Operational readiness | Walk the operations ADR's decisions (hosting, backup/DR, observability, rollback) one by one with `harness adr show <ops ADR>` | §5, the P2 decision |
+| Security round for this version | Run the `security-verify` skill → `harness security verdict` passes (High 0 · unaddressed Medium 0 · authorization denial 100% · results workbook present) | The core refuses `harness gate approve P10` without it |
 
 The swap drill is the device that **turns the claim "we can change it all at once" into measured
 evidence**. Close P10 without the drill and the single source of truth for tokens exists only in a document.
@@ -67,6 +68,8 @@ evidence**. Close P10 without the drill and the single source of truth for token
 
 ```bash
 harness ship verdict                    # first, see what is currently blocking
+harness security verdict                # the current version's security round (skill security-verify)
+# → register its unresolved High/Medium with the lines from `harness security defects`
 # → dispatch readiness-auditor (drives verifying-production-readiness, read-only)
 # → register every finding with harness ship defect add → fix → re-measure → verified
 harness ship verdict                    # 0 open blockers · UX wave evidence confirmed
@@ -107,4 +110,5 @@ These are separate skill packages, not part of this harness. The `king-wjang-har
 for them and offers to install any that are missing.
 
 - `verifying-production-readiness` — the readiness rubric the `readiness-auditor` drives for the first verdict.
+- `security-verify` (bundled) — the per-version security round the P10/P12 gates require.
 - `oh-my-claudecode:security-reviewer` — OWASP-oriented vulnerability pass feeding the defect ledger.

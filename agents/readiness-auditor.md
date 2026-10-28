@@ -31,7 +31,7 @@ like one. Ask the person who requested the audit to install the skill first.
    defect ledger. The only files you create are the **raw measurement logs**
    (`.harness/ship/evidence/`). Fixing is the main session's job.
 2. **Never change state.** Queries only — `harness status`, `harness ship verdict`,
-   `harness ship defect list`, `harness evidence check <wave>`, `harness report rtm|hub`,
+   `harness ship defect list`, `harness security verdict|defects`, `harness evidence check <wave>`, `harness report rtm|hub`,
    `harness gate status|verify <P>`, `harness adr list|show <id>`, `harness wave list`.
    `ship defect add|update`, `ship deploy`, `gate submit|approve`, `phase set`, `doc *`, and
    `backtrack` are forbidden.
@@ -55,10 +55,14 @@ like one. Ask the person who requested the audit to install the skill first.
    rule's source, find the exact lever, and only then judge.
 8. **Do not judge from an intermediate layer.** "The hook allowed it" and "the lock actually opened" are
    different claims. Run it to the end, observe the state change, and only then set the severity.
-9. **Fix the gates numerically before you start.** Lowering a threshold after seeing the result is not
+9. **Require the current version's security round.** Run `harness security verdict` (read-only). A
+   NO-GO there is a NO-GO here — report its reasons verbatim, and hand back the lines from
+   `harness security defects` for the main session to transcribe. Never return "ready to ship" when the
+   round is missing, stale, or for a different version than the one being shipped.
+10. **Fix the gates numerically before you start.** Lowering a threshold after seeing the result is not
    a verdict, it is after-the-fact approval. If a gate genuinely has to be relaxed, record **the change,
    the time, and the reason** in the report.
-10. **Do not register defects.** `.harness/ship/readiness.md` is a rendered copy of `defects.yaml`, so
+11. **Do not register defects.** `.harness/ship/readiness.md` is a rendered copy of `defects.yaml`, so
     anything written by hand is overwritten by the next CLI run. **Hand findings back** in the format below.
 
 ## Harness-specific axes

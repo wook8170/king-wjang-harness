@@ -14,6 +14,7 @@ import {
   shipVerdict, renderReleaseChecklist,
   defectsPath, readinessPath, deploymentsPath,
 } from '../src/ship';
+import { passingSecurityRound } from './security-fixture';
 
 const setup = () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-'));
@@ -74,6 +75,8 @@ const shipReadyRoot = () => {
     acceptance: ['결제 e2e 그린'], goal: '결제 화면 구현',
   });
   putCapture(root, 'wave-001');
+  // P10·P12 는 현재 버전의 보안 결과 통과를 요구한다(security.test.ts 가 그 규칙을 따로 잰다).
+  passingSecurityRound(root);
   approveShipGate(root, 'P10', 'docs/harden.md');
   approveShipGate(root, 'P11', 'docs/deploy.md');
   return root;

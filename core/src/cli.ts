@@ -27,6 +27,10 @@ import { handleHook, HookEvent, HookInput } from './hook';
 import { armJudgeClock, disarmJudgeClock, overDeadline, JudgeTimeout } from './budget';
 import { expectedPositionals, positionalsOf } from './validate';
 import {
+  loadSecurityConfig, securityVerdict, writeSecurityReport, defectCommands, judgeRound, checkTarget, parseRoutes,
+  currentVersion, assertVersion as assertSecurityVersion, roundDir as securityRoundDir, type SecurityConfig,
+} from './security';
+import {
   submitGate, approveGate, verifyGate, invalidateStaleGates, setPhaseViaGate,
   recordGateFeedback, readGateFeedback, feedbackPath,
 } from './gate';
@@ -1207,6 +1211,59 @@ export function run(argv: string[], root: string): number {
           }
           case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
           default: throw new Error(unknownSub('ship', sub, lang));
+        }
+      }
+
+      case 'security': {
+        // 보안 점검 회차의 판정 · 결과서. 점검 실행(네트워크 · 도커)은 코어 밖 진입점
+        // core/dist/security-run.js 의 몫이다(§1) — 이 군은 디스크만 읽고 쓴다.
+        const args = [sub, ...rest];
+        const loaded = loadSecurityConfig(root);
+        const cfgOrThrow = () => {
+          if (loaded.status === 'ok') return loaded.config;
+          throw new Error(loaded.status === 'absent'
+            ? L(`No ${loaded.path} — write it first (skill security-verify has the template).`, `${loaded.path} 가 없다 — 먼저 작성하라(스킬 security-verify 에 견본이 있다).`)
+            : L(`Invalid ${loaded.path}: ${loaded.errors.join('; ')}`, `${loaded.path} 가 잘못됐다: ${loaded.errors.join('; ')}`));
+        };
+        const versionOf = (cfg: SecurityConfig) => {
+          const v = flag(args, 'version');
+          return v ? assertSecurityVersion(root, v, '--version') : currentVersion(root, cfg);
+        };
+        switch (sub) {
+          case 'verdict': {
+            const v = securityVerdict(root, flag(args, 'version'));
+            if (!v.applies) { console.log(L('NOT APPLICABLE', '해당 없음')); return 0; }
+            console.log(`${v.ok ? L('PASSED', '통과') : L('NOT PASSED', '미통과')}${v.version ? ` — ${v.version}` : ''}`);
+            if (v.reasons.length > 0) console.log(v.reasons.map(r => `  - ${r}`).join('\n'));
+            return v.ok ? 0 : EXIT_VERDICT_NO;
+          }
+          case 'report': {
+            const cfg = cfgOrThrow();
+            const r = writeSecurityReport(root, cfg, versionOf(cfg));
+            console.log(`${r.judgement.ok ? L('PASSED', '통과') : L('NOT PASSED', '미통과')} — ${path.relative(root, r.xlsx)}`);
+            if (r.judgement.reasons.length > 0) console.log(r.judgement.reasons.map(x => `  - ${x}`).join('\n'));
+            return r.judgement.ok ? 0 : EXIT_VERDICT_NO;
+          }
+          case 'defects': {
+            const cfg = cfgOrThrow();
+            const version = versionOf(cfg);
+            const cmds = defectCommands(judgeRound(root, securityRoundDir(root, cfg, version), version), root);
+            console.log(cmds.length ? cmds.join('\n') : L('No unresolved High/Medium findings.', '미해결 High · Medium 이 없다.'));
+            return 0;
+          }
+          case 'target': {
+            const cfg = cfgOrThrow();
+            const url = req(rest[0], 'harness security target <url>');
+            const c = checkTarget(url, cfg);
+            console.log(c.ok ? L(`allowed: ${url}`, `허용: ${url}`) : L(`REFUSED: ${c.reason}`, `거부: ${c.reason}`));
+            return c.ok ? 0 : EXIT_VERDICT_NO;
+          }
+          case 'routes': {
+            const from = req(flag(args, 'from'), 'harness security routes --from <file>');
+            console.log(JSON.stringify(parseRoutes(fs.readFileSync(path.resolve(root, from), 'utf8')), null, 2));
+            return 0;
+          }
+          default: throw new Error(unknownSub('security', sub, lang));
         }
       }
 
