@@ -8,6 +8,19 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-10-31
+
+Ships the changes held under Unreleased since 0.1.2, plus a reference to an external UX review
+skill. The version moves so that `claude plugin update` picks the release up — it compares version
+strings, not commits.
+
+### Added — P9 and P10 point to the adversarial UX review in the wb plugin
+
+The pre-ship adversarial UX review lives in the wb plugin as `wb:quality-ux-adversarial`; this
+harness does not keep a second copy of its criteria. P9 and P10 name it among their companion skills
+(when the wb plugin is absent, the same criteria go into the project's own brief), and the driver
+skill's companion table gives its install command.
+
 ### Changed — exit codes now separate "the verdict is no" from "the command did not run" ([API-05])
 
 Both used to be `1`. A release script running `harness ship verdict` could not tell

@@ -59,17 +59,17 @@
 ### [SHIP-01] HIGH — 롤백할 수 있는 유일한 버전(v0.1.0)이 치명 우회를 그대로 갖고 있다
 
 **근거등급** measured
-**근거** `docs/release-readiness/2026-08-27/evidence/ax10-rollback.log` · `CHANGELOG.md:13`
+**근거** `docs/release-readiness/2026-08-27/evidence/ax10-rollback.log` · `CHANGELOG.md:26`
 
 ```
 $ git tag -l                       → v0.1.0                (그것뿐)
 $ git ls-remote --tags origin      → refs/tags/v0.1.0      (원격도 그것뿐)
 $ node -e 'console.log(require("./package.json").version)' → 0.1.2
-CHANGELOG.md:13  ## [0.1.2] — 2026-08-26   ← 릴리즈됐지만 태그 없음
-CHANGELOG.md:30  ## [0.1.1] — 2026-08-26   ← 릴리즈됐지만 태그 없음
+CHANGELOG.md:26  ## [0.1.2] — 2026-08-26   ← 릴리즈됐지만 태그 없음
+CHANGELOG.md:43  ## [0.1.1] — 2026-08-26   ← 릴리즈됐지만 태그 없음
 ```
 
-`CHANGELOG.md:13` 의 0.1.2 항목이 고친 것이 **SEC-300**: `echo x >> .harness/events\.jsonl` 이
+`CHANGELOG.md:26` 의 0.1.2 항목이 고친 것이 **SEC-300**: `echo x >> .harness/events\.jsonl` 이
 백슬래시 앞까지만 파싱돼 실제 저널에 꽂혔고, 위조된 `gate-approved` 이벤트로 **사람 승인 없이
 `npm publish` 가 열렸다.** 그 우회가 v0.1.0 에 살아 있는지 **두 버전의 실제 훅에 같은 payload 를
 먹여 대조**했다:

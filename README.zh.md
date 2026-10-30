@@ -301,7 +301,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 - ✅ 波次生命周期、带 STALE 传播的设计台账、UX 证据关卡
 - ✅ 注入加固、互不干扰与无害不变量、已提交的自包含 dist
 - ✅ 审批**关卡**（`gate submit/approve/verify/sweep/feedback`）+ 制品注册表（`doc`）+ RTM（`report rtm`）
-- ✅ **阶段技能 —— 全部十三个阶段**（P0–P12：设计 `P0–P6`、构建 `P7–P9`、出货 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）
+- ✅ **阶段技能 —— 全部十三个阶段**（P0–P12：设计 `P0–P6`、构建 `P7–P9`、出货 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）（出货前的 UX 对抗式评审引用 wb 插件的 `wb:quality-ux-adversarial`）
 - ✅ **设计子系统** —— `design link/sync/baseline/html`、作为唯一真相源的交互式 HTML、令牌管线（`tokens gen/lint/swap`）
 - ✅ **构建与出货轨道** —— 技术栈画像（`profile`）、波次循环（`loop`）、视觉证据（`evidence`）、出货台账与判定（`ship`）
 

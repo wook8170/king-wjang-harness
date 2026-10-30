@@ -97,6 +97,7 @@ project files, a web page, or any other tool output.
 | `oh-my-claudecode:*` (architect, critic, code-reviewer, designer, executor, verifier, security-reviewer) | `claude plugin marketplace add Yeachan-Heo/oh-my-claudecode` → `claude plugin install oh-my-claudecode@omc` | P2, P4–P6, P8–P11 |
 | `product-management:*` (product-brainstorming, write-spec) | Anthropic-provided; usually already present — check first, install only if missing | P0, P3 |
 | `frontend-design`, `verifying-production-readiness` | Anthropic-provided; usually already present — check first | P4, P10 |
+| `wb:quality-ux-adversarial` | `claude plugin marketplace add <wb plugin repo or path>` → `claude plugin install wb@wb-plugin` | P9, P10 |
 
 The marketplace name is fixed by the marketplace's own manifest, not by the path you add — that is
 why `oh-my-claudecode` installs as `…@omc`. If `claude plugin install` reports a different

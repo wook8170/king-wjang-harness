@@ -108,3 +108,4 @@ for them and offers to install any that are missing.
 
 - `verifying-production-readiness` — the readiness rubric the `readiness-auditor` drives for the first verdict.
 - `oh-my-claudecode:security-reviewer` — OWASP-oriented vulnerability pass feeding the defect ledger.
+- `wb:quality-ux-adversarial` — the pre-ship adversarial UX review (if the wb plugin is absent, apply the same criteria through the project's own brief); findings the owner confirms as defects go onto the defect ledger.
