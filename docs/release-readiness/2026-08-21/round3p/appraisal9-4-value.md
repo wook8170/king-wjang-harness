@@ -155,7 +155,7 @@ README(4개 언어)가 「**1311 passing** (54 files) — 17 리포 전용 검�
 | 표면 | 판정 문구 |
 |---|---|
 | README.md:239 / ko:238 / ja:238 / zh:236 | still **not-ready** / **출하 불가** / **出荷不可** / **不可出货** |
-| CHANGELOG.md:76·80 | agent-lane discipline, **not a security boundary** · verdict still **not-ready** |
+| CHANGELOG.md:89·80 | agent-lane discipline, **not a security boundary** · verdict still **not-ready** |
 | 태그 `v0.1.0` | 「이 태그가 고정하는 것: 코드·검증. **고정하지 않는 것: 출하 판정** — 여전히 출하 불가」 |
 | 머지 `edc224c` | 「**판정은 「출하 불가」 유지** — main 에 오르는 것과 출하는 다른 말」 |
 

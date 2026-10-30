@@ -306,7 +306,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 - ✅ 웨이브 수명주기, STALE 전파 설계 원장, UX 증적 게이트
 - ✅ 주입 방어, 비간섭·무해 불변식, 커밋된 자체완결 dist
 - ✅ 승인 **게이트** (`gate submit/approve/verify/sweep/feedback`) + 산출물 레지스트리 (`doc`) + RTM (`report rtm`)
-- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`)
+- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`) — 출하 전 UX 적대적 점검은 wb 플러그인(`wb:quality-ux-adversarial`)을 참조
 - ✅ **디자인 서브시스템** — `design link/sync/baseline/html`, 인터랙티브 HTML 정본, 토큰 파이프라인 (`tokens gen/lint/swap`)
 - ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`)
 

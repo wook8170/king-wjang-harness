@@ -307,7 +307,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 - ✅ ウェーブのライフサイクル、STALE伝播つき設計台帳、UXエビデンスゲート
 - ✅ インジェクション対策、非干渉・無害の不変条件、自己完結な dist のコミット
 - ✅ 承認**ゲート**（`gate submit/approve/verify/sweep/feedback`）+ 成果物レジストリ（`doc`）+ RTM（`report rtm`）
-- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）
+- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）（出荷前の UX 敵対的レビューは wb プラグインの `wb:quality-ux-adversarial` を参照）
 - ✅ **デザインサブシステム** —— `design link/sync/baseline/html`、インタラクティブHTMLの信頼できる情報源、トークンパイプライン（`tokens gen/lint/swap`）
 - ✅ **ビルド & 出荷トラック** —— スタックプロファイル（`profile`）、ウェーブループ（`loop`）、視覚的エビデンス（`evidence`）、出荷台帳と判定（`ship`）
 

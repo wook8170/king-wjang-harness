@@ -148,7 +148,7 @@ harness doctor        # → ok=true · warnings=[] · issues=[]   경고조차 �
 | README.ko.md:238 | 아직 **출하 불가** |
 | README.ja.md:238 | 依然 **出荷不可** |
 | README.zh.md:236 | 仍为 **不可出货** |
-| CHANGELOG.md:76·80 | agent-lane discipline, **not a security boundary** · verdict still **not-ready** |
+| CHANGELOG.md:89·80 | agent-lane discipline, **not a security boundary** · verdict still **not-ready** |
 | 00-summary 판정 블록 | **출하 불가 (판정 유지)** — 가성비 축 미착수 사유 명시 |
 | 태그 `v0.1.0` 메시지 | 「이 태그가 고정하는 것: 코드·검증 결과. **고정하지 않는 것: 출하 판정** — 여전히 출하 불가」 |
 | 머지 커밋 `edc224c` | **판정은 「출하 불가」 유지** — main 에 오르는 것과 출하는 다른 말 |
