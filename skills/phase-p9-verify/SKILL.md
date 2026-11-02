@@ -1,6 +1,6 @@
 ---
 name: phase-p9-verify
-description: Use when driving P9 (VERIFY) of the harness build track — verifying each wave with tests, QA and visual comparison against the P4 baseline, looping back to P8 on failure, and using the RTM to catch anything designed-but-not-verified before the ship track. Triggers - "verify this wave", "QA the build", harness phase set P9, dispatching wave-verifier, visual comparison, harness evidence packet, harness design baseline, the P8 to P9 loop, harness report rtm, a wave that will not complete.
+description: Use when driving P9 (VERIFY) of the harness build track — verifying each wave with tests, QA and visual comparison against the P4 baseline, looping back to P8 on failure, and using the RTM to catch anything designed-but-not-verified before the ship track. The build track closes only after a post-implementation adversarial conformance audit (design-auditor, implementation conformance lens) reaches HIGH 0. Triggers - "verify this wave", "conformance audit", "QA the build", harness phase set P9, dispatching wave-verifier, visual comparison, harness evidence packet, harness design baseline, the P8 to P9 loop, harness report rtm, a wave that will not complete.
 ---
 
 # P9 VERIFY — the wave is not done until it is verified, and the RTM says so
@@ -34,8 +34,14 @@ summoned. The phase closes only when the **RTM shows nothing designed-but-not-ve
    ```bash
    harness report rtm     # catches designed-but-not-implemented / implemented-but-not-verified
    ```
-   Every `F-x` must show implemented **and** verified before the build track ends. Then
-   `harness phase set P10` opens the ship track.
+   Every `F-x` must show implemented **and** verified before the build track ends.
+5. **Adversarial conformance audit of the implementation.** Dispatch a fresh `design-auditor` with
+   the **implementation conformance** lens (see P6, "After implementation"). It reads the changed code
+   against the approved design and locates every design invariant as `file:line`, holds or breaks,
+   and ends with `HIGH N`. Write it to `.harness/audit/conformance-rN.md`. A HIGH loops back to P8
+   (or, when the design itself is wrong, `harness backtrack`); re-audit in a new round with a
+   reconciliation table, as in P6. Only at `HIGH 0` does `harness phase set P10` open the ship track,
+   and the report goes to P10 as a mandatory input.
 
 ## Gate
 
@@ -43,6 +49,10 @@ summoned. The phase closes only when the **RTM shows nothing designed-but-not-ve
 fails three times in a row (the P8↔P9 loop threshold). Otherwise the RTM being clean is the gate.
 
 ## Pitfalls
+
+- **Wave verification is not the conformance audit.** `wave-verifier` checks one wave's acceptance
+  criteria; the conformance audit reads the whole change against the design's invariants. An invariant
+  that spans waves (a permission rule, a count that must agree on two screens) is visible only to the second.
 
 - **Visual evidence is created directly, not by a harness command.** Put the 2x screenshot into
   `.harness/evidence/<wave-id>/` yourself — the hand-edit ban covers only core/policy files, so

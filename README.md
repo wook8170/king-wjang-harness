@@ -311,7 +311,7 @@ core — is a wall.
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
-- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the wb plugin (`wb:quality-ux-adversarial`)
+- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the wb plugin (`wb:quality-ux-adversarial`). P6 enters P7 only at `HIGH 0` (per-round re-audit, reconciliation table, code citations checked); P10 and P12 take two adversarial reviews as mandatory inputs — the implementation conformance audit and the changed-screen UX review on nine axes with persona task scenarios and design system visual comparison — and an open high from either blocks
 - ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
 - ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
 

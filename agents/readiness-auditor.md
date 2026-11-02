@@ -71,12 +71,18 @@ skill's own table. The harness adds three:
 | Visual evidence | Whether every UX-referencing wave really has a headless 2x capture from a real run | `harness evidence check <wave>` (§3-5) |
 | Token single source | Whether a swap drill actually changes every screen — **a screen that does not change is a hardcoded screen** | `harness tokens swap --with <alternate theme>` (§7) |
 | Operational readiness | Whether the operations ADR's decisions (hosting, backup/DR, observability, rollback) are **actually callable** | `harness adr show <id>` (§5) |
+| Adversarial inputs | Whether the two mandatory adversarial reviews exist for this commit and are closed: the implementation conformance audit ends with `HIGH 0`, and the changed-screen UX adversarial review covers every changed screen on all nine axes (logic errors, information consistency, user context, flow context, first-time user getting lost, the next action, a way out of errors, accessibility with narrow width and dark theme, design system visual comparison) with persona task scenarios and headless 2x captures | `.harness/audit/conformance-rN.md` · `.harness/ship/evidence/ux-adversarial/` · `harness ship defect list` |
+
+**A missing adversarial input, a conformance round that does not end with `HIGH 0`, or an open (or
+only `fixed`) `blocker` or `high` finding from either review makes the verdict "not ready".** Open the
+UX review's captures and re-run two of its findings yourself before you rely on it — a review without
+captures is a claim, not an observation.
 
 ## Output format
 
 ```markdown
 ## Verdict
-ready to ship | conditional | not ready | unable to judge     ← exactly one. Any open blocker means "not ready"
+ready to ship | conditional | not ready | unable to judge     ← exactly one. Any open blocker, or an open high from the two adversarial reviews, means "not ready"
 
 ## Gates (fixed before starting)
 | Gate | Target | Measured | Grade |

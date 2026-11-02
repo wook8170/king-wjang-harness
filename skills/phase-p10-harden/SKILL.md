@@ -1,6 +1,6 @@
 ---
 name: phase-p10-harden
-description: Use when driving P10 (HARDEN) of the harness ship track — getting the first readiness verdict, standing up the defect ledger, running the fix → re-verdict loop, and closing the token swap drill, security, performance and operational readiness on measured evidence. Triggers - "get ready to ship", "readiness verdict", harness phase set P10, submitting the P10 gate, the defect ledger, defects.yaml, readiness.md, the token swap drill, re-measurement.
+description: Use when driving P10 (HARDEN) of the harness ship track — getting the first readiness verdict, standing up the defect ledger, running the fix → re-verdict loop, and closing the token swap drill, security, performance and operational readiness on measured evidence. Two adversarial reviews are mandatory inputs to the verdict: the implementation conformance audit and the changed-screen UX adversarial review with design system visual comparison; an open blocker or high finding from either stops the gate. Triggers - "get ready to ship", "readiness verdict", "UX adversarial review", "changed screens", harness phase set P10, submitting the P10 gate, the defect ledger, defects.yaml, readiness.md, the token swap drill, re-measurement.
 ---
 
 # P10 HARDEN — the readiness verdict and the defect ledger
@@ -52,6 +52,47 @@ harness ship defect update SEC-01 --status verified --evidence ".harness/ship/ev
 Promoting something to `verified` without re-measuring after the fix fills the ledger with lies.
 Get the re-verdict by **dispatching readiness-auditor afresh** (a session does not approve its own fix).
 
+## Mandatory inputs to the verdict — two adversarial reviews
+
+The readiness verdict is not dispatched until both exist for the current commit. Lane tests, the token
+swap drill and a design lint baseline do not replace them: none of them sees wording a first-time user
+misreads, a dead end, or spacing that touches.
+
+| Input | Who | What | Where |
+|---|---|---|---|
+| Implementation conformance audit | fresh `design-auditor`, implementation conformance lens (P9 step 5) | every design invariant located in the code, holds or breaks; ends with `HIGH N` | `.harness/audit/conformance-rN.md` |
+| Changed-screen UX adversarial review | a checker from a context that did not build the screens (`wb:quality-ux-adversarial` when the wb plugin is installed; otherwise the same criteria in the project's own brief) | see below | `.harness/ship/evidence/ux-adversarial/` |
+
+**The changed-screen UX adversarial review.**
+
+1. Scope: every screen and flow the release changed (the UX nodes of this release's waves, and the
+   screen files changed since the previous release).
+2. The checker starts the product in isolation (the project's e2e harness or an isolated stack — never
+   the working database or the owner's ports) and walks each changed flow in a **headless** browser,
+   leaving **2x** captures.
+3. Method: it names the personas first (who comes to each screen and why — a first-time business user,
+   an administrator, a viewer with few permissions), does their real task scenarios from the first
+   screen to the end, and on every screen writes what the persona has understood and is about to do.
+4. It reports on all nine UX axes (each one with findings or "checked, no finding"): 1 logic errors ·
+   2 information consistency · 3 user context · 4 flow context · 5 first-time user getting lost ·
+   6 the next action · 7 a way out of errors and exceptions · 8 accessibility (keyboard, screen
+   reader), narrow width, dark theme · 9 **design system visual comparison** measured on the page
+   against the P4 design system: spacing that touches, line height too tight, type sizes or weights
+   mixed in one block, table row heights, button and badge sizes.
+5. Every finding has a severity (`blocker` / `high` / `medium` / `low`), an axis, a reproduction and a
+   2x capture as evidence.
+
+**Into the defect ledger.** Findings of both reviews are registered with `harness ship defect add`
+(ids such as `UXA-03` and `CONF-02`, evidence = capture path or `file:line`). An open `blocker` already
+blocks `harness ship verdict`. **An open `high` from either review blocks the P10 gate as well**: do not
+submit P10 while one is `open` or `fixed` — fix, re-check with a fresh reviewer, promote to `verified`,
+or record the owner's decision with `--status deferred --defer-reason`.
+
+**Screen changes need the owner first.** Findings whose fix changes a screen (layout, wording, flow)
+are collected and put to the user in one artifact — the findings table with the 2x captures, viewable
+remotely — and fixed only after the user confirms them. A fix inside the ledger scope that restores the
+intended design is a defect fix; anything else is a design change and goes through `harness backtrack`.
+
 ## Mandatory items — these three close on `measured` in P10
 
 | Item | How | Basis |
@@ -67,14 +108,17 @@ evidence**. Close P10 without the drill and the single source of truth for token
 
 ```bash
 harness ship verdict                    # first, see what is currently blocking
-# → dispatch readiness-auditor (drives verifying-production-readiness, read-only)
+# → .harness/audit/conformance-rN.md ends with HIGH 0 (P9 step 5)
+# → changed-screen UX adversarial review done; findings registered; screen changes confirmed by the user
+# → dispatch readiness-auditor with both reports as inputs (drives verifying-production-readiness, read-only)
 # → register every finding with harness ship defect add → fix → re-measure → verified
 harness ship verdict                    # 0 open blockers · UX wave evidence confirmed
 harness doc upsert --id DOC-P10 --path .harness/ship/readiness.md --phase P10 --refs F-12,UX-7
 harness doc url DOC-P10 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P10              # refused without artifact_url
 harness gate submit P10 --evidence measured \
-  --paths .harness/ship/readiness.md,.harness/ship/defects.yaml
+  --paths .harness/ship/readiness.md,.harness/ship/defects.yaml,.harness/audit/conformance-r2.md,\
+.harness/ship/evidence/ux-adversarial/findings.md
 # → present .harness/packets/P10.md → wait for the user's approval
 harness doc approve DOC-P10
 harness phase set P11
@@ -108,4 +152,4 @@ for them and offers to install any that are missing.
 
 - `verifying-production-readiness` — the readiness rubric the `readiness-auditor` drives for the first verdict.
 - `oh-my-claudecode:security-reviewer` — OWASP-oriented vulnerability pass feeding the defect ledger.
-- `wb:quality-ux-adversarial` — the pre-ship adversarial UX review (if the wb plugin is absent, apply the same criteria through the project's own brief); findings the owner confirms as defects go onto the defect ledger.
+- `wb:quality-ux-adversarial` — the changed-screen UX adversarial review above (nine axes, persona task scenarios, isolated stack, headless 2x). If the wb plugin is absent, apply the same criteria through the project's own brief. Its findings go onto the defect ledger; an open high blocks the P10 gate.

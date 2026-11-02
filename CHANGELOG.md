@@ -8,6 +8,46 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-11-02
+
+Strengthens the adversarial reviews at both ends of the build: the design audit before P7 and the
+ship verdict after it. Skills and agent definitions only; the core (`harness ship verdict`) is unchanged.
+
+### Changed — P6 enters P7 only at HIGH 0
+
+- `design-auditor` checks the code a design cites, not only its sentences, and gives both locations as
+  evidence. Every report ends with the line `HIGH N`.
+- Each fix round marks its changed paragraphs (`[rN]`) and carries `.harness/audit/reconcile-rN.md`
+  (finding → accepted or not → where applied, with a checkable reason when not accepted), and is
+  re-audited in a new round. A round that only fixed HIGH findings may be re-audited on those
+  findings, but the new risks of the revision are always checked.
+- The P6 gate is submitted only on a round that ends with `HIGH 0`. Owner decisions found by the audit
+  are collected and confirmed before the gate.
+- The UX walkthrough lens names personas, walks their real task scenarios end to end, records on each
+  screen what the persona understood and is about to do, and reports all nine UX axes: logic errors,
+  information consistency, user context, flow context, first-time user getting lost, the next action,
+  a way out of errors and exceptions, accessibility with narrow width and dark theme, design system
+  visual comparison.
+
+### Added — the post-implementation conformance audit (P9 → P10)
+
+- A fifth `design-auditor` lens, implementation conformance: the changed code read against the approved
+  design, every invariant located as `file:line`, holds or breaks, ending with `HIGH N`. P9 runs it
+  before the build track closes (`.harness/audit/conformance-rN.md`); a HIGH loops back to P8.
+
+### Changed — P10 and P12 take two adversarial reviews as mandatory inputs
+
+- P10: the conformance audit and a changed-screen UX adversarial review (a checker from another
+  context, isolated stack, headless 2x captures, persona task scenarios, the nine axes including design
+  system visual comparison — touching spacing, tight line height, mixed type size or weight, table row
+  height, button and badge size) are required before `readiness-auditor` is dispatched. Findings go onto
+  the defect ledger (`UXA-*`, `CONF-*`); an open or only fixed `high` blocks the P10 gate. Findings that
+  change a screen are put to the user in one remotely viewable artifact (table and captures) before any fix.
+- P12: both inputs are re-checked for the shipping commit (re-run on screens and code changed after
+  P10); a missing input or an open high is a NO-GO. The release notes carry the review results.
+- `readiness-auditor` adds the axis "adversarial inputs" and returns "not ready" when one is missing or
+  has an open blocker or high.
+
 ## [0.1.3] — 2026-10-31
 
 Ships the changes held under Unreleased since 0.1.2, plus a reference to an external UX review
