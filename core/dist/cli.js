@@ -12944,6 +12944,7 @@ function submitGate(root, phase, opts) {
   assertInsideRoot(root, paths);
   assertSubstantive(root, readArtifacts(root, paths));
   assertPhaseFit(root, phase, paths);
+  assertNoShipBlockers(root, phase);
   const artifactHash = computeArtifactHash(root, paths);
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
@@ -12966,6 +12967,16 @@ function submitGate(root, phase, opts) {
   };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
+}
+function assertNoShipBlockers(root, phase) {
+  if (phase !== "P10") return;
+  const blocking = shipBlockingDefects(root);
+  if (blocking.length === 0) return;
+  const list = blocking.map((d) => `${d.id} (${d.severity}, ${d.status})`).join(", ");
+  throw new Error(tr(root, {
+    en: `Cannot submit P10 while ${blocking.length} blocker or high defect(s) are open or only fixed: ${list} \u2014 fix, re-measure with a fresh auditor, then \`harness ship defect update <id> --status verified\`; or record the owner's decision with \`--status deferred --defer-reason "<why>"\``,
+    ko: `\uCC28\uB2E8\xB7\uB192\uC74C \uACB0\uD568 ${blocking.length}\uAC74\uC774 open \uC774\uAC70\uB098 fixed \uC5D0 \uBA38\uBB38 \uCC44\uB85C P10 \uC744 \uC81C\uCD9C\uD560 \uC218 \uC5C6\uB2E4: ${list} \u2014 \uC218\uC815 \u2192 \uC0C8 \uAC10\uC0AC\uC790\uB85C \uC7AC\uCE21\uC815 \u2192 \`harness ship defect update <id> --status verified\`, \uB610\uB294 \uC624\uB108 \uACB0\uC815\uC744 \`--status deferred --defer-reason "<\uC0AC\uC720>"\` \uB85C \uB0A8\uACA8\uB77C`
+  }));
 }
 function measuredOnlyViolation(root, phase, evidence) {
   if (!SHIP_PHASES.includes(phase) || evidence === "measured") return null;
@@ -13644,6 +13655,12 @@ var readinessPath = (root) => path15.join(shipDir(root), "readiness.md");
 var deploymentsPath = (root) => path15.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
+var SHIP_BLOCKING_SEVERITIES = ["blocker", "high"];
+function shipBlockingDefects(root) {
+  return listDefects(root).filter(
+    (d) => SHIP_BLOCKING_SEVERITIES.includes(d.severity) && (d.status === "open" || d.status === "fixed")
+  );
+}
 function writeAtomic(target, content) {
   fs19.mkdirSync(path15.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
@@ -13967,16 +13984,18 @@ function shipVerdict(root) {
     }));
   } else {
     for (const d of defects.value) {
-      if (d.severity !== "blocker") continue;
+      if (!SHIP_BLOCKING_SEVERITIES.includes(d.severity)) continue;
+      const sevEn = d.severity === "blocker" ? "blocker" : "high defect";
+      const sevKo = d.severity === "blocker" ? "\uCC28\uB2E8 \uACB0\uD568" : "\uB192\uC74C \uACB0\uD568";
       if (d.status === "open") {
         reasons.push(t({
-          en: `open blocker: ${d.id} ${d.title} (evidence ${d.evidence}) \u2014 fix it, re-measure, then close it with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `\uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
+          en: `open ${sevEn}: ${d.id} ${d.title} (evidence ${d.evidence}) \u2014 fix it, re-measure, then close it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC5F4\uB9B0 ${sevKo}: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
         }));
       } else if (d.status === "fixed") {
         reasons.push(t({
-          en: `unverified blocker: ${d.id} ${d.title} (fixed) \u2014 "fixed" is a claim, re-measurement is the observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
+          en: `unverified ${sevEn}: ${d.id} ${d.title} (fixed) \u2014 "fixed" is a claim, re-measurement is the observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 ${sevKo}: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
         }));
       }
     }
@@ -14043,8 +14062,8 @@ function renderReleaseChecklist(root) {
       }),
       "",
       t({
-        en: "- No open blocker \xB7 P10\xB7P11 gates approved \xB7 ship gate evidence is measured \xB7 UX waves have real-run evidence",
-        ko: "- \uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568 \uC5C6\uC74C \xB7 P10\xB7P11 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC644\uB8CC \xB7 \uCD9C\uD558 \uAC8C\uC774\uD2B8 \uADFC\uAC70 measured \xB7 UX \uC6E8\uC774\uBE0C \uC2E4\uC8FC\uD589 \uC99D\uC801 \uC788\uC74C"
+        en: "- No open or unverified blocker or high defect \xB7 P10\xB7P11 gates approved \xB7 ship gate evidence is measured \xB7 UX waves have real-run evidence",
+        ko: "- \uC5F4\uB9AC\uAC70\uB098 \uC7AC\uCE21\uC815 \uC548 \uB41C \uCC28\uB2E8\xB7\uB192\uC74C \uACB0\uD568 \uC5C6\uC74C \xB7 P10\xB7P11 \uAC8C\uC774\uD2B8 \uC2B9\uC778 \uC644\uB8CC \xB7 \uCD9C\uD558 \uAC8C\uC774\uD2B8 \uADFC\uAC70 measured \xB7 UX \uC6E8\uC774\uBE0C \uC2E4\uC8FC\uD589 \uC99D\uC801 \uC788\uC74C"
       }),
       "",
       t({

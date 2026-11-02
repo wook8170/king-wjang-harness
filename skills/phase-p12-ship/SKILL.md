@@ -21,14 +21,14 @@ names **what to close and how**.
 
 | Blocking condition | How to close it |
 |---|---|
-| An open `blocker` defect | Fix → **re-measure** → `harness ship defect update <id> --status verified` |
-| A `blocker` stuck at `fixed` | "Fixed" is a claim. Run it again, observe it, then promote to `verified` |
+| An open `blocker` or `high` defect | Fix → **re-measure** → `harness ship defect update <id> --status verified` |
+| A `blocker` or `high` stuck at `fixed` | "Fixed" is a claim. Run it again, observe it, then promote to `verified` |
 | The P10 or P11 gate is not approved | Go back to that phase, submit the artifacts, and get the user's approval |
 | A ship-track gate whose evidence is not `measured` | Attach real-run and measurement evidence and resubmit |
 | A UX-referencing wave with no real-run capture | `harness evidence check <wave>` → leave headless 2x screenshots |
 
-**Two adversarial inputs, checked before the verdict.** The machine verdict above blocks on open
-blockers only; the harness rule is stricter for the two adversarial reviews of P10. Before running
+**Two adversarial inputs, checked before the verdict.** The machine verdict above blocks open or
+unverified blocker and high defects, but it cannot see a review that was never run. Before running
 `harness ship verdict`, confirm:
 
 - the implementation conformance audit (`.harness/audit/conformance-rN.md`) of the shipping commit ends

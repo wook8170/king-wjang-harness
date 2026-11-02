@@ -277,6 +277,50 @@ describe('출하 판정 (P12 go/no-go)', () => {
     expect(v.reasons.some(r => r.includes('SEC-08') && /재측정/.test(r))).toBe(true);
   });
 
+  // 오너 결정(2026-11-02): high 도 blocker 와 같은 규칙으로 출하를 막는다.
+  it('open high 가 있으면 NO-GO 이고 결함 id 를 지목한다', () => {
+    const root = shipReadyRoot();
+    addDefect(root, defect({ id: 'UXA-03', severity: 'high', title: '저장 뒤 목록 건수가 그대로다' }));
+    const v = shipVerdict(root);
+
+    expect(v.ok).toBe(false);
+    expect(v.reasons.some(r => r.includes('UXA-03') && r.includes('높음'))).toBe(true);
+  });
+
+  it('high 가 fixed 로만 있으면 NO-GO — 재측정 전에는 닫히지 않는다', () => {
+    const root = shipReadyRoot();
+    addDefect(root, defect({ id: 'CONF-02', severity: 'high', status: 'fixed' }));
+    const v = shipVerdict(root);
+
+    expect(v.ok).toBe(false);
+    expect(v.reasons.some(r => r.includes('CONF-02') && /재측정/.test(r))).toBe(true);
+  });
+
+  it('high 가 verified 이거나 사유 있는 deferred 면 GO, medium·low 는 막지 않는다', () => {
+    const root = shipReadyRoot();
+    addDefect(root, defect({ id: 'UXA-04', severity: 'high', status: 'verified' }));
+    addDefect(root, defect({ id: 'UXA-05', severity: 'high', status: 'deferred', deferReason: '오너가 다음 판으로 미룸' }));
+    addDefect(root, defect({ id: 'UXA-06', severity: 'medium' }));
+    addDefect(root, defect({ id: 'UXA-07', severity: 'low', status: 'fixed' }));
+    expect(shipVerdict(root)).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('P10 제출은 open·fixed 인 high·blocker 가 있으면 거부하고 상태를 바꾸지 않는다', () => {
+    const root = setup();
+    writeDoc(root, 'docs/harden.md', '# P10 산출물\n\nP10 트랙의 심사 대상이다. 위협 모델과 그것을 막는 가드, '
+      + '그리고 실제로 시도해 본 우회 경로를 담는다. 심링크·접두 명령·래퍼를 씌운 호출까지 돌려 보고, '
+      + '막힌 것과 막지 말아야 할 것을 짝으로 기록한다. 과차단이 나오면 그것도 결함으로 센다.\n');
+    addDefect(root, defect({ id: 'UXA-08', severity: 'high' }));
+    addDefect(root, defect({ id: 'SEC-09', status: 'fixed' }));
+    expect(() => submitGate(root, 'P10', { paths: ['docs/harden.md'], evidence: 'measured' }))
+      .toThrow(/UXA-08.*SEC-09|SEC-09.*UXA-08/);
+    expect(readEvents(root).some(e => e.type === 'gate-submitted')).toBe(false);
+
+    updateDefect(root, 'UXA-08', { status: 'verified' });
+    updateDefect(root, 'SEC-09', { status: 'deferred', deferReason: '오너 결정: 운영 우회로로 대응' });
+    expect(submitGate(root, 'P10', { paths: ['docs/harden.md'], evidence: 'measured' }).status).toBe('submitted');
+  });
+
   it('P10·P11 게이트가 승인 전이면 NO-GO 이고 게이트를 지목한다', () => {
     const root = setup();
     const v = shipVerdict(root);

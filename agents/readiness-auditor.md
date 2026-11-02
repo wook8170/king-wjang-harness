@@ -82,7 +82,7 @@ captures is a claim, not an observation.
 
 ```markdown
 ## Verdict
-ready to ship | conditional | not ready | unable to judge     ← exactly one. Any open blocker, or an open high from the two adversarial reviews, means "not ready"
+ready to ship | conditional | not ready | unable to judge     ← exactly one. Any open or only fixed blocker or high, or a missing adversarial input, means "not ready"
 
 ## Gates (fixed before starting)
 | Gate | Target | Measured | Grade |

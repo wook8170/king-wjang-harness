@@ -84,6 +84,21 @@ export type DefectSeverity = (typeof DEFECT_SEVERITIES)[number];
 export const DEFECT_STATUSES = ['open', 'fixed', 'verified', 'deferred'] as const;
 export type DefectStatus = (typeof DEFECT_STATUSES)[number];
 
+/**
+ * 출하를 막는 심각도(오너 결정 2026-11-02). 예전에는 `blocker` 만 막았고 `high`(「출하 직후
+ * 반드시 문제가 된다」)는 판정에 아무 영향이 없었다 — 그래서 바뀐 화면 UX 적대 점검의 높음
+ * 지적이 결함 대장에 올라가도 GO 가 났다. 이제 `high` 도 `blocker` 와 같은 규칙으로 막는다:
+ * `open` 은 물론 `fixed`(주장)도 막고, `verified`(재측정 관측)와 사유를 적은 `deferred` 만 닫힌다.
+ */
+export const SHIP_BLOCKING_SEVERITIES: readonly DefectSeverity[] = ['blocker', 'high'];
+
+/** 출하를 막는 결함 — 심각도가 blocker·high 이고 상태가 open·fixed. 판정과 P10 제출 검사가 이 한 벌을 쓴다. */
+export function shipBlockingDefects(root: string): DefectRecord[] {
+  return listDefects(root).filter(
+    d => SHIP_BLOCKING_SEVERITIES.includes(d.severity) && (d.status === 'open' || d.status === 'fixed'),
+  );
+}
+
 export interface DefectRecord {
   id: string;
   severity: DefectSeverity;
@@ -547,19 +562,21 @@ export function shipVerdict(root: string): ShipVerdict {
     }));
   } else {
     for (const d of defects.value) {
-      if (d.severity !== 'blocker') continue;
+      if (!SHIP_BLOCKING_SEVERITIES.includes(d.severity)) continue;
+      const sevEn = d.severity === 'blocker' ? 'blocker' : 'high defect';
+      const sevKo = d.severity === 'blocker' ? '차단 결함' : '높음 결함';
       if (d.status === 'open') {
         reasons.push(t({
-          en: `open blocker: ${d.id} ${d.title} (evidence ${d.evidence}) — fix it, re-measure, then close it `
+          en: `open ${sevEn}: ${d.id} ${d.title} (evidence ${d.evidence}) — fix it, re-measure, then close it `
             + `with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `열린 차단 결함: ${d.id} ${d.title} (근거 ${d.evidence}) — 수정 후 재측정하고 `
+          ko: `열린 ${sevKo}: ${d.id} ${d.title} (근거 ${d.evidence}) — 수정 후 재측정하고 `
             + `\`harness ship defect update ${d.id} --status verified\` 로 닫아라`,
         }));
       } else if (d.status === 'fixed') {
         reasons.push(t({
-          en: `unverified blocker: ${d.id} ${d.title} (fixed) — "fixed" is a claim, re-measurement is the `
+          en: `unverified ${sevEn}: ${d.id} ${d.title} (fixed) — "fixed" is a claim, re-measurement is the `
             + `observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `재측정되지 않은 차단 결함: ${d.id} ${d.title} (fixed) — 「고쳤다」는 주장이고 재측정이 `
+          ko: `재측정되지 않은 ${sevKo}: ${d.id} ${d.title} (fixed) — 「고쳤다」는 주장이고 재측정이 `
             + `관측이다. 다시 돌려 확인한 뒤 \`harness ship defect update ${d.id} --status verified\` 로 올려라`,
         }));
       }
@@ -653,8 +670,8 @@ export function renderReleaseChecklist(root: string): string {
       }),
       '',
       t({
-        en: '- No open blocker · P10·P11 gates approved · ship gate evidence is measured · UX waves have real-run evidence',
-        ko: '- 열린 차단 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음',
+        en: '- No open or unverified blocker or high defect · P10·P11 gates approved · ship gate evidence is measured · UX waves have real-run evidence',
+        ko: '- 열리거나 재측정 안 된 차단·높음 결함 없음 · P10·P11 게이트 승인 완료 · 출하 게이트 근거 measured · UX 웨이브 실주행 증적 있음',
       }),
       '',
       t({

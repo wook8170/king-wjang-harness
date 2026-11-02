@@ -11,7 +11,17 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.4] — 2026-11-02
 
 Strengthens the adversarial reviews at both ends of the build: the design audit before P7 and the
-ship verdict after it. Skills and agent definitions only; the core (`harness ship verdict`) is unchanged.
+ship verdict after it, and makes the core block high defects the same way it blocks blockers.
+
+### Changed — `harness ship verdict` and the P10 submission block high defects
+
+A `high` defect ("certain to become a problem right after shipping") used to have no effect on the
+verdict, so a high finding of the pre-ship UX review could sit on the ledger while the verdict said GO.
+Now `high` follows the blocker rule: `open` and `fixed` both block, and only `verified` or a `deferred`
+with a reason closes it. The same rule (`shipBlockingDefects`) also refuses `harness gate submit P10`
+while such a defect is left, naming each id with its severity and status. `medium` and `low` do not
+block. Regression tests: open high, fixed high, verified/deferred high with medium and low (GO), and
+the P10 refusal — the open-high, fixed-high and P10 tests fail on 0.1.3.
 
 ### Changed — P6 enters P7 only at HIGH 0
 

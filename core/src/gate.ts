@@ -58,6 +58,8 @@ import { computePolicyHash } from './policy';
 import { sanitizeUntrusted } from './untrusted';
 import { loadRegistry } from './registry';
 import { readState, writeState } from './state';
+// 순환 import(ship → gate → ship)지만 양쪽 다 함수 안에서만 쓰므로 평가 순서에 기대지 않는다.
+import { shipBlockingDefects } from './ship';
 import { PHASES, SHIP_PHASES, isEvidenceGrade } from './types';
 import type { EvidenceGrade, GateRecord, HarnessState, Phase } from './types';
 
@@ -603,6 +605,7 @@ export function submitGate(
   // 전부 저널·상태를 건드리기 **전에** 던진다(실패한 제출은 흔적을 남기지 않는다).
   assertSubstantive(root, readArtifacts(root, paths));
   assertPhaseFit(root, phase, paths);
+  assertNoShipBlockers(root, phase);
   const artifactHash = computeArtifactHash(root, paths);
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
@@ -627,6 +630,27 @@ export function submitGate(
   };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
+}
+
+/**
+ * P10 제출 검사(오너 결정 2026-11-02): 출하를 막는 결함(blocker·high 가 open·fixed)이 남은
+ * 채로 P10 을 제출하지 않는다. 판정(`shipVerdict`)과 같은 한 벌(`shipBlockingDefects`)을 쓴다 —
+ * 제출은 통과시키고 판정만 막으면 사람은 「제출이 받아들여졌다」를 「준비됐다」로 읽는다.
+ * 대장을 못 읽으면 `listDefects` 가 던진다 — 손상은 「결함 없음」이 아니다.
+ */
+function assertNoShipBlockers(root: string, phase: Phase): void {
+  if (phase !== 'P10') return;
+  const blocking = shipBlockingDefects(root);
+  if (blocking.length === 0) return;
+  const list = blocking.map(d => `${d.id} (${d.severity}, ${d.status})`).join(', ');
+  throw new Error(tr(root, {
+    en: `Cannot submit P10 while ${blocking.length} blocker or high defect(s) are open or only fixed: ${list} — `
+      + 'fix, re-measure with a fresh auditor, then `harness ship defect update <id> --status verified`; '
+      + 'or record the owner\'s decision with `--status deferred --defer-reason "<why>"`',
+    ko: `차단·높음 결함 ${blocking.length}건이 open 이거나 fixed 에 머문 채로 P10 을 제출할 수 없다: ${list} — `
+      + '수정 → 새 감사자로 재측정 → `harness ship defect update <id> --status verified`, '
+      + '또는 오너 결정을 `--status deferred --defer-reason "<사유>"` 로 남겨라',
+  }));
 }
 
 /**

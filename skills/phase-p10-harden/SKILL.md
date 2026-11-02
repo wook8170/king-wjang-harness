@@ -36,7 +36,7 @@ Register everything the auditor hands back through the CLI.
 | `status` | `open` → `fixed` → `verified`. **`fixed` is a claim; `verified` is an observation** |
 | `deferReason` | **Mandatory** to leave something `deferred`. A deferral without a reason is not a deferral, it is concealment (the core refuses) |
 
-A `blocker` blocks the P12 verdict until it is `verified` — being stuck at `fixed` blocks it too.
+A `blocker` or `high` defect blocks the P12 verdict until it is `verified` — being stuck at `fixed` blocks it too. The core also refuses `harness gate submit P10` while one is `open` or `fixed`. Only `verified`, or `deferred` with the owner's reason, closes it.
 
 ## The fix → re-measure loop
 
@@ -83,10 +83,10 @@ misreads, a dead end, or spacing that touches.
    2x capture as evidence.
 
 **Into the defect ledger.** Findings of both reviews are registered with `harness ship defect add`
-(ids such as `UXA-03` and `CONF-02`, evidence = capture path or `file:line`). An open `blocker` already
-blocks `harness ship verdict`. **An open `high` from either review blocks the P10 gate as well**: do not
-submit P10 while one is `open` or `fixed` — fix, re-check with a fresh reviewer, promote to `verified`,
-or record the owner's decision with `--status deferred --defer-reason`.
+(ids such as `UXA-03` and `CONF-02`, evidence = capture path or `file:line`). An open or only fixed
+`blocker` or `high` blocks `harness ship verdict`, and the core refuses `harness gate submit P10` while
+one is left — fix, re-check with a fresh reviewer, promote to `verified`, or record the owner's decision
+with `--status deferred --defer-reason`.
 
 **Screen changes need the owner first.** Findings whose fix changes a screen (layout, wording, flow)
 are collected and put to the user in one artifact — the findings table with the 2x captures, viewable
