@@ -7659,7 +7659,7 @@ function writeState(root, state) {
 }
 
 // core/src/gate.ts
-var crypto3 = __toESM(require("crypto"));
+var crypto4 = __toESM(require("crypto"));
 
 // core/src/hash.ts
 function updateHashEntry(h, rel, content) {
@@ -7672,8 +7672,8 @@ function updateHashEntry(h, rel, content) {
 }
 
 // core/src/gate.ts
-var fs8 = __toESM(require("fs"));
-var path5 = __toESM(require("path"));
+var fs16 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
 
 // core/src/events.ts
 var fs5 = __toESM(require("fs"));
@@ -8142,380 +8142,267 @@ function docsForPhase(root, phase) {
   return [...latest.values()];
 }
 
-// core/src/gate.ts
-var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
-function canonicalRel(root, rel) {
+// core/src/ship.ts
+var fs15 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
+var YAML6 = __toESM(require_dist());
+
+// core/src/evidence.ts
+var fs13 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
+
+// core/src/ledger.ts
+var fs10 = __toESM(require("fs"));
+var path7 = __toESM(require("path"));
+var YAML4 = __toESM(require_dist());
+
+// core/src/wave.ts
+var fs9 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
+var YAML3 = __toESM(require_dist());
+
+// core/src/runtime.ts
+var fs8 = __toESM(require("fs"));
+var path5 = __toESM(require("path"));
+var f = (root, name) => path5.join(runtimeDir(root), name);
+function noteTurnLogged(root) {
+  fs8.mkdirSync(runtimeDir(root), { recursive: true });
+  fs8.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+}
+
+// core/src/wave.ts
+var isWaveFile = (name) => WAVE_FILE_RE.test(name);
+var WAVE_FILE_RE = /^wave-\d+\.md$/;
+var waveNumberOf = (name) => {
+  const m = /^wave-(\d+)\.md$/.exec(name);
+  return m ? Number(m[1]) : void 0;
+};
+function parseWave(txt, lang = DEFAULT_LANG) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
+  if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
+  let raw;
   try {
-    const real = fs8.realpathSync(path5.resolve(root, rel));
-    const r = path5.relative(fs8.realpathSync(root), real);
-    return r && !r.startsWith(`..${path5.sep}`) && r !== ".." && !path5.isAbsolute(r) ? r : rel;
+    raw = YAML3.parse(m[1]);
   } catch {
-    return rel;
+    raw = null;
   }
+  if (typeof raw !== "object" || raw === null) throw new Error(pick({ en: "Malformed wave file: frontmatter could not be parsed", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4" }, lang));
+  const r = raw;
+  const asArr = (v) => Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : [];
+  const statuses = ["pending", "active", "done", "stale"];
+  const meta = {
+    id: typeof r.id === "string" ? r.id : "",
+    milestone: typeof r.milestone === "string" ? r.milestone : pick(UNSPECIFIED, lang),
+    design_refs: asArr(r.design_refs),
+    status: statuses.includes(r.status) ? r.status : "pending",
+    acceptance: asArr(r.acceptance)
+  };
+  return { meta, body: m[2] };
 }
-function normalizePaths(root, relPaths) {
-  const canon = relPaths.map((p) => p.trim()).filter(Boolean).map((p) => canonicalRel(root, p));
-  return [...new Set(canon)].sort();
+var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
+function serializeWave(meta, body) {
+  return `---
+${YAML3.stringify(meta).trimEnd()}
+---
+${body}`;
 }
-var MIN_SUBSTANCE_CHARS = 80;
-var MIN_DISTINCT_CHARS = 12;
-var MIN_WORDS = 5;
-function distinctCharCount(text) {
-  return new Set(text.replace(NON_ALNUM_RE, "")).size;
+function readWave(root, id) {
+  return parseWave(readCapped(root, wavePath(root, id), READ_CAPS.WAVE, `the instruction sheet of ${id}`), langFor(root));
 }
-function wordCount(text) {
-  return text.split(/\s+/u).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
-}
-var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
-var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
-function readArtifact(root, rel) {
-  try {
-    return fs8.readFileSync(path5.resolve(root, rel));
-  } catch {
-    throw new Error(
-      tr(root, {
-        en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
-      })
-    );
+function listWaves(root) {
+  if (!fs9.existsSync(wavesDir(root))) return [];
+  const out = [];
+  for (const f2 of fs9.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+    try {
+      out.push(parseWave(readCapped(root, path6.join(wavesDir(root), f2), READ_CAPS.WAVE, `the instruction sheet ${f2}`), langFor(root)).meta);
+    } catch {
+      continue;
+    }
   }
+  return out;
 }
-function readArtifacts(root, relPaths) {
-  return relPaths.map((rel) => {
-    const text = readArtifact(root, rel).toString("utf8");
-    return {
-      rel,
-      text,
-      substance: text.replace(/\s+/gu, "").length,
-      binary: text.includes("\uFFFD") || text.includes("\0")
-    };
+function writeWave(root, id, meta, body) {
+  const target = wavePath(root, id);
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs9.writeFileSync(tmp, serializeWave(meta, body));
+  fs9.renameSync(tmp, target);
+}
+function evidenceFiles(root, id) {
+  const dir = evidenceDir(root, id);
+  if (!fs9.existsSync(dir)) return [];
+  return fs9.readdirSync(dir).filter((f2) => {
+    if (f2.startsWith(".")) return false;
+    const st = fs9.statSync(path6.join(dir, f2));
+    return st.isFile() && st.size > 0;
   });
 }
-function assertSubstantive(root, arts) {
-  const blank = arts.filter((a) => a.substance === 0).map((a) => a.rel);
-  if (blank.length > 0) {
+function nextWaveId(root) {
+  const nums = [];
+  if (fs9.existsSync(wavesDir(root))) {
+    for (const f2 of fs9.readdirSync(wavesDir(root))) {
+      const n = waveNumberOf(f2);
+      if (n !== void 0) nums.push(n);
+    }
+  }
+  for (const ev of readEvents(root)) {
+    if (ev.type !== "wave-created") continue;
+    const id = ev.data.id;
+    if (typeof id !== "string") continue;
+    const m = /^wave-(\d+)$/.exec(id);
+    if (m) nums.push(parseInt(m[1], 10));
+  }
+  return `wave-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
+}
+function createWave(root, opts) {
+  const lang = langFor(root);
+  const missing = opts.design_refs.filter((id2) => !getNode(root, id2));
+  if (missing.length > 0) {
+    throw new Error(tr(root, {
+      en: `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first: CLI \`harness node upsert --id <id> --title <title>\`, MCP \`harness_node_upsert\``,
+      ko: `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C: CLI \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \xB7 MCP \`harness_node_upsert\``
+    }));
+  }
+  if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
+    throw new Error(tr(root, {
+      en: "A wave needs a goal \u2014 an instruction sheet without one cannot be picked up by the next session",
+      ko: "\uC6E8\uC774\uBE0C \uBAA9\uD45C\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 \uBAA9\uD45C \uC5C6\uB294 \uC9C0\uC2DC\uC11C\uB294 \uB2E4\uC74C \uC138\uC158\uC774 \uC774\uC5B4\uBC1B\uC744 \uC218 \uC5C6\uB2E4"
+    }));
+  }
+  const id = nextWaveId(root);
+  if (fs9.existsSync(wavePath(root, id))) {
+    throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
+  }
+  const inherited = evidenceFiles(root, id);
+  if (inherited.length > 0) {
+    const sample = `${inherited.slice(0, 3).join(", ")}${inherited.length > 3 ? ", \u2026" : ""}`;
+    throw new Error(pick({
+      en: `${evidenceDir(root, id)} still holds ${inherited.length} piece(s) of earlier evidence (${sample}) \u2014 a new wave inheriting someone else's visual evidence disables the UX gate. Check that directory, archive or delete it, then create the wave again.`,
+      ko: `${evidenceDir(root, id)} \uC5D0 \uC774\uC804 \uC99D\uC801 ${inherited.length}\uAC74(${sample})\uC774 \uB0A8\uC544 \uC788\uB2E4 \u2014 \uC0C8 \uC6E8\uC774\uBE0C\uAC00 \uB0A8\uC758 \uC2DC\uAC01 \uC99D\uC801\uC744 \uBB3C\uB824\uBC1B\uC73C\uBA74 UX \uAC8C\uC774\uD2B8\uAC00 \uBB34\uB825\uD654\uB41C\uB2E4. \uD574\uB2F9 \uB514\uB809\uD1A0\uB9AC\uB97C \uD655\uC778\uD574 \uBCF4\uAD00\uD558\uAC70\uB098 \uC0AD\uC81C\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
+    }, lang));
+  }
+  const meta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: "pending", acceptance: opts.acceptance };
+  const body = [
+    `## ${pick({ en: "Goal", ko: "\uBAA9\uD45C" }, lang)}`,
+    opts.goal,
+    "",
+    `## ${pick({ en: "Done when", ko: "\uC644\uB8CC \uAE30\uC900" }, lang)}`,
+    ...opts.acceptance.map((a) => `- ${a}`),
+    "",
+    `## ${pick({ en: "Turn log", ko: "\uD134 \uB85C\uADF8" }, lang)}`,
+    ""
+  ].join("\n");
+  writeWave(root, id, meta, body);
+  appendEvent(root, "wave-created", { id, milestone: opts.milestone, design_refs: opts.design_refs });
+  return meta;
+}
+function activateWave(root, id) {
+  const state = readState(root);
+  if (state.activeWave && state.activeWave !== id) {
+    throw new Error(tr(root, { en: `A wave is already active: ${state.activeWave}. Complete it first (\`harness wave complete\`).`, ko: `\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.` }));
+  }
+  let meta, body;
+  try {
+    ({ meta, body } = readWave(root, id));
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
     throw new Error(
       tr(root, {
-        en: `Empty artifact under review: ${blank.join(", ")} \u2014 a gate approves content, not filenames. Write the document, or drop the path from --paths`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uBE44\uC5B4 \uC788\uB2E4: ${blank.join(", ")} \u2014 \uAC8C\uC774\uD2B8\uB294 \uD30C\uC77C \uC774\uB984\uC774 \uC544\uB2C8\uB77C \uB0B4\uC6A9\uC744 \uC2B9\uC778\uD55C\uB2E4. \uBB38\uC11C\uB97C \uCC44\uC6B0\uAC70\uB098 --paths \uC5D0\uC11C \uADF8 \uACBD\uB85C\uB97C \uBE7C\uB77C`
+        en: `No instruction sheet for wave ${id} (${wavePath(root, id)}) \u2014 check the id, or list them with \`harness wave list\``,
+        ko: `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
       })
     );
   }
-  const total = arts.reduce((n, a) => n + a.substance, 0);
-  if (total < MIN_SUBSTANCE_CHARS) {
+  if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
+  if (meta.status === "stale") {
+    throw new Error(tr(root, {
+      en: `${id} is STALE \u2014 the design it referenced (${meta.design_refs.join(", ")}) has moved on since. Re-activating it would silently build on an outdated decision. Open a new wave against the current design instead: \`harness wave create --goal "<goal>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`,
+      ko: `${id} \uB294 STALE \uC774\uB2E4 \u2014 \uCC38\uC870\uD55C \uC124\uACC4(${meta.design_refs.join(", ")})\uAC00 \uADF8 \uB4A4\uB85C \uBC14\uB00C\uC5C8\uB2E4. \uB418\uC0B4\uB9AC\uBA74 \uB0A1\uC740 \uACB0\uC815 \uC704\uC5D0 \uC870\uC6A9\uD788 \uC9D3\uAC8C \uB41C\uB2E4. \uD604\uC7AC \uC124\uACC4\uB85C \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uC5F4\uC5B4\uB77C: \`harness wave create --goal "<\uBAA9\uD45C>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`
+    }));
+  }
+  meta.status = "active";
+  writeWave(root, id, meta, body);
+  appendEvent(root, "wave-activated", { id });
+  writeState(root, { ...state, activeWave: id });
+}
+function readActiveWave(root, id) {
+  try {
+    return readWave(root, id);
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
     throw new Error(
       tr(root, {
-        en: `The artifacts under review carry ${total} non-whitespace characters, below the ${MIN_SUBSTANCE_CHARS} minimum (paths: ${arts.map((a) => a.rel).join(", ")}). A gate is a review, not a ceremony \u2014 submit the document that was actually written`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC758 \uACF5\uBC31 \uC81C\uC678 \uBB38\uC790\uAC00 ${total}\uC790\uB85C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4 (\uB300\uC0C1: ${arts.map((a) => a.rel).join(", ")}). \uAC8C\uC774\uD2B8\uB294 \uC758\uC2DD\uC774 \uC544\uB2C8\uB77C \uC2EC\uC0AC\uB2E4 \u2014 \uC2E4\uC81C\uB85C \uC791\uC131\uB41C \uBB38\uC11C\uB97C \uC81C\uCD9C\uD558\uB77C`
+        en: `The instruction sheet for the active wave ${id} is missing (${wavePath(root, id)}) \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\`.`,
+        ko: `\uD65C\uC131 \uC6E8\uC774\uBE0C ${id} \uC758 \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C.`
       })
     );
   }
-  const textual = arts.filter((a) => !a.binary);
-  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(NON_ALNUM_RE, "");
-  if (textual.length > 0 && residual.length === 0) {
-    throw new Error(
-      tr(root, {
-        en: `The artifacts under review are placeholders only (TODO/TBD and the like): ${textual.map((a) => a.rel).join(", ")} \u2014 a placeholder is not grounds for approval`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC790\uB9AC\uD45C\uC2DC\uC790\uBFD0\uC774\uB2E4(TODO\xB7TBD\xB7\uBBF8\uC9C0\uC815 \uB530\uC704): ${textual.map((a) => a.rel).join(", ")} \u2014 \uC790\uB9AC\uD45C\uC2DC\uC790\uB294 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
-      })
-    );
-  }
-  if (textual.length > 0) {
-    const joined = textual.map((a) => a.text).join("\n");
-    const chars = distinctCharCount(joined);
-    const words = wordCount(joined);
-    if (chars < MIN_DISTINCT_CHARS && words < MIN_WORDS) {
+}
+function logTurn(root, text) {
+  const state = readState(root);
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
+  const id = state.activeWave;
+  const { meta, body } = readActiveWave(root, id);
+  const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${oneLine(text)}`;
+  writeWave(root, id, meta, body.trimEnd() + "\n" + entry + "\n");
+  appendEvent(root, "wave-turn-logged", { id });
+  noteTurnLogged(root);
+}
+function completeWave(root) {
+  const state = readState(root);
+  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
+  const id = state.activeWave;
+  const { meta, body } = readActiveWave(root, id);
+  if (meta.design_refs.some((r) => r.startsWith("UX-"))) {
+    const dir = evidenceDir(root, id);
+    const report = validateEvidence(root, id);
+    if (report.usable.length === 0) {
+      const uxRefs = meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ");
+      const why = report.entries > 0 ? tr(root, {
+        en: `the files there do not count as evidence:
+  - ${report.problems.join("\n  - ")}`,
+        ko: `\uAC70\uAE30 \uC788\uB294 \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4:
+  - ${report.problems.join("\n  - ")}`
+      }) : tr(root, {
+        // [USE-248] 게이트를 여는 형태를 **전부** 적는다. 스크린샷만 광고하면
+        // html 목업으로 여는 정당한 경로를 사람이 모른 채 헤맨다 — 첫 거부문이
+        // 절반만 말하면 나머지 절반은 존재하지 않는 것과 같다.
+        en: `there is no visual evidence. Put an image (real dimensions, not a 1x1 placeholder) or an exported HTML page in ${dir}.`,
+        ko: `\uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uB2E4. ${dir} \uC5D0 \uC774\uBBF8\uC9C0(1x1 \uC790\uB9AC\uD45C\uC2DC\uC790 \uB9D0\uACE0 \uC2E4\uC81C \uCE58\uC218) \uB610\uB294 \uB0B4\uBCF4\uB0B8 HTML \uD398\uC774\uC9C0\uB97C \uB123\uC5B4\uB77C.`
+      });
       throw new Error(
         tr(root, {
-          en: `The artifacts under review are not prose \u2014 ${chars} distinct letters/digits across ${words} word(s) (${textual.map((a) => a.rel).join(", ")}). Padding a file to the character minimum is not a document; a gate reviews what the phase actually produced`,
-          ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC0B0\uBB38\uC774 \uC544\uB2C8\uB2E4 \u2014 \uACE0\uC720 \uAE00\uC790\xB7\uC22B\uC790 ${chars}\uC885, \uB0B1\uB9D0 ${words}\uAC1C (${textual.map((a) => a.rel).join(", ")}). \uCD5C\uC18C \uAE00\uC790\uC218\uB97C \uCC44\uC6B0\uB824\uACE0 \uB298\uB9B0 \uD30C\uC77C\uC740 \uBB38\uC11C\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uAC8C\uC774\uD2B8\uB294 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4`
+          en: `A wave referencing UX nodes (${uxRefs}) cannot be completed \u2014 ${why}`,
+          ko: `UX \uB178\uB4DC(${uxRefs})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4 \u2014 ${why}`
         })
       );
     }
   }
+  meta.status = "done";
+  writeWave(root, id, meta, body);
+  appendEvent(root, "wave-completed", { id });
+  writeState(root, { ...state, activeWave: null });
 }
-function contentDigest(root, relPaths) {
-  const each = relPaths.map((rel) => crypto3.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
-  const h = crypto3.createHash("sha256");
-  for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
-  return h.digest("hex");
-}
-function latestSubmissions(root) {
-  const out = /* @__PURE__ */ new Map();
-  const events = readEvents(root);
-  for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
-    if (ev.type !== "gate-submitted") continue;
-    const phase = ev.data.phase;
-    if (!PHASES.includes(phase) || out.has(phase)) continue;
-    const raw = ev.data.paths;
-    const paths = Array.isArray(raw) ? raw.filter((p) => typeof p === "string") : [];
-    out.set(phase, typeof ev.data.contentHash === "string" ? { paths, contentHash: ev.data.contentHash } : { paths });
-  }
-  return out;
-}
-function assertDistinct(root, phase, hash, contentHash, gates) {
-  const prior = latestSubmissions(root);
-  const clash = PHASES.filter((p) => {
-    if (p === phase) return false;
-    const g = gates[p];
-    if (!g || g.status !== "submitted" && g.status !== "approved") return false;
-    const prev = prior.get(p);
-    return prev?.contentHash ? prev.contentHash === contentHash : g.artifactHash === hash;
-  });
-  if (clash.length > 0) {
-    throw new Error(
-      tr(root, {
-        en: `The same artifacts already opened gate ${clash.join(", ")} \u2014 byte-identical content cannot stand in for ${phase} as well. Each gate reviews what that phase actually produced; submit the revised or new artifact`,
-        ko: `\uAC19\uC740 \uC0B0\uCD9C\uBB3C\uC774 \uC774\uBBF8 \uAC8C\uC774\uD2B8 ${clash.join(", ")} \uB97C \uC5F4\uC5C8\uB2E4 \u2014 \uBC14\uC774\uD2B8\uAC00 \uAC19\uC740 \uB0B4\uC6A9\uC774 ${phase} \uAE4C\uC9C0 \uB300\uC2E0\uD560 \uC218\uB294 \uC5C6\uB2E4. \uAC8C\uC774\uD2B8\uB9C8\uB2E4 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC774\uB098 \uC0C8 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uB77C`
-      })
-    );
-  }
-}
-var SHINGLE = 5;
-function shingles(text) {
-  const norm = text.toLowerCase().replace(/\s+/gu, " ").trim();
-  const out = /* @__PURE__ */ new Set();
-  for (let i = 0; i + SHINGLE <= norm.length; i++) out.add(norm.slice(i, i + SHINGLE));
-  return out;
-}
-function textualJoin(root, rels) {
-  return readArtifacts(root, rels).filter((a) => !a.binary).map((a) => a.text).join("\n");
-}
-function assertNewMaterial(root, phase, paths, gates) {
-  let mine;
-  try {
-    mine = shingles(textualJoin(root, paths));
-  } catch {
-    return;
-  }
-  if (mine.size === 0) return;
-  const prior = latestSubmissions(root);
-  const seen = /* @__PURE__ */ new Set();
-  const seenGates = [];
-  for (const p of PHASES) {
-    if (p === phase) continue;
-    const g = gates[p];
-    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
-    const prev = prior.get(p);
-    if (!prev || prev.paths.length === 0) continue;
-    try {
-      if (computeArtifactHash(root, prev.paths) !== g.artifactHash) continue;
-      for (const sh of shingles(textualJoin(root, prev.paths))) seen.add(sh);
-    } catch {
-      continue;
-    }
-    seenGates.push(p);
-  }
-  if (seenGates.length === 0) return;
-  let fresh = 0;
-  for (const sh of mine) if (!seen.has(sh)) fresh++;
-  if (fresh < MIN_SUBSTANCE_CHARS) {
-    throw new Error(
-      tr(root, {
-        en: `This submission carries only ${fresh} characters of text that gate ${seenGates.join(", ")} has not already reviewed \u2014 below the ${MIN_SUBSTANCE_CHARS} minimum. Bringing earlier artifacts along is fine, but ${phase} has to add what ${phase} actually produced; editing a few characters does not make a reviewed document a new one`,
-        ko: `\uC774 \uC81C\uCD9C\uC5D0\uC11C \uAC8C\uC774\uD2B8 ${seenGates.join(", ")} \uAC00 \uC774\uBBF8 \uC2EC\uC0AC\uD558\uC9C0 \uC54A\uC740 \uD14D\uC2A4\uD2B8\uB294 ${fresh}\uC790\uBFD0\uC774\uB77C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4. \uC55E \uC0B0\uCD9C\uBB3C\uC744 \uB3D9\uBC18\uD558\uB294 \uAC83\uC740 \uC815\uC0C1\uC774\uB2E4 \u2014 \uB2E4\uB9CC ${phase} \uB294 ${phase} \uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uB354\uD574\uC57C \uD55C\uB2E4. \uBA87 \uAE00\uC790\uB97C \uACE0\uCE5C\uB2E4\uACE0 \uC774\uBBF8 \uC2EC\uC0AC\uBC1B\uC740 \uBB38\uC11C\uAC00 \uC0C8 \uBB38\uC11C\uAC00 \uB418\uC9C0\uB294 \uC54A\uB294\uB2E4`
-      })
-    );
-  }
-}
-var normRel = (p) => path5.normalize(p).replace(/^(?:\.[\\/])+/, "");
-function assertPhaseFit(root, phase, paths) {
-  const want = new Set(paths.map(normRel));
-  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
-  if (known.length === 0) return;
-  if (new Set(known.map((d) => normRel(d.path))).size < want.size) return;
-  if (known.some((d) => d.phase === phase)) return;
-  const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
-  throw new Error(
-    tr(root, {
-      en: `None of the artifacts under review is registered to ${phase} \u2014 the registry has them as ${where}. A document belonging to another phase cannot open this gate. Register the ${phase} artifact with \`harness doc upsert --id <DOC-x> --path <p> --phase ${phase}\``,
-      ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC911 ${phase} \uB85C \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uD558\uB098\uB3C4 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0\uB294 ${where} \uB85C \uC788\uB2E4. \uB2E4\uB978 \uD398\uC774\uC988\uC758 \uBB38\uC11C\uB85C \uC774 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218\uB294 \uC5C6\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase ${phase}\` \uB85C ${phase} \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uB77C`
-    })
-  );
-}
-function assertInsideRoot(root, paths) {
-  const outside = paths.filter((p) => !isInsideRoot(root, p));
-  if (outside.length > 0) {
-    throw new Error(
-      tr(root, {
-        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
-      })
-    );
-  }
-}
-function computeArtifactHash(root, relPaths) {
-  const h = crypto3.createHash("sha256");
-  for (const rel of normalizePaths(root, relPaths)) {
-    updateHashEntry(h, rel, readArtifact(root, rel));
-  }
-  return h.digest("hex");
-}
-function recordedPaths(root, phase) {
-  const s = latestSubmissions(root).get(phase);
-  return s && s.paths.length > 0 ? s.paths : null;
-}
-function submissionSignals(root, phase) {
-  const rels = recordedPaths(root, phase);
-  if (!rels) return null;
-  const paths = rels.map((rel) => {
-    let text;
-    try {
-      text = fs8.readFileSync(path5.resolve(root, rel)).toString("utf8");
-    } catch {
-      return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
-    }
-    return {
-      rel,
-      missing: false,
-      binary: text.includes("\uFFFD") || text.includes("\0"),
-      substance: text.replace(/\s+/gu, "").length,
-      distinctChars: distinctCharCount(text),
-      words: wordCount(text)
-    };
-  });
-  const textual = paths.filter((p) => !p.binary && !p.missing);
-  const substance = textual.reduce((n, p) => n + p.substance, 0);
-  const distinctChars = Math.max(0, ...textual.map((p) => p.distinctChars), 0);
-  const words = textual.reduce((n, p) => n + p.words, 0);
-  return {
-    paths,
-    substance,
-    distinctChars,
-    words,
-    // 2배·30 은 이 리포 실산출물(213자·고유 글자 40+)이 걸리지 않는 자리다 —
-    // 정당한 문서가 매번 깃발을 달면 그 깃발은 곧 무시된다.
-    nearFloor: textual.length > 0 && (substance < MIN_SUBSTANCE_CHARS * 2 || distinctChars < 30)
-  };
-}
-function submitGate(root, phase, opts) {
-  const paths = normalizePaths(root, opts.paths);
-  if (paths.length === 0) {
-    throw new Error(
-      tr(root, {
-        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
-        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
-      })
-    );
-  }
-  if (!isEvidenceGrade(opts.evidence)) {
-    throw new Error(
-      tr(root, {
-        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
-        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
-      })
-    );
-  }
-  assertInsideRoot(root, paths);
-  assertSubstantive(root, readArtifacts(root, paths));
-  assertPhaseFit(root, phase, paths);
-  const artifactHash = computeArtifactHash(root, paths);
-  const contentHash = contentDigest(root, paths);
+function markStale(root, id) {
+  const { meta, body } = readWave(root, id);
+  meta.status = "stale";
+  writeWave(root, id, meta, body);
+  appendEvent(root, "wave-stale", { id });
   const state = readState(root);
-  assertDistinct(root, phase, artifactHash, contentHash, state.gates);
-  assertNewMaterial(root, phase, paths, state.gates);
-  const prevStatus = state.gates[phase]?.status ?? "pending";
-  const ev = appendEvent(root, "gate-submitted", {
-    phase,
-    artifactHash,
-    contentHash,
-    evidence: opts.evidence,
-    paths,
-    prevStatus
-  });
-  const record = {
-    status: "submitted",
-    artifactHash,
-    evidence: opts.evidence,
-    submittedAt: ev.ts
-  };
-  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
-  return record;
+  if (state.activeWave === id) writeState(root, { ...state, activeWave: null });
 }
-function measuredOnlyViolation(root, phase, evidence) {
-  if (!SHIP_PHASES.includes(phase) || evidence === "measured") return null;
-  return tr(root, {
-    en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
-    ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
-  });
-}
-function feedbackPath(root, phase) {
-  return path5.join(packetsDir(root), `${phase}.feedback.md`);
-}
-function readGateFeedback(root, phase) {
-  try {
-    return fs8.readFileSync(feedbackPath(root, phase), "utf8");
-  } catch {
-    return "";
-  }
-}
-function verifyGate(root, phase) {
-  const t = (m) => tr(root, m);
-  const g = readState(root).gates[phase];
-  if (!g || g.status === "pending") {
-    return { ok: false, reason: t({
-      en: `there is no record for gate ${phase} \u2014 it has not been submitted`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4`
-    }) };
-  }
-  if (g.status === "invalidated") {
-    return { ok: false, reason: g.invalidatedReason ?? t({
-      en: `gate ${phase} is invalidated`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4`
-    }) };
-  }
-  if (!g.artifactHash) {
-    return { ok: false, reason: t({
-      en: `gate ${phase} has no pinned artifact hash`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4`
-    }) };
-  }
-  const paths = recordedPaths(root, phase);
-  if (!paths) {
-    return { ok: false, reason: t({
-      en: `the submission history for gate ${phase} is not in the journal \u2014 resubmit`,
-      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694`
-    }) };
-  }
-  let hash;
-  try {
-    hash = computeArtifactHash(root, paths);
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
-  }
-  if (hash !== g.artifactHash) {
-    return {
-      ok: false,
-      reason: t({
-        en: `artifact hash mismatch \u2014 pinned ${g.artifactHash.slice(0, 12)} \u2260 current ${hash.slice(0, 12)} (paths: ${paths.join(", ")})`,
-        ko: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
-      })
-    };
-  }
-  return { ok: true };
-}
-
-// core/src/wave.ts
-var fs14 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
-var YAML5 = __toESM(require_dist());
 
 // core/src/ledger.ts
-var fs9 = __toESM(require("fs"));
-var path6 = __toESM(require("path"));
-var YAML3 = __toESM(require_dist());
 function loadLedger(root) {
-  if (!fs9.existsSync(ledgerPath(root))) return [];
-  const doc = YAML3.parse(readCapped(root, ledgerPath(root), READ_CAPS.LEDGER, "the design ledger"));
+  if (!fs10.existsSync(ledgerPath(root))) return [];
+  const doc = YAML4.parse(readCapped(root, ledgerPath(root), READ_CAPS.LEDGER, "the design ledger"));
   const nodes = doc?.nodes;
   return Array.isArray(nodes) ? nodes : [];
 }
 function saveLedger(root, nodes) {
   const target = ledgerPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs9.writeFileSync(tmp, YAML3.stringify({ nodes }));
-  fs9.renameSync(tmp, target);
+  fs10.writeFileSync(tmp, YAML4.stringify({ nodes }));
+  fs10.renameSync(tmp, target);
 }
 function getNode(root, id) {
   return loadLedger(root).find((n) => n.id === id);
@@ -8555,12 +8442,12 @@ function bumpNode(root, id) {
   saveLedger(root, nodes);
   const affectedWaves = [];
   const unverifiable = [];
-  if (fs9.existsSync(wavesDir(root))) {
-    for (const f2 of fs9.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  if (fs10.existsSync(wavesDir(root))) {
+    for (const f2 of fs10.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
       const stem = f2.replace(/\.md$/, "");
       let txt;
       try {
-        txt = fs9.readFileSync(path6.join(wavesDir(root), f2), "utf8");
+        txt = fs10.readFileSync(path7.join(wavesDir(root), f2), "utf8");
       } catch {
         unverifiable.push(stem);
         continue;
@@ -8631,24 +8518,11 @@ function mergeNode(root, patch) {
   return node;
 }
 
-// core/src/runtime.ts
-var fs10 = __toESM(require("fs"));
-var path7 = __toESM(require("path"));
-var f = (root, name) => path7.join(runtimeDir(root), name);
-function noteTurnLogged(root) {
-  fs10.mkdirSync(runtimeDir(root), { recursive: true });
-  fs10.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
-}
-
-// core/src/evidence.ts
-var fs13 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
-
 // core/src/design.ts
 var fs12 = __toESM(require("fs"));
 var path9 = __toESM(require("path"));
-var crypto4 = __toESM(require("crypto"));
-var YAML4 = __toESM(require_dist());
+var crypto3 = __toESM(require("crypto"));
+var YAML5 = __toESM(require_dist());
 
 // core/src/tokens.ts
 var fs11 = __toESM(require("fs"));
@@ -8825,230 +8699,9 @@ function hasMeasuredEvidence(root, waveId) {
   return validateEvidence(root, waveId).files.some(isRealCapture);
 }
 
-// core/src/wave.ts
-var isWaveFile = (name) => WAVE_FILE_RE.test(name);
-var WAVE_FILE_RE = /^wave-\d+\.md$/;
-var waveNumberOf = (name) => {
-  const m = /^wave-(\d+)\.md$/.exec(name);
-  return m ? Number(m[1]) : void 0;
-};
-function parseWave(txt, lang = DEFAULT_LANG) {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(txt);
-  if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
-  let raw;
-  try {
-    raw = YAML5.parse(m[1]);
-  } catch {
-    raw = null;
-  }
-  if (typeof raw !== "object" || raw === null) throw new Error(pick({ en: "Malformed wave file: frontmatter could not be parsed", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uB97C \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4" }, lang));
-  const r = raw;
-  const asArr = (v) => Array.isArray(v) ? v.map(String) : typeof v === "string" && v ? [v] : [];
-  const statuses = ["pending", "active", "done", "stale"];
-  const meta = {
-    id: typeof r.id === "string" ? r.id : "",
-    milestone: typeof r.milestone === "string" ? r.milestone : pick(UNSPECIFIED, lang),
-    design_refs: asArr(r.design_refs),
-    status: statuses.includes(r.status) ? r.status : "pending",
-    acceptance: asArr(r.acceptance)
-  };
-  return { meta, body: m[2] };
-}
-var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
-function serializeWave(meta, body) {
-  return `---
-${YAML5.stringify(meta).trimEnd()}
----
-${body}`;
-}
-function readWave(root, id) {
-  return parseWave(readCapped(root, wavePath(root, id), READ_CAPS.WAVE, `the instruction sheet of ${id}`), langFor(root));
-}
-function listWaves(root) {
-  if (!fs14.existsSync(wavesDir(root))) return [];
-  const out = [];
-  for (const f2 of fs14.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
-    try {
-      out.push(parseWave(readCapped(root, path11.join(wavesDir(root), f2), READ_CAPS.WAVE, `the instruction sheet ${f2}`), langFor(root)).meta);
-    } catch {
-      continue;
-    }
-  }
-  return out;
-}
-function writeWave(root, id, meta, body) {
-  const target = wavePath(root, id);
-  const tmp = `${target}.tmp-${process.pid}`;
-  fs14.writeFileSync(tmp, serializeWave(meta, body));
-  fs14.renameSync(tmp, target);
-}
-function evidenceFiles(root, id) {
-  const dir = evidenceDir(root, id);
-  if (!fs14.existsSync(dir)) return [];
-  return fs14.readdirSync(dir).filter((f2) => {
-    if (f2.startsWith(".")) return false;
-    const st = fs14.statSync(path11.join(dir, f2));
-    return st.isFile() && st.size > 0;
-  });
-}
-function nextWaveId(root) {
-  const nums = [];
-  if (fs14.existsSync(wavesDir(root))) {
-    for (const f2 of fs14.readdirSync(wavesDir(root))) {
-      const n = waveNumberOf(f2);
-      if (n !== void 0) nums.push(n);
-    }
-  }
-  for (const ev of readEvents(root)) {
-    if (ev.type !== "wave-created") continue;
-    const id = ev.data.id;
-    if (typeof id !== "string") continue;
-    const m = /^wave-(\d+)$/.exec(id);
-    if (m) nums.push(parseInt(m[1], 10));
-  }
-  return `wave-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
-}
-function createWave(root, opts) {
-  const lang = langFor(root);
-  const missing = opts.design_refs.filter((id2) => !getNode(root, id2));
-  if (missing.length > 0) {
-    throw new Error(tr(root, {
-      en: `Design refs not in the ledger: ${missing.join(", ")} \u2014 register them first: CLI \`harness node upsert --id <id> --title <title>\`, MCP \`harness_node_upsert\``,
-      ko: `\uC6D0\uC7A5\uC5D0 \uC5C6\uB294 \uC124\uACC4 \uCC38\uC870: ${missing.join(", ")} \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C: CLI \`harness node upsert --id <id> --title <\uC81C\uBAA9>\` \xB7 MCP \`harness_node_upsert\``
-    }));
-  }
-  if (!opts.goal.trim() || opts.goal.trim() === pick(UNSPECIFIED, lang)) {
-    throw new Error(tr(root, {
-      en: "A wave needs a goal \u2014 an instruction sheet without one cannot be picked up by the next session",
-      ko: "\uC6E8\uC774\uBE0C \uBAA9\uD45C\uAC00 \uD544\uC694\uD558\uB2E4 \u2014 \uBAA9\uD45C \uC5C6\uB294 \uC9C0\uC2DC\uC11C\uB294 \uB2E4\uC74C \uC138\uC158\uC774 \uC774\uC5B4\uBC1B\uC744 \uC218 \uC5C6\uB2E4"
-    }));
-  }
-  const id = nextWaveId(root);
-  if (fs14.existsSync(wavePath(root, id))) {
-    throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
-  }
-  const inherited = evidenceFiles(root, id);
-  if (inherited.length > 0) {
-    const sample = `${inherited.slice(0, 3).join(", ")}${inherited.length > 3 ? ", \u2026" : ""}`;
-    throw new Error(pick({
-      en: `${evidenceDir(root, id)} still holds ${inherited.length} piece(s) of earlier evidence (${sample}) \u2014 a new wave inheriting someone else's visual evidence disables the UX gate. Check that directory, archive or delete it, then create the wave again.`,
-      ko: `${evidenceDir(root, id)} \uC5D0 \uC774\uC804 \uC99D\uC801 ${inherited.length}\uAC74(${sample})\uC774 \uB0A8\uC544 \uC788\uB2E4 \u2014 \uC0C8 \uC6E8\uC774\uBE0C\uAC00 \uB0A8\uC758 \uC2DC\uAC01 \uC99D\uC801\uC744 \uBB3C\uB824\uBC1B\uC73C\uBA74 UX \uAC8C\uC774\uD2B8\uAC00 \uBB34\uB825\uD654\uB41C\uB2E4. \uD574\uB2F9 \uB514\uB809\uD1A0\uB9AC\uB97C \uD655\uC778\uD574 \uBCF4\uAD00\uD558\uAC70\uB098 \uC0AD\uC81C\uD55C \uB4A4 \uB2E4\uC2DC \uC0DD\uC131\uD558\uB77C.`
-    }, lang));
-  }
-  const meta = { id, milestone: opts.milestone, design_refs: opts.design_refs, status: "pending", acceptance: opts.acceptance };
-  const body = [
-    `## ${pick({ en: "Goal", ko: "\uBAA9\uD45C" }, lang)}`,
-    opts.goal,
-    "",
-    `## ${pick({ en: "Done when", ko: "\uC644\uB8CC \uAE30\uC900" }, lang)}`,
-    ...opts.acceptance.map((a) => `- ${a}`),
-    "",
-    `## ${pick({ en: "Turn log", ko: "\uD134 \uB85C\uADF8" }, lang)}`,
-    ""
-  ].join("\n");
-  writeWave(root, id, meta, body);
-  appendEvent(root, "wave-created", { id, milestone: opts.milestone, design_refs: opts.design_refs });
-  return meta;
-}
-function activateWave(root, id) {
-  const state = readState(root);
-  if (state.activeWave && state.activeWave !== id) {
-    throw new Error(tr(root, { en: `A wave is already active: ${state.activeWave}. Complete it first (\`harness wave complete\`).`, ko: `\uC774\uBBF8 \uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC788\uB2E4: ${state.activeWave}. \uBA3C\uC800 complete \uD558\uB77C.` }));
-  }
-  let meta, body;
-  try {
-    ({ meta, body } = readWave(root, id));
-  } catch (e) {
-    if (e.code !== "ENOENT") throw e;
-    throw new Error(
-      tr(root, {
-        en: `No instruction sheet for wave ${id} (${wavePath(root, id)}) \u2014 check the id, or list them with \`harness wave list\``,
-        ko: `\uC6E8\uC774\uBE0C ${id} \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 id \uB97C \uD655\uC778\uD558\uAC70\uB098 \`harness wave list\` \uB85C \uBAA9\uB85D\uC744 \uBCF4\uB77C`
-      })
-    );
-  }
-  if (meta.status === "done") throw new Error(tr(root, { en: `${id} is already done`, ko: `${id} \uB294 \uC774\uBBF8 done \uC774\uB2E4` }));
-  if (meta.status === "stale") {
-    throw new Error(tr(root, {
-      en: `${id} is STALE \u2014 the design it referenced (${meta.design_refs.join(", ")}) has moved on since. Re-activating it would silently build on an outdated decision. Open a new wave against the current design instead: \`harness wave create --goal "<goal>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`,
-      ko: `${id} \uB294 STALE \uC774\uB2E4 \u2014 \uCC38\uC870\uD55C \uC124\uACC4(${meta.design_refs.join(", ")})\uAC00 \uADF8 \uB4A4\uB85C \uBC14\uB00C\uC5C8\uB2E4. \uB418\uC0B4\uB9AC\uBA74 \uB0A1\uC740 \uACB0\uC815 \uC704\uC5D0 \uC870\uC6A9\uD788 \uC9D3\uAC8C \uB41C\uB2E4. \uD604\uC7AC \uC124\uACC4\uB85C \uC0C8 \uC6E8\uC774\uBE0C\uB97C \uC5F4\uC5B4\uB77C: \`harness wave create --goal "<\uBAA9\uD45C>" --refs ${meta.design_refs.join(",") || "<ids>"}\`.`
-    }));
-  }
-  meta.status = "active";
-  writeWave(root, id, meta, body);
-  appendEvent(root, "wave-activated", { id });
-  writeState(root, { ...state, activeWave: id });
-}
-function readActiveWave(root, id) {
-  try {
-    return readWave(root, id);
-  } catch (e) {
-    if (e.code !== "ENOENT") throw e;
-    throw new Error(
-      tr(root, {
-        en: `The instruction sheet for the active wave ${id} is missing (${wavePath(root, id)}) \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\`.`,
-        ko: `\uD65C\uC131 \uC6E8\uC774\uBE0C ${id} \uC758 \uC9C0\uC2DC\uC11C\uAC00 \uC5C6\uB2E4 (${wavePath(root, id)}) \u2014 git \uBE0C\uB79C\uCE58 \uC804\uD658 \uB4F1\uC73C\uB85C \uC77C\uC2DC \uBD80\uC7AC\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uBCF5\uC6D0\uC774 \uC6B0\uC120\uC774\uB2E4. \uC815\uB9D0 \uC720\uC2E4\uC774\uBA74 \`harness doctor --repair\` \uB85C activeWave \uB97C \uC815\uC0B0(null)\uD558\uB77C.`
-      })
-    );
-  }
-}
-function logTurn(root, text) {
-  const state = readState(root);
-  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
-  const id = state.activeWave;
-  const { meta, body } = readActiveWave(root, id);
-  const entry = `- [${(/* @__PURE__ */ new Date()).toISOString()}] ${oneLine(text)}`;
-  writeWave(root, id, meta, body.trimEnd() + "\n" + entry + "\n");
-  appendEvent(root, "wave-turn-logged", { id });
-  noteTurnLogged(root);
-}
-function completeWave(root) {
-  const state = readState(root);
-  if (!state.activeWave) throw new Error(tr(root, { en: "No active wave \u2014 activate one with `harness wave activate <wave-id>`", ko: "\uD65C\uC131 \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4 \u2014 `harness wave activate <wave-id>` \uB85C \uD65C\uC131\uD654\uD558\uB77C" }));
-  const id = state.activeWave;
-  const { meta, body } = readActiveWave(root, id);
-  if (meta.design_refs.some((r) => r.startsWith("UX-"))) {
-    const dir = evidenceDir(root, id);
-    const report = validateEvidence(root, id);
-    if (report.usable.length === 0) {
-      const uxRefs = meta.design_refs.filter((r) => r.startsWith("UX-")).join(", ");
-      const why = report.entries > 0 ? tr(root, {
-        en: `the files there do not count as evidence:
-  - ${report.problems.join("\n  - ")}`,
-        ko: `\uAC70\uAE30 \uC788\uB294 \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4:
-  - ${report.problems.join("\n  - ")}`
-      }) : tr(root, {
-        // [USE-248] 게이트를 여는 형태를 **전부** 적는다. 스크린샷만 광고하면
-        // html 목업으로 여는 정당한 경로를 사람이 모른 채 헤맨다 — 첫 거부문이
-        // 절반만 말하면 나머지 절반은 존재하지 않는 것과 같다.
-        en: `there is no visual evidence. Put an image (real dimensions, not a 1x1 placeholder) or an exported HTML page in ${dir}.`,
-        ko: `\uC2DC\uAC01 \uC99D\uC801\uC774 \uC5C6\uB2E4. ${dir} \uC5D0 \uC774\uBBF8\uC9C0(1x1 \uC790\uB9AC\uD45C\uC2DC\uC790 \uB9D0\uACE0 \uC2E4\uC81C \uCE58\uC218) \uB610\uB294 \uB0B4\uBCF4\uB0B8 HTML \uD398\uC774\uC9C0\uB97C \uB123\uC5B4\uB77C.`
-      });
-      throw new Error(
-        tr(root, {
-          en: `A wave referencing UX nodes (${uxRefs}) cannot be completed \u2014 ${why}`,
-          ko: `UX \uB178\uB4DC(${uxRefs})\uB97C \uCC38\uC870\uD558\uB294 \uC6E8\uC774\uBE0C\uB294 \uC644\uB8CC\uD560 \uC218 \uC5C6\uB2E4 \u2014 ${why}`
-        })
-      );
-    }
-  }
-  meta.status = "done";
-  writeWave(root, id, meta, body);
-  appendEvent(root, "wave-completed", { id });
-  writeState(root, { ...state, activeWave: null });
-}
-function markStale(root, id) {
-  const { meta, body } = readWave(root, id);
-  meta.status = "stale";
-  writeWave(root, id, meta, body);
-  appendEvent(root, "wave-stale", { id });
-  const state = readState(root);
-  if (state.activeWave === id) writeState(root, { ...state, activeWave: null });
-}
-
 // core/src/report.ts
-var fs15 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
+var fs14 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
 var trFor2 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -9093,10 +8746,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs14.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs15.readdirSync(wavesDir(root));
+    files = fs14.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -9112,14 +8765,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs15.readdirSync(dir);
+    files = fs14.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs15.statSync(path12.join(dir, f2));
+      const st = fs14.statSync(path11.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -9514,19 +9167,22 @@ function buildHub(root) {
 }
 
 // core/src/ship.ts
-var fs16 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
-var YAML6 = __toESM(require_dist());
 var trFor3 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path13.join(harnessDir(root), "ship");
-var defectsPath = (root) => path13.join(shipDir(root), "defects.yaml");
+var shipDir = (root) => path12.join(harnessDir(root), "ship");
+var defectsPath = (root) => path12.join(shipDir(root), "defects.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
+var SHIP_BLOCKING_SEVERITIES = ["blocker", "high"];
+function shipBlockingDefects(root) {
+  return listDefects(root).filter(
+    (d) => SHIP_BLOCKING_SEVERITIES.includes(d.severity) && (d.status === "open" || d.status === "fixed")
+  );
+}
 function readRecords(root, file, key, to) {
-  if (!fs16.existsSync(file)) return [];
+  if (!fs15.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML6.parse(fs16.readFileSync(file, "utf8"));
+    doc = YAML6.parse(fs15.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -9578,16 +9234,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs16.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs16.readdirSync(wavesDir(root));
+    files = fs15.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs16.readFileSync(path13.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs15.readFileSync(path12.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -9609,16 +9265,18 @@ function shipVerdict(root) {
     }));
   } else {
     for (const d of defects.value) {
-      if (d.severity !== "blocker") continue;
+      if (!SHIP_BLOCKING_SEVERITIES.includes(d.severity)) continue;
+      const sevEn = d.severity === "blocker" ? "blocker" : "high defect";
+      const sevKo = d.severity === "blocker" ? "\uCC28\uB2E8 \uACB0\uD568" : "\uB192\uC74C \uACB0\uD568";
       if (d.status === "open") {
         reasons.push(t({
-          en: `open blocker: ${d.id} ${d.title} (evidence ${d.evidence}) \u2014 fix it, re-measure, then close it with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `\uC5F4\uB9B0 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
+          en: `open ${sevEn}: ${d.id} ${d.title} (evidence ${d.evidence}) \u2014 fix it, re-measure, then close it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC5F4\uB9B0 ${sevKo}: ${d.id} ${d.title} (\uADFC\uAC70 ${d.evidence}) \u2014 \uC218\uC815 \uD6C4 \uC7AC\uCE21\uC815\uD558\uACE0 \`harness ship defect update ${d.id} --status verified\` \uB85C \uB2EB\uC544\uB77C`
         }));
       } else if (d.status === "fixed") {
         reasons.push(t({
-          en: `unverified blocker: ${d.id} ${d.title} (fixed) \u2014 "fixed" is a claim, re-measurement is the observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
-          ko: `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 \uCC28\uB2E8 \uACB0\uD568: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
+          en: `unverified ${sevEn}: ${d.id} ${d.title} (fixed) \u2014 "fixed" is a claim, re-measurement is the observation. Run it again, then raise it with \`harness ship defect update ${d.id} --status verified\``,
+          ko: `\uC7AC\uCE21\uC815\uB418\uC9C0 \uC54A\uC740 ${sevKo}: ${d.id} ${d.title} (fixed) \u2014 \u300C\uACE0\uCCE4\uB2E4\u300D\uB294 \uC8FC\uC7A5\uC774\uACE0 \uC7AC\uCE21\uC815\uC774 \uAD00\uCE21\uC774\uB2E4. \uB2E4\uC2DC \uB3CC\uB824 \uD655\uC778\uD55C \uB4A4 \`harness ship defect update ${d.id} --status verified\` \uB85C \uC62C\uB824\uB77C`
         }));
       }
     }
@@ -9664,6 +9322,371 @@ function shipVerdict(root) {
   }
   reasons.push(...waves.unreadable);
   return { ok: reasons.length === 0, reasons };
+}
+
+// core/src/gate.ts
+var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
+function canonicalRel(root, rel) {
+  try {
+    const real = fs16.realpathSync(path13.resolve(root, rel));
+    const r = path13.relative(fs16.realpathSync(root), real);
+    return r && !r.startsWith(`..${path13.sep}`) && r !== ".." && !path13.isAbsolute(r) ? r : rel;
+  } catch {
+    return rel;
+  }
+}
+function normalizePaths(root, relPaths) {
+  const canon = relPaths.map((p) => p.trim()).filter(Boolean).map((p) => canonicalRel(root, p));
+  return [...new Set(canon)].sort();
+}
+var MIN_SUBSTANCE_CHARS = 80;
+var MIN_DISTINCT_CHARS = 12;
+var MIN_WORDS = 5;
+function distinctCharCount(text) {
+  return new Set(text.replace(NON_ALNUM_RE, "")).size;
+}
+function wordCount(text) {
+  return text.split(/\s+/u).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|placeholder|lorem|ipsum|dolor|sit|amet|stub|draft|tk)\b/gi;
+var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
+function readArtifact(root, rel) {
+  try {
+    return fs16.readFileSync(path13.resolve(root, rel));
+  } catch {
+    throw new Error(
+      tr(root, {
+        en: `Cannot read the artifact under review: ${rel} \u2014 check the path, or write the document first`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${rel} \u2014 \uACBD\uB85C\uB97C \uD655\uC778\uD558\uAC70\uB098 \uBB38\uC11C\uB97C \uBA3C\uC800 \uB9CC\uB4E4\uC5B4\uB77C`
+      })
+    );
+  }
+}
+function readArtifacts(root, relPaths) {
+  return relPaths.map((rel) => {
+    const text = readArtifact(root, rel).toString("utf8");
+    return {
+      rel,
+      text,
+      substance: text.replace(/\s+/gu, "").length,
+      binary: text.includes("\uFFFD") || text.includes("\0")
+    };
+  });
+}
+function assertSubstantive(root, arts) {
+  const blank = arts.filter((a) => a.substance === 0).map((a) => a.rel);
+  if (blank.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Empty artifact under review: ${blank.join(", ")} \u2014 a gate approves content, not filenames. Write the document, or drop the path from --paths`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uBE44\uC5B4 \uC788\uB2E4: ${blank.join(", ")} \u2014 \uAC8C\uC774\uD2B8\uB294 \uD30C\uC77C \uC774\uB984\uC774 \uC544\uB2C8\uB77C \uB0B4\uC6A9\uC744 \uC2B9\uC778\uD55C\uB2E4. \uBB38\uC11C\uB97C \uCC44\uC6B0\uAC70\uB098 --paths \uC5D0\uC11C \uADF8 \uACBD\uB85C\uB97C \uBE7C\uB77C`
+      })
+    );
+  }
+  const total = arts.reduce((n, a) => n + a.substance, 0);
+  if (total < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review carry ${total} non-whitespace characters, below the ${MIN_SUBSTANCE_CHARS} minimum (paths: ${arts.map((a) => a.rel).join(", ")}). A gate is a review, not a ceremony \u2014 submit the document that was actually written`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC758 \uACF5\uBC31 \uC81C\uC678 \uBB38\uC790\uAC00 ${total}\uC790\uB85C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4 (\uB300\uC0C1: ${arts.map((a) => a.rel).join(", ")}). \uAC8C\uC774\uD2B8\uB294 \uC758\uC2DD\uC774 \uC544\uB2C8\uB77C \uC2EC\uC0AC\uB2E4 \u2014 \uC2E4\uC81C\uB85C \uC791\uC131\uB41C \uBB38\uC11C\uB97C \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+  const textual = arts.filter((a) => !a.binary);
+  const residual = textual.map((a) => a.text).join("\n").replace(PLACEHOLDER_WORDS, "").replace(PLACEHOLDER_WORDS_KO, "").replace(NON_ALNUM_RE, "");
+  if (textual.length > 0 && residual.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `The artifacts under review are placeholders only (TODO/TBD and the like): ${textual.map((a) => a.rel).join(", ")} \u2014 a placeholder is not grounds for approval`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC790\uB9AC\uD45C\uC2DC\uC790\uBFD0\uC774\uB2E4(TODO\xB7TBD\xB7\uBBF8\uC9C0\uC815 \uB530\uC704): ${textual.map((a) => a.rel).join(", ")} \u2014 \uC790\uB9AC\uD45C\uC2DC\uC790\uB294 \uC2B9\uC778 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uBABB\uD55C\uB2E4`
+      })
+    );
+  }
+  if (textual.length > 0) {
+    const joined = textual.map((a) => a.text).join("\n");
+    const chars = distinctCharCount(joined);
+    const words = wordCount(joined);
+    if (chars < MIN_DISTINCT_CHARS && words < MIN_WORDS) {
+      throw new Error(
+        tr(root, {
+          en: `The artifacts under review are not prose \u2014 ${chars} distinct letters/digits across ${words} word(s) (${textual.map((a) => a.rel).join(", ")}). Padding a file to the character minimum is not a document; a gate reviews what the phase actually produced`,
+          ko: `\uC2EC\uC0AC \uB300\uC0C1\uC774 \uC0B0\uBB38\uC774 \uC544\uB2C8\uB2E4 \u2014 \uACE0\uC720 \uAE00\uC790\xB7\uC22B\uC790 ${chars}\uC885, \uB0B1\uB9D0 ${words}\uAC1C (${textual.map((a) => a.rel).join(", ")}). \uCD5C\uC18C \uAE00\uC790\uC218\uB97C \uCC44\uC6B0\uB824\uACE0 \uB298\uB9B0 \uD30C\uC77C\uC740 \uBB38\uC11C\uAC00 \uC544\uB2C8\uB2E4 \u2014 \uAC8C\uC774\uD2B8\uB294 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4`
+        })
+      );
+    }
+  }
+}
+function contentDigest(root, relPaths) {
+  const each = relPaths.map((rel) => crypto4.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
+  const h = crypto4.createHash("sha256");
+  for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
+  return h.digest("hex");
+}
+function latestSubmissions(root) {
+  const out = /* @__PURE__ */ new Map();
+  const events = readEvents(root);
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev.type !== "gate-submitted") continue;
+    const phase = ev.data.phase;
+    if (!PHASES.includes(phase) || out.has(phase)) continue;
+    const raw = ev.data.paths;
+    const paths = Array.isArray(raw) ? raw.filter((p) => typeof p === "string") : [];
+    out.set(phase, typeof ev.data.contentHash === "string" ? { paths, contentHash: ev.data.contentHash } : { paths });
+  }
+  return out;
+}
+function assertDistinct(root, phase, hash, contentHash, gates) {
+  const prior = latestSubmissions(root);
+  const clash = PHASES.filter((p) => {
+    if (p === phase) return false;
+    const g = gates[p];
+    if (!g || g.status !== "submitted" && g.status !== "approved") return false;
+    const prev = prior.get(p);
+    return prev?.contentHash ? prev.contentHash === contentHash : g.artifactHash === hash;
+  });
+  if (clash.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `The same artifacts already opened gate ${clash.join(", ")} \u2014 byte-identical content cannot stand in for ${phase} as well. Each gate reviews what that phase actually produced; submit the revised or new artifact`,
+        ko: `\uAC19\uC740 \uC0B0\uCD9C\uBB3C\uC774 \uC774\uBBF8 \uAC8C\uC774\uD2B8 ${clash.join(", ")} \uB97C \uC5F4\uC5C8\uB2E4 \u2014 \uBC14\uC774\uD2B8\uAC00 \uAC19\uC740 \uB0B4\uC6A9\uC774 ${phase} \uAE4C\uC9C0 \uB300\uC2E0\uD560 \uC218\uB294 \uC5C6\uB2E4. \uAC8C\uC774\uD2B8\uB9C8\uB2E4 \uADF8 \uD398\uC774\uC988\uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uC2EC\uC0AC\uD55C\uB2E4 \u2014 \uAC1C\uC815\uBCF8\uC774\uB098 \uC0C8 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uB77C`
+      })
+    );
+  }
+}
+var SHINGLE = 5;
+function shingles(text) {
+  const norm = text.toLowerCase().replace(/\s+/gu, " ").trim();
+  const out = /* @__PURE__ */ new Set();
+  for (let i = 0; i + SHINGLE <= norm.length; i++) out.add(norm.slice(i, i + SHINGLE));
+  return out;
+}
+function textualJoin(root, rels) {
+  return readArtifacts(root, rels).filter((a) => !a.binary).map((a) => a.text).join("\n");
+}
+function assertNewMaterial(root, phase, paths, gates) {
+  let mine;
+  try {
+    mine = shingles(textualJoin(root, paths));
+  } catch {
+    return;
+  }
+  if (mine.size === 0) return;
+  const prior = latestSubmissions(root);
+  const seen = /* @__PURE__ */ new Set();
+  const seenGates = [];
+  for (const p of PHASES) {
+    if (p === phase) continue;
+    const g = gates[p];
+    if (!g || g.status !== "submitted" && g.status !== "approved") continue;
+    const prev = prior.get(p);
+    if (!prev || prev.paths.length === 0) continue;
+    try {
+      if (computeArtifactHash(root, prev.paths) !== g.artifactHash) continue;
+      for (const sh of shingles(textualJoin(root, prev.paths))) seen.add(sh);
+    } catch {
+      continue;
+    }
+    seenGates.push(p);
+  }
+  if (seenGates.length === 0) return;
+  let fresh = 0;
+  for (const sh of mine) if (!seen.has(sh)) fresh++;
+  if (fresh < MIN_SUBSTANCE_CHARS) {
+    throw new Error(
+      tr(root, {
+        en: `This submission carries only ${fresh} characters of text that gate ${seenGates.join(", ")} has not already reviewed \u2014 below the ${MIN_SUBSTANCE_CHARS} minimum. Bringing earlier artifacts along is fine, but ${phase} has to add what ${phase} actually produced; editing a few characters does not make a reviewed document a new one`,
+        ko: `\uC774 \uC81C\uCD9C\uC5D0\uC11C \uAC8C\uC774\uD2B8 ${seenGates.join(", ")} \uAC00 \uC774\uBBF8 \uC2EC\uC0AC\uD558\uC9C0 \uC54A\uC740 \uD14D\uC2A4\uD2B8\uB294 ${fresh}\uC790\uBFD0\uC774\uB77C \uCD5C\uC18C\uCE58 ${MIN_SUBSTANCE_CHARS}\uC790\uC5D0 \uBABB \uBBF8\uCE5C\uB2E4. \uC55E \uC0B0\uCD9C\uBB3C\uC744 \uB3D9\uBC18\uD558\uB294 \uAC83\uC740 \uC815\uC0C1\uC774\uB2E4 \u2014 \uB2E4\uB9CC ${phase} \uB294 ${phase} \uAC00 \uC2E4\uC81C\uB85C \uB9CC\uB4E0 \uAC83\uC744 \uB354\uD574\uC57C \uD55C\uB2E4. \uBA87 \uAE00\uC790\uB97C \uACE0\uCE5C\uB2E4\uACE0 \uC774\uBBF8 \uC2EC\uC0AC\uBC1B\uC740 \uBB38\uC11C\uAC00 \uC0C8 \uBB38\uC11C\uAC00 \uB418\uC9C0\uB294 \uC54A\uB294\uB2E4`
+      })
+    );
+  }
+}
+var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
+function assertPhaseFit(root, phase, paths) {
+  const want = new Set(paths.map(normRel));
+  const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
+  if (known.length === 0) return;
+  if (new Set(known.map((d) => normRel(d.path))).size < want.size) return;
+  if (known.some((d) => d.phase === phase)) return;
+  const where = [...new Set(known.map((d) => `${d.id}(${d.phase})`))].join(", ");
+  throw new Error(
+    tr(root, {
+      en: `None of the artifacts under review is registered to ${phase} \u2014 the registry has them as ${where}. A document belonging to another phase cannot open this gate. Register the ${phase} artifact with \`harness doc upsert --id <DOC-x> --path <p> --phase ${phase}\``,
+      ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC911 ${phase} \uB85C \uB4F1\uB85D\uB41C \uC0B0\uCD9C\uBB3C\uC774 \uD558\uB098\uB3C4 \uC5C6\uB2E4 \u2014 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC5D0\uB294 ${where} \uB85C \uC788\uB2E4. \uB2E4\uB978 \uD398\uC774\uC988\uC758 \uBB38\uC11C\uB85C \uC774 \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218\uB294 \uC5C6\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uACBD\uB85C> --phase ${phase}\` \uB85C ${phase} \uC0B0\uCD9C\uBB3C\uC744 \uB4F1\uB85D\uD558\uB77C`
+    })
+  );
+}
+function assertInsideRoot(root, paths) {
+  const outside = paths.filter((p) => !isInsideRoot(root, p));
+  if (outside.length > 0) {
+    throw new Error(
+      tr(root, {
+        en: `Artifacts under review must live inside the project \u2014 outside paths: ${outside.join(", ")}. A gate exists to guarantee \xABwhat was reviewed is what gets approved\xBB. You cannot stamp approval on a file the reviewer cannot see in the repository.`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1\uC740 \uD504\uB85C\uC81D\uD2B8 \uC548\uC5D0 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uB8E8\uD2B8 \uBC16 \uACBD\uB85C: ${outside.join(", ")}. \uAC8C\uC774\uD2B8\uB294 \xAB\uC2EC\uC0AC\uD55C \uAC83\uACFC \uC2B9\uC778\uD560 \uAC83\uC774 \uAC19\uB2E4\xBB\uB97C \uBCF4\uC7A5\uD558\uB294 \uC7A5\uCE58\uB2E4. \uB9AC\uBDF0\uC5B4\uAC00 \uC800\uC7A5\uC18C\uC5D0\uC11C \uBCFC \uC218 \uC5C6\uB294 \uD30C\uC77C\uC5D0\uB294 \uC2B9\uC778 \uB3C4\uC7A5\uC744 \uCC0D\uC744 \uC218 \uC5C6\uB2E4.`
+      })
+    );
+  }
+}
+function computeArtifactHash(root, relPaths) {
+  const h = crypto4.createHash("sha256");
+  for (const rel of normalizePaths(root, relPaths)) {
+    updateHashEntry(h, rel, readArtifact(root, rel));
+  }
+  return h.digest("hex");
+}
+function recordedPaths(root, phase) {
+  const s = latestSubmissions(root).get(phase);
+  return s && s.paths.length > 0 ? s.paths : null;
+}
+function submissionSignals(root, phase) {
+  const rels = recordedPaths(root, phase);
+  if (!rels) return null;
+  const paths = rels.map((rel) => {
+    let text;
+    try {
+      text = fs16.readFileSync(path13.resolve(root, rel)).toString("utf8");
+    } catch {
+      return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
+    }
+    return {
+      rel,
+      missing: false,
+      binary: text.includes("\uFFFD") || text.includes("\0"),
+      substance: text.replace(/\s+/gu, "").length,
+      distinctChars: distinctCharCount(text),
+      words: wordCount(text)
+    };
+  });
+  const textual = paths.filter((p) => !p.binary && !p.missing);
+  const substance = textual.reduce((n, p) => n + p.substance, 0);
+  const distinctChars = Math.max(0, ...textual.map((p) => p.distinctChars), 0);
+  const words = textual.reduce((n, p) => n + p.words, 0);
+  return {
+    paths,
+    substance,
+    distinctChars,
+    words,
+    // 2배·30 은 이 리포 실산출물(213자·고유 글자 40+)이 걸리지 않는 자리다 —
+    // 정당한 문서가 매번 깃발을 달면 그 깃발은 곧 무시된다.
+    nearFloor: textual.length > 0 && (substance < MIN_SUBSTANCE_CHARS * 2 || distinctChars < 30)
+  };
+}
+function submitGate(root, phase, opts) {
+  const paths = normalizePaths(root, opts.paths);
+  if (paths.length === 0) {
+    throw new Error(
+      tr(root, {
+        en: `No artifacts to review \u2014 name the documents with \`harness gate submit ${phase} --paths <a,b>\`. A gate approves artifacts; it is not a declaration that work is done`,
+        ko: `\uC2EC\uC0AC \uB300\uC0C1 \uC0B0\uCD9C\uBB3C\uC774 \uC5C6\uB2E4 \u2014 \`harness gate submit ${phase} --paths <\uACBD\uB85C,...>\` \uB85C \uC2B9\uC778\uBC1B\uC744 \uBB38\uC11C\uB97C \uC9C0\uC815\uD558\uB77C. \uAC8C\uC774\uD2B8\uB294 \uC0B0\uCD9C\uBB3C \uC2B9\uC778\uC774\uC9C0 \uC791\uC5C5 \uC644\uB8CC \uC120\uC5B8\uC774 \uC544\uB2C8\uB2E4`
+      })
+    );
+  }
+  if (!isEvidenceGrade(opts.evidence)) {
+    throw new Error(
+      tr(root, {
+        en: `Invalid evidence grade: ${String(opts.evidence)} (one of claimed, code, measured)`,
+        ko: `\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uADFC\uAC70 \uB4F1\uAE09: ${String(opts.evidence)} (claimed, code, measured \uC911 \uD558\uB098)`
+      })
+    );
+  }
+  assertInsideRoot(root, paths);
+  assertSubstantive(root, readArtifacts(root, paths));
+  assertPhaseFit(root, phase, paths);
+  assertNoShipBlockers(root, phase);
+  const artifactHash = computeArtifactHash(root, paths);
+  const contentHash = contentDigest(root, paths);
+  const state = readState(root);
+  assertDistinct(root, phase, artifactHash, contentHash, state.gates);
+  assertNewMaterial(root, phase, paths, state.gates);
+  const prevStatus = state.gates[phase]?.status ?? "pending";
+  const ev = appendEvent(root, "gate-submitted", {
+    phase,
+    artifactHash,
+    contentHash,
+    evidence: opts.evidence,
+    paths,
+    prevStatus
+  });
+  const record = {
+    status: "submitted",
+    artifactHash,
+    evidence: opts.evidence,
+    submittedAt: ev.ts
+  };
+  writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
+  return record;
+}
+function assertNoShipBlockers(root, phase) {
+  if (phase !== "P10") return;
+  const blocking = shipBlockingDefects(root);
+  if (blocking.length === 0) return;
+  const list = blocking.map((d) => `${d.id} (${d.severity}, ${d.status})`).join(", ");
+  throw new Error(tr(root, {
+    en: `Cannot submit P10 while ${blocking.length} blocker or high defect(s) are open or only fixed: ${list} \u2014 fix, re-measure with a fresh auditor, then \`harness ship defect update <id> --status verified\`; or record the owner's decision with \`--status deferred --defer-reason "<why>"\``,
+    ko: `\uCC28\uB2E8\xB7\uB192\uC74C \uACB0\uD568 ${blocking.length}\uAC74\uC774 open \uC774\uAC70\uB098 fixed \uC5D0 \uBA38\uBB38 \uCC44\uB85C P10 \uC744 \uC81C\uCD9C\uD560 \uC218 \uC5C6\uB2E4: ${list} \u2014 \uC218\uC815 \u2192 \uC0C8 \uAC10\uC0AC\uC790\uB85C \uC7AC\uCE21\uC815 \u2192 \`harness ship defect update <id> --status verified\`, \uB610\uB294 \uC624\uB108 \uACB0\uC815\uC744 \`--status deferred --defer-reason "<\uC0AC\uC720>"\` \uB85C \uB0A8\uACA8\uB77C`
+  }));
+}
+function measuredOnlyViolation(root, phase, evidence) {
+  if (!SHIP_PHASES.includes(phase) || evidence === "measured") return null;
+  return tr(root, {
+    en: `Ship-track gate ${phase} only passes on measured evidence (currently: ${evidence ?? "none"}) \u2014 resubmit with real-run measurements attached (Iron Rule, spec \xA73-4)`,
+    ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
+  });
+}
+function feedbackPath(root, phase) {
+  return path13.join(packetsDir(root), `${phase}.feedback.md`);
+}
+function readGateFeedback(root, phase) {
+  try {
+    return fs16.readFileSync(feedbackPath(root, phase), "utf8");
+  } catch {
+    return "";
+  }
+}
+function verifyGate(root, phase) {
+  const t = (m) => tr(root, m);
+  const g = readState(root).gates[phase];
+  if (!g || g.status === "pending") {
+    return { ok: false, reason: t({
+      en: `there is no record for gate ${phase} \u2014 it has not been submitted`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 \uC81C\uCD9C \uC804\uC774\uB2E4`
+    }) };
+  }
+  if (g.status === "invalidated") {
+    return { ok: false, reason: g.invalidatedReason ?? t({
+      en: `gate ${phase} is invalidated`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uAC00 \uBB34\uD6A8\uD654\uB41C \uC0C1\uD0DC\uB2E4`
+    }) };
+  }
+  if (!g.artifactHash) {
+    return { ok: false, reason: t({
+      en: `gate ${phase} has no pinned artifact hash`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC5D0 \uACE0\uC815\uB41C \uC0B0\uCD9C\uBB3C \uD574\uC2DC\uAC00 \uC5C6\uB2E4`
+    }) };
+  }
+  const paths = recordedPaths(root, phase);
+  if (!paths) {
+    return { ok: false, reason: t({
+      en: `the submission history for gate ${phase} is not in the journal \u2014 resubmit`,
+      ko: `\uAC8C\uC774\uD2B8 ${phase} \uC758 \uC81C\uCD9C \uC774\uB825\uC774 \uC800\uB110\uC5D0 \uC5C6\uB2E4 \u2014 \uC7AC\uC81C\uCD9C \uD544\uC694`
+    }) };
+  }
+  let hash;
+  try {
+    hash = computeArtifactHash(root, paths);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  if (hash !== g.artifactHash) {
+    return {
+      ok: false,
+      reason: t({
+        en: `artifact hash mismatch \u2014 pinned ${g.artifactHash.slice(0, 12)} \u2260 current ${hash.slice(0, 12)} (paths: ${paths.join(", ")})`,
+        ko: `\uC0B0\uCD9C\uBB3C \uD574\uC2DC \uBD88\uC77C\uCE58 \u2014 \uACE0\uC815 ${g.artifactHash.slice(0, 12)} \u2260 \uD604\uC7AC ${hash.slice(0, 12)} (\uB300\uC0C1: ${paths.join(", ")})`
+      })
+    };
+  }
+  return { ok: true };
 }
 
 // core/src/doctor.ts

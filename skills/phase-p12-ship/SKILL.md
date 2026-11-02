@@ -1,6 +1,6 @@
 ---
 name: phase-p12-ship
-description: Use when driving P12 (SHIP) of the harness ship track — re-rendering the final go/no-go with harness ship verdict, producing the release notes and the final checklist (with the RTM attached), and obtaining the last approval. Triggers - "let's ship", "go/no-go", "release notes", harness phase set P12, submitting the P12 gate, the ship checklist, the final verdict.
+description: Use when driving P12 (SHIP) of the harness ship track — re-rendering the final go/no-go with harness ship verdict, producing the release notes and the final checklist (with the RTM attached), and obtaining the last approval. The verdict takes the two adversarial reviews from P10 as mandatory inputs and re-checks screens changed since then. Triggers - "let's ship", "go/no-go", "release notes", harness phase set P12, submitting the P12 gate, the ship checklist, the final verdict.
 ---
 
 # P12 SHIP — the final go/no-go
@@ -21,11 +21,25 @@ names **what to close and how**.
 
 | Blocking condition | How to close it |
 |---|---|
-| An open `blocker` defect | Fix → **re-measure** → `harness ship defect update <id> --status verified` |
-| A `blocker` stuck at `fixed` | "Fixed" is a claim. Run it again, observe it, then promote to `verified` |
+| An open `blocker` or `high` defect | Fix → **re-measure** → `harness ship defect update <id> --status verified` |
+| A `blocker` or `high` stuck at `fixed` | "Fixed" is a claim. Run it again, observe it, then promote to `verified` |
 | The P10 or P11 gate is not approved | Go back to that phase, submit the artifacts, and get the user's approval |
 | A ship-track gate whose evidence is not `measured` | Attach real-run and measurement evidence and resubmit |
 | A UX-referencing wave with no real-run capture | `harness evidence check <wave>` → leave headless 2x screenshots |
+
+**Two adversarial inputs, checked before the verdict.** The machine verdict above blocks open or
+unverified blocker and high defects, but it cannot see a review that was never run. Before running
+`harness ship verdict`, confirm:
+
+- the implementation conformance audit (`.harness/audit/conformance-rN.md`) of the shipping commit ends
+  with `HIGH 0` — if code changed after P10 (ledger fixes, P11 changes), dispatch a fresh round on the change;
+- the changed-screen UX adversarial review (nine axes, persona task scenarios, design system visual
+  comparison, headless 2x in an isolated stack) covers every screen changed since it ran — re-run it on
+  screens changed after P10;
+- no `UXA-*` or `CONF-*` defect of severity `blocker` or `high` is `open` or `fixed`.
+
+Any of these unmet is a NO-GO, reported the same way as a machine reason: what is missing and how to
+close it. Screen changes those reviews ask for go to the user first, as in P10.
 
 The verdict is decided from what is on disk alone — the same state gives the same verdict. **There is
 no path around a NO-GO.** To pass the verdict, change the state; do not change the verdict.
@@ -49,6 +63,7 @@ means that this release has requirements designed but not implemented.
 | What shipped | Per requirement (F-x) in this deployment. Must match the RTM's deployment column |
 | Known limitations | Every `deferred` defect plus its reason. Hide them and the next person rediscovers the same thing |
 | Not examined | The axes left out of the verdict, and why. Leaving one out is itself information |
+| Adversarial reviews | `HIGH N` of the last conformance round; UX adversarial counts by severity and axis, with the link to the findings artifact (table and captures) |
 | Deployment coordinates | Version · commit SHA · environment (exactly as `harness ship deploy` recorded them) |
 
 ## Procedure
