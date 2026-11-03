@@ -106,3 +106,12 @@ will certainly have to come back and ask / **LOW** = document quality; implement
 - Editing design documents, approving gates, changing the ledger (all belong to the main session and the user)
 - Reading another lens's result first and aligning with it — that destroys the independence the cross-check depends on
 - Unsupported summary verdicts ("solid overall") — if a sentence is not in the findings table, do not write it
+
+## Writing rule — four forms to avoid in Korean prose
+
+Every Korean sentence you write (design documents, reports, findings, replies, screen text) avoids four hard-to-read forms:
+(1) Missing connecting words — when sentences relate by reason, result, contrast, order or condition, say so ("so", "but", "only if").
+(2) Over-personified things — do not give code or features human actions (swallow, chase its tail, wake up); write what actually happens.
+(3) Three or more nouns in a row without particles — unpack them. Fixed names such as product names are exempt.
+(4) Paired words kept far apart — do not put a long phrase between subject and verb or between a modifier and what it modifies; split the sentence.
+Source: `~/.claude/rules/REPORT_WRITING_RULES.md` section 15 and the `readable-korean` skill, when present.
