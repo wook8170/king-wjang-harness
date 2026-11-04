@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- king-wjang-harness: a staircase of phases that stops at one gate. Two colors, no text. -->
+  <rect width="512" height="512" rx="112" fill="#1E2A32"/>
+  <g fill="#4FC3D9" stroke="#4FC3D9" stroke-width="24" stroke-linejoin="round">
+    <path d="M 100 404 V 332 H 172 V 260 H 244 V 188 H 292 V 404 Z"/>
+    <rect x="372" y="108" width="40" height="296" rx="20"/>
+  </g>
+</svg>
