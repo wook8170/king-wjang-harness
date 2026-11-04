@@ -8,6 +8,25 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-11-05
+
+### Added — plugin icon
+
+`.claude-plugin/icon.svg` and `.claude-plugin/icon.png` (1024 px, rendered from the SVG with
+`rsvg-convert`). The icon follows the same family as the wb icon: a dark slate rounded square with
+one accent color and no text. It shows a staircase of phases that stops at one gate bar.
+`claude plugin validate --strict` no longer reports `ICON_MISSING`.
+
+### Changed — the two design specs read more plainly in Korean
+
+`docs/superpowers/specs/2026-08-20-king-harness-design.md` and
+`docs/superpowers/specs/2026-08-26-multiagent-p8-design.md` were rewritten sentence by sentence to
+drop the four hard-to-read forms (missing connecting words, over-personified things, three or more
+nouns in a row, long gaps between paired words). Meaning, figures and identifiers are unchanged.
+Every line was edited in place, so line numbers still match; the P8 plan cites
+`sed -n '70,80p'` of the P8 spec and still points at §4. Documentation only; no command or hook
+behavior changes.
+
 ## [0.1.5] — 2026-11-03
 
 ### Changed — four hard-to-read Korean sentence forms are banned in produced prose
