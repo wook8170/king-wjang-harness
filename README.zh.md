@@ -141,7 +141,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 
 ## 快速开始
 
-### 安装（作为 Claude Code 插件）
+### 安装（作为 Claude Code 插件） — Node.js 18+
 
 ```bash
 claude plugin marketplace add wook8170/king-wjang-harness

@@ -141,7 +141,7 @@ alongside, because a large part of any absolute number is that floor and not thi
 
 ## Quick start
 
-### Install (as a Claude Code plugin)
+### Install (as a Claude Code plugin) — Node.js 18+
 
 ```bash
 claude plugin marketplace add wook8170/king-wjang-harness

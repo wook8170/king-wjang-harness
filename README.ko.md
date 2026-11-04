@@ -141,7 +141,7 @@ flowchart LR
 
 ## 빠른 시작
 
-### 설치 (Claude Code 플러그인으로)
+### 설치 (Claude Code 플러그인으로) — Node.js 18 이상
 
 ```bash
 claude plugin marketplace add wook8170/king-wjang-harness
