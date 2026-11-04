@@ -8,6 +8,16 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-11-03
+
+### Changed — four hard-to-read Korean sentence forms are banned in produced prose
+
+The main skill, the phase skills that write documents or reports (P0~P6, P9, P10, P12) and the
+four agents that return written findings (`design-auditor`, `readiness-auditor`, `researcher`,
+`wave-verifier`) now end with a writing rule: no missing connecting words, no over-personified
+things, no three or more nouns in a row, no long gap between paired words. Instruction text only;
+no command or hook behavior changes.
+
 ## [0.1.4] — 2026-11-02
 
 Strengthens the adversarial reviews at both ends of the build: the design audit before P7 and the
