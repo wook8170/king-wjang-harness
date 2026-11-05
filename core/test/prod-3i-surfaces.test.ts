@@ -86,8 +86,9 @@ describe.skipIf(!IN_REPO)('[PROD-B6] 폐기된 구판 감사가 판정으로 읽
     expect(t.slice(0, 1200)).toMatch(/출하 불가/);
   });
 
-  it('배포본에는 애초에 실리지 않는다 — export-ignore 가 그대로다', () => {
-    expect(read('.gitattributes')).toMatch(/docs\/release-readiness\s+export-ignore/);
+  // [DIR-01] export-ignore 를 지웠으므로 이 문서는 저장소와 함께 실린다. 그래서 머리말이 그 사실을 밝혀야 한다.
+  it('구판 문서 머리말이 저장소에 함께 실린다는 것과 판정 문서의 위치를 밝힌다', () => {
+    expect(fs.readFileSync(LEGACY, 'utf8').slice(0, 1400)).toMatch(/함께 실린다/);
   });
 });
 

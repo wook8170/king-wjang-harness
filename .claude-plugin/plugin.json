@@ -1,10 +1,16 @@
 {
   "name": "king-wjang-harness",
-  "version": "0.1.6",
-  "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. The event journal is the source of truth for phase, wave, and design-ledger state; PreToolUse/Stop hooks block source writes in the design track and unsettled session ends. Completely silent in projects without a .harness/ directory.",
+  "displayName": "King Wjang Harness",
+  "version": "0.1.7",
+  "description": "Hook and CLI harness that enforces design → build → ship process discipline. The event journal is the source of truth for phase, wave, and design-ledger state; PreToolUse/Stop hooks block source writes in the design track and unsettled session ends. Completely silent in projects without a .harness/ directory.",
   "author": {
-    "name": "장욱"
+    "name": "Wook Jang",
+    "email": "wook81701@gmail.com",
+    "url": "https://github.com/wook8170"
   },
+  "homepage": "https://github.com/wook8170/king-wjang-harness",
+  "repository": "https://github.com/wook8170/king-wjang-harness",
+  "license": "MIT",
   "keywords": [
     "workflow",
     "hooks",
@@ -12,6 +18,10 @@
     "design-track",
     "harness"
   ],
+  "icon": "./.claude-plugin/icon.png",
+  "documentationUrl": "https://github.com/wook8170/king-wjang-harness#readme",
+  "supportUrl": "https://github.com/wook8170/king-wjang-harness/issues",
+  "privacyPolicyUrl": "https://github.com/wook8170/king-wjang-harness/blob/main/PRIVACY.md",
   "mcpServers": {
     "harness": {
       "command": "node",

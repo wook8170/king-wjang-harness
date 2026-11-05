@@ -157,14 +157,30 @@ describe('PROD: README 가 광고하는 계량이 사실과 맞는다', () => {
   });
 });
 
-describe('PROD-113: 배포본에 내부 작업물이 실리지 않는다', () => {
-  it('.gitattributes 가 내부 문서를 export-ignore 한다', () => {
-    const attrs = read('.gitattributes');
-    for (const p of ['progress.md', 'docs/release-readiness', 'docs/appraisal']) {
-      expect(attrs, `${p} 가 배포본에서 빠지지 않는다`).toMatch(
-        new RegExp(`^${p.replace('/', '\\/')}\\s+export-ignore`, 'm'),
-      );
-    }
+describe('DIR-01: 플러그인 디렉터리 검증이 저장소를 거부하지 않는다', () => {
+  /**
+   * PROD-113 은 .gitattributes 의 export-ignore 로 내부 작업물을 배포본에서 뺐다. 그런데
+   * Anthropic 플러그인 디렉터리는 export-ignore · export-subst · filter 가 있으면 저장소 검증을
+   * 멈춘다. 게다가 Claude Code 는 플러그인을 git clone 으로 받아서, 설치본에는 원래부터
+   * progress.md 와 .github 가 들어 있었다(실측: 0.1.2~0.1.5 설치 캐시). 그래서 줄을 지우고,
+   * 다시 생기지 않게 막는다.
+   */
+  it('.gitattributes 에 내용을 바꾸거나 빼는 속성이 없다', () => {
+    const attrs = read('.gitattributes')
+      .split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).join('\n');
+    expect(attrs).not.toMatch(/\bexport-(ignore|subst)\b/);
+    expect(attrs).not.toMatch(/\bfilter\s*=/);
+  });
+
+  it('추적 중인 텍스트 파일에 NUL 바이트가 없다 — 디렉터리 검증은 그런 파일을 바이너리로 보고 보류한다', () => {
+    const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
+    const files = execFileSync('git', ['ls-files', '-z'], { cwd: repo, encoding: 'utf8' })
+      .split('\0').filter((f) => f && !/\.(png|jpe?g|gif|webp|woff2?|ttf|otf)$/i.test(f));
+    const withNul = files.filter((f) => {
+      const p = path.join(repo, f);
+      return fs.existsSync(p) && fs.readFileSync(p).includes(0);
+    });
+    expect(withNul).toEqual([]);
   });
 });
 

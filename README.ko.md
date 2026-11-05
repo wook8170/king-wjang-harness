@@ -339,6 +339,43 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 
 **`.harness/state.json`을 손으로 고쳐도 되나?** 안 된다 — 훅이 막는다. 기준 기록은 저널이라서, 손으로 고치면 상태가 저널과 어긋난다. `harness` 명령(또는 `harness doctor --repair`)을 쓴다.
 
+## 실행하는 것 · 보내는 것 · 가져오는 것
+
+### 실행하는 것
+
+**훅**(`hooks/hooks.json`). 모든 훅은 짧은 `sh` 스크립트인 `bin/harness-hook` 을 부른다. 프로젝트에 `.harness` 가 없으면 이 스크립트는 바로 exit 0 으로 끝나고, 다른 것은 실행되지 않는다. `.harness` 가 있으면 Node.js 로 `bin/harness hook <이벤트>` 를 실행한다.
+
+| 이벤트 | 대상 | 훅이 하는 일 |
+|---|---|---|
+| `SessionStart` | 전체 | 현재 페이즈·웨이브와 정산하지 않은 작업을 세션 맥락에 넣는다. `.harness/.runtime/` 에 남은 이전 세션의 활동 표시를 지운다 |
+| `PreToolUse` | `Write`·`Edit`·`MultiEdit`·`NotebookEdit`·`Bash`, 이름이 쓰기처럼 보이는 MCP 도구 | 지금 페이즈가 허용하지 않는 쓰기를 거부한다. 설계 트랙에서 소스를 쓰는 경우가 그 예다. 판정에만 도구 입력을 읽고, 파일은 바꾸지 않는다 |
+| `PostToolUse` | 위와 같다 | 파일을 바꿀 수 있는 도구였으면 `.harness/.runtime/last-activity` 에 시각을 적는다. `Stop` 훅은 이 기록을 보고 그 턴에 작업이 있었는지 판단한다 |
+| `Stop` | 전체 | 턴 기록을 정산하지 않았으면 세션 종료를 막고, 무엇을 정산할지 Claude 에게 알린다 |
+
+훅은 `~/.claude/` 나 사용자 설정 파일, 권한 규칙을 고치지 않는다. 훅이 쓰는 곳은 프로젝트의 `.harness/.runtime/` 폴더뿐이다. 이벤트 저널 같은 나머지 `.harness/` 파일은 `harness` CLI 와 MCP 도구가 쓴다. 지우는 파일도 그 안에 있는 자체 임시 파일과 활동 표시뿐이다.
+
+**MCP 서버** `harness`: `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.js` 로 실행하는 로컬 stdio 서버다. 의존 패키지가 없다. 도구는 CLI 와 같은 `.harness/` 파일을 읽고 쓴다.
+
+**CLI**: 플러그인이 켜져 있는 동안 `bin/harness` 가 Bash 도구의 `PATH` 에 들어간다. 사용자나 Claude 가 부를 때만 실행된다. 플러그인 최상위에 `bin/` 폴더가 있어서, 이 플러그인은 Claude Code 에만 설치되고 claude.ai 와 Cowork 에는 설치되지 않는다.
+
+실제로 실행되는 코드는 `core/dist/cli.js` 와 `core/dist/mcp.js` 다. 둘 다 `core/src/` 를 압축하지 않고 묶은 파일이다. CI 는 새로 빌드한 결과가 이 두 파일과 한 바이트도 다르지 않은지 확인한다.
+
+### 보내는 것
+
+없다. 훅·CLI·MCP 서버는 네트워크 모듈을 불러오지 않고, 다른 프로그램도 실행하지 않는다. 플러그인은 데이터를 모으지 않고, 자체 서버도 없다. `harness migrate` 는 `~/.claude/` 아래에 예전 자작 훅 폴더가 있는지만 확인하고 안내 문구를 출력한다.
+
+### 가져오는 것
+
+플러그인 코드는 실행 중에 아무것도 내려받지 않는다. 네트워크를 쓰는 경우는 아래 세 가지이며, 모두 사용자 눈에 보인다.
+
+- **설치.** Claude Code 는 플러그인을 설치할 때 `.npmrc` 의 `omit=dev` 설정대로 `npm ci` 를 실행한다. 그래서 `package-lock.json` 에 적힌 런타임 패키지를 npm 레지스트리에서 받는다. 다만 런타임 코드는 이미 번들에 들어 있어서, 실행 중에는 이 패키지가 필요하지 않다.
+- **동반 플러그인.** `king-wjang-harness` 스킬에는 선택 사항인 동반 플러그인 목록이 있다. Claude 는 설치하기 전에 사용자에게 묻는다. 설치는 그 스킬에 적힌 고정 좌표에서만 `claude plugin marketplace add` 와 `claude plugin install` 로 한다.
+- **Claude 의 도구.** 일부 페이즈 스킬은 Claude 에게 WebFetch·WebSearch 를 쓰라고 안내한다. 예를 들어 P4 에서는 사용자가 준 Claude Design 캔버스 주소를 읽는다. 페이즈 문서를 claude.ai 아티팩트로 게시하라고도 안내한다. 이것은 사용자 세션에서 일어나는 Claude Code 도구 호출이며, 플러그인 코드가 하는 일이 아니다.
+
+### 저장소에 함께 있는 것
+
+저장소에는 이 프로젝트의 작업 기록도 들어 있다. `progress.md`, `docs/release-readiness/`, `docs/appraisal/`, `docs/superpowers/`, `.claude/skills/verify/` 가 그것이다. Claude Code 는 이 파일들을 불러오지 않는다. 지금 판의 판정은 `docs/release-readiness/2026-08-21/00-summary.md` 와 그 뒤 라운드 문서에 있다. `docs/release-readiness/readiness.md` 는 폐기된 구판 감사이며, 문서 머리에 그 사실을 적어 두었다.
+
 ---
 
 ## 지원

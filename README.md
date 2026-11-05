@@ -344,6 +344,43 @@ core — is a wall.
 
 **Can I hand-edit `.harness/state.json`?** Don't — and the hook won't let you. The journal is the truth; hand-edits desync it. Use `harness` commands (or `harness doctor --repair`).
 
+## What it runs, sends, and fetches
+
+### What it runs
+
+**Hooks** (`hooks/hooks.json`). Every hook calls `bin/harness-hook`, a short `sh` script. If the project has no `.harness` entry, the script exits 0 at once and nothing else runs. In a project with `.harness`, it runs `bin/harness hook <event>` with Node.js:
+
+| Event | Matcher | What the hook does |
+|---|---|---|
+| `SessionStart` | all | Prints the current phase, wave and unsettled work into the session context, and clears the previous session's activity marker in `.harness/.runtime/` |
+| `PreToolUse` | `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `Bash`, and MCP tools whose names look like writes | Denies a write that the current phase does not allow, such as a source write during the design track. It reads the tool input only to decide; it changes no files |
+| `PostToolUse` | same as above | When the tool could have changed files, writes a timestamp to `.harness/.runtime/last-activity`, so the `Stop` hook knows the turn did work |
+| `Stop` | all | Blocks the session from ending while the turn log is unsettled, and tells Claude what to settle |
+
+The hooks never edit `~/.claude/`, your settings files, or permission rules. They write only inside the project's `.harness/.runtime/` directory. The `harness` CLI and MCP tools write the rest of `.harness/`, such as the event journal. The only files they delete are their own temporary files and activity markers there.
+
+**MCP server** `harness`: `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.js`, a local stdio server with no dependencies. Its tools read and write the same `.harness/` files as the CLI.
+
+**CLI**: `bin/harness` is on the Bash tool's `PATH` while the plugin is enabled. It runs only when you or Claude call it. Because the plugin has a top-level `bin/` directory, it installs in Claude Code only, not in claude.ai or Cowork.
+
+The code that runs is `core/dist/cli.js` and `core/dist/mcp.js`. They are unminified bundles of `core/src/`, and CI checks that a fresh build reproduces them byte for byte.
+
+### What it sends
+
+Nothing. The hooks, the CLI and the MCP server load no network module and start no other program. The plugin collects no data and has no server of its own. `harness migrate` reads whether a few legacy hook folders exist under `~/.claude/` and only prints advice.
+
+### What it fetches
+
+The plugin itself downloads nothing at run time. Three things can reach the network, and each one is visible to you:
+
+- **Install.** Claude Code runs `npm ci` with `omit=dev` from `.npmrc` when it installs the plugin, which fetches the runtime packages in `package-lock.json` from the npm registry. The runtime code is already bundled, so nothing at run time needs them.
+- **Companion plugins.** The `king-wjang-harness` skill lists optional companion plugins. Claude asks you before it installs any of them, and installs only from the fixed coordinates in that skill, through `claude plugin marketplace add` and `claude plugin install`.
+- **Claude's own tools.** Some phase skills ask Claude to use WebFetch or WebSearch, for example to read a Claude Design canvas URL you supply in P4, and to publish phase documents as claude.ai Artifacts. These are Claude Code tool calls in your session, not plugin code.
+
+### What else is in the repository
+
+The repository also holds the project's own work records: `progress.md`, `docs/release-readiness/`, `docs/appraisal/`, `docs/superpowers/` and `.claude/skills/verify/`. Claude Code does not load them. The verdict that applies to this release is in `docs/release-readiness/2026-08-21/00-summary.md` and later rounds; `docs/release-readiness/readiness.md` is a superseded audit and says so at its top.
+
 ---
 
 ## Support
@@ -363,6 +400,6 @@ paste (they contain no file contents).
 
 ## License & author
 
-MIT — see [LICENSE](LICENSE). Authored by **장욱 (Wook Jang)**.
+MIT — see [LICENSE](LICENSE). Authored by **Wook Jang (장욱)**.
 
 <sub>Built with a design → build → ship discipline — enforced by itself.</sub>

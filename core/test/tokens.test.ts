@@ -258,7 +258,7 @@ describe('tokens · findRawValues', () => {
     expect(findRawValues(null as unknown as string)).toEqual([]);
     expect(findRawValues(42 as unknown as string)).toEqual([]);
     expect(findRawValues('')).toEqual([]);
-    expect(findRawValues(' \uD800{{{[[[/*'.repeat(200))).toEqual([]);
+    expect(findRawValues('\x00\uD800{{{[[[/*'.repeat(200))).toEqual([]);
   });
 });
 
