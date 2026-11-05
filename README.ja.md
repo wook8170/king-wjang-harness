@@ -9,6 +9,8 @@ AIコーディングエージェントのためのプロセス規律 —— **�
 
 <sub>フック + CLI ・ 追記専用イベントジャーナルを信頼できる情報源として使用 ・ セッションあたりコンテキスト ~260 トークン ・ オプトインしていないプロジェクトでは無音</sub>
 
+![king-wjang-harness のデモ: harness init、設計フェーズでソースの書き込みを拒否し設計ドキュメントは通す PreToolUse フック、ゲート承認前のフェーズ変更の拒否、harness doctor と拒否ログ](docs/demo.gif)
+
 ---
 
 ## 30秒でわかる要点
@@ -307,7 +309,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 - ✅ ウェーブのライフサイクル、STALE伝播つき設計台帳、UXエビデンスゲート
 - ✅ インジェクション対策、非干渉・無害の不変条件、自己完結な dist のコミット
 - ✅ 承認**ゲート**（`gate submit/approve/verify/sweep/feedback`）+ 成果物レジストリ（`doc`）+ RTM（`report rtm`）
-- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）（出荷前の UX 敵対的レビューは wb プラグインの `wb:quality-ux-adversarial` を参照。P6 は `HIGH 0` で初めて P7 へ進む（ラウンドごとの再監査・反映対照表・引用コードの照合）。P10・P12 は二つの敵対的レビュー（実装適合性監査、変更画面の UX レビュー — 9軸・ペルソナのタスク遂行・デザインシステムの視覚照合）を必須入力とし、どちらかに未解決の high があれば止める）
+- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）（出荷前の UX 敵対的レビューは lanekeeper プラグインの `lanekeeper:quality-ux-adversarial` を参照。P6 は `HIGH 0` で初めて P7 へ進む（ラウンドごとの再監査・反映対照表・引用コードの照合）。P10・P12 は二つの敵対的レビュー（実装適合性監査、変更画面の UX レビュー — 9軸・ペルソナのタスク遂行・デザインシステムの視覚照合）を必須入力とし、どちらかに未解決の high があれば止める）
 - ✅ **デザインサブシステム** —— `design link/sync/baseline/html`、インタラクティブHTMLの信頼できる情報源、トークンパイプライン（`tokens gen/lint/swap`）
 - ✅ **ビルド & 出荷トラック** —— スタックプロファイル（`profile`）、ウェーブループ（`loop`）、視覚的エビデンス（`evidence`）、出荷台帳と判定（`ship`）
 

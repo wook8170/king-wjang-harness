@@ -61,7 +61,7 @@ misreads, a dead end, or spacing that touches.
 | Input | Who | What | Where |
 |---|---|---|---|
 | Implementation conformance audit | fresh `design-auditor`, implementation conformance lens (P9 step 5) | every design invariant located in the code, holds or breaks; ends with `HIGH N` | `.harness/audit/conformance-rN.md` |
-| Changed-screen UX adversarial review | a checker from a context that did not build the screens (`lanekeeper:quality-ux-adversarial` when the lanekeeper plugin (formerly wb) is installed; otherwise the same criteria in the project's own brief) | see below | `.harness/ship/evidence/ux-adversarial/` |
+| Changed-screen UX adversarial review | a checker from a context that did not build the screens (`lanekeeper:quality-ux-adversarial` when the lanekeeper plugin is installed; otherwise the same criteria in the project's own brief) | see below | `.harness/ship/evidence/ux-adversarial/` |
 
 **The changed-screen UX adversarial review.**
 
@@ -152,7 +152,7 @@ for them and offers to install any that are missing.
 
 - `verifying-production-readiness` — the readiness rubric the `readiness-auditor` drives for the first verdict.
 - `oh-my-claudecode:security-reviewer` — OWASP-oriented vulnerability pass feeding the defect ledger.
-- `lanekeeper:quality-ux-adversarial` — the changed-screen UX adversarial review above (nine axes, persona task scenarios, isolated stack, headless 2x). If the lanekeeper plugin (formerly wb) is absent, apply the same criteria through the project's own brief. Its findings go onto the defect ledger; an open high blocks the P10 gate.
+- `lanekeeper:quality-ux-adversarial` — the changed-screen UX adversarial review above (nine axes, persona task scenarios, isolated stack, headless 2x). If the lanekeeper plugin is absent, apply the same criteria through the project's own brief. Its findings go onto the defect ledger; an open high blocks the P10 gate.
 
 ## Writing rule — four forms to avoid in Korean prose
 

@@ -9,6 +9,8 @@ AI 코딩 에이전트가 작업 절차를 지키게 하는 도구다. **프롬�
 
 <sub>훅 + CLI · 기준 기록은 추가만 하는(append-only) 이벤트 저널 · 세션당 컨텍스트 ~260 토큰 · 켜지 않은 프로젝트에서는 아무것도 출력하지 않음</sub>
 
+![king-wjang-harness 시연: harness init 뒤 설계 단계에서 PreToolUse 훅이 소스 쓰기를 거부하고 설계 문서는 허용한다. 게이트 승인 전에는 단계를 바꿀 수 없고, 마지막으로 harness doctor 와 거부 기록을 보여 준다](docs/demo.gif)
+
 ---
 
 ## 30초 요약
@@ -306,7 +308,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 - ✅ 웨이브 수명주기, STALE 전파 설계 원장, UX 증적 게이트
 - ✅ 주입 방어, 비간섭·무해 불변식, 커밋된 자체완결 dist
 - ✅ 승인 **게이트** (`gate submit/approve/verify/sweep/feedback`) + 산출물 레지스트리 (`doc`) + RTM (`report rtm`)
-- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`) — 출하 전 UX 적대적 점검은 wb 플러그인(`wb:quality-ux-adversarial`)을 참조한다. P6 은 `HIGH 0` 이어야 P7 로 넘어간다(회차별 재감사, 반영 대조표, 인용 코드 대조). P10·P12 는 적대 검증 두 가지(구현 적합성 감사, 바뀐 화면 UX 적대 점검 — 9축·페르소나 과업 수행·디자인 시스템 시각 대조)를 필수 입력으로 받고, 둘 중 하나라도 열린 high 가 있으면 막는다
+- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`) — 출하 전 UX 적대적 점검은 lanekeeper 플러그인(`lanekeeper:quality-ux-adversarial`)을 참조한다. P6 은 `HIGH 0` 이어야 P7 로 넘어간다(회차별 재감사, 반영 대조표, 인용 코드 대조). P10·P12 는 적대 검증 두 가지(구현 적합성 감사, 바뀐 화면 UX 적대 점검 — 9축·페르소나 과업 수행·디자인 시스템 시각 대조)를 필수 입력으로 받고, 둘 중 하나라도 열린 high 가 있으면 막는다
 - ✅ **디자인 서브시스템** — `design link/sync/baseline/html`, 인터랙티브 HTML 정본, 토큰 파이프라인 (`tokens gen/lint/swap`)
 - ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`)
 

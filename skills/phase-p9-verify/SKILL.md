@@ -69,7 +69,7 @@ fails three times in a row (the P8↔P9 loop threshold). Otherwise the RTM being
   completion checks and test adequacy, before you call a wave verified.
 - `oh-my-claudecode:code-reviewer` — severity-rated review of the wave's diff as part of QA.
 - `oh-my-claudecode:designer` — a designer's eye on the visual comparison (spacing, hierarchy, slop).
-- `lanekeeper:quality-ux-adversarial` — the pre-ship adversarial UX review (if the lanekeeper plugin (formerly wb) is absent, apply the same criteria through the project's own brief).
+- `lanekeeper:quality-ux-adversarial` — the pre-ship adversarial UX review (if the lanekeeper plugin is absent, apply the same criteria through the project's own brief).
 
 ## Writing rule — four forms to avoid in Korean prose
 
