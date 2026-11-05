@@ -8,6 +8,38 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-11-05
+
+Prepares the plugin for Anthropic's plugin directory. No hook, CLI or MCP behavior changes.
+
+### Fixed — the directory could not validate the repository
+
+`.gitattributes` used `export-ignore`, and the directory stops validating any repository whose
+`.gitattributes` holds `export-ignore`, `export-subst` or `filter`. The lines are gone. They never
+took effect for Claude Code users anyway: Claude Code installs the plugin with `git clone`, and the
+installed copies of 0.1.2 to 0.1.5 contain `progress.md` and `.github/`. A new test (`DIR-01`) keeps
+those attributes out. The superseded audit `docs/release-readiness/readiness.md` now says at its top
+that it ships with the repository.
+
+### Fixed — two test files read as binary
+
+`core/test/design.test.ts` and `core/test/tokens.test.ts` held literal NUL bytes inside string
+literals. The directory treats such files as binary and holds them for review. They now use the
+`\x00` escape, which gives the same string. A new test fails if any tracked text file holds a NUL byte.
+
+### Changed — listing metadata and disclosures
+
+- `plugin.json` gains `displayName`, `license`, `homepage`, `repository`, `icon`,
+  `documentationUrl`, `supportUrl` and `privacyPolicyUrl`. The author name is written in one script
+  (`Wook Jang`), as the directory requires.
+- README (English and Korean) gains a "What it runs, sends, and fetches" section, and `PRIVACY.md`
+  states that the plugin collects and sends no data.
+- The `king-wjang-harness` skill now asks the user before it installs a companion plugin, instead
+  of installing missing companions on activation.
+- The companion table points to the `wook8170-plugins` marketplace for
+  `verifying-production-readiness` (it is not an Anthropic plugin), and to
+  `lanekeeper:quality-ux-adversarial`, the new name of the wb plugin's review skill.
+
 ## [0.1.6] — 2026-11-05
 
 ### Added — plugin icon

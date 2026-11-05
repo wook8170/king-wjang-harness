@@ -1,22 +1,27 @@
 {
   "name": "king-wjang-harness",
   "owner": {
-    "name": "장욱"
+    "name": "Wook Jang"
   },
   "metadata": {
-    "description": "Local marketplace for king-wjang-harness \u2014 the design \u2192 build \u2192 ship discipline harness",
+    "description": "Local marketplace for king-wjang-harness — the design → build → ship discipline harness",
     "version": "0.1.0"
   },
   "plugins": [
     {
       "name": "king-wjang-harness",
       "source": "./",
-      "description": "Hook and CLI harness that enforces design \u2192 build \u2192 ship process discipline. Completely silent in projects without a .harness/ directory.",
-      "version": "0.1.6",
+      "description": "Hook and CLI harness that enforces design → build → ship process discipline. Completely silent in projects without a .harness/ directory.",
+      "version": "0.1.7",
       "author": {
-        "name": "장욱"
+        "name": "Wook Jang"
       },
-      "keywords": ["workflow", "hooks", "process-discipline", "harness"],
+      "keywords": [
+        "workflow",
+        "hooks",
+        "process-discipline",
+        "harness"
+      ],
       "category": "workflow"
     }
   ]

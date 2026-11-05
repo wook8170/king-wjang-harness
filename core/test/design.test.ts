@@ -201,7 +201,7 @@ describe('design — P4 추출 2종', () => {
   });
 
   it('쓰레기 입력은 빈 인벤토리 — 절대 throw 하지 않는다', () => {
-    for (const junk of ['', '<<<>>>{{', ' ', 'data-component=', 'data-component=""']) {
+    for (const junk of ['', '<<<>>>{{', '\x00\x01', 'data-component=', 'data-component=""']) {
       expect(extractInventory(junk)).toEqual({ components: [], total: 0 });
     }
     expect(extractInventory(undefined as unknown as string)).toEqual({ components: [], total: 0 });
