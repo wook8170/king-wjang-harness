@@ -258,8 +258,10 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 ### 4-3. 게이트 승인 — 권한 다이얼로그 장치 (승인됨)
 
 1. `harness gate submit <P>` → 리뷰 패킷 아티팩트 생성 (산출물 요약 + 원장 diff + 스크린샷·캔버스 링크).
-2. `harness gate approve <P>` 는 **의도적으로 permission allowlist에서 제외** → 실행 시마다
-   권한 다이얼로그가 뜬다 → 승인의 최종 클릭은 항상 사람이 한다. LLM 혼자서는 게이트를 열 수 없다.
+2. 승인은 세 경로로 한다(`core/src/approve.ts`).
+   - 슬래시 명령 `/king-wjang-harness:approve <P>`: `disable-model-invocation` 으로 사용자만 부른다.
+   - 확인 창: 에이전트의 `harness gate approve <P>` 호출에 훅이 `ask` 와 일회용 표를 돌려준다.
+   - 터미널: 사람이 TTY 에서 실행한다.
 3. 승인 레코드에 산출물 해시를 저장한다 → 나중에 산출물이 바뀌면 게이트를 자동으로 무효화한다.
 
 ### 4-4. 크리티컬 이벤트 소환 (요구 5)
@@ -431,8 +433,8 @@ harness phase set P0    # P0 진입, 이후 파이프라인이 주도
 
 ## 12. 알려진 한계 (정직 고지)
 
-- 권한 다이얼로그 승인 장치는 Claude Code의 permission 프롬프트에 의존한다 —
-  사용자가 해당 명령을 allowlist에 넣으면 이 장치는 효과가 없다(init 때 경고한다).
+- 승인 경로는 호출자가 사람임을 증명하지 않는다. 창의 응답은 Claude Code 가 받고 훅은 보지 못한다.
+  허용 규칙이 승인 명령을 덮으면 훅이 창을 거부한다(init 고지 · doctor 경고).
 - 프로파일이 얇은 스택(generic)에서는 차단 매트릭스·룰팩의 정밀도가 떨어진다 —
   정밀도는 수동 매핑의 품질에 따라 달라진다.
 - usage API와 Claude Design 아티팩트 구조는 외부에 의존한다. 바뀌면 코어의 어댑터 계층에서 대응한다.

@@ -262,7 +262,7 @@ describe('PERF-95: 훅 가드 래퍼가 코어와 같은 판정을 한다', () =
     for (const entries of Object.values(wiring.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>>)) {
       for (const e of entries) for (const h of e.hooks) cmds.push(h.command);
     }
-    expect(cmds.length).toBe(4);
+    expect(cmds.length).toBe(5);
     for (const c of cmds) expect(c).toContain('/bin/harness-hook');
   });
 
@@ -311,8 +311,10 @@ describe('ENG-A: hooks.json matcher 가 판정 대상 도구 집합과 일치한
     fs.readFileSync(path.resolve(__dirname, '../../hooks/hooks.json'), 'utf8'),
   ) as { hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>> };
 
-  const matchers = Object.values(wiring.hooks)
-    .flat()
+  // UserPromptExpansion 의 matcher 는 도구가 아니라 슬래시 명령 이름이다 — 도구 집합 대조에서 뺀다.
+  const matchers = Object.entries(wiring.hooks)
+    .filter(([event]) => event !== 'UserPromptExpansion')
+    .flatMap(([, entries]) => entries)
     .filter(e => typeof e.matcher === 'string')
     .map(e => e.matcher as string);
 

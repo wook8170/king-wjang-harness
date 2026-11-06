@@ -8,6 +8,34 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-11-06
+
+Gate approval no longer requires typing a versioned cache path into a terminal.
+
+### Added — two approval paths
+
+- `/king-wjang-harness:approve <P>`: a user-only skill (`disable-model-invocation: true`). A new
+  `UserPromptExpansion` hook issues a short-lived ticket when the user types it.
+- Confirmation dialog: when an agent runs `harness gate approve <P>` alone on one line, the hook returns
+  `permissionDecision: "ask"`. The dialog shows the phase, the artifacts, the evidence grade and the hash.
+  `updatedInput` adds a single-use ticket; only its hash is stored.
+- The hook refuses the dialog in modes other than `default`, `acceptEdits` and `auto`, in `-p` and SDK
+  sessions, for subagents, for chained or altered commands, and when an allow rule covers the command.
+- `gate-approved` events record `via`: `terminal`, `dialog`, `slash` or `no-tty`.
+- `harness doctor` warns when a `permissions.allow` rule covers `harness gate approve`.
+
+### Changed
+
+- Guidance no longer prints the absolute path, which contains the plugin version. Approval points to the
+  slash command. Other human-only commands print `!harness …`, which runs at the Claude Code prompt.
+- `harness_gate_approve` over MCP still refuses; its message now names the slash command.
+- `.harness/.runtime/approve-ticket` is protected like other harness-owned files.
+
+### Known limits
+
+The approval paths do not prove that a person is the caller: Claude Code receives the dialog's answer and
+the hook never sees it. A declined dialog leaves no record. Remote Control was not reproduced.
+
 ## [0.1.7] — 2026-11-05
 
 Prepares the plugin for Anthropic's plugin directory. No hook, CLI or MCP behavior changes.

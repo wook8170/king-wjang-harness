@@ -126,7 +126,7 @@ harness phase set P11
 
 ## Approval is a human's
 
-**A human presses `harness gate approve P10`. An agent never approves on their behalf.** Summarise
+**A human approves by typing `/king-wjang-harness:approve P10`. An agent never approves on their behalf.** Summarise
 the verdict, the unresolved items, and the deferral reasons honestly, and wait. If the evidence grade
 is not `measured` the core refuses first — do not try to route around that refusal.
 

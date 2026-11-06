@@ -125,17 +125,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path21) {
-      const ctrl = callVisitor(key, node, visitor, path21);
+    function visit_(key, node, visitor, path22) {
+      const ctrl = callVisitor(key, node, visitor, path22);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path21, ctrl);
-        return visit_(key, ctrl, visitor, path21);
+        replaceNode(key, path22, ctrl);
+        return visit_(key, ctrl, visitor, path22);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path21 = Object.freeze(path21.concat(node));
+          path22 = Object.freeze(path22.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path21);
+            const ci = visit_(i, node.items[i], visitor, path22);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -146,13 +146,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path21 = Object.freeze(path21.concat(node));
-          const ck = visit_("key", node.key, visitor, path21);
+          path22 = Object.freeze(path22.concat(node));
+          const ck = visit_("key", node.key, visitor, path22);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path21);
+          const cv = visit_("value", node.value, visitor, path22);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -173,17 +173,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path21) {
-      const ctrl = await callVisitor(key, node, visitor, path21);
+    async function visitAsync_(key, node, visitor, path22) {
+      const ctrl = await callVisitor(key, node, visitor, path22);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path21, ctrl);
-        return visitAsync_(key, ctrl, visitor, path21);
+        replaceNode(key, path22, ctrl);
+        return visitAsync_(key, ctrl, visitor, path22);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path21 = Object.freeze(path21.concat(node));
+          path22 = Object.freeze(path22.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path21);
+            const ci = await visitAsync_(i, node.items[i], visitor, path22);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -194,13 +194,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path21 = Object.freeze(path21.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path21);
+          path22 = Object.freeze(path22.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path22);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path21);
+          const cv = await visitAsync_("value", node.value, visitor, path22);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -227,23 +227,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path21) {
+    function callVisitor(key, node, visitor, path22) {
       if (typeof visitor === "function")
-        return visitor(key, node, path21);
+        return visitor(key, node, path22);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path21);
+        return visitor.Map?.(key, node, path22);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path21);
+        return visitor.Seq?.(key, node, path22);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path21);
+        return visitor.Pair?.(key, node, path22);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path21);
+        return visitor.Scalar?.(key, node, path22);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path21);
+        return visitor.Alias?.(key, node, path22);
       return void 0;
     }
-    function replaceNode(key, path21, node) {
-      const parent = path21[path21.length - 1];
+    function replaceNode(key, path22, node) {
+      const parent = path22[path22.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -853,10 +853,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path21, value) {
+    function collectionFromPath(schema, path22, value) {
       let v = value;
-      for (let i = path21.length - 1; i >= 0; --i) {
-        const k = path21[i];
+      for (let i = path22.length - 1; i >= 0; --i) {
+        const k = path22[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -875,7 +875,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path21) => path21 == null || typeof path21 === "object" && !!path21[Symbol.iterator]().next().done;
+    var isEmptyPath = (path22) => path22 == null || typeof path22 === "object" && !!path22[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -905,11 +905,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path21, value) {
-        if (isEmptyPath(path21))
+      addIn(path22, value) {
+        if (isEmptyPath(path22))
           this.add(value);
         else {
-          const [key, ...rest] = path21;
+          const [key, ...rest] = path22;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -923,8 +923,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path21) {
-        const [key, ...rest] = path21;
+      deleteIn(path22) {
+        const [key, ...rest] = path22;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -938,8 +938,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path21, keepScalar) {
-        const [key, ...rest] = path21;
+      getIn(path22, keepScalar) {
+        const [key, ...rest] = path22;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path21) {
-        const [key, ...rest] = path21;
+      hasIn(path22) {
+        const [key, ...rest] = path22;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -968,8 +968,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path21, value) {
-        const [key, ...rest] = path21;
+      setIn(path22, value) {
+        const [key, ...rest] = path22;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3484,9 +3484,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path21, value) {
+      addIn(path22, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path21, value);
+          this.contents.addIn(path22, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3561,14 +3561,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path21) {
-        if (Collection.isEmptyPath(path21)) {
+      deleteIn(path22) {
+        if (Collection.isEmptyPath(path22)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path21) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path22) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3583,10 +3583,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path21, keepScalar) {
-        if (Collection.isEmptyPath(path21))
+      getIn(path22, keepScalar) {
+        if (Collection.isEmptyPath(path22))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path21, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path22, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3597,10 +3597,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path21) {
-        if (Collection.isEmptyPath(path21))
+      hasIn(path22) {
+        if (Collection.isEmptyPath(path22))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path21) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path22) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3617,13 +3617,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path21, value) {
-        if (Collection.isEmptyPath(path21)) {
+      setIn(path22, value) {
+        if (Collection.isEmptyPath(path22)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path21), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path22), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path21, value);
+          this.contents.setIn(path22, value);
         }
       }
       /**
@@ -5583,9 +5583,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path21) => {
+    visit.itemAtPath = (cst, path22) => {
       let item = cst;
-      for (const [field, index] of path21) {
+      for (const [field, index] of path22) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5594,23 +5594,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path21) => {
-      const parent = visit.itemAtPath(cst, path21.slice(0, -1));
-      const field = path21[path21.length - 1][0];
+    visit.parentCollection = (cst, path22) => {
+      const parent = visit.itemAtPath(cst, path22.slice(0, -1));
+      const field = path22[path22.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path21, item, visitor) {
-      let ctrl = visitor(item, path21);
+    function _visit(path22, item, visitor) {
+      let ctrl = visitor(item, path22);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path21.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path22.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5621,10 +5621,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path21);
+            ctrl = ctrl(item, path22);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path21) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path22) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6926,14 +6926,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs25 = this.flowScalar(this.type);
+              const fs26 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs25, sep: [] });
+                map.items.push({ start, key: fs26, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs25);
+                this.stack.push(fs26);
               } else {
-                Object.assign(it, { key: fs25, sep: [] });
+                Object.assign(it, { key: fs26, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7061,13 +7061,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs25 = this.flowScalar(this.type);
+              const fs26 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs25, sep: [] });
+                fc.items.push({ start: [], key: fs26, sep: [] });
               else if (it.sep)
-                this.stack.push(fs25);
+                this.stack.push(fs26);
               else
-                Object.assign(it, { key: fs25, sep: [] });
+                Object.assign(it, { key: fs26, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7385,7 +7385,7 @@ __export(cli_exports, {
   unknownFlags: () => unknownFlags
 });
 module.exports = __toCommonJS(cli_exports);
-var fs24 = __toESM(require("fs"));
+var fs25 = __toESM(require("fs"));
 
 // core/src/budget.ts
 var HOOK_BUDGET_MS = 1e4;
@@ -8797,7 +8797,7 @@ function mentionsPath(cmd, needles) {
 
 // core/src/cli.ts
 var tty = __toESM(require("tty"));
-var path20 = __toESM(require("path"));
+var path21 = __toESM(require("path"));
 var import_node_crypto2 = require("crypto");
 
 // core/src/state.ts
@@ -8833,9 +8833,11 @@ function harnessCliPath() {
   cachedCliPath = shellQuote(resolved);
   return cachedCliPath;
 }
-function humanCmd(args) {
-  return harnessCliPath() + " " + args;
+function humanCmd(args, envPrefix) {
+  return `!${envPrefix ? `${envPrefix} ` : ""}harness ${args}`;
 }
+var approveSlash = (phase) => `/king-wjang-harness:approve ${phase}`;
+var SLASH_COMMAND_NAME = "king-wjang-harness:approve";
 function shellQuote(p) {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
 }
@@ -11184,24 +11186,108 @@ function markStale(root, id) {
 }
 
 // core/src/doctor.ts
-var fs14 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
+var fs15 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
+
+// core/src/approve.ts
+var crypto2 = __toESM(require("crypto"));
+var fs12 = __toESM(require("fs"));
+var os2 = __toESM(require("os"));
+var path9 = __toESM(require("path"));
+var ASK_MODES = ["default", "acceptEdits", "auto"];
+var DIALOG_TTL_MS = 30 * 60 * 1e3;
+var SLASH_TTL_MS = 60 * 1e3;
+var ticketPath = (root) => path9.join(runtimeDir(root), "approve-ticket");
+var sha2562 = (s) => crypto2.createHash("sha256").update(s).digest("hex");
+function writeTicket(root, t) {
+  fs12.mkdirSync(runtimeDir(root), { recursive: true });
+  const tmp = `${ticketPath(root)}.tmp-${process.pid}`;
+  fs12.writeFileSync(tmp, JSON.stringify(t), { mode: 384 });
+  fs12.renameSync(tmp, ticketPath(root));
+}
+function issueDialogTicket(root, phase, artifactHash) {
+  const nonce = crypto2.randomBytes(16).toString("hex");
+  writeTicket(root, { kind: "dialog", phase, artifactHash, issuedAt: Date.now(), nonceHash: sha2562(nonce) });
+  return nonce;
+}
+function issueSlashTicket(root, phase, artifactHash) {
+  writeTicket(root, { kind: "slash", phase, artifactHash, issuedAt: Date.now() });
+}
+function consumeTicket(root, kind, phase, artifactHash, nonce, now = Date.now()) {
+  let t;
+  try {
+    t = JSON.parse(fs12.readFileSync(ticketPath(root), "utf8"));
+  } catch {
+    return false;
+  }
+  if (t.kind !== kind || t.phase !== phase || t.artifactHash !== artifactHash) return false;
+  if (kind === "dialog" && (!nonce || !t.nonceHash || sha2562(nonce) !== t.nonceHash)) return false;
+  const age = now - t.issuedAt;
+  if (!(age >= 0 && age <= (kind === "dialog" ? DIALOG_TTL_MS : SLASH_TTL_MS))) return false;
+  fs12.rmSync(ticketPath(root), { force: true });
+  return true;
+}
+function parseApproveCall(cmd) {
+  const m = /^harness[ \t]+gate[ \t]+approve[ \t]+(P\d{1,2})$/u.exec(cmd.trim());
+  return m && isPhase(m[1]) ? { phase: m[1] } : null;
+}
+function askableMode(mode) {
+  return mode !== void 0 && ASK_MODES.includes(mode);
+}
+function interactiveEntrypoint() {
+  return process.env.CLAUDE_CODE_ENTRYPOINT === "cli";
+}
+function settingsFiles(root) {
+  const home = process.env.CLAUDE_CONFIG_DIR ?? path9.join(os2.homedir(), ".claude");
+  return [
+    path9.join(home, "settings.json"),
+    path9.join(root, ".claude", "settings.json"),
+    path9.join(root, ".claude", "settings.local.json")
+  ];
+}
+function ruleMatches(rule, commands) {
+  if (rule === "Bash") return true;
+  const m = /^Bash\((.*)\)$/su.exec(rule);
+  if (!m) return false;
+  const body = m[1].replace(/:\*$/u, " *");
+  const re = new RegExp(`^${body.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/gu, "\\$&")).join(".*")}$`, "su");
+  return commands.some((c) => re.test(c));
+}
+function approveAllowRule(root) {
+  const commands = PHASES.flatMap((p) => ["harness", harnessCliPath()].flatMap((h) => [
+    `${h} gate approve ${p}`,
+    `${h} gate approve ${p} --dialog-ticket 0`
+  ]));
+  for (const file of settingsFiles(root)) {
+    let allow;
+    try {
+      allow = JSON.parse(fs12.readFileSync(file, "utf8"))?.permissions?.allow;
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(allow)) continue;
+    for (const rule of allow) {
+      if (typeof rule === "string" && ruleMatches(rule.trim(), commands)) return { file, rule };
+    }
+  }
+  return null;
+}
 
 // core/src/adr.ts
-var fs12 = __toESM(require("fs"));
-var path9 = __toESM(require("path"));
+var fs13 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
 var YAML5 = __toESM(require_dist());
-var adrDir = (root) => path9.join(designDir(root), "adr");
-var adrPath = (root, id) => path9.join(adrDir(root), `${id}.yaml`);
-var adrHistoryPath = (root, id, version) => path9.join(adrDir(root), `${id}.v${version}.yaml`);
+var adrDir = (root) => path10.join(designDir(root), "adr");
+var adrPath = (root, id) => path10.join(adrDir(root), `${id}.yaml`);
+var adrHistoryPath = (root, id, version) => path10.join(adrDir(root), `${id}.v${version}.yaml`);
 var CUSTOM_OPTION_ID = "custom";
 var MIN_OPTIONS = 2;
 var MAX_OPTIONS = 4;
 function writeAdrFile(target, rec) {
-  fs12.mkdirSync(path9.dirname(target), { recursive: true });
+  fs13.mkdirSync(path10.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs12.writeFileSync(tmp, YAML5.stringify(rec));
-  fs12.renameSync(tmp, target);
+  fs13.writeFileSync(tmp, YAML5.stringify(rec));
+  fs13.renameSync(tmp, target);
 }
 function toAdrRecord(v) {
   if (typeof v !== "object" || v === null) return null;
@@ -11233,20 +11319,20 @@ function toAdrRecord(v) {
 }
 function getAdr(root, id) {
   const p = adrPath(root, id);
-  if (!fs12.existsSync(p)) return void 0;
-  const parsed = toAdrRecord(YAML5.parse(fs12.readFileSync(p, "utf8")));
+  if (!fs13.existsSync(p)) return void 0;
+  const parsed = toAdrRecord(YAML5.parse(fs13.readFileSync(p, "utf8")));
   if (!parsed) throw new Error(tr(root, { en: `The body of ADR record ${id} is damaged: ${p} \u2014 restore it from git history`, ko: `ADR \uAE30\uB85D ${id} \uC758 \uBCF8\uBB38\uC774 \uC190\uC0C1\uB410\uB2E4: ${p} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   return parsed;
 }
 function listAdrs(root) {
   const dir = adrDir(root);
-  if (!fs12.existsSync(dir)) return [];
+  if (!fs13.existsSync(dir)) return [];
   const out = [];
-  for (const f2 of fs12.readdirSync(dir).sort()) {
+  for (const f2 of fs13.readdirSync(dir).sort()) {
     if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
     if (/\.v\d+\.yaml$/.test(f2)) continue;
     try {
-      const rec = toAdrRecord(YAML5.parse(fs12.readFileSync(path9.join(dir, f2), "utf8")));
+      const rec = toAdrRecord(YAML5.parse(fs13.readFileSync(path10.join(dir, f2), "utf8")));
       if (rec) out.push(rec);
     } catch {
       continue;
@@ -11295,12 +11381,12 @@ function syncIndex(root, rec) {
 function referencingWaves(root, id) {
   const affected = [];
   const unverifiable = [];
-  if (!fs12.existsSync(wavesDir(root))) return { affected, unverifiable };
-  for (const f2 of fs12.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  if (!fs13.existsSync(wavesDir(root))) return { affected, unverifiable };
+  for (const f2 of fs13.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     const stem = f2.replace(/\.md$/, "");
     let txt;
     try {
-      txt = fs12.readFileSync(path9.join(wavesDir(root), f2), "utf8");
+      txt = fs13.readFileSync(path10.join(wavesDir(root), f2), "utf8");
     } catch {
       unverifiable.push(stem);
       continue;
@@ -11320,7 +11406,7 @@ function proposeAdr(root, input) {
   if (!input.id.startsWith("ADR-")) {
     throw new Error(tr(root, { en: `An ADR node id must start with "ADR-": "${input.id}" (\xA73-2 ledger id convention)`, ko: `ADR \uB178\uB4DC id \uB294 "ADR-" \uB85C \uC2DC\uC791\uD574\uC57C \uD55C\uB2E4: "${input.id}" (\xA73-2 \uC6D0\uC7A5 ID \uADDC\uC57D)` }));
   }
-  if (fs12.existsSync(adrPath(root, input.id))) {
+  if (fs13.existsSync(adrPath(root, input.id))) {
     throw new Error(
       tr(root, {
         en: `ADR ${input.id} already exists \u2014 do not overwrite a decision. To change it, revise formally with reviseAdr (version++ and STALE propagation).`,
@@ -11499,7 +11585,7 @@ function renderAdrPacket(rec, lang = DEFAULT_LANG) {
 }
 
 // core/src/policy.ts
-var crypto2 = __toESM(require("crypto"));
+var crypto3 = __toESM(require("crypto"));
 
 // core/src/hash.ts
 function updateHashEntry(h, rel, content) {
@@ -11512,8 +11598,8 @@ function updateHashEntry(h, rel, content) {
 }
 
 // core/src/policy.ts
-var fs13 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
+var fs14 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
 var STATE_FILES = [
   ".harness/state.json",
@@ -11524,41 +11610,43 @@ var STATE_FILES = [
   ".harness/ship/deployments.yaml",
   // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
   ".harness/.runtime/last-activity",
-  ".harness/.runtime/last-turn"
+  ".harness/.runtime/last-turn",
+  // 승인 표. 직접 쓸 수 있으면 CLI 의 TTY 검사를 표 위조로 넘을 수 있다(approve.ts).
+  ".harness/.runtime/approve-ticket"
 ];
 var OWNED_FILES = [...STATE_FILES, ...POLICY_FILES];
 var POLICY_PREFIXES = [".harness/profile/"];
 function collect(root, dir, out) {
   let entries;
   try {
-    entries = fs13.readdirSync(dir, { withFileTypes: true });
+    entries = fs14.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
   for (const e of entries) {
-    const p = path10.join(dir, e.name);
+    const p = path11.join(dir, e.name);
     if (e.isDirectory()) collect(root, p, out);
-    else if (e.isFile()) out.push(path10.relative(root, p).split(path10.sep).join("/"));
+    else if (e.isFile()) out.push(path11.relative(root, p).split(path11.sep).join("/"));
   }
 }
 function listPolicyFiles(root) {
   const out = [];
   for (const rel of POLICY_FILES) {
     try {
-      if (fs13.statSync(path10.join(root, rel)).isFile()) out.push(rel);
+      if (fs14.statSync(path11.join(root, rel)).isFile()) out.push(rel);
     } catch {
     }
   }
-  for (const pre of POLICY_PREFIXES) collect(root, path10.join(root, pre), out);
+  for (const pre of POLICY_PREFIXES) collect(root, path11.join(root, pre), out);
   return [...new Set(out)].sort();
 }
 function computePolicyHash(root) {
   const files = listPolicyFiles(root);
-  const h = crypto2.createHash("sha256");
+  const h = crypto3.createHash("sha256");
   for (const rel of files) {
     let content = null;
     try {
-      content = fs13.readFileSync(path10.join(root, rel));
+      content = fs14.readFileSync(path11.join(root, rel));
     } catch {
       content = null;
     }
@@ -11610,17 +11698,17 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs14.readdirSync(dir);
+      names = fs15.readdirSync(dir);
     } catch {
       continue;
     }
     for (const name of names) {
       const m = TMP_RE.exec(name);
       if (!m || pidAlive(Number(m[1]))) continue;
-      const p = path11.join(dir, name);
+      const p = path12.join(dir, name);
       try {
-        if (!fs14.statSync(p).isFile()) continue;
-        fs14.rmSync(p);
+        if (!fs15.statSync(p).isFile()) continue;
+        fs15.rmSync(p);
         swept++;
       } catch {
       }
@@ -11631,11 +11719,11 @@ function sweepOrphanTmp(root) {
 function unwritableDirs(root) {
   const bad = [];
   for (const dir of [harnessDir(root), runtimeDir(root)]) {
-    if (!fs14.existsSync(dir)) continue;
-    const probe = path11.join(dir, `write-probe.tmp-${process.pid}`);
+    if (!fs15.existsSync(dir)) continue;
+    const probe = path12.join(dir, `write-probe.tmp-${process.pid}`);
     try {
-      fs14.writeFileSync(probe, "");
-      fs14.rmSync(probe);
+      fs15.writeFileSync(probe, "");
+      fs15.rmSync(probe);
     } catch {
       bad.push(dir);
     }
@@ -11643,9 +11731,9 @@ function unwritableDirs(root) {
   return bad;
 }
 function countHookErrors(root) {
-  const p = path11.join(runtimeDir(root), "hook-errors.log");
-  if (!fs14.existsSync(p)) return 0;
-  return fs14.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  const p = path12.join(runtimeDir(root), "hook-errors.log");
+  if (!fs15.existsSync(p)) return 0;
+  return fs15.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -11656,7 +11744,7 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  if (fs14.existsSync(harnessDir(root))) {
+  if (fs15.existsSync(harnessDir(root))) {
     const unwritable = unwritableDirs(root);
     if (unwritable.length > 0) {
       issues.push(t({
@@ -11665,7 +11753,7 @@ function runDoctor(root, opts = {}) {
       }));
     }
   }
-  const journalExists = fs14.existsSync(eventsPath(root));
+  const journalExists = fs15.existsSync(eventsPath(root));
   let events = [];
   let corruptLines = 0;
   let journalReadable = true;
@@ -11753,7 +11841,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs14.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs15.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -11786,7 +11874,7 @@ function runDoctor(root, opts = {}) {
   ]) {
     let size = 0;
     try {
-      size = fs14.statSync(file).size;
+      size = fs15.statSync(file).size;
     } catch {
       continue;
     }
@@ -11816,15 +11904,22 @@ function runDoctor(root, opts = {}) {
       ko: `${cfg.path} \uC5D0 \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uC9C0 \uC54A\uB294 \uD0A4\uAC00 ${cfg.unknownKeys.length}\uAC1C \uC788\uB2E4: ${bad} \u2014 \uBB34\uC2DC\uB418\uBBC0\uB85C \uAE30\uBCF8\uAC12\uC774 \uB3CC\uACE0 \uC788\uACE0, \uADF8 \uD0A4\uB85C \uAC78\uB824\uB358 \uAC15\uC81C\uB294 \uAC78\uB824 \uC788\uC9C0 \uC54A\uB2E4. \uCCA0\uC790\uB97C \uACE0\uCE58\uAC70\uB098 \uADF8 \uD0A4\uB97C \uC9C0\uC6CC\uB77C. \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uB294 \uD0A4\uB294: ${known}. (doctor \uB294 \uC774\uAC83\uC744 \uBCF5\uAD6C\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 config \uD30C\uC77C\uC740 \uC0AC\uB78C\uC774 \uACE0\uCE58\uB294 \uAC83\uC774\uB2E4.)`
     }));
   }
+  const allowRule = approveAllowRule(root);
+  if (allowRule) {
+    warnings.push(t({
+      en: `\`${allowRule.rule}\` in ${allowRule.file} allows \`harness gate approve\`, so the hook refuses to raise the confirmation dialog for it. Remove the rule, or approve with \`${approveSlash("<P>")}\`.`,
+      ko: `${allowRule.file} \uC758 \`${allowRule.rule}\` \uADDC\uCE59\uC774 \`harness gate approve\` \uB97C \uD5C8\uC6A9\uD574 \uD6C5\uC774 \uD655\uC778 \uCC3D\uC744 \uB744\uC6B0\uC9C0 \uC54A\uACE0 \uAC70\uBD80\uD55C\uB2E4. \uADF8 \uADDC\uCE59\uC744 \uC9C0\uC6B0\uAC70\uB098 \`${approveSlash("<P>")}\` \uB85C \uC2B9\uC778\uD558\uB77C.`
+    }));
+  }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    const log = path11.join(runtimeDir(root), "hook-errors.log");
+    const log = path12.join(runtimeDir(root), "hook-errors.log");
     warnings.push(t({
       en: `${hookErrors} hook decision failure(s) recorded \u2014 read ${log} to find out why`,
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs14.existsSync(harnessDir(root))) try {
+  if (fs15.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -11894,7 +11989,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs14.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs15.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -11914,9 +12009,9 @@ function runDoctor(root, opts = {}) {
     }
   }
   if (opts.repair && !refused && hookErrors > 0) {
-    const log = path11.join(runtimeDir(root), "hook-errors.log");
+    const log = path12.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs14.renameSync(log, `${log}.prev`);
+      fs15.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -11932,7 +12027,7 @@ function runDoctor(root, opts = {}) {
 }
 
 // core/src/loop.ts
-var fs15 = __toESM(require("fs"));
+var fs16 = __toESM(require("fs"));
 var CRITICAL_REASONS = [
   "repeated-failure",
   "backtrack-needed",
@@ -12012,7 +12107,7 @@ function recordAttempt(root, waveId, outcome, detail) {
   if (outcome !== "pass" && outcome !== "fail") {
     throw new Error(tr(root, { en: `The verification outcome must be pass or fail: ${String(outcome)}`, ko: `\uAC80\uC99D \uACB0\uACFC\uB294 pass \uB610\uB294 fail \uC774\uC5B4\uC57C \uD55C\uB2E4: ${String(outcome)}` }));
   }
-  if (!fs15.existsSync(wavePath(root, waveId))) {
+  if (!fs16.existsSync(wavePath(root, waveId))) {
     throw new Error(
       tr(root, {
         en: `No instruction sheet for wave ${waveId} (${wavePath(root, waveId)}) \u2014 check the id, or list them with \`harness wave list\``,
@@ -12432,19 +12527,19 @@ function buildVerifierBrief(root, waveId) {
 }
 
 // core/src/ship.ts
-var fs19 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
+var fs20 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
 var YAML7 = __toESM(require_dist());
 
 // core/src/gate.ts
-var crypto4 = __toESM(require("crypto"));
-var fs17 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
+var crypto5 = __toESM(require("crypto"));
+var fs18 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
 
 // core/src/registry.ts
-var fs16 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
-var crypto3 = __toESM(require("crypto"));
+var fs17 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
+var crypto4 = __toESM(require("crypto"));
 var YAML6 = __toESM(require_dist());
 function toDocNode(v) {
   if (typeof v !== "object" || v === null) return null;
@@ -12466,10 +12561,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs16.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs17.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML6.parse(fs16.readFileSync(registryPath(root), "utf8"));
+    doc = YAML6.parse(fs17.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -12479,8 +12574,8 @@ function readEntries(root) {
 function writeEntries(root, entries) {
   const target = registryPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs16.writeFileSync(tmp, YAML6.stringify({ docs: entries }));
-  fs16.renameSync(tmp, target);
+  fs17.writeFileSync(tmp, YAML6.stringify({ docs: entries }));
+  fs17.renameSync(tmp, target);
 }
 function inspectRegistry(root) {
   const { entries, parseError } = readEntries(root);
@@ -12524,10 +12619,10 @@ function upsertDoc(root, node) {
   writeEntries(root, entries);
 }
 function computeDocHash(root, doc) {
-  const abs = path12.join(root, doc.path);
+  const abs = path13.join(root, doc.path);
   let buf;
   try {
-    buf = fs16.readFileSync(abs);
+    buf = fs17.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -12536,7 +12631,7 @@ function computeDocHash(root, doc) {
       })
     );
   }
-  return crypto3.createHash("sha256").update(buf).digest("hex");
+  return crypto4.createHash("sha256").update(buf).digest("hex");
 }
 function require_(root, id) {
   const doc = getDoc(root, id);
@@ -12680,9 +12775,9 @@ function docsForPhase(root, phase) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs17.realpathSync(path13.resolve(root, rel));
-    const r = path13.relative(fs17.realpathSync(root), real);
-    return r && !r.startsWith(`..${path13.sep}`) && r !== ".." && !path13.isAbsolute(r) ? r : rel;
+    const real = fs18.realpathSync(path14.resolve(root, rel));
+    const r = path14.relative(fs18.realpathSync(root), real);
+    return r && !r.startsWith(`..${path14.sep}`) && r !== ".." && !path14.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
   }
@@ -12704,7 +12799,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs17.readFileSync(path13.resolve(root, rel));
+    return fs18.readFileSync(path14.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -12769,8 +12864,8 @@ function assertSubstantive(root, arts) {
   }
 }
 function contentDigest(root, relPaths) {
-  const each = relPaths.map((rel) => crypto4.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
-  const h = crypto4.createHash("sha256");
+  const each = relPaths.map((rel) => crypto5.createHash("sha256").update(readArtifact(root, rel)).digest("hex"));
+  const h = crypto5.createHash("sha256");
   for (const d of [...new Set(each)].sort()) h.update(`${d}\0`);
   return h.digest("hex");
 }
@@ -12853,7 +12948,7 @@ function assertNewMaterial(root, phase, paths, gates) {
     );
   }
 }
-var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel = (p) => path14.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
   const want = new Set(paths.map(normRel));
   const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
@@ -12880,7 +12975,7 @@ function assertInsideRoot(root, paths) {
   }
 }
 function computeArtifactHash(root, relPaths) {
-  const h = crypto4.createHash("sha256");
+  const h = crypto5.createHash("sha256");
   for (const rel of normalizePaths(root, relPaths)) {
     updateHashEntry(h, rel, readArtifact(root, rel));
   }
@@ -12896,7 +12991,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs17.readFileSync(path13.resolve(root, rel)).toString("utf8");
+      text = fs18.readFileSync(path14.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -12985,7 +13080,7 @@ function measuredOnlyViolation(root, phase, evidence) {
     ko: `\uCD9C\uD558 \uD2B8\uB799 \uAC8C\uC774\uD2B8 ${phase} \uB294 measured \uADFC\uAC70\uB9CC \uD1B5\uACFC\uD55C\uB2E4 (\uD604\uC7AC: ${evidence ?? "\uC5C6\uC74C"}) \u2014 \uC2E4\uC8FC\uD589\xB7\uCE21\uC815 \uC99D\uC801\uC744 \uBD99\uC5EC \uC7AC\uC81C\uCD9C\uD558\uB77C (Iron Rule, \uC2A4\uD399 \xA73-4)`
   });
 }
-function approveGate(root, phase) {
+function approveGate(root, phase, via) {
   const state = readState(root);
   const current = state.gates[phase];
   if (!current || current.status !== "submitted") {
@@ -13021,14 +13116,16 @@ function approveGate(root, phase) {
     artifactHash,
     evidence: current.evidence,
     paths,
-    policyHash: computePolicyHash(root).hash
+    policyHash: computePolicyHash(root).hash,
+    // 어느 경로로 승인됐는지를 남긴다. 호출자가 사람임을 증명하는 값은 아니다(approve.ts).
+    ...via ? { via } : {}
   });
   const record = { ...current, status: "approved", approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
 }
 function feedbackPath(root, phase) {
-  return path13.join(packetsDir(root), `${phase}.feedback.md`);
+  return path14.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function recordGateFeedback(root, phase, raw) {
   const stripBullet = (l) => l.replace(/^\s*[-*+]\s+/, "");
@@ -13042,8 +13139,8 @@ function recordGateFeedback(root, phase, raw) {
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs17.mkdirSync(packetsDir(root), { recursive: true });
-  fs17.appendFileSync(
+  fs18.mkdirSync(packetsDir(root), { recursive: true });
+  fs18.appendFileSync(
     feedbackPath(root, phase),
     `
 ## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
@@ -13055,7 +13152,7 @@ ${lines.map((l) => `- ${l}`).join("\n")}
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs17.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs18.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -13135,8 +13232,8 @@ function canEnterPhase(root, phase) {
   return {
     ok: false,
     reason: tr(root, {
-      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${first} is currently: ${gates[first]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`${humanCmd(`gate approve ${first}`)}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
-      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${first} \uB294 \uD604\uC7AC ${gates[first]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`${humanCmd(`gate approve ${first}`)}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
+      en: `Cannot move to ${phase} \u2014 ${missing.length} gate(s) before it are not approved: ${list} (${first} is currently: ${gates[first]?.status ?? "pending"}). Start with the earliest: \`harness gate submit ${first}\` \u2192 \`${approveSlash(first)}\`. A phase change happens on 'artifact approval', never on 'work finished' (spec \xA72). Approving a later gate does not stand in for the ones before it`,
+      ko: `${phase} \uB85C \uAC08 \uC218 \uC5C6\uB2E4 \u2014 \uADF8 \uC55E\uC758 \uAC8C\uC774\uD2B8 ${missing.length}\uAC1C\uAC00 \uC2B9\uC778\uB418\uC9C0 \uC54A\uC558\uB2E4: ${list} (${first} \uB294 \uD604\uC7AC ${gates[first]?.status ?? "pending"}). \uAC00\uC7A5 \uC55E\uC758 \uAC83\uBD80\uD130 \uCC98\uB9AC\uD558\uB77C: \`harness gate submit ${first}\` \u2192 \`${approveSlash(first)}\`. \uD398\uC774\uC988 \uC804\uD658\uC740 '\uC791\uC5C5 \uC644\uB8CC'\uAC00 \uC544\uB2C8\uB77C '\uC0B0\uCD9C\uBB3C \uC2B9\uC778'\uC73C\uB85C\uB9CC \uC77C\uC5B4\uB09C\uB2E4(\uC2A4\uD399 \xA72). \uB4A4 \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4\uACE0 \uC55E \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4`
     })
   };
 }
@@ -13151,8 +13248,8 @@ function setPhaseViaGate(root, phase) {
 }
 
 // core/src/report.ts
-var fs18 = __toESM(require("fs"));
-var path14 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
 var trFor3 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -13197,10 +13294,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs18.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs19.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs18.readdirSync(wavesDir(root));
+    files = fs19.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -13216,14 +13313,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs18.readdirSync(dir);
+    files = fs19.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs18.statSync(path14.join(dir, f2));
+      const st = fs19.statSync(path15.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -13620,7 +13717,7 @@ function renderDenials(root, limit = 20) {
   const t = trFor3(langFor(root));
   let raw;
   try {
-    raw = fs18.readFileSync(denialsPath(root), "utf8");
+    raw = fs19.readFileSync(denialsPath(root), "utf8");
   } catch {
     return t({
       en: "No denials recorded yet \u2014 nothing has been blocked in this project since the harness was installed. This file only appears the first time a tool call is denied.",
@@ -13649,10 +13746,10 @@ function renderDenials(root, limit = 20) {
 
 // core/src/ship.ts
 var trFor4 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path15.join(harnessDir(root), "ship");
-var defectsPath = (root) => path15.join(shipDir(root), "defects.yaml");
-var readinessPath = (root) => path15.join(shipDir(root), "readiness.md");
-var deploymentsPath = (root) => path15.join(shipDir(root), "deployments.yaml");
+var shipDir = (root) => path16.join(harnessDir(root), "ship");
+var defectsPath = (root) => path16.join(shipDir(root), "defects.yaml");
+var readinessPath = (root) => path16.join(shipDir(root), "readiness.md");
+var deploymentsPath = (root) => path16.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 var SHIP_BLOCKING_SEVERITIES = ["blocker", "high"];
@@ -13662,16 +13759,16 @@ function shipBlockingDefects(root) {
   );
 }
 function writeAtomic(target, content) {
-  fs19.mkdirSync(path15.dirname(target), { recursive: true });
+  fs20.mkdirSync(path16.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs19.writeFileSync(tmp, content);
-  fs19.renameSync(tmp, target);
+  fs20.writeFileSync(tmp, content);
+  fs20.renameSync(tmp, target);
 }
 function readRecords(root, file, key, to) {
-  if (!fs19.existsSync(file)) return [];
+  if (!fs20.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML7.parse(fs19.readFileSync(file, "utf8"));
+    doc = YAML7.parse(fs20.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -13953,16 +14050,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs19.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs19.readdirSync(wavesDir(root));
+    files = fs20.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs19.readFileSync(path15.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs20.readFileSync(path16.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -14067,8 +14164,8 @@ function renderReleaseChecklist(root) {
       }),
       "",
       t({
-        en: "This verdict does not open the gate for you \u2014 a human presses `" + humanCmd("gate approve P12") + "`.",
-        ko: "\uC774 \uD310\uC815\uC740 \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0 \uC5F4\uC9C0 \uC54A\uB294\uB2E4 \u2014 `" + humanCmd("gate approve P12") + "` \uB294 \uC0AC\uB78C\uC774 \uB204\uB978\uB2E4."
+        en: "This verdict does not open the gate for you \u2014 a human presses `" + approveSlash("P12") + "`.",
+        ko: "\uC774 \uD310\uC815\uC740 \uAC8C\uC774\uD2B8\uB97C \uB300\uC2E0 \uC5F4\uC9C0 \uC54A\uB294\uB2E4 \u2014 `" + approveSlash("P12") + "` \uB294 \uC0AC\uB78C\uC774 \uB204\uB978\uB2E4."
       })
     );
   } else {
@@ -14167,7 +14264,7 @@ var COMMANDS = [
     summary: M2("Phase gates \u2014 submit artifacts, then a human approves.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8 \u2014 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uACE0 \uC0AC\uB78C\uC774 \uC2B9\uC778\uD55C\uB2E4."),
     subs: [
       { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M2("Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4. \uBE48 \uBB38\uC11C\xB7\uC790\uB9AC\uD45C\uC2DC\uC790\uC640 \uC774\uBBF8 \uB2E4\uB978 \uAC8C\uC774\uD2B8\uB97C \uC5F0 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uD55C\uB2E4.") },
-      { name: "approve", args: "<P>", summary: M2("Approve a submitted gate. Humans only \u2014 never an agent.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4 \u2014 \uC5D0\uC774\uC804\uD2B8\uB294 \uBABB \uD55C\uB2E4.") },
+      { name: "approve", args: "<P> [--dialog-ticket <t>] [--via slash] [--project <dir>]", summary: M2("Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4: /king-wjang-harness:approve <P> \uB97C \uC785\uB825\uD558\uAC70\uB098 \uD655\uC778 \uCC3D\uC5D0 \uB2F5\uD55C\uB2E4. \uD50C\uB798\uADF8\uB294 \uD50C\uB7EC\uADF8\uC778\uC774 \uC4F0\uB294 \uAC12\uC774\uB77C \uC190\uC73C\uB85C \uCE58\uC9C0 \uC54A\uB294\uB2E4.") },
       { name: "verify", args: "<P>", summary: M2("Re-check that submitted artifacts still match their pinned hash.", "\uC81C\uCD9C \uB2F9\uC2DC \uD574\uC2DC\uC640 \uD604\uC7AC \uC0B0\uCD9C\uBB3C\uC774 \uAC19\uC740\uC9C0 \uB2E4\uC2DC \uD655\uC778\uD55C\uB2E4.") },
       { name: "sweep", summary: M2("Invalidate gates whose artifacts changed after approval.", "\uC2B9\uC778 \uD6C4 \uC0B0\uCD9C\uBB3C\uC774 \uBC14\uB010 \uAC8C\uC774\uD2B8\uB97C \uBB34\uD6A8\uD654\uD55C\uB2E4.") },
       { name: "status", summary: M2("Print all gate records as JSON.", "\uC804 \uAC8C\uC774\uD2B8 \uB808\uCF54\uB4DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
@@ -14523,14 +14620,14 @@ Run \`harness --help\` for the full usage.`;
 }
 
 // core/src/hook.ts
-var fs22 = __toESM(require("fs"));
-var path18 = __toESM(require("path"));
+var fs23 = __toESM(require("fs"));
+var path19 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs20 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
+var fs21 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
-var tierFile = (root) => path16.join(runtimeDir(root), "usage-tier");
+var tierFile = (root) => path17.join(runtimeDir(root), "usage-tier");
 function tierFor(percent) {
   if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
   if (percent >= 99) return "final-handoff";
@@ -14563,12 +14660,12 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs20.mkdirSync(runtimeDir(root), { recursive: true });
-  fs20.writeFileSync(tierFile(root), tier + "\n");
+  fs21.mkdirSync(runtimeDir(root), { recursive: true });
+  fs21.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs20.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs21.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
@@ -14576,8 +14673,8 @@ function lastTier(root) {
 }
 
 // core/src/profile.ts
-var fs21 = __toESM(require("fs"));
-var path17 = __toESM(require("path"));
+var fs22 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
 var YAML8 = __toESM(require_dist());
 var trFor5 = (lang) => (m) => pick(m, lang);
 var GENERIC = "generic";
@@ -14602,14 +14699,14 @@ var GENERIC_FLOOR = Object.freeze({
   origin: "floor",
   dir: ""
 });
-var localProfileDir = (root) => path17.join(harnessDir(root), "profile");
+var localProfileDir = (root) => path18.join(harnessDir(root), "profile");
 function bundledProfilesDir() {
-  return path17.resolve(__dirname, "..", "..", "profiles");
+  return path18.resolve(__dirname, "..", "..", "profiles");
 }
 var errMsg = (e) => e instanceof Error ? e.message : String(e);
 function isDir(p) {
   try {
-    return fs21.statSync(p).isDirectory();
+    return fs22.statSync(p).isDirectory();
   } catch {
     return false;
   }
@@ -14647,10 +14744,10 @@ function readList(m, key, fallback, yamlPath, problems, required, t) {
   return parsed.list;
 }
 function readCommands(dir, problems, t) {
-  const p = path17.join(dir, "commands.yaml");
+  const p = path18.join(dir, "commands.yaml");
   let text;
   try {
-    text = fs21.readFileSync(p, "utf8");
+    text = fs22.readFileSync(p, "utf8");
   } catch {
     problems.push(t({
       en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
@@ -14692,12 +14789,12 @@ function readCommands(dir, problems, t) {
   return out;
 }
 function readProfileDir(dir, origin, problems, t) {
-  const yamlPath = path17.join(dir, "profile.yaml");
+  const yamlPath = path18.join(dir, "profile.yaml");
   let text;
   try {
-    text = fs21.readFileSync(yamlPath, "utf8");
+    text = fs22.readFileSync(yamlPath, "utf8");
   } catch (e) {
-    if (fs21.existsSync(path17.join(dir, "commands.yaml"))) {
+    if (fs22.existsSync(path18.join(dir, "commands.yaml"))) {
       text = "name: local";
     } else {
       problems.push(t({
@@ -14725,7 +14822,7 @@ function readProfileDir(dir, origin, problems, t) {
     return null;
   }
   const m = raw;
-  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path17.basename(dir);
+  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path18.basename(dir);
   const description = typeof m.description === "string" ? m.description.trim() : void 0;
   return {
     name,
@@ -14754,7 +14851,7 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
   const problems = [];
   const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
   const local = localProfileDir(root);
-  if (fs21.existsSync(local)) {
+  if (fs22.existsSync(local)) {
     if (!isDir(local)) {
       problems.push(t({
         en: `${local} is not a directory \u2014 skipping the project-local profile`,
@@ -14773,8 +14870,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
         ko: `\uD504\uB85C\uD30C\uC77C \uC774\uB984 '${wanted}' \uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4(\uC601\uC22B\uC790\xB7. _ - \uB9CC \uD5C8\uC6A9) \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \`.harness/config.yaml\` \uC758 \`profile\` \uC744 \uACE0\uCCD0\uB77C`
       })
     );
-  } else if (isDir(path17.join(bundled, wanted))) {
-    const p = readProfileDir(path17.join(bundled, wanted), "bundled", problems, t);
+  } else if (isDir(path18.join(bundled, wanted))) {
+    const p = readProfileDir(path18.join(bundled, wanted), "bundled", problems, t);
     if (p) return { profile: p, problems };
   } else {
     problems.push(
@@ -14784,8 +14881,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
       })
     );
   }
-  if (wanted !== GENERIC && isDir(path17.join(bundled, GENERIC))) {
-    const p = readProfileDir(path17.join(bundled, GENERIC), "bundled", problems, t);
+  if (wanted !== GENERIC && isDir(path18.join(bundled, GENERIC))) {
+    const p = readProfileDir(path18.join(bundled, GENERIC), "bundled", problems, t);
     if (p) return { profile: p, problems };
   }
   problems.push(
@@ -14962,7 +15059,7 @@ function isHarnessStateShape(s) {
 function handleHook(root, event, input) {
   realCache = /* @__PURE__ */ new Map();
   try {
-    if (!fs22.existsSync(harnessDir(root))) return null;
+    if (!fs23.existsSync(harnessDir(root))) return null;
     let state;
     let degraded = null;
     try {
@@ -14972,7 +15069,7 @@ function handleHook(root, event, input) {
     } catch {
       let size = 0;
       try {
-        size = fs22.statSync(eventsPath(root)).size;
+        size = fs23.statSync(eventsPath(root)).size;
       } catch {
         size = 0;
       }
@@ -15005,6 +15102,8 @@ function handleHook(root, event, input) {
       }
       case "post-tool":
         return postTool(root, input);
+      case "user-prompt-expansion":
+        return slashApproveTicket(root, state, input);
       case "stop":
         return stopGuard(root, state, input, config.lang, degraded);
       default:
@@ -15021,9 +15120,9 @@ function handleHook(root, event, input) {
 function logHookError(root, event, err) {
   try {
     const dir = runtimeDir(root);
-    fs22.mkdirSync(dir, { recursive: true });
-    fs22.appendFileSync(
-      path18.join(dir, "hook-errors.log"),
+    fs23.mkdirSync(dir, { recursive: true });
+    fs23.appendFileSync(
+      path19.join(dir, "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${event} ${String(err)}
 `
     );
@@ -15230,14 +15329,79 @@ function recordDenial(root, input, out) {
       reason: maskSecrets(oneLine(String(d.permissionDecisionReason ?? ""))).slice(0, 400)
     });
     const p = denialsPath(root);
-    fs22.mkdirSync(path18.dirname(p), { recursive: true });
-    fs22.appendFileSync(p, line + "\n");
-    if (fs22.statSync(p).size > DENIALS_ROTATE_BYTES) {
-      const kept = fs22.readFileSync(p, "utf8").split("\n").filter(Boolean).slice(-DENIALS_KEEP);
-      fs22.writeFileSync(p, kept.join("\n") + "\n");
+    fs23.mkdirSync(path19.dirname(p), { recursive: true });
+    fs23.appendFileSync(p, line + "\n");
+    if (fs23.statSync(p).size > DENIALS_ROTATE_BYTES) {
+      const kept = fs23.readFileSync(p, "utf8").split("\n").filter(Boolean).slice(-DENIALS_KEEP);
+      fs23.writeFileSync(p, kept.join("\n") + "\n");
     }
   } catch {
   }
+}
+function judgeApproveCall(root, state, input, cmd, degraded, L) {
+  const call = parseApproveCall(cmd);
+  if (!call) {
+    return { why: L(
+      "only the plain command `harness gate approve <P>`, alone on one line, can raise it.",
+      "`harness gate approve <P>` \uB97C \uADF8\uB300\uB85C \uD55C \uC904 \uB2E8\uB3C5\uC73C\uB85C \uC2E4\uD589\uD560 \uB54C\uB9CC \uB744\uC6B8 \uC218 \uC788\uB2E4."
+    ) };
+  }
+  if (degraded) {
+    return { why: L("the state is damaged, so what is being approved cannot be shown.", "\uC0C1\uD0DC\uAC00 \uC190\uC0C1\uB3FC \uBB34\uC5C7\uC744 \uC2B9\uC778\uD558\uB294\uC9C0 \uBCF4\uC5EC \uC904 \uC218 \uC5C6\uB2E4.") };
+  }
+  if (input.agent_id) {
+    return { why: L("it came from a subagent.", "\uC11C\uBE0C\uC5D0\uC774\uC804\uD2B8\uC758 \uD638\uCD9C\uC774\uB2E4.") };
+  }
+  if (!interactiveEntrypoint()) {
+    return { why: L("this session has nobody at the prompt to answer it.", "\uC774 \uC138\uC158\uC5D0\uB294 \uCC3D\uC5D0 \uB2F5\uD560 \uC0AC\uB78C\uC774 \uC5C6\uB2E4.") };
+  }
+  if (!askableMode(input.permission_mode)) {
+    return { why: L(
+      `permission mode \`${input.permission_mode ?? "unknown"}\` does not guarantee that a person sees the dialog.`,
+      `\uAD8C\uD55C \uBAA8\uB4DC \`${input.permission_mode ?? "\uC54C \uC218 \uC5C6\uC74C"}\` \uC5D0\uC11C\uB294 \uC0AC\uB78C\uC5D0\uAC8C \uCC3D\uC774 \uB72C\uB2E4\uACE0 \uBCF4\uC7A5\uD560 \uC218 \uC5C6\uB2E4.`
+    ) };
+  }
+  const allowed = approveAllowRule(root);
+  if (allowed) {
+    return { why: L(
+      `\`${allowed.rule}\` in ${allowed.file} allows this command, so the dialog may never appear. Remove that rule.`,
+      `${allowed.file} \uC758 \`${allowed.rule}\` \uADDC\uCE59\uC774 \uC774 \uBA85\uB839\uC744 \uD5C8\uC6A9\uD574 \uCC3D\uC774 \uB728\uC9C0 \uC54A\uC744 \uC218 \uC788\uB2E4. \uADF8 \uADDC\uCE59\uC744 \uC9C0\uC6CC\uC57C \uD55C\uB2E4.`
+    ) };
+  }
+  const gate = state.gates[call.phase];
+  if (gate?.status !== "submitted") {
+    return { why: L(
+      `gate ${call.phase} is not submitted (currently: ${gate?.status ?? "pending"}).`,
+      `\uAC8C\uC774\uD2B8 ${call.phase} \uAC00 \uC81C\uCD9C \uC0C1\uD0DC\uAC00 \uC544\uB2C8\uB2E4(\uD604\uC7AC: ${gate?.status ?? "pending"}).`
+    ) };
+  }
+  const notMeasured = measuredOnlyViolation(root, call.phase, gate.evidence);
+  if (notMeasured) return { why: notMeasured };
+  const paths = recordedPaths(root, call.phase) ?? [];
+  const shown = sanitizeUntrusted(paths.slice(0, 5).join(", ") + (paths.length > 5 ? ` +${paths.length - 5}` : ""), 300);
+  const hash = (gate.artifactHash ?? "").slice(0, 12);
+  const nonce = issueDialogTicket(root, call.phase, gate.artifactHash ?? "");
+  return { ask: {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "ask",
+      permissionDecisionReason: L(
+        `Approve gate ${call.phase}? Artifacts: ${shown} \xB7 evidence: ${gate.evidence} \xB7 hash: ${hash} \xB7 review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`,
+        `\uAC8C\uC774\uD2B8 ${call.phase} \uB97C \uC2B9\uC778\uD569\uB2C8\uAE4C? \uC0B0\uCD9C\uBB3C: ${shown} \xB7 \uADFC\uAC70: ${gate.evidence} \xB7 \uD574\uC2DC: ${hash} \xB7 \uB9AC\uBDF0 \uD328\uD0B7: .harness/packets/${call.phase}.md. \uC2B9\uC778\uD558\uBA74 \uB2E4\uC74C \uD398\uC774\uC988\uAC00 \uC5F4\uB9B0\uB2E4.`
+      ),
+      // 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
+      updatedInput: { ...input.tool_input, command: `${harnessCliPath()} gate approve ${call.phase} --dialog-ticket ${nonce}` }
+    }
+  } };
+}
+function slashApproveTicket(root, state, input) {
+  if (input.command_name !== SLASH_COMMAND_NAME || input.command_source !== "plugin") return null;
+  if (!interactiveEntrypoint()) return null;
+  const phase = (input.command_args ?? "").trim();
+  if (!isPhase(phase)) return null;
+  const gate = state.gates[phase];
+  if (gate?.status === "submitted") issueSlashTicket(root, phase, gate.artifactHash ?? "");
+  return null;
 }
 function deny(reason, degraded, lang = "en") {
   const tag = degraded ? lang === "ko" ? ` [state \uC190\uC0C1 \u2014 harness doctor --repair \uAD8C\uC7A5${degraded.corruptLines > 0 ? `; \uC800\uB110 ${degraded.corruptLines}\uC904 \uC190\uC0C1` : ""}]` : ` [state damaged \u2014 run harness doctor --repair${degraded.corruptLines > 0 ? `; ${degraded.corruptLines} journal line(s) corrupt` : ""}]` : "";
@@ -15259,27 +15423,27 @@ function realOrSelf(p) {
 }
 function realOrSelfUncached(p) {
   try {
-    return fs22.realpathSync.native(p);
+    return fs23.realpathSync.native(p);
   } catch {
     try {
-      const target = fs22.readlinkSync(p);
-      return realOrSelf(path18.isAbsolute(target) ? target : path18.join(path18.dirname(p), target));
+      const target = fs23.readlinkSync(p);
+      return realOrSelf(path19.isAbsolute(target) ? target : path19.join(path19.dirname(p), target));
     } catch {
     }
-    const parent = path18.dirname(p);
+    const parent = path19.dirname(p);
     if (parent === p) return p;
-    return path18.join(realOrSelf(parent), path18.basename(p));
+    return path19.join(realOrSelf(parent), path19.basename(p));
   }
 }
 function relPath(root, p) {
-  return path18.relative(root, path18.resolve(root, p));
+  return path19.relative(root, path19.resolve(root, p));
 }
 function realRelPath(root, p) {
-  const abs = path18.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
-  return path18.relative(realOrSelf(root), realOrSelf(abs));
+  const abs = path19.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
+  return path19.relative(realOrSelf(root), realOrSelf(abs));
 }
 function isOutsideRoot(rel) {
-  return rel === ".." || rel.startsWith(`..${path18.sep}`) || path18.isAbsolute(rel);
+  return rel === ".." || rel.startsWith(`..${path19.sep}`) || path19.isAbsolute(rel);
 }
 var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
 var DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join("|")})$`);
@@ -15312,19 +15476,19 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
           continue;
         }
         try {
-          const st0 = fs22.statSync(path18.resolve(root, candidate));
+          const st0 = fs23.statSync(path19.resolve(root, candidate));
           if (!st0.isFile()) continue;
           if (st0.size > SCRIPT_MAX_BYTES) {
             unread.push(candidate);
             continue;
           }
-          outside.push(fs22.readFileSync(path18.resolve(root, candidate), "utf8"));
+          outside.push(fs23.readFileSync(path19.resolve(root, candidate), "utf8"));
         } catch {
         }
         continue;
       }
-      const abs = path18.resolve(root, candidate);
-      const st = fs22.statSync(abs);
+      const abs = path19.resolve(root, candidate);
+      const st = fs23.statSync(abs);
       if (!st.isFile()) continue;
       if (atLimit) {
         tooDeep.push(candidate);
@@ -15334,7 +15498,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
         unread.push(candidate);
         continue;
       }
-      const body = fs22.readFileSync(abs, "utf8");
+      const body = fs23.readFileSync(abs, "utf8");
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);
       out.push(...sub.bodies);
@@ -15347,7 +15511,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
   if (npmRun) {
     try {
-      const pkg = JSON.parse(fs22.readFileSync(path18.join(root, "package.json"), "utf8"));
+      const pkg = JSON.parse(fs23.readFileSync(path19.join(root, "package.json"), "utf8"));
       const script = pkg.scripts?.[npmRun[1]];
       if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
@@ -15374,11 +15538,11 @@ function interpreterProgramBodies(root, cmd) {
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     try {
-      const abs = path18.resolve(root, candidate);
-      const st = fs22.statSync(abs);
+      const abs = path19.resolve(root, candidate);
+      const st = fs23.statSync(abs);
       if (!st.isFile()) continue;
       if (st.size > SCRIPT_MAX_BYTES) continue;
-      bodies.push(fs22.readFileSync(abs, "utf8"));
+      bodies.push(fs23.readFileSync(abs, "utf8"));
     } catch {
     }
   }
@@ -15404,11 +15568,11 @@ function readPatchTargets(root, files) {
   if (files.length === 0) return null;
   const out = [];
   for (const rel of files) {
-    const abs = path18.isAbsolute(rel) ? rel : path18.resolve(root, rel);
+    const abs = path19.isAbsolute(rel) ? rel : path19.resolve(root, rel);
     let body;
     try {
-      if (fs22.statSync(abs).size > PATCH_READ_CAP) return null;
-      body = fs22.readFileSync(abs, "utf8");
+      if (fs23.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs23.readFileSync(abs, "utf8");
     } catch {
       return null;
     }
@@ -15488,22 +15652,22 @@ function protectedByGlob(target) {
   return CORE_FILES.find((f2) => re.test(f2)) ?? POLICY_PREFIXES.map((pre) => `${pre}profile.yaml`).find((f2) => re.test(f2));
 }
 function harnessProgramFiles() {
-  const install = path18.resolve(__dirname, "..", "..");
+  const install = path19.resolve(__dirname, "..", "..");
   return [
-    path18.join(install, "core", "dist", "cli.js"),
-    path18.join(install, "core", "dist", "mcp.js"),
-    path18.join(install, "core", "src", "cli.ts"),
-    path18.join(install, "core", "src", "mcp.ts"),
-    path18.join(install, "core", "src", "hook.ts"),
-    path18.join(install, "bin", "harness"),
-    path18.join(install, "bin", "harness-hook")
+    path19.join(install, "core", "dist", "cli.js"),
+    path19.join(install, "core", "dist", "mcp.js"),
+    path19.join(install, "core", "src", "cli.ts"),
+    path19.join(install, "core", "src", "mcp.ts"),
+    path19.join(install, "core", "src", "hook.ts"),
+    path19.join(install, "bin", "harness"),
+    path19.join(install, "bin", "harness-hook")
   ];
 }
 var INTERPRETER_HEADS = new RegExp(
   `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join("|")})$`
 );
 function runsProgramDirectly(root, line, prog) {
-  const same = (t) => realOrSelf(path18.isAbsolute(t) ? t : path18.resolve(root, t)) === realOrSelf(prog);
+  const same = (t) => realOrSelf(path19.isAbsolute(t) ? t : path19.resolve(root, t)) === realOrSelf(prog);
   const tokens = line.split(/\s+/).filter(Boolean);
   const first = tokens[0] ?? "";
   if (first && same(first)) return true;
@@ -15516,7 +15680,7 @@ function copiesHarnessProgram(root, cmd) {
   const real = progs.map((f2) => realOrSelf(f2));
   const lines = commandLines(cmd);
   for (const m of pathLikeMentions(cmd)) {
-    const abs = realOrSelf(path18.isAbsolute(m) ? m : path18.resolve(root, m));
+    const abs = realOrSelf(path19.isAbsolute(m) ? m : path19.resolve(root, m));
     const i = real.indexOf(abs);
     if (i === -1) continue;
     if (lines.some((l) => runsProgramDirectly(root, l, progs[i]))) continue;
@@ -15593,12 +15757,12 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   }
   const aliasOfCore = (() => {
     try {
-      const abs = path18.resolve(root, raw);
-      const st = fs22.statSync(abs);
+      const abs = path19.resolve(root, raw);
+      const st = fs23.statSync(abs);
       if (!st.isFile() || st.nlink < 2) return void 0;
       for (const core of CORE_FILES) {
         try {
-          const cs = fs22.statSync(path18.join(root, core));
+          const cs = fs23.statSync(path19.join(root, core));
           if (cs.dev === st.dev && cs.ino === st.ino) return core;
         } catch {
         }
@@ -15638,7 +15802,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     );
   }
   const bundleDir = realOrSelf(bundledProfilesDir());
-  const bundleHit = [raw].map((r) => realOrSelf(path18.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path18.sep}`));
+  const bundleHit = [raw].map((r) => realOrSelf(path19.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path19.sep}`));
   if (raw && bundleHit) {
     return deny(
       L(
@@ -15665,7 +15829,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   if (!coreOnly && SHIP_PHASES.includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
-    const isNew = inRoot && target !== "" && !fs22.existsSync(path18.join(root, target));
+    const isNew = inRoot && target !== "" && !fs23.existsSync(path19.join(root, target));
     if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
         // [UTIL-149] **강제하지 않는 것을 강제한다고 말하지 않는다.** 예전 문구는 「이 구간은
@@ -15863,8 +16027,8 @@ function preTool(root, state, config, input, degraded) {
       const copied = copiesHarnessProgram(root, cmd);
       if (copied) {
         return deny(L(
-          `This copies the harness's own program (${path18.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always yours, in your own terminal.)`,
-          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path18.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uAC00 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uD55C\uB2E4.)`
+          `This copies the harness's own program (${path19.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always the user's: \`${approveSlash("<P>")}\`.)`,
+          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path19.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uC758 \uC77C\uC774\uB2E4: \`${approveSlash("<P>")}\`.)`
         ), degraded, lang);
       }
       const blind0 = scan.blindTargets[0];
@@ -15948,20 +16112,28 @@ function preTool(root, state, config, input, degraded) {
     }
     if (/HARNESS_ALLOW_FORCE(?![A-Z0-9_])/.test(cmd) || runsHarnessWith(cmd, /\bphase\b/, /--force(?![\w-])/)) {
       return deny(L(
-        "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** in their terminal: `HARNESS_ALLOW_FORCE=1 " + humanCmd("phase set <P> --force") + "`.",
-        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** `HARNESS_ALLOW_FORCE=1 " + humanCmd("phase set <P> --force") + "` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
+        "`phase set --force` skips the gate check, so an agent cannot run it \u2014 phase changes go through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, **the user must run it themselves** at the Claude Code prompt: `" + humanCmd("phase set <P> --force", "HARNESS_ALLOW_FORCE=1") + "`.",
+        "`phase set --force` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4 \u2014 \uD398\uC774\uC988 \uC804\uD658\uC740 `harness gate submit <P>` \u2192 \uC0AC\uB78C \uC2B9\uC778 `harness gate approve <P>` \uB85C\uB9CC \uD55C\uB2E4. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uAC00 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 Claude Code \uD504\uB86C\uD504\uD2B8\uC5D0\uC11C** `" + humanCmd("phase set <P> --force", "HARNESS_ALLOW_FORCE=1") + "` \uB97C \uC2E4\uD589\uD574\uC57C \uD55C\uB2E4."
       ), degraded, lang);
     }
     if (setsEnv(cmd, "HARNESS_APPROVE_NO_TTY") || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
+      const judged = judgeApproveCall(root, state, input, cmd, degraded, L);
+      if ("ask" in judged) return judged.ask;
       return deny(L(
-        "Approving a gate is the human's decision \u2014 an agent cannot run `harness gate approve`. Submit the artifacts and let the review packet be read: `harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** in their terminal with `" + humanCmd("gate approve <P>") + "`. Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.",
-        "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 `harness gate approve` \uB97C \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD574 \uB9AC\uBDF0 \uD328\uD0B7\uC774 \uC77D\uD788\uAC8C \uD558\uB77C: `harness gate submit <P> --evidence measured --paths <\uC0B0\uCD9C\uBB3C>`. \uADF8 \uB2E4\uC74C **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811** \uD130\uBBF8\uB110\uC5D0\uC11C `" + humanCmd("gate approve <P>") + "` \uB85C \uC2B9\uC778\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`."
+        `Approving a gate is the human's decision, and this call cannot raise a confirmation dialog: ${judged.why} Submit the artifacts and let the review packet be read: \`harness gate submit <P> --evidence measured --paths <artifacts>\`, then **ask the user to type** \`` + approveSlash("<P>") + "`. Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.",
+        `\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC774\uACE0, \uC774 \uD638\uCD9C\uB85C\uB294 \uD655\uC778 \uCC3D\uC744 \uB744\uC6B8 \uC218 \uC5C6\uB2E4: ${judged.why} \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD574 \uB9AC\uBDF0 \uD328\uD0B7\uC774 \uC77D\uD788\uAC8C \uD558\uB77C: \`harness gate submit <P> --evidence measured --paths <\uC0B0\uCD9C\uBB3C>\`. \uADF8 \uB2E4\uC74C **\uC0AC\uC6A9\uC790\uC5D0\uAC8C** \`` + approveSlash("<P>") + "` \uC785\uB825\uC744 \uC694\uCCAD\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`."
+      ), degraded, lang);
+    }
+    if (cmd.includes(":approve") && commandLines(cmd).some((l) => /^\S*claude\b/u.test(l))) {
+      return deny(L(
+        `A nested Claude Code session cannot type the approval command. Ask the user to type \`${approveSlash("<P>")}\`.`,
+        `\uD558\uC704 Claude Code \uC138\uC158\uC73C\uB85C \uC2B9\uC778 \uBA85\uB839\uC744 \uC785\uB825\uD560 \uC218 \uC5C6\uB2E4. \uC0AC\uC6A9\uC790\uC5D0\uAC8C \`${approveSlash("<P>")}\` \uC785\uB825\uC744 \uC694\uCCAD\uD558\uB77C.`
       ), degraded, lang);
     }
     if (/HARNESS_ACCEPT_POLICY/.test(cmd) || runsHarnessWith(cmd, /\bdoctor\b/, /--accept-policy(?![\w-])/)) {
       return deny(L(
-        '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing the diff: `HARNESS_ACCEPT_POLICY=1 ' + humanCmd("doctor --accept-policy") + "`. Diagnosis is open to you: `harness doctor` reports the drift.",
-        "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
+        '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning \u2014 so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to them is the user\'s judgement. **The user runs it themselves** at the Claude Code prompt after reviewing the diff: `' + humanCmd("doctor --accept-policy", "HARNESS_ACCEPT_POLICY=1") + "`. Diagnosis is open to you: `harness doctor` reports the drift.",
+        "`doctor --accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uB294 \uBA85\uB839\uC774\uB77C \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2E4\uD589\uD560 \uC218 \uC5C6\uB2E4. \uC815\uCC45 \uD30C\uC77C\uC740 \uC774 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uACE0, \uADF8 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4 \u2014 **\uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 Claude Code \uD504\uB86C\uD504\uD2B8\uC5D0\uC11C** \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 `" + humanCmd("doctor --accept-policy", "HARNESS_ACCEPT_POLICY=1") + "` \uB85C \uC2E4\uD589\uD55C\uB2E4. \uC9C4\uB2E8\uC740 \uC5F4\uB824 \uC788\uB2E4: `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
       ), degraded, lang);
     }
     const inBuild = BUILD_PHASES.includes(state.phase);
@@ -16066,8 +16238,8 @@ ${note}` };
 }
 
 // core/src/migrate.ts
-var fs23 = __toESM(require("fs"));
-var path19 = __toESM(require("path"));
+var fs24 = __toESM(require("fs"));
+var path20 = __toESM(require("path"));
 var CANDIDATES = [
   {
     name: "handoff-guard",
@@ -16113,10 +16285,10 @@ var CANDIDATES = [
 function detectLegacyTools(homeDir, lang = DEFAULT_LANG) {
   const found = [];
   for (const c of CANDIDATES) {
-    const p = path19.join(homeDir, c.rel);
+    const p = path20.join(homeDir, c.rel);
     let st;
     try {
-      st = fs23.statSync(p);
+      st = fs24.statSync(p);
     } catch {
       continue;
     }
@@ -16158,7 +16330,7 @@ function migrationReport(tools, lang = DEFAULT_LANG) {
 }
 function legacyHarnessGitignore(root) {
   try {
-    const body = fs23.readFileSync(path19.join(runtimeDir(root), ".gitignore"), "utf8");
+    const body = fs24.readFileSync(path20.join(runtimeDir(root), ".gitignore"), "utf8");
     return body.trim() === "*";
   } catch {
     return false;
@@ -16166,12 +16338,15 @@ function legacyHarnessGitignore(root) {
 }
 
 // core/src/cli.ts
-var HOOK_EVENTS = ["session-start", "pre-tool", "post-tool", "stop"];
+var HOOK_EVENTS = ["session-start", "pre-tool", "post-tool", "stop", "user-prompt-expansion"];
 function flag(argv, name) {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : void 0;
 }
 var VALUE_FLAGS = /* @__PURE__ */ new Set([
+  "dialog-ticket",
+  "via",
+  "project",
   "accept",
   "acceptance",
   "anchor",
@@ -16289,10 +16464,10 @@ function explainUnknownFlag(tok, allowed) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs24.existsSync(harnessDir(root))) return;
-    fs24.mkdirSync(runtimeDir(root), { recursive: true });
-    fs24.appendFileSync(
-      path20.join(runtimeDir(root), "hook-errors.log"),
+    if (!fs25.existsSync(harnessDir(root))) return;
+    fs25.mkdirSync(runtimeDir(root), { recursive: true });
+    fs25.appendFileSync(
+      path21.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
     );
@@ -16322,7 +16497,7 @@ function readAllStdin() {
   for (; ; ) {
     let n;
     try {
-      n = fs24.readSync(0, buf, 0, CHUNK, null);
+      n = fs25.readSync(0, buf, 0, CHUNK, null);
     } catch (err) {
       const code = err.code;
       if (code === "EAGAIN") {
@@ -16354,7 +16529,7 @@ function assertOutputAllowed(root, out, targets, lang, what) {
     ));
   }
   for (const t of targets) {
-    const rel = path20.relative(root, path20.resolve(root, t));
+    const rel = path21.relative(root, path21.resolve(root, t));
     if (OWNED_FILES.includes(rel)) {
       throw new Error(L(
         `${what.en} would overwrite \`${rel}\`, which only harness commands may change \u2014 the journal is the audit trail and the state store is derived from it. Choose a different --out path.`,
@@ -16366,7 +16541,7 @@ function assertOutputAllowed(root, out, targets, lang, what) {
   if (!DESIGN_PHASES.includes(phase)) return;
   const profile = loadProfile(root);
   for (const t of targets) {
-    const rel = path20.relative(root, path20.resolve(root, t));
+    const rel = path21.relative(root, path21.resolve(root, t));
     if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
       throw new Error(L(
         `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
@@ -16394,7 +16569,7 @@ function requirePhase(raw, cmd, lang) {
 function harnessVersion() {
   for (const rel of ["../../package.json", "../package.json"]) {
     try {
-      const v = JSON.parse(fs24.readFileSync(path20.resolve(__dirname, rel), "utf8")).version;
+      const v = JSON.parse(fs25.readFileSync(path21.resolve(__dirname, rel), "utf8")).version;
       if (typeof v === "string" && v) return `v${v}`;
     } catch {
     }
@@ -16403,7 +16578,7 @@ function harnessVersion() {
 }
 function buildId() {
   try {
-    const h = (0, import_node_crypto2.createHash)("sha256").update(fs24.readFileSync(__filename)).digest("hex");
+    const h = (0, import_node_crypto2.createHash)("sha256").update(fs25.readFileSync(__filename)).digest("hex");
     return h.slice(0, 8);
   } catch {
     return "unknown";
@@ -16415,15 +16590,15 @@ function warnUnresolvedEvidence(root, evidence, lang) {
   if (URL_SCHEME_RE.test(raw)) return;
   const p0 = raw.replace(/:\d+(?::\d+)?$/, "");
   if (!p0 || !/[/.]/.test(p0)) return;
-  if (path20.isAbsolute(p0)) return;
-  if (fs24.existsSync(path20.resolve(root, p0))) return;
+  if (path21.isAbsolute(p0)) return;
+  if (fs25.existsSync(path21.resolve(root, p0))) return;
   console.error(lang === "ko" ? `\uACBD\uACE0: \uADFC\uAC70 \uACBD\uB85C\uAC00 \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC5C6\uB2E4 \u2014 ${p0}. \uACB0\uD568\uC740 \uB4F1\uC7AC\uD588\uB2E4. \uC2E4\uC81C \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uAC8C \uACE0\uCE58\uB824\uBA74 \`harness ship defect update <id> --evidence <\uACBD\uB85C:\uC904>\` \uC744 \uC4F0\uB77C.` : `Warning: the evidence path does not exist in this project \u2014 ${p0}. The defect was recorded. Point it at a real file with \`harness ship defect update <id> --evidence <path:line>\`.`);
 }
 var DIVERGE_CHECK_MAX_BYTES = 8 * 1024 * 1024;
 function warnIfDiverged(root, current) {
   try {
     const p = eventsPath(root);
-    if (fs24.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;
+    if (fs25.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;
     const { events } = readJournal(root);
     const replayed = replayState(events);
     const diffs = [];
@@ -16443,6 +16618,7 @@ function warnIfDiverged(root, current) {
 }
 function run(argv, root) {
   const [cmd, sub, ...rest] = argv;
+  if (cmd === "gate" && sub === "approve" && flag(rest, "project")) root = path21.resolve(flag(rest, "project"));
   if (cmd === "hook") {
     try {
       if (sub === void 0 || sub === "--help" || sub === "-h" || sub === "help") {
@@ -16599,8 +16775,8 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
           "\uCC38\uACE0: `.harness/` \uB294 gitignore \uB418\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uC774\uBCA4\uD2B8 \uC800\uB110\uC774 \uAC10\uC0AC \uAE30\uB85D\uC774\uB77C \uD300\uC774 \uB300\uAC1C \uCEE4\uBC0B\uD55C\uB2E4. \uC790\uC720 \uD14D\uC2A4\uD2B8 \uD544\uB4DC\uB294 \uD754\uD55C \uBE44\uBC00 \uD615\uD0DC\uB97C \uB9C8\uC2A4\uD0B9\uD558\uC9C0\uB9CC, \uB9C8\uC2A4\uD0B9\uC740 \uAE30\uB85D\uC744 \uBB49\uAC1C\uB294 \uCABD\uBCF4\uB2E4 **\uB193\uCE58\uB294 \uCABD**\uC744 \uD0DD\uD55C \uC808\uCDA9\uC774\uB2E4: `--detail`\xB7rationale \uC5D0 \uC790\uACA9\uC99D\uBA85\uC744 \uB123\uC9C0 \uB9C8\uB77C. \uC774\uB825\uC744 \uB85C\uCEEC\uC5D0\uB9CC \uB450\uACE0 \uC2F6\uC73C\uBA74 `.gitignore` \uC5D0 `.harness/` \uB97C \uB354\uD574\uB77C."
         ));
         console.error(L(
-          "NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the permission dialog so that the final approval click is always a human \u2014 allowlisting it lets an agent open gates on its own.",
-          "\uACE0\uC9C0: `harness gate approve` \uB97C \uAD8C\uD55C allowlist \uC5D0 \uB123\uC9C0 \uB9C8\uB77C. \uAC8C\uC774\uD2B8\uB294 \uAD8C\uD55C \uB2E4\uC774\uC5BC\uB85C\uADF8\uC5D0 \uAE30\uB300\uC5B4 \u300C\uC2B9\uC778\uC758 \uCD5C\uC885 \uD074\uB9AD\uC740 \uC0AC\uB78C\u300D\uC744 \uC9C0\uD0A8\uB2E4 \u2014 allowlist \uC5D0 \uB123\uC73C\uBA74 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC2A4\uC2A4\uB85C \uAC8C\uC774\uD2B8\uB97C \uC5F4 \uC218 \uC788\uB2E4."
+          `NOTE: do not add \`harness gate approve\` to your permission allowlist. If a rule covers it, the hook refuses to raise the confirmation dialog, and approval works only through \`${approveSlash("<P>")}\`.`,
+          `\uACE0\uC9C0: \`harness gate approve\` \uB97C \uAD8C\uD55C \uD5C8\uC6A9 \uBAA9\uB85D\uC5D0 \uB123\uC9C0 \uB9C8\uB77C. \uADDC\uCE59\uC774 \uC774 \uBA85\uB839\uC744 \uB36E\uC73C\uBA74 \uD6C5\uC774 \uD655\uC778 \uCC3D\uC744 \uB744\uC6B0\uC9C0 \uC54A\uACE0 \uAC70\uBD80\uD558\uBBC0\uB85C \`${approveSlash("<P>")}\` \uB85C\uB9CC \uC2B9\uC778\uD560 \uC218 \uC788\uB2E4.`
         ));
         return 0;
       case "status": {
@@ -16613,8 +16789,8 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         if (argv.includes("--accept-policy") && process.env.HARNESS_ACCEPT_POLICY !== "1") {
           throw new Error(
             L(
-              "`--accept-policy` re-pins the policy baseline and clears the \"policy changed\" warning, so it is locked by default \u2014 accepting a change to the files that decide what the hook blocks is the user's judgement, not an agent's. Review the diff, then run `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` yourself. Diagnosis is always open: plain `harness doctor` reports the drift.",
-              "`--accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC758 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC544\uB2C8\uB77C \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4. \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_ACCEPT_POLICY=1 " + humanCmd("doctor --accept-policy") + "` \uB85C \uC2E4\uD589\uD558\uB77C. \uC9C4\uB2E8\uC740 \uC5B8\uC81C\uB098 \uC5F4\uB824 \uC788\uB2E4: \uADF8\uB0E5 `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
+              "`--accept-policy` re-pins the policy baseline and clears the \"policy changed\" warning, so it is locked by default \u2014 accepting a change to the files that decide what the hook blocks is the user's judgement, not an agent's. Review the diff, then run `" + humanCmd("doctor --accept-policy", "HARNESS_ACCEPT_POLICY=1") + "` yourself. Diagnosis is always open: plain `harness doctor` reports the drift.",
+              "`--accept-policy` \uB294 \uC815\uCC45 \uBCA0\uC774\uC2A4\uB77C\uC778\uC744 \uC7AC\uACE0\uC815\uD574 \u300C\uC815\uCC45\uC774 \uBC14\uB00C\uC5C8\uB2E4\u300D \uACBD\uACE0\uB97C \uC9C0\uC6B0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uD6C5\uC774 \uBB34\uC5C7\uC744 \uB9C9\uC744\uC9C0 \uC815\uD558\uB294 \uD30C\uC77C\uC758 \uBCC0\uACBD\uC744 \uC218\uC6A9\uD558\uB294 \uAC83\uC740 \uC5D0\uC774\uC804\uD2B8\uAC00 \uC544\uB2C8\uB77C \uC0AC\uC6A9\uC790\uC758 \uD310\uB2E8\uC774\uB2E4. \uCC28\uC774\uB97C \uD655\uC778\uD55C \uB4A4 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `" + humanCmd("doctor --accept-policy", "HARNESS_ACCEPT_POLICY=1") + "` \uB85C \uC2E4\uD589\uD558\uB77C. \uC9C4\uB2E8\uC740 \uC5B8\uC81C\uB098 \uC5F4\uB824 \uC788\uB2E4: \uADF8\uB0E5 `harness doctor` \uAC00 \uB4DC\uB9AC\uD504\uD2B8\uB97C \uBCF4\uACE0\uD55C\uB2E4."
             )
           );
         }
@@ -16636,8 +16812,8 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
         if (argv.includes("--force") && process.env.HARNESS_ALLOW_FORCE !== "1") {
           throw new Error(
             L(
-              `\`--force\` skips the gate check and is locked by default \u2014 it stops the design-track enforcement from being undone in one line. The normal path is \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. If bootstrap or recovery genuinely needs it, run \`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` yourself.`,
-              `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` \uB85C \uC2E4\uD589\uD558\uB77C.`
+              `\`--force\` skips the gate check and is locked by default \u2014 it stops the design-track enforcement from being undone in one line. The normal path is \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. If bootstrap or recovery genuinely needs it, run \`${humanCmd(`phase set ${phase} --force`, "HARNESS_ALLOW_FORCE=1")}\` yourself.`,
+              `\`--force\` \uB294 \uAC8C\uC774\uD2B8 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F0\uBBC0\uB85C \uAE30\uBCF8 \uC7A0\uAE08\uC774\uB2E4 \u2014 \uC124\uACC4 \uD2B8\uB799 \uAC15\uC81C\uAC00 \uD55C \uC904\uB85C \uD480\uB9AC\uB294 \uAC83\uC744 \uB9C9\uB294\uB2E4. \uC815\uC0C1 \uACBD\uB85C\uB294 \`harness gate submit <P>\` \u2192 \`harness gate approve <P>\`. \uBD80\uD2B8\uC2A4\uD2B8\uB7A9\xB7\uBCF5\uAD6C\uB85C \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`${humanCmd(`phase set ${phase} --force`, "HARNESS_ALLOW_FORCE=1")}\` \uB85C \uC2E4\uD589\uD558\uB77C.`
             )
           );
         }
@@ -16672,9 +16848,9 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
             let packet = "";
             try {
-              fs24.mkdirSync(packetsDir(root), { recursive: true });
-              packet = path20.join(packetsDir(root), `${phase}.md`);
-              fs24.writeFileSync(packet, buildReviewPacket(root, phase));
+              fs25.mkdirSync(packetsDir(root), { recursive: true });
+              packet = path21.join(packetsDir(root), `${phase}.md`);
+              fs25.writeFileSync(packet, buildReviewPacket(root, phase));
             } catch (e) {
               console.error(L(`Review packet generation failed (the submission still stands) \u2014 ${String(e)}`, `\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`));
               packet = "";
@@ -16683,28 +16859,48 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
             console.log(
               L(
                 `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}` + (packet ? `
-Review packet: ${path20.relative(root, packet)}` : "") + (noDoc ? `
+Review packet: ${path21.relative(root, packet)}` : "") + (noDoc ? `
 Note: no document is registered for ${phase}, so the packet says it is not grounds for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` \u2192 publish \u2192 \`harness doc url <DOC-x> <url>\`, then submit again.` : "") + `
-Next: a human approves it in their terminal:
-  ${humanCmd(`gate approve ${phase}`)}`,
+Next: the user approves it by typing this in Claude Code:
+  ${approveSlash(phase)}`,
                 `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
-\uB9AC\uBDF0 \uD328\uD0B7: ${path20.relative(root, packet)}` : "") + (noDoc ? `
+\uB9AC\uBDF0 \uD328\uD0B7: ${path21.relative(root, packet)}` : "") + (noDoc ? `
 \uCC38\uACE0: ${phase} \uC5D0 \uB4F1\uB85D\uB41C \uBB38\uC11C\uAC00 \uC5C6\uC5B4 \uD328\uD0B7\uC774 \u300C\uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4\u300D\uB77C\uACE0 \uC801\uB294\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uD30C\uC77C> --phase ${phase}\` \u2192 \uBC1C\uD589 \u2192 \`harness doc url <DOC-x> <url>\` \uB85C \uC774\uC740 \uB4A4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C.` : "") + `
-\uB2E4\uC74C: \uC0AC\uB78C\uC774 \uC790\uAE30 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2B9\uC778\uD55C\uB2E4:
-  ${humanCmd(`gate approve ${phase}`)}`
+\uB2E4\uC74C: \uC0AC\uC6A9\uC790\uAC00 Claude Code \uC5D0 \uC544\uB798 \uBA85\uB839\uC744 \uC785\uB825\uD574 \uC2B9\uC778\uD55C\uB2E4:
+  ${approveSlash(phase)}`
               )
             );
             return 0;
           }
           case "approve": {
-            if (!process.stdin.isTTY && process.env.HARNESS_APPROVE_NO_TTY !== "1") {
+            const ticket = flag(rest, "dialog-ticket");
+            const viaFlag = flag(rest, "via");
+            let via;
+            if (ticket !== void 0 || viaFlag !== void 0) {
+              if (ticket === void 0 && viaFlag !== "slash") {
+                throw new Error(L(`--via only accepts slash (got: ${String(viaFlag)})`, `--via \uB294 slash \uB9CC \uBC1B\uB294\uB2E4 (\uC785\uB825: ${String(viaFlag)})`));
+              }
+              const phase2 = requirePhase(rest[0], "harness gate approve", lang);
+              const kind = ticket !== void 0 ? "dialog" : "slash";
+              if (!consumeTicket(root, kind, phase2, readState(root).gates[phase2]?.artifactHash, ticket)) {
+                throw new Error(L(
+                  `No valid approval ticket for this call. A ticket comes only from the confirmation dialog or from typing the slash command, and it is single-use. Type \`${approveSlash(phase2)}\` again; first check with \`harness gate status\` that the gate is submitted.`,
+                  `\uC774 \uD638\uCD9C\uC5D0 \uC720\uD6A8\uD55C \uC2B9\uC778 \uD45C\uAC00 \uC5C6\uB2E4. \uD45C\uB294 \uD655\uC778 \uCC3D\uC774\uB098 \uC2AC\uB798\uC2DC \uBA85\uB839 \uC785\uB825\uC5D0\uC11C\uB9CC \uB098\uC624\uACE0 \uD55C \uBC88\uB9CC \uC4F8 \uC218 \uC788\uB2E4. \`${approveSlash(phase2)}\` \uB97C \uB2E4\uC2DC \uC785\uB825\uD558\uB77C. \uBA3C\uC800 \`harness gate status\` \uB85C \uC81C\uCD9C \uC0C1\uD0DC\uC778\uC9C0 \uD655\uC778\uD55C\uB2E4.`
+                ));
+              }
+              via = kind;
+            } else if (process.stdin.isTTY) {
+              via = "terminal";
+            } else if (process.env.HARNESS_APPROVE_NO_TTY === "1") {
+              via = "no-tty";
+            } else {
               throw new Error(L(
-                "Approving a gate is the human's final click, so it must come from a terminal \u2014 this process has no TTY, which is what an agent's tool call looks like. Run `" + humanCmd("gate approve <P>") + "` yourself in your terminal. Everything else on the gate is open: `harness gate status`, `harness gate verify <P>`. If you really are a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` yourself \u2014 but then nothing is checking that a person read the review packet.",
-                "\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uCD5C\uC885 \uD074\uB9AD\uC774\uB77C \uD130\uBBF8\uB110\uC5D0\uC11C \uC640\uC57C \uD55C\uB2E4 \u2014 \uC774 \uD504\uB85C\uC138\uC2A4\uC5D0\uB294 TTY \uAC00 \uC5C6\uACE0, \uADF8\uAC83\uC774 \uACE7 \uC5D0\uC774\uC804\uD2B8 \uB3C4\uAD6C \uD638\uCD9C\uC758 \uBAA8\uC2B5\uC774\uB2E4. `" + humanCmd("gate approve <P>") + "` \uB97C \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \uD130\uBBF8\uB110\uC5D0\uC11C \uC2E4\uD589\uD558\uB77C. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: `harness gate status`\xB7`harness gate verify <P>`. TTY \uC5C6\uB294 \uC0AC\uB78C \uD658\uACBD(\uC6D0\uACA9 \uD30C\uC774\uD504\xB7CI)\uC774 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 `HARNESS_APPROVE_NO_TTY=1` \uC744 \uCF20\uB2E4 \u2014 \uB2E4\uB9CC \uADF8 \uC21C\uAC04 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uC0AC\uB78C\uC774 \uC77D\uC5C8\uB294\uC9C0 \uAC80\uC0AC\uD558\uB294 \uAC83\uC774 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4."
+                `Approving a gate is the human's decision, and this process has no terminal, which is what an agent's tool call looks like. The user approves by typing \`${approveSlash("<P>")}\` in Claude Code. Everything else on the gate is open: \`harness gate status\`, \`harness gate verify <P>\`. If you really are a human without a TTY (a remote pipe or CI), set \`HARNESS_APPROVE_NO_TTY=1\` yourself \u2014 but then nothing is checking that a person read the review packet.`,
+                `\uAC8C\uC774\uD2B8 \uC2B9\uC778\uC740 \uC0AC\uB78C\uC758 \uD310\uB2E8\uC778\uB370 \uC774 \uD504\uB85C\uC138\uC2A4\uC5D0\uB294 \uD130\uBBF8\uB110\uC774 \uC5C6\uACE0, \uADF8\uAC83\uC774 \uACE7 \uC5D0\uC774\uC804\uD2B8 \uB3C4\uAD6C \uD638\uCD9C\uC758 \uBAA8\uC2B5\uC774\uB2E4. \uC0AC\uC6A9\uC790\uAC00 Claude Code \uC5D0 \`${approveSlash("<P>")}\` \uB97C \uC785\uB825\uD574 \uC2B9\uC778\uD55C\uB2E4. \uB098\uBA38\uC9C0\uB294 \uC5F4\uB824 \uC788\uB2E4: \`harness gate status\`\xB7\`harness gate verify <P>\`. TTY \uC5C6\uB294 \uC0AC\uB78C \uD658\uACBD(\uC6D0\uACA9 \uD30C\uC774\uD504\xB7CI)\uC774 \uC815\uB9D0 \uD544\uC694\uD558\uBA74 \uC0AC\uC6A9\uC790\uAC00 \uC9C1\uC811 \`HARNESS_APPROVE_NO_TTY=1\` \uC744 \uCF20\uB2E4 \u2014 \uB2E4\uB9CC \uADF8 \uC21C\uAC04 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uC0AC\uB78C\uC774 \uC77D\uC5C8\uB294\uC9C0 \uAC80\uC0AC\uD558\uB294 \uAC83\uC774 \uC544\uBB34\uAC83\uB3C4 \uB0A8\uC9C0 \uC54A\uB294\uB2E4.`
               ));
             }
             const phase = requirePhase(rest[0], "harness gate approve", lang);
-            const r = approveGate(root, phase);
+            const r = approveGate(root, phase, via);
             console.log(L(`${phase} approved \u2014 ${r.approvedAt} \xB7 evidence ${r.evidence}`, `${phase} \uC2B9\uC778\uB428 \u2014 ${r.approvedAt} \xB7 \uADFC\uAC70 ${r.evidence}`));
             return 0;
           }
@@ -16736,10 +16932,10 @@ Next: a human approves it in their terminal:
               console.log(existing || (lang === "ko" ? `${phase} \uC5D0 \uC218\uC9D1\uB41C \uB9AC\uBDF0 \uD53C\uB4DC\uBC31\uC774 \uC5C6\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uCF54\uBA58\uD2B8\uD30C\uC77C>\` \uB85C \uC218\uC9D1\uD558\uB77C.` : `No review feedback collected for ${phase} \u2014 collect it with \`harness gate feedback ${phase} --from <comments-file>\`.`));
               return 0;
             }
-            const fromPath = path20.resolve(root, from);
+            const fromPath = path21.resolve(root, from);
             let body;
             try {
-              body = fs24.readFileSync(fromPath, "utf8");
+              body = fs25.readFileSync(fromPath, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the comments file: ${from} (looked in ${fromPath}). Paths are resolved from the project root.`,
@@ -16747,8 +16943,8 @@ Next: a human approves it in their terminal:
               ));
             }
             const n = recordGateFeedback(root, phase, body);
-            console.log(lang === "ko" ? `${phase} \uB9AC\uBDF0 \uD53C\uB4DC\uBC31 ${n}\uAC74 \uC218\uC9D1 \u2014 ${path20.relative(root, feedbackPath(root, phase))}
-\uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB2E4\uC2DC \uB9CC\uB4E4\uBA74(\`harness report packet ${phase}\`) \uAC1C\uC815 \uADFC\uAC70\uB85C \uC2E4\uB9B0\uB2E4.` : `Collected ${n} review comment(s) for ${phase} \u2014 ${path20.relative(root, feedbackPath(root, phase))}
+            console.log(lang === "ko" ? `${phase} \uB9AC\uBDF0 \uD53C\uB4DC\uBC31 ${n}\uAC74 \uC218\uC9D1 \u2014 ${path21.relative(root, feedbackPath(root, phase))}
+\uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB2E4\uC2DC \uB9CC\uB4E4\uBA74(\`harness report packet ${phase}\`) \uAC1C\uC815 \uADFC\uAC70\uB85C \uC2E4\uB9B0\uB2E4.` : `Collected ${n} review comment(s) for ${phase} \u2014 ${path21.relative(root, feedbackPath(root, phase))}
 Regenerate the packet (\`harness report packet ${phase}\`) to include them as revision grounds.`);
             return 0;
           }
@@ -16913,8 +17109,8 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
             assertOutputAllowed(root, out, [out], lang, { en: "The generated spec", ko: "\uC0DD\uC131\uB41C \uC2A4\uD399\uC740" });
-            fs24.mkdirSync(path20.dirname(path20.resolve(root, out)), { recursive: true });
-            fs24.writeFileSync(path20.resolve(root, out), src);
+            fs25.mkdirSync(path21.dirname(path21.resolve(root, out)), { recursive: true });
+            fs25.writeFileSync(path21.resolve(root, out), src);
             console.log(out);
             return 0;
           }
@@ -16939,7 +17135,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const out = flag(args, "out");
             if (out) assertOutputAllowed(root, out, [out], lang, { en: "The generated packet", ko: "\uC0DD\uC131\uB41C \uD328\uD0B7\uC740" });
             if (out) {
-              fs24.writeFileSync(path20.resolve(root, out), html);
+              fs25.writeFileSync(path21.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -16967,8 +17163,8 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const cmdKey = req(rest[0], "harness profile cmd <key>");
             const c = commandFor(p, cmdKey);
             if (!c) {
-              const localFile = path20.join(localProfileDir(root), "commands.yaml");
-              const where = p.origin === "local" && p.dir ? path20.join(p.dir, "commands.yaml") : L(`${localFile} (project-local, always wins)`, `${localFile} (\uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \u2014 \uD56D\uC0C1 \uC6B0\uC120)`);
+              const localFile = path21.join(localProfileDir(root), "commands.yaml");
+              const where = p.origin === "local" && p.dir ? path21.join(p.dir, "commands.yaml") : L(`${localFile} (project-local, always wins)`, `${localFile} (\uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \u2014 \uD56D\uC0C1 \uC6B0\uC120)`);
               const why = problems.length > 0 ? L(`
   ${problems.join("\n  ")}`, `
   ${problems.join("\n  ")}`) : "";
@@ -17006,10 +17202,10 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
                 )
               );
             }
-            const fromAbs = path20.resolve(root, from);
+            const fromAbs = path21.resolve(root, from);
             let content;
             try {
-              content = fs24.readFileSync(fromAbs, "utf8");
+              content = fs25.readFileSync(fromAbs, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the canvas content file: ${fromAbs} \u2014 the core never touches the network, so an agent must fetch the canvas (WebFetch) and save it to a file first. Check the path, then pass it with \`--from <file>\`.`,
@@ -17056,7 +17252,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const out = flag(args, "out");
             const html = generateSourceOfTruthHtml(root);
             if (out) {
-              fs24.writeFileSync(path20.resolve(root, out), html);
+              fs25.writeFileSync(path21.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -17082,15 +17278,15 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             assertOutputAllowed(
               root,
               out,
-              targets.map(([name]) => path20.join(out, name)),
+              targets.map(([name]) => path21.join(out, name)),
               lang,
               { en: "Generated tokens", ko: "\uC0DD\uC131\uBB3C\uC740" }
             );
-            fs24.mkdirSync(path20.resolve(root, out), { recursive: true });
+            fs25.mkdirSync(path21.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
-              fs24.writeFileSync(path20.resolve(root, out, name), content);
+              fs25.writeFileSync(path21.resolve(root, out, name), content);
             }
-            console.log(targets.map(([n]) => path20.join(out, n)).join("\n"));
+            console.log(targets.map(([n]) => path21.join(out, n)).join("\n"));
             return 0;
           }
           case "lint": {
@@ -17101,7 +17297,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               if (isTokenFile(root, f2)) continue;
               let src = "";
               try {
-                src = fs24.readFileSync(path20.resolve(root, f2), "utf8");
+                src = fs25.readFileSync(path21.resolve(root, f2), "utf8");
               } catch {
                 throw new Error(L(
                   `Cannot read the file to lint: ${f2} \u2014 check the path. A file that was not read is not a file that is clean`,
@@ -17120,13 +17316,13 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const overridePath = flag(args, "with");
             if (!overridePath) throw new Error(L("Usage: harness tokens swap --with <override-theme.json> [--out <path>]", "\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]"));
             const doc = loadTokens(root);
-            const overrides = JSON.parse(fs24.readFileSync(path20.resolve(root, overridePath), "utf8"));
+            const overrides = JSON.parse(fs25.readFileSync(path21.resolve(root, overridePath), "utf8"));
             const swapped = swapTokens(doc, overrides);
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
             if (out) assertOutputAllowed(root, out, [out], lang, { en: "The swapped CSS", ko: "\uC2A4\uC651\uB41C CSS \uB294" });
-            if (out) fs24.writeFileSync(path20.resolve(root, out), generateCss(swapped, lang));
+            if (out) fs25.writeFileSync(path21.resolve(root, out), generateCss(swapped, lang));
             console.log(L(
               `Swap is meaningful \u2014 ${changed.length} token(s) changed` + (out ? ` \xB7 CSS written to ${out}` : " \xB7 dry run: nothing was written. Pass `--out <file.css>` to write the swapped CSS."),
               `\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74` + (out ? ` \xB7 CSS \uAE30\uB85D \u2192 ${out}` : " \xB7 \uB4DC\uB77C\uC774\uB7F0: \uC544\uBB34\uAC83\uB3C4 \uAE30\uB85D\uD558\uC9C0 \uC54A\uC558\uB2E4. \uAE30\uB85D\uD558\uB824\uBA74 `--out <\uD30C\uC77C.css>` \uB97C \uB118\uACA8\uB77C.")

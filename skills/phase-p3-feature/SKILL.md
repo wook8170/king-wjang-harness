@@ -49,7 +49,7 @@ never reviewed.
 
 ## Approval is a human's
 
-**An agent does not run `harness gate approve P3`.** Summarise the feature count, the number of
+**An agent never approves P3 on its own — the user types `/king-wjang-harness:approve P3`.** Summarise the feature count, the number of
 acceptance criteria, and any missing exception paths, then wait for the user's approval.
 
 ## Pitfalls

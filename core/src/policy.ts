@@ -66,6 +66,8 @@ export const STATE_FILES: readonly string[] = [
   // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
   '.harness/.runtime/last-activity',
   '.harness/.runtime/last-turn',
+  // 승인 표. 직접 쓸 수 있으면 CLI 의 TTY 검사를 표 위조로 넘을 수 있다(approve.ts).
+  '.harness/.runtime/approve-ticket',
 ];
 
 /** 상태 + 정책 — 「하네스 명령으로만 바뀐다」가 적용되는 전체 집합. */

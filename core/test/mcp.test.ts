@@ -107,8 +107,8 @@ describe('mcp: gate approve 안전 장치 (§4-3)', () => {
 
     const r = callTool(root, 'harness_gate_approve', { phase: 'P0' });
     expect(r.ok).toBe(false);
-    expect(r.content).toMatch(/harness gate approve P0/);
-    expect(r.content).toMatch(/permission dialog/);
+    expect(r.content).toMatch(/\/king-wjang-harness:approve P0/);
+    expect(r.content).toMatch(/confirmation dialog/);
     // 핵심: 상태가 승인으로 넘어가지 않았다
     expect(readState(root).gates.P0?.status).toBe('submitted');
   });
@@ -116,7 +116,7 @@ describe('mcp: gate approve 안전 장치 (§4-3)', () => {
   it('미초기화 프로젝트에서도 승인 거절은 무조건이다', () => {
     const r = callTool(mkroot(), 'harness_gate_approve', { phase: 'P0' });
     expect(r.ok).toBe(false);
-    expect(r.content).toMatch(/harness gate approve/);
+    expect(r.content).toMatch(/\/king-wjang-harness:approve/);
   });
 });
 

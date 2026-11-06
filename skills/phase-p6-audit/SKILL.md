@@ -150,7 +150,7 @@ and tampered approved documents **before** you ask for approval.
 
 ## Approval is a human's
 
-**An agent never runs `harness gate approve P6`.** This is the "design done, start building" button
+**An agent never approves P6 on its own — the user types `/king-wjang-harness:approve P6`.** This is the "design done, start building" button
 and it is the most expensive one to undo. Summarise the audit verdict, `HIGH N` per round, the
 reconciliation tables, the owner decisions and their answers, the unresolved items, and the uncovered
 stretches of the RTM honestly, and let the user approve it themselves.

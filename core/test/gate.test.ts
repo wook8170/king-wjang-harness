@@ -351,7 +351,7 @@ describe('canEnterPhase / setPhaseViaGate', () => {
     const root = setup();
     const v = canEnterPhase(root, 'P1');
     expect(v.ok).toBe(false);
-    expect(v.reason).toMatch(/harness gate approve P0/);
+    expect(v.reason).toMatch(/\/king-wjang-harness:approve P0/);
     expect(v.reason).toMatch(/산출물 승인/);
   });
 

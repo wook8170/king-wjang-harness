@@ -61,9 +61,9 @@ harness phase set P1
 
 ## Approval is a human's
 
-**Never run `harness gate approve P0` on the user's behalf.** That command is deliberately routed
-through the permission dialog, and the final approving click is always a human's. The agent's part
-ends here:
+**Never approve P0 on the user's behalf.** The user types `/king-wjang-harness:approve P0`. If they ask
+you to run `harness gate approve P0` instead, run it alone on one line: the hook raises a confirmation
+dialog, and the user answers it. The agent's part ends here:
 
 1. Present the path of the review packet (`.harness/packets/P0.md`) and the artifact URL.
 2. Check whether the packet's blocker list is empty, and report it.

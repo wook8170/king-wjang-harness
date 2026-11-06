@@ -125,17 +125,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path17) {
-      const ctrl = callVisitor(key, node, visitor, path17);
+    function visit_(key, node, visitor, path18) {
+      const ctrl = callVisitor(key, node, visitor, path18);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visit_(key, ctrl, visitor, path17);
+        replaceNode(key, path18, ctrl);
+        return visit_(key, ctrl, visitor, path18);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path18 = Object.freeze(path18.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path17);
+            const ci = visit_(i, node.items[i], visitor, path18);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -146,13 +146,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = visit_("key", node.key, visitor, path17);
+          path18 = Object.freeze(path18.concat(node));
+          const ck = visit_("key", node.key, visitor, path18);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path17);
+          const cv = visit_("value", node.value, visitor, path18);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -173,17 +173,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path17) {
-      const ctrl = await callVisitor(key, node, visitor, path17);
+    async function visitAsync_(key, node, visitor, path18) {
+      const ctrl = await callVisitor(key, node, visitor, path18);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path17, ctrl);
-        return visitAsync_(key, ctrl, visitor, path17);
+        replaceNode(key, path18, ctrl);
+        return visitAsync_(key, ctrl, visitor, path18);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path17 = Object.freeze(path17.concat(node));
+          path18 = Object.freeze(path18.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path17);
+            const ci = await visitAsync_(i, node.items[i], visitor, path18);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -194,13 +194,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path17 = Object.freeze(path17.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path17);
+          path18 = Object.freeze(path18.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path18);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path17);
+          const cv = await visitAsync_("value", node.value, visitor, path18);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -227,23 +227,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path17) {
+    function callVisitor(key, node, visitor, path18) {
       if (typeof visitor === "function")
-        return visitor(key, node, path17);
+        return visitor(key, node, path18);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path17);
+        return visitor.Map?.(key, node, path18);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path17);
+        return visitor.Seq?.(key, node, path18);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path17);
+        return visitor.Pair?.(key, node, path18);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path17);
+        return visitor.Scalar?.(key, node, path18);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path17);
+        return visitor.Alias?.(key, node, path18);
       return void 0;
     }
-    function replaceNode(key, path17, node) {
-      const parent = path17[path17.length - 1];
+    function replaceNode(key, path18, node) {
+      const parent = path18[path18.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -853,10 +853,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path17, value) {
+    function collectionFromPath(schema, path18, value) {
       let v = value;
-      for (let i = path17.length - 1; i >= 0; --i) {
-        const k = path17[i];
+      for (let i = path18.length - 1; i >= 0; --i) {
+        const k = path18[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -875,7 +875,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path17) => path17 == null || typeof path17 === "object" && !!path17[Symbol.iterator]().next().done;
+    var isEmptyPath = (path18) => path18 == null || typeof path18 === "object" && !!path18[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -905,11 +905,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path17, value) {
-        if (isEmptyPath(path17))
+      addIn(path18, value) {
+        if (isEmptyPath(path18))
           this.add(value);
         else {
-          const [key, ...rest] = path17;
+          const [key, ...rest] = path18;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -923,8 +923,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        const [key, ...rest] = path17;
+      deleteIn(path18) {
+        const [key, ...rest] = path18;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -938,8 +938,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        const [key, ...rest] = path17;
+      getIn(path18, keepScalar) {
+        const [key, ...rest] = path18;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path17) {
-        const [key, ...rest] = path17;
+      hasIn(path18) {
+        const [key, ...rest] = path18;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -968,8 +968,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        const [key, ...rest] = path17;
+      setIn(path18, value) {
+        const [key, ...rest] = path18;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3484,9 +3484,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path17, value) {
+      addIn(path18, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path17, value);
+          this.contents.addIn(path18, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3561,14 +3561,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path17) {
-        if (Collection.isEmptyPath(path17)) {
+      deleteIn(path18) {
+        if (Collection.isEmptyPath(path18)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path17) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path18) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3583,10 +3583,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path17, keepScalar) {
-        if (Collection.isEmptyPath(path17))
+      getIn(path18, keepScalar) {
+        if (Collection.isEmptyPath(path18))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path17, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path18, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3597,10 +3597,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path17) {
-        if (Collection.isEmptyPath(path17))
+      hasIn(path18) {
+        if (Collection.isEmptyPath(path18))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path17) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path18) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3617,13 +3617,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path17, value) {
-        if (Collection.isEmptyPath(path17)) {
+      setIn(path18, value) {
+        if (Collection.isEmptyPath(path18)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path17), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path18), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path17, value);
+          this.contents.setIn(path18, value);
         }
       }
       /**
@@ -5583,9 +5583,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path17) => {
+    visit.itemAtPath = (cst, path18) => {
       let item = cst;
-      for (const [field, index] of path17) {
+      for (const [field, index] of path18) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5594,23 +5594,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path17) => {
-      const parent = visit.itemAtPath(cst, path17.slice(0, -1));
-      const field = path17[path17.length - 1][0];
+    visit.parentCollection = (cst, path18) => {
+      const parent = visit.itemAtPath(cst, path18.slice(0, -1));
+      const field = path18[path18.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path17, item, visitor) {
-      let ctrl = visitor(item, path17);
+    function _visit(path18, item, visitor) {
+      let ctrl = visitor(item, path18);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path17.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path18.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5621,10 +5621,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path17);
+            ctrl = ctrl(item, path18);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path17) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path18) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6926,14 +6926,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs20 = this.flowScalar(this.type);
+              const fs21 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs20, sep: [] });
+                map.items.push({ start, key: fs21, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs20);
+                this.stack.push(fs21);
               } else {
-                Object.assign(it, { key: fs20, sep: [] });
+                Object.assign(it, { key: fs21, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7061,13 +7061,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs20 = this.flowScalar(this.type);
+              const fs21 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs20, sep: [] });
+                fc.items.push({ start: [], key: fs21, sep: [] });
               else if (it.sep)
-                this.stack.push(fs20);
+                this.stack.push(fs21);
               else
-                Object.assign(it, { key: fs20, sep: [] });
+                Object.assign(it, { key: fs21, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7382,8 +7382,8 @@ __export(mcp_exports, {
   toolDefinitions: () => toolDefinitions
 });
 module.exports = __toCommonJS(mcp_exports);
-var fs19 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
+var fs20 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
 
 // core/src/state.ts
 var fs3 = __toESM(require("fs"));
@@ -7417,9 +7417,7 @@ function harnessCliPath() {
   cachedCliPath = shellQuote(resolved);
   return cachedCliPath;
 }
-function humanCmd(args) {
-  return harnessCliPath() + " " + args;
-}
+var approveSlash = (phase) => `/king-wjang-harness:approve ${phase}`;
 function shellQuote(p) {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
 }
@@ -7983,7 +7981,9 @@ var STATE_FILES = [
   ".harness/ship/deployments.yaml",
   // stop 가드가 「이번 턴에 활동이 있었나」를 읽는 마커. 지우거나 되돌리면 정산 강제가 풀린다.
   ".harness/.runtime/last-activity",
-  ".harness/.runtime/last-turn"
+  ".harness/.runtime/last-turn",
+  // 승인 표. 직접 쓸 수 있으면 CLI 의 TTY 검사를 표 위조로 넘을 수 있다(approve.ts).
+  ".harness/.runtime/approve-ticket"
 ];
 var OWNED_FILES = [...STATE_FILES, ...POLICY_FILES];
 var POLICY_PREFIXES = [".harness/profile/"];
@@ -9690,14 +9690,57 @@ function verifyGate(root, phase) {
 }
 
 // core/src/doctor.ts
-var fs18 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
+
+// core/src/approve.ts
+var crypto5 = __toESM(require("crypto"));
+var fs17 = __toESM(require("fs"));
+var os2 = __toESM(require("os"));
+var path14 = __toESM(require("path"));
+var DIALOG_TTL_MS = 30 * 60 * 1e3;
+var SLASH_TTL_MS = 60 * 1e3;
+function settingsFiles(root) {
+  const home = process.env.CLAUDE_CONFIG_DIR ?? path14.join(os2.homedir(), ".claude");
+  return [
+    path14.join(home, "settings.json"),
+    path14.join(root, ".claude", "settings.json"),
+    path14.join(root, ".claude", "settings.local.json")
+  ];
+}
+function ruleMatches(rule, commands) {
+  if (rule === "Bash") return true;
+  const m = /^Bash\((.*)\)$/su.exec(rule);
+  if (!m) return false;
+  const body = m[1].replace(/:\*$/u, " *");
+  const re = new RegExp(`^${body.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/gu, "\\$&")).join(".*")}$`, "su");
+  return commands.some((c) => re.test(c));
+}
+function approveAllowRule(root) {
+  const commands = PHASES.flatMap((p) => ["harness", harnessCliPath()].flatMap((h) => [
+    `${h} gate approve ${p}`,
+    `${h} gate approve ${p} --dialog-ticket 0`
+  ]));
+  for (const file of settingsFiles(root)) {
+    let allow;
+    try {
+      allow = JSON.parse(fs17.readFileSync(file, "utf8"))?.permissions?.allow;
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(allow)) continue;
+    for (const rule of allow) {
+      if (typeof rule === "string" && ruleMatches(rule.trim(), commands)) return { file, rule };
+    }
+  }
+  return null;
+}
 
 // core/src/adr.ts
-var fs17 = __toESM(require("fs"));
-var path14 = __toESM(require("path"));
+var fs18 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
 var YAML7 = __toESM(require_dist());
-var adrDir = (root) => path14.join(designDir(root), "adr");
+var adrDir = (root) => path15.join(designDir(root), "adr");
 function toAdrRecord(v) {
   if (typeof v !== "object" || v === null) return null;
   const o = v;
@@ -9728,13 +9771,13 @@ function toAdrRecord(v) {
 }
 function listAdrs(root) {
   const dir = adrDir(root);
-  if (!fs17.existsSync(dir)) return [];
+  if (!fs18.existsSync(dir)) return [];
   const out = [];
-  for (const f2 of fs17.readdirSync(dir).sort()) {
+  for (const f2 of fs18.readdirSync(dir).sort()) {
     if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
     if (/\.v\d+\.yaml$/.test(f2)) continue;
     try {
-      const rec = toAdrRecord(YAML7.parse(fs17.readFileSync(path14.join(dir, f2), "utf8")));
+      const rec = toAdrRecord(YAML7.parse(fs18.readFileSync(path15.join(dir, f2), "utf8")));
       if (rec) out.push(rec);
     } catch {
       continue;
@@ -9760,17 +9803,17 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs18.readdirSync(dir);
+      names = fs19.readdirSync(dir);
     } catch {
       continue;
     }
     for (const name of names) {
       const m = TMP_RE.exec(name);
       if (!m || pidAlive(Number(m[1]))) continue;
-      const p = path15.join(dir, name);
+      const p = path16.join(dir, name);
       try {
-        if (!fs18.statSync(p).isFile()) continue;
-        fs18.rmSync(p);
+        if (!fs19.statSync(p).isFile()) continue;
+        fs19.rmSync(p);
         swept++;
       } catch {
       }
@@ -9781,11 +9824,11 @@ function sweepOrphanTmp(root) {
 function unwritableDirs(root) {
   const bad = [];
   for (const dir of [harnessDir(root), runtimeDir(root)]) {
-    if (!fs18.existsSync(dir)) continue;
-    const probe = path15.join(dir, `write-probe.tmp-${process.pid}`);
+    if (!fs19.existsSync(dir)) continue;
+    const probe = path16.join(dir, `write-probe.tmp-${process.pid}`);
     try {
-      fs18.writeFileSync(probe, "");
-      fs18.rmSync(probe);
+      fs19.writeFileSync(probe, "");
+      fs19.rmSync(probe);
     } catch {
       bad.push(dir);
     }
@@ -9793,9 +9836,9 @@ function unwritableDirs(root) {
   return bad;
 }
 function countHookErrors(root) {
-  const p = path15.join(runtimeDir(root), "hook-errors.log");
-  if (!fs18.existsSync(p)) return 0;
-  return fs18.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  const p = path16.join(runtimeDir(root), "hook-errors.log");
+  if (!fs19.existsSync(p)) return 0;
+  return fs19.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -9806,7 +9849,7 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  if (fs18.existsSync(harnessDir(root))) {
+  if (fs19.existsSync(harnessDir(root))) {
     const unwritable = unwritableDirs(root);
     if (unwritable.length > 0) {
       issues.push(t({
@@ -9815,7 +9858,7 @@ function runDoctor(root, opts = {}) {
       }));
     }
   }
-  const journalExists = fs18.existsSync(eventsPath(root));
+  const journalExists = fs19.existsSync(eventsPath(root));
   let events = [];
   let corruptLines = 0;
   let journalReadable = true;
@@ -9903,7 +9946,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs18.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs19.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -9936,7 +9979,7 @@ function runDoctor(root, opts = {}) {
   ]) {
     let size = 0;
     try {
-      size = fs18.statSync(file).size;
+      size = fs19.statSync(file).size;
     } catch {
       continue;
     }
@@ -9966,15 +10009,22 @@ function runDoctor(root, opts = {}) {
       ko: `${cfg.path} \uC5D0 \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uC9C0 \uC54A\uB294 \uD0A4\uAC00 ${cfg.unknownKeys.length}\uAC1C \uC788\uB2E4: ${bad} \u2014 \uBB34\uC2DC\uB418\uBBC0\uB85C \uAE30\uBCF8\uAC12\uC774 \uB3CC\uACE0 \uC788\uACE0, \uADF8 \uD0A4\uB85C \uAC78\uB824\uB358 \uAC15\uC81C\uB294 \uAC78\uB824 \uC788\uC9C0 \uC54A\uB2E4. \uCCA0\uC790\uB97C \uACE0\uCE58\uAC70\uB098 \uADF8 \uD0A4\uB97C \uC9C0\uC6CC\uB77C. \uC774 \uBE4C\uB4DC\uAC00 \uC77D\uB294 \uD0A4\uB294: ${known}. (doctor \uB294 \uC774\uAC83\uC744 \uBCF5\uAD6C\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 config \uD30C\uC77C\uC740 \uC0AC\uB78C\uC774 \uACE0\uCE58\uB294 \uAC83\uC774\uB2E4.)`
     }));
   }
+  const allowRule = approveAllowRule(root);
+  if (allowRule) {
+    warnings.push(t({
+      en: `\`${allowRule.rule}\` in ${allowRule.file} allows \`harness gate approve\`, so the hook refuses to raise the confirmation dialog for it. Remove the rule, or approve with \`${approveSlash("<P>")}\`.`,
+      ko: `${allowRule.file} \uC758 \`${allowRule.rule}\` \uADDC\uCE59\uC774 \`harness gate approve\` \uB97C \uD5C8\uC6A9\uD574 \uD6C5\uC774 \uD655\uC778 \uCC3D\uC744 \uB744\uC6B0\uC9C0 \uC54A\uACE0 \uAC70\uBD80\uD55C\uB2E4. \uADF8 \uADDC\uCE59\uC744 \uC9C0\uC6B0\uAC70\uB098 \`${approveSlash("<P>")}\` \uB85C \uC2B9\uC778\uD558\uB77C.`
+    }));
+  }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    const log = path15.join(runtimeDir(root), "hook-errors.log");
+    const log = path16.join(runtimeDir(root), "hook-errors.log");
     warnings.push(t({
       en: `${hookErrors} hook decision failure(s) recorded \u2014 read ${log} to find out why`,
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs18.existsSync(harnessDir(root))) try {
+  if (fs19.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -10044,7 +10094,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs18.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs19.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -10064,9 +10114,9 @@ function runDoctor(root, opts = {}) {
     }
   }
   if (opts.repair && !refused && hookErrors > 0) {
-    const log = path15.join(runtimeDir(root), "hook-errors.log");
+    const log = path16.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs18.renameSync(log, `${log}.prev`);
+      fs19.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -10119,7 +10169,7 @@ function toolDefinitions() {
     },
     {
       name: "harness_gate_approve",
-      description: "[UNAVAILABLE] Gate approval cannot be done over MCP. Approval only happens in the terminal via `harness gate approve <P>`, which raises a permission dialog on every run so the final click is always a human (spec \xA74-3). This tool only points you to that path.",
+      description: "[UNAVAILABLE] Gate approval cannot be done over MCP. The user approves by typing `/king-wjang-harness:approve <P>`, or by answering the confirmation dialog raised when `harness gate approve <P>` runs through Bash (spec \xA74-3). This tool only points you to those paths.",
       inputSchema: {
         type: "object",
         properties: { phase: phaseProp }
@@ -10254,9 +10304,8 @@ function refuseApprove(o) {
   const phase = str(o, "phase");
   const target = isPhase(phase) ? phase : "<P0..P12>";
   return fail(
-    `Gate approval cannot be done over MCP \u2014 run \`${humanCmd(`gate approve ${target}`)}\` in the terminal.
-That command is deliberately excluded from the permission allowlist, so a permission dialog appears on every run and the final click that opens a gate is always a human (spec \xA74-3). Approving on your behalf through an MCP tool would bypass that, so this path refuses.
-You can still submit: use \`harness_gate_submit\` to build a review packet and hand it to a human.`
+    `Gate approval cannot be done over MCP \u2014 ask the user to type \`${approveSlash(target)}\`.
+Alternatively run \`harness gate approve ` + target + "` alone through Bash: the hook raises a confirmation dialog, and the user answers it (spec \xA74-3). Approving through an MCP tool would skip the user, so this path refuses.\nYou can still submit: use `harness_gate_submit` to build a review packet and hand it to a human."
   );
 }
 function callTool(root, name, args) {
@@ -10301,9 +10350,9 @@ function dispatch(root, name, o) {
       const r = submitGate(root, phase, { paths: strArr(o, "paths"), evidence });
       let packet = "";
       try {
-        fs19.mkdirSync(packetsDir(root), { recursive: true });
-        packet = path16.join(packetsDir(root), `${phase}.md`);
-        fs19.writeFileSync(packet, buildReviewPacket(root, phase));
+        fs20.mkdirSync(packetsDir(root), { recursive: true });
+        packet = path17.join(packetsDir(root), `${phase}.md`);
+        fs20.writeFileSync(packet, buildReviewPacket(root, phase));
       } catch (e) {
         return ok(
           `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
@@ -10312,8 +10361,8 @@ Warning: review packet generation failed (the submission still stands) \u2014 ${
       }
       return ok(
         `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
-Review packet: ${path16.relative(root, packet)}
-Approve in the terminal with \`${humanCmd(`gate approve ${phase}`)}\` \u2014 the final click is a human.`
+Review packet: ${path17.relative(root, packet)}
+Next: the user approves with \`${approveSlash(phase)}\` \u2014 the final decision is a human's.`
       );
     }
     case "harness_wave_create": {

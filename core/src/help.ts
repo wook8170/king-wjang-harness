@@ -58,7 +58,7 @@ export const COMMANDS: CommandGroup[] = [
     summary: M('Phase gates — submit artifacts, then a human approves.', '페이즈 게이트 — 산출물을 제출하고 사람이 승인한다.'),
     subs: [
       { name: 'submit', args: '<P> --paths <a,b> [--evidence claimed|code|measured]', summary: M('Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.', '산출물을 심사에 올린다. 해시를 고정하고 리뷰 패킷을 남긴다. 빈 문서·자리표시자와 이미 다른 게이트를 연 내용은 거부한다.') },
-      { name: 'approve', args: '<P>', summary: M('Approve a submitted gate. Humans only — never an agent.', '제출된 게이트를 승인한다. 사람만 한다 — 에이전트는 못 한다.') },
+      { name: 'approve', args: '<P> [--dialog-ticket <t>] [--via slash] [--project <dir>]', summary: M('Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.', '제출된 게이트를 승인한다. 사람만 한다: /king-wjang-harness:approve <P> 를 입력하거나 확인 창에 답한다. 플래그는 플러그인이 쓰는 값이라 손으로 치지 않는다.') },
       { name: 'verify', args: '<P>', summary: M('Re-check that submitted artifacts still match their pinned hash.', '제출 당시 해시와 현재 산출물이 같은지 다시 확인한다.') },
       { name: 'sweep', summary: M('Invalidate gates whose artifacts changed after approval.', '승인 후 산출물이 바뀐 게이트를 무효화한다.') },
       { name: 'status', summary: M('Print all gate records as JSON.', '전 게이트 레코드를 JSON 으로 출력한다.') },

@@ -24,23 +24,18 @@ export const runtimeDir = (root: string) => path.join(harnessDir(root), '.runtim
 export const denialsPath = (root: string) => path.join(runtimeDir(root), 'denials.log');
 
 /**
- * [UX-15] **사람에게 내미는 명령은 사람의 터미널에서 그대로 돌아야 한다.**
+ * [UX-15] 플러그인으로 설치되면 이 CLI 는 플러그인 캐시의 버전 디렉토리 아래 bin/ 에 놓이고
+ * **사용자 셸의 PATH 에는 없다.** 그래서 예전에는 안내 문구에 절대 경로를 넣었는데, 그 경로에는
+ * 판 번호가 들어가 길고 판이 올라가면 사라진다. 이제 안내는 `approveSlash`·`humanCmd` 로 내고,
+ * 절대 경로는 훅이 확인 창의 명령을 이 설치로 고정할 때만 쓴다.
  *
- * 플러그인으로 설치되면 이 CLI 는 플러그인 캐시(~/.claude/plugins/cache/... 아래 버전
- * 디렉토리)의 bin/ 에 놓이고 **사용자 셸의 PATH 에는 없다.** 에이전트 세션은 그 경로를 이미
- * export 해 두므로 짧은 이름으로 부를 수 있지만, 그 출력을 복사한 사람의 터미널에서는
- * "command not found" 가 난다. 하필 그렇게 안내되는 것이 게이트 승인이다 — **사람만 실행할
- * 수 있는 명령**이라, 사람이 못 치면 게이트가 열리지 않는다. 실제 사고: P1 제출 뒤 안내문을
- * 그대로 복사한 사용자가 여기서 막혔다.
- *
- * 경로는 **런타임에 푼다**(하드코딩하면 설치 위치·버전이 바뀔 때마다 안내가 거짓말이 된다).
  * __dirname 은 <install>/core/dist(번들) 또는 <install>/core/src(테스트) 이므로 두 단계 위가
  * 설치 루트다 — profile.ts 의 번들 프로파일 경로와 hook.ts 의 harnessProgramFiles 가 이미 같은
  * 가정 위에 서 있다. 심링크는 realpath 로 편다.
  */
 let cachedCliPath: string | undefined;
 
-/** 이 프로세스를 돌리고 있는 실행 파일의 절대 경로 — 셸에 그대로 붙여 넣을 수 있는 형태. */
+/** 이 프로세스를 돌리고 있는 실행 파일의 절대 경로. 안내 문구가 아니라 훅의 경로 대조에 쓴다. */
 export function harnessCliPath(): string {
   if (cachedCliPath !== undefined) return cachedCliPath;
   const candidate = path.resolve(__dirname, '..', '..', 'bin', 'harness');
@@ -53,12 +48,23 @@ export function harnessCliPath(): string {
   return cachedCliPath;
 }
 
-/** 사람이 자기 터미널에 그대로 붙여 넣는 명령 한 줄(절대 경로 포함). */
-export function humanCmd(args: string): string {
-  return harnessCliPath() + ' ' + args;
+/**
+ * 사람이 Claude Code 프롬프트에 그대로 치는 명령 한 줄. **짧은 이름만 낸다.**
+ *
+ * 절대 경로에는 플러그인 판 번호가 들어가, 판이 올라가면 안내가 가리키는 파일이 사라진다.
+ * 플러그인의 `bin/` 은 Claude Code 의 셸 PATH 에 들어가므로(공식 문서 · 2.1.319 실측) `!` 접두로
+ * 실행한다. 이 접두 입력은 PreToolUse 훅을 거치지 않으므로(실측) 에이전트 호출과 구분된다.
+ * 게이트 승인은 여기 말고 `approveSlash` 를 쓴다 — `!` 실행에는 TTY 가 없어 CLI 가 거부한다.
+ */
+export function humanCmd(args: string, envPrefix?: string): string {
+  return `!${envPrefix ? `${envPrefix} ` : ''}harness ${args}`;
 }
 
-/** 붙여 넣어 **그대로 도는 것**이 목적이므로 공백·메타문자가 있으면 따옴표로 싼다. */
+/** 사용자가 프롬프트에 치는 승인 명령. 판 번호도 설치 경로도 들어가지 않는다. */
+export const approveSlash = (phase: string): string => `/king-wjang-harness:approve ${phase}`;
+export const SLASH_COMMAND_NAME = 'king-wjang-harness:approve';
+
+/** 셸 명령에 그대로 넣을 수 있게 공백·메타문자가 있으면 따옴표로 싼다. */
 function shellQuote(p: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
 }

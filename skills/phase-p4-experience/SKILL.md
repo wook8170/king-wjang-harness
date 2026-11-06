@@ -134,7 +134,7 @@ harness phase set P5
 
 ## Approval is a human's
 
-**An agent does not run `harness gate approve P4`.** Give the artifact URL of the HTML of record
+**An agent never approves P4 on its own — the user types `/king-wjang-harness:approve P4`.** Give the artifact URL of the HTML of record
 first and let the user actually click through it. P4 is a gate that is approved with the eyes.
 
 ## Pitfalls

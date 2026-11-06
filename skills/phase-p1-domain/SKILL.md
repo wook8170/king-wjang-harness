@@ -47,7 +47,7 @@ harness phase set P2
 
 ## Approval is a human's
 
-**An agent never runs `harness gate approve P1`.** Present the review packet path and the artifact
+**An agent never approves P1 on its own — the user types `/king-wjang-harness:approve P1`.** Present the review packet path and the artifact
 URL, and wait for the user's approval. Without it, `harness phase set P2` is refused — a phase
 transition happens on "artifact approved", never on "work finished".
 

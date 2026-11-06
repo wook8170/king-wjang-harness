@@ -63,7 +63,7 @@ through is not a record.
 
 ## Approval is a human's
 
-**A human presses `harness gate approve P11`. An agent never approves on their behalf.** Deploying is
+**A human approves by typing `/king-wjang-harness:approve P11`. An agent never approves on their behalf.** Deploying is
 the most expensive action to undo. Present the smoke and canary results and the rollback path, then
 wait. If the evidence grade is not `measured`, the core refuses first.
 
