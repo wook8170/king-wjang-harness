@@ -62,7 +62,7 @@ harness phase set P6
 
 ## Approval is a human's
 
-**An agent does not run `harness gate approve P5`.** Present the review packet and the artifact URL,
+**An agent never approves P5 on its own — the user types `/king-wjang-harness:approve P5`.** Present the review packet and the artifact URL,
 then wait. Without approval, `harness phase set P6` is refused.
 
 ## Pitfalls

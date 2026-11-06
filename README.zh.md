@@ -67,10 +67,11 @@ flowchart LR
 
 - **事件日志是唯一真相源。** `.harness/events.jsonl` 是仅追加（append-only）的。`state.json` 是一份*派生缓存*——把它弄坏或删掉，harness 会通过重放日志把它重建出来。`harness doctor --repair` 做的正是这件事。
 - **三条轨道，十三个阶段。** 设计 `P0–P6` · 构建 `P7–P9` · 出货 `P10–P12`。
-- **四个钩子，一个二进制程序：**
+- **五个钩子，一个二进制程序：**
   - `SessionStart` —— 注入当前阶段、活跃波次、该波次的指示、最近的轮次日志，以及任何降级警告。你的智能体一醒来就清楚自己身处何处。
   - `PreToolUse` —— 在设计轨道上拒绝源代码写入、拒绝设计轨道上的部署类 Bash 命令，并且在**任意**阶段拒绝对三个 harness 自有文件的手工编辑。
   - `PostToolUse` —— 记录"发生了实际工作"（写入操作 / 非自身触发的 Bash），这样 Stop 守卫就知道这一轮需要结算。
+  - `UserPromptExpansion` —— 用户输入 `/king-wjang-harness:approve <P>` 时，发放批准所用的票据。
   - `Stop` —— 如果活跃波次上有活动，但轮次日志没有更新，就阻止会话结束。（一句明确的"这轮是琐碎小事"说明，是被接受的逃生出口。）
 - **波次与设计台账。** *波次* 是一个带有轮次日志和验收标准的工作单元。*台账* 保存带版本号的设计节点；`node bump` 会把 **STALE** 传播给所有引用了该设计的波次——这样就不会有任何东西悄悄地建立在过时的决策之上。
 
@@ -120,7 +121,7 @@ harness 把**设计当作被强制执行、有版本的状态**来对待——�
 | 指标 | 数值 |
 |---|---|
 | 钩子延迟（p95） | 两个测量面，**都由 `npm run bench:hook` 打印**。*进程内*（捆绑包已加载时的判定本身）：正常 **0.9 ms**，10 万条（15 MB）日志重放回退路径生效时 **18.6 ms**。*挂钟*（一次工具调用真正等待的值），同一次运行：**77 ms** / **102 ms** —— 其中 **40 ms 是那台机器的 `node` 启动**。挂钟绝对值是机器的属性；关卡卡在回退路径**多加**的值上（进程内 +17.7 ms、挂钟 +24.7 ms、阈值 50 ms）。 |
-| 测试套件 | **1596 tests**（68 个文件）—— **发布包中 1572 项通过**（其余是查看仓库内部文档的检查，这些文档不随发布包分发；`git archive` 实测）。2 项墙钟断言在繁忙机器上不给判定，而是记录**「无法测量」与当时的负载** |
+| 测试套件 | **1665 tests**（69 个文件）—— **发布包中 1658 项通过**（其余是查看仓库内部文档的检查，这些文档不随发布包分发；`git archive` 实测）。2 项墙钟断言在繁忙机器上不给判定，而是记录**「无法测量」与当时的负载** |
 | 每会话新增上下文 | 启用时 **约 260 令牌**；没有 `.harness/` 的项目为 **0**。复测: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` —— 注入的简报约 1KB（其中包含项目路径，故实际大小略有出入），除以 4 即为令牌估算 |
 | 运行时依赖 | **1 个**（`yaml`，已打包） |
 | 确定性 | 3 次运行判定完全一致 |
@@ -150,7 +151,7 @@ claude plugin marketplace add wook8170/king-wjang-harness
 claude plugin install king-wjang-harness@king-wjang-harness
 ```
 
-该插件会自动接好全部四个钩子。已提交的 `core/dist/` 意味着克隆下来即可直接使用——**无需构建步骤。**
+该插件会自动接好全部五个钩子。已提交的 `core/dist/` 意味着克隆下来即可直接使用——**无需构建步骤。**
 
 <details>
 <summary>或从源码安装（开发模式）</summary>
@@ -203,11 +204,32 @@ harness --version
 | `harness backtrack <phase> --reason "…"` | 从后续轨道正式退回设计阶段 |
 | `harness doctor [--repair [--force]] [--accept-policy]` | 完整性检查 · 日志重放恢复 · 策略变更检测（`--accept-policy` 需要 `HARNESS_ACCEPT_POLICY=1` — 仅限人工） |
 | `harness gate submit <P0..P12>` | 将该阶段的产物提交评审 |
-| `harness gate approve <P0..P12>` | **仅限人工** —— 打开下一阶段的批准（不要加入允许列表） |
+| `/king-wjang-harness:approve <P0..P12>` · `harness gate approve <P0..P12>` | **仅限人工** —— 打开下一阶段的批准。见[批准关卡](#批准关卡)（不要加入允许列表） |
 | `harness report denials [--limit <n>]` | 钩子最近拒绝的工具调用 —— 什么被拦下、为什么 |
 | `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | 呼叫人工并停止 wave 循环；判断完成后解除 |
 
 `harness --help` 会打印命令地图，`harness <命令组> --help` 会列出该组的子命令；这张表是简要参考。钩子事件（`harness hook …`）由插件调用，从不需要手动调用。
+
+### 批准关卡
+
+批准是用户的决定。共有三种方式，都不需要输入带版本号的路径。
+
+| 方式 | 用户的操作 | 日志记录 |
+|---|---|---|
+| 斜杠命令 | 在 Claude Code 中输入 `/king-wjang-harness:approve <P>` | `via: slash` |
+| 确认对话框 | 智能体单独一行运行 `harness gate approve <P>` 后，用户回答对话框。对话框显示阶段 · 产出物 · 证据等级 | `via: dialog` |
+| 终端 | 在 `PATH` 含插件 `bin/` 的真实终端中运行 `harness gate approve <P>` | `via: terminal` |
+
+斜杠命令声明了 `disable-model-invocation: true`，智能体调用时 Claude Code 会阻止。
+
+以下情况无法保证对话框显示给人，因此钩子不显示对话框而是拒绝，并提示使用斜杠命令。
+
+- 权限模式不是 `default` · `acceptEdits` · `auto` 时，包括 `bypassPermissions` · `dontAsk` · `plan`。
+- `-p` · SDK 会话，或来自子智能体的调用。
+- 命令被连接，或带有管道 · 替换 · 路径 · 环境变量前缀。
+- 设置中的 `permissions.allow` 规则覆盖了 `harness gate approve`。`harness doctor` 也会警告。
+
+其他仅限人工的命令（`phase set --force` · `doctor --accept-policy`）在 Claude Code 提示符处加 `!` 运行，例如 `!harness loop critical clear`。
 
 **如何卸下。** 没有 `harness uninstall`，这是有意为之：智能体不应能够关闭它自己正在受约束的规则。
 解除是人在自己终端里做的动作。
@@ -237,7 +259,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 服务器暴露的工具恰好是 16 个：`harness_status`、
 `harness_wave_create`／`_activate`／`_update`／`_complete`／`_list`、`harness_node_upsert`／`_bump`、
 `harness_gate_submit`／`_status`、`harness_report_rtm`／`_hub`、`harness_ship_verdict`、
-`harness_trace`、`harness_doctor` —— 以及 `harness_gate_approve`，它只用于**拒绝并指向终端**。
+`harness_trace`、`harness_doctor` —— 以及 `harness_gate_approve`，它只用于**拒绝并指向斜杠命令**。
 
 **有两件事是刻意做不到的**：无法批准关卡（最终点击永远属于人 —— 这是设计，不是疏漏），也无法越过未批准的关卡推进阶段。
 通过 MCP 能做的事，本来通过 CLI 也能做 —— 关卡还是同一批关卡。
@@ -270,7 +292,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 ## 状态 —— 已通过生产就绪验证
 
 **v0.1.2 —— SHIP-READY（可出货）。** 核心引擎、三条轨道以及全部十三个阶段均已实现并实测
-（1596 tests），并在此之上通过了本工具**自己**的出货就绪关卡。强制出货纪律的工具，被同一套纪律
+（1665 tests），并在此之上通过了本工具**自己**的出货就绪关卡。强制出货纪律的工具，被同一套纪律
 量过，并且通过了。
 
 ### 验证到什么程度
@@ -279,15 +301,15 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 实现者 —— 它是**真正端到端驱动产品**而非仅仅阅读代码的 **11 轴**扫描。结果:
 
 - **13 个出货关卡 → 12 个实测 PASS**（第 13 个钩子延迟在空闲机器上可干净复测）:
-  测试 · 类型 · 自包含克隆 · 钩子无害性 · 强制力 · MCP **安全性质**（终端前没有人时关卡无法被
-  批准）· 确定性 · 供应链（`npm audit --omit=dev`: **0**）· 密钥历史（这是 gitleaks 规则能捕获的范围，与 GitHub 推送保护拦截的范围并不相同；本次审计中两者对同一字符串给出了不同判定）（gitleaks，307 个提交:
+  测试 · 类型 · 自包含克隆 · 钩子无害性 · 强制力 · MCP **安全性质**（无法通过 MCP
+  批准关卡）· 确定性 · 供应链（`npm audit --omit=dev`: **0**）· 密钥历史（这是 gitleaks 规则能捕获的范围，与 GitHub 推送保护拦截的范围并不相同；本次审计中两者对同一字符串给出了不同判定）（gitleaks，307 个提交:
   **0**）· CLI 契约 · 可观测性 · 打包。
 - **绕过钩子的对抗性扫描 —— 在常设 300+ 条语料*之外*新增约 40 种写法**，全部经真实钩子判定:
   新的源文件写入形式（`printf` · `dd` · `ex` · `install` · `python3 -c` · `awk -i inplace` …）、
   对核心 / 策略 / 日志的写入、符号链接与硬链接的 TOCTOU、日志伪造、`base64 -d | sh`，以及嵌套与
   数组形式的 MCP 参数。**所有不可逆目标 —— 核心、策略、状态、事件日志 —— 全部被拒绝。在「不可
   拦截」对照集上过度拦截为 0。**
-- **1596 tests green · `tsc` 0 · 重复运行结果确定。**
+- **1665 tests green · `tsc` 0 · 重复运行结果确定。**
 
 **判定: SHIP-READY —— 无阻塞性缺陷。** 唯一有意保留的可穿透之处并未隐藏，而是明说: 设计 → 源码
 的分离是*减速带，不是安全墙*（见「已知限制」与常见问题）。一旦泄漏就不可逆的东西 —— 日志、策略
@@ -299,7 +321,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 ### 已经建成的部分
 
 - ✅ 事件日志、状态重放、doctor 恢复
-- ✅ 四个钩子：会话注入、设计轨道拒绝、活动追踪、停止结算
+- ✅ 五个钩子：会话注入、设计轨道拒绝、活动追踪、批准命令确认、停止结算
 - ✅ 波次生命周期、带 STALE 传播的设计台账、UX 证据关卡
 - ✅ 注入加固、互不干扰与无害不变量、已提交的自包含 dist
 - ✅ 审批**关卡**（`gate submit/approve/verify/sweep/feedback`）+ 制品注册表（`doc`）+ RTM（`report rtm`）
@@ -319,6 +341,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 - **布局模板声明没有在核心中强制** —— 设计系统只检查令牌与冻结路径。
 - `/remote-control` **不由本插件提供** —— 会话提示是条件性说明，不是指令。
 - 关卡衡量的是**数量而非质量**。它拒绝非散文的内容，也拒绝那些相对已审关卡带来不足 80 个新字符的提交 —— 灌水凑字数、改一个字符的副本、往已批准集合上加薄文件，这些路都被堵上了（实测 13/13 → 分别开启 0、1、2 个）。剩下的是「新带来的 80 个字符是否**够好**」，那属于人 —— 评审包会把每一条提交路径及其大小摆在人面前。
+- **批准路径不能证明调用者是人。** 对话框的回答由 Claude Code 接收，钩子看不到，因此 `via: dialog` 只记录经对话框路径执行。拒绝时不触发任何钩子事件，所以不留记录。智能体以钩子读不懂的形式写入票据文件，或操控下层交互会话的途径仍然存在。Claude Code 2.1.319 实测：钩子的 `ask` 在 `default` · `acceptEdits` · `auto` 下显示了对话框。官方文档也写明 `ask` 不由分类器判定。Remote Control 未能复现。
 - 人工手改 `.harness/events.jsonl` **不在威胁模型内** —— 钩子拦的是智能体，不是项目主人。
 - 钩子只看 **它能解析的部分** —— `sh -c`、最多 3 层的脚本、`npm run` 脚本。**不解析 `make <target>`**（解析 Makefile 超出范围），对 4 层以上的脚本链不再追踪而是**拒绝** —— 看不到最后一步写了什么，并不等于它是安全的。
 - **以«文件»形式交给解释器的程序，读取方式与 shell 脚本相同** —— 当程序作为文件传给解释器时（`sed -f prog.sed`、`awk -f prog.awk`、`perl x.pl`、`python3 x.py`、`node x.js`、`bun`、`deno run`、`ruby`、`php`、`tclsh`、`lua`、`Rscript`），钩子会读取该文件，若它写入 harness 管辖的路径就拒绝。**三个边界是有意为之的**：① 程序文件**超过 64 KB 时是跳过而非拒绝**（真实的打包产物很大，而手写的伪造文件很小 —— 超过 64 KB 的伪造文件，是为了不阻塞 `node dist/cli.js` 而公开承担的代价）；② **钩子不认识的解释器**（如 `julia`、`groovy`、`raku` 等冷门运行时）不在枚举范围内；③ **不把路径写成字面量、而在语言内部拼装的程序** —— 字符串拼接（`".har" + "ness/…"`）、`chr()`/`String.fromCharCode` 或 base64 —— 不会被字面量路径检查捕获（进入受保护目录的相对 `chdir(".harness")` 会被捕获）。要完全关闭解释器长尾与语言内混淆，需要的是**文件系统层的强制**，而不是钩子读取程序体；那超出了钩子的范围。

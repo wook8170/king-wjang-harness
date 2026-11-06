@@ -3,6 +3,10 @@
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" session-start", "timeout": 10 } ] }
     ],
+    "UserPromptExpansion": [
+      { "matcher": "king-wjang-harness:approve",
+        "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" user-prompt-expansion", "timeout": 10 } ] }
+    ],
     "PreToolUse": [
       { "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__.*(write|edit|create|put|save|append|patch|move|copy|delete|remove|mkdir|store|upload|truncate|set_file|set_content|replace).*",
         "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/harness-hook\" pre-tool", "timeout": 10 } ] }

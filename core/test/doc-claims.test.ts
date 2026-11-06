@@ -172,7 +172,8 @@ describe('DIR-01: 플러그인 디렉터리 검증이 저장소를 거부하지 
     expect(attrs).not.toMatch(/\bfilter\s*=/);
   });
 
-  it('추적 중인 텍스트 파일에 NUL 바이트가 없다 — 디렉터리 검증은 그런 파일을 바이너리로 보고 보류한다', () => {
+  // 배포본(`git archive`)에는 .git 이 없어 추적 목록을 얻을 수 없다.
+  it.skipIf(!fs.existsSync(path.join(repo, '.git')))('추적 중인 텍스트 파일에 NUL 바이트가 없다 — 디렉터리 검증은 그런 파일을 바이너리로 보고 보류한다', () => {
     const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
     const files = execFileSync('git', ['ls-files', '-z'], { cwd: repo, encoding: 'utf8' })
       .split('\0').filter((f) => f && !/\.(png|jpe?g|gif|webp|woff2?|ttf|otf)$/i.test(f));

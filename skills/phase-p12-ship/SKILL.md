@@ -87,7 +87,7 @@ Run `harness gate sweep` once before submitting — it catches artifacts tampere
 
 ## Approval is a human's
 
-**A human presses `harness gate approve P12`. An agent never approves on their behalf.** This is the
+**A human approves by typing `/king-wjang-harness:approve P12`. An agent never approves on their behalf.** This is the
 "ship" button and it is the most expensive one to undo. Present the verdict, the deferred list, and
 the uncovered stretches of the RTM exactly as they are, and let the user approve themselves. A GO is
 not the approval — it is **the input to the approval review**.

@@ -12,7 +12,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir, presence, ledgerPath } from './paths';
+import { harnessDir, statePath, eventsPath, designDir, wavesDir, wavePath, runtimeDir, presence, ledgerPath, approveSlash } from './paths';
+import { approveAllowRule } from './approve';
 import { READ_CAPS, READ_WARN_RATIO } from './validate';
 import { listAdrs } from './adr';
 import { loadLedger } from './ledger';
@@ -417,6 +418,17 @@ export function runDoctor(
         + '무시되므로 기본값이 돌고 있고, 그 키로 걸려던 강제는 걸려 있지 않다. '
         + `철자를 고치거나 그 키를 지워라. 이 빌드가 읽는 키는: ${known}. `
         + '(doctor 는 이것을 복구하지 않는다 — config 파일은 사람이 고치는 것이다.)',
+    }));
+  }
+
+  // 승인 명령을 덮는 허용 규칙. 복구로 고쳐지지 않고 슬래시 명령은 계속 쓸 수 있으므로 warning 이다.
+  const allowRule = approveAllowRule(root);
+  if (allowRule) {
+    warnings.push(t({
+      en: `\`${allowRule.rule}\` in ${allowRule.file} allows \`harness gate approve\`, so the hook refuses to raise `
+        + `the confirmation dialog for it. Remove the rule, or approve with \`${approveSlash('<P>')}\`.`,
+      ko: `${allowRule.file} 의 \`${allowRule.rule}\` 규칙이 \`harness gate approve\` 를 허용해 훅이 확인 창을 `
+        + `띄우지 않고 거부한다. 그 규칙을 지우거나 \`${approveSlash('<P>')}\` 로 승인하라.`,
     }));
   }
 

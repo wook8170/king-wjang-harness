@@ -46,7 +46,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
-import { harnessDir, evidenceDir, wavesDir, humanCmd } from './paths';
+import { harnessDir, evidenceDir, wavesDir, approveSlash } from './paths';
 import { tr, langFor } from './tr';
 import { pick, type Lang, type Msg } from './i18n';
 import { appendEvent } from './events';
@@ -675,8 +675,8 @@ export function renderReleaseChecklist(root: string): string {
       }),
       '',
       t({
-        en: 'This verdict does not open the gate for you — a human presses `' + humanCmd('gate approve P12') + '`.',
-        ko: '이 판정은 게이트를 대신 열지 않는다 — `' + humanCmd('gate approve P12') + '` 는 사람이 누른다.',
+        en: 'This verdict does not open the gate for you — a human presses `' + approveSlash('P12') + '`.',
+        ko: '이 판정은 게이트를 대신 열지 않는다 — `' + approveSlash('P12') + '` 는 사람이 누른다.',
       }),
     );
   } else {

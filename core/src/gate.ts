@@ -53,7 +53,8 @@ import * as path from 'node:path';
 import { appendEvent, readEvents } from './events';
 import { tr } from './tr';
 import type { Msg } from './i18n';
-import { packetsDir, isInsideRoot, humanCmd } from './paths';
+import { packetsDir, isInsideRoot, approveSlash } from './paths';
+import type { ApprovalVia } from './approve';
 import { computePolicyHash } from './policy';
 import { sanitizeUntrusted } from './untrusted';
 import { loadRegistry } from './registry';
@@ -506,7 +507,7 @@ export function computeArtifactHash(root: string, relPaths: string[]): string {
 }
 
 /** 저널에서 이 페이즈의 최신 제출 심사 경로를 되읽는다. 제출 이력이 없거나 불량이면 null. */
-function recordedPaths(root: string, phase: Phase): string[] | null {
+export function recordedPaths(root: string, phase: Phase): string[] | null {
   const s = latestSubmissions(root).get(phase);
   return s && s.paths.length > 0 ? s.paths : null;
 }
@@ -678,7 +679,7 @@ export function measuredOnlyViolation(
   });
 }
 
-export function approveGate(root: string, phase: Phase): GateRecord {
+export function approveGate(root: string, phase: Phase, via?: ApprovalVia): GateRecord {
   const state = readState(root);
   const current = state.gates[phase];
   if (!current || current.status !== 'submitted') {
@@ -721,6 +722,8 @@ export function approveGate(root: string, phase: Phase): GateRecord {
   // 않되, 「이 게이트는 어떤 정책 아래에서 열렸나」는 나중에 저널만으로 답할 수 있어야 한다.
   const ev = appendEvent(root, 'gate-approved', {
     phase, artifactHash, evidence: current.evidence, paths, policyHash: computePolicyHash(root).hash,
+    // 어느 경로로 승인됐는지를 남긴다. 호출자가 사람임을 증명하는 값은 아니다(approve.ts).
+    ...(via ? { via } : {}),
   });
   const record: GateRecord = { ...current, status: 'approved', approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
@@ -892,12 +895,12 @@ export function canEnterPhase(root: string, phase: Phase): GateVerdict {
       tr(root, {
         en: `Cannot move to ${phase} — ${missing.length} gate(s) before it are not approved: ${list} `
           + `(${first} is currently: ${gates[first]?.status ?? 'pending'}). Start with the earliest: `
-          + `\`harness gate submit ${first}\` → \`${humanCmd(`gate approve ${first}`)}\`. `
+          + `\`harness gate submit ${first}\` → \`${approveSlash(first)}\`. `
           + "A phase change happens on 'artifact approval', never on 'work finished' (spec §2). "
           + 'Approving a later gate does not stand in for the ones before it',
         ko: `${phase} 로 갈 수 없다 — 그 앞의 게이트 ${missing.length}개가 승인되지 않았다: ${list} `
           + `(${first} 는 현재 ${gates[first]?.status ?? 'pending'}). 가장 앞의 것부터 처리하라: `
-          + `\`harness gate submit ${first}\` → \`${humanCmd(`gate approve ${first}`)}\`. `
+          + `\`harness gate submit ${first}\` → \`${approveSlash(first)}\`. `
           + "페이즈 전환은 '작업 완료'가 아니라 '산출물 승인'으로만 일어난다(스펙 §2). "
           + '뒤 게이트를 승인한다고 앞 게이트를 대신하지는 못한다',
       }),

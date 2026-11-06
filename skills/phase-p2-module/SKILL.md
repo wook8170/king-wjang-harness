@@ -73,7 +73,7 @@ harness phase set P3
 
 ## Approval is a human's
 
-**An agent does not run `harness gate approve P2`.** Check and report that both ADRs are `accepted`
+**An agent never approves P2 on its own — the user types `/king-wjang-harness:approve P2`.** Check and report that both ADRs are `accepted`
 and that the review packet has no blockers, then wait.
 
 ## Pitfalls

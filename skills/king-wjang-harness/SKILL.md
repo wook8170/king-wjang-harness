@@ -64,7 +64,7 @@ own source in the design track.
 | `harness wave update "<what you did, what is next>"` | Settle the turn log (an empty log is rejected) |
 | `harness wave complete` | Complete the wave (a UX node reference requires visual evidence — see Pitfalls) |
 | `harness wave list` | Wave list as JSON |
-| `harness gate submit <P> --paths <a,b> [--evidence claimed\|code\|measured]` / `harness gate approve <P>` | Submit artifacts for review / **human** approval |
+| `harness gate submit <P> --paths <a,b> [--evidence claimed\|code\|measured]` / `/king-wjang-harness:approve <P>` | Submit artifacts for review / **human** approval. The user types the slash command; an agent cannot invoke it. Alternatively, `harness gate approve <P>` alone on one line raises a confirmation dialog, and the hook refuses it where a person may not see the dialog (`bypassPermissions`, `dontAsk`, `plan`, `-p`, subagents, chained commands, an allow rule that covers it) |
 | `harness backtrack <phase> --reason "<reason>"` / `harness backtrack clear` | Formally go back to design from the build/ship track / end the backtrack |
 | `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check and journal-replay recovery (JSON: `ok/repaired/refused/issues/warnings`). `--accept-policy` re-pins the policy baseline and needs `HARNESS_ACCEPT_POLICY=1` — the user runs it |
 

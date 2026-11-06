@@ -18,9 +18,10 @@
  *      `{ok:false, content:<행동 가능한 한국어 안내>}` 로 되돌려 모델이 다음 수를 알게 한다.
  *
  *  (3) **게이트 승인은 MCP 로 열 수 없다 (§4-3 안전 속성).**
- *      `harness gate approve` 는 의도적으로 permission allowlist 에서 제외되어, 실행할 때마다
- *      권한 다이얼로그가 뜨고 게이트를 여는 최종 클릭은 항상 사람이 한다. MCP 도구로 승인을
- *      대행하면 그 장치를 통째로 우회한다 — LLM 단독으로 설계·출하 게이트를 열 수 있게 된다.
+ *      승인은 슬래시 명령(`/king-wjang-harness:approve <P>`), 훅이 띄우는 확인 창, 터미널의 세
+ *      경로로만 일어난다(approve.ts). 에이전트의 Bash 호출에 창이 뜨는 것은 허용 목록에서 빠져서가
+ *      아니라 훅이 `ask` 를 돌려주기 때문이다. MCP 도구로 승인을 대행하면 이 장치를 통째로
+ *      우회한다 — LLM 단독으로 설계·출하 게이트를 열 수 있게 된다.
  *
  *      **선택: 도구 목록에 남기되 무조건 거절한다** (숨기지 않는다).
  *      목록에서 빼면 승인 경로를 찾는 모델이 무엇을 해야 하는지 알 수 없어 임의의 우회
@@ -42,7 +43,7 @@ import { loadRegistry } from './registry';
 import { renderRtm, buildHub, buildReviewPacket, traceNode } from './report';
 import { shipVerdict } from './ship';
 import { runDoctor } from './doctor';
-import { packetsDir, humanCmd } from './paths';
+import { packetsDir, approveSlash } from './paths';
 import { PHASES, EVIDENCE_GRADES, LEDGER_STATUSES, isPhase, isEvidenceGrade } from './types';
 import type { EvidenceGrade, LedgerNode } from './types';
 
@@ -115,9 +116,9 @@ export function toolDefinitions(): McpToolDef[] {
     {
       name: 'harness_gate_approve',
       description:
-        '[UNAVAILABLE] Gate approval cannot be done over MCP. Approval only happens in the terminal '
-        + 'via `harness gate approve <P>`, which raises a permission dialog on every run so the final '
-        + 'click is always a human (spec §4-3). This tool only points you to that path.',
+        '[UNAVAILABLE] Gate approval cannot be done over MCP. The user approves by typing '
+        + '`/king-wjang-harness:approve <P>`, or by answering the confirmation dialog raised when '
+        + '`harness gate approve <P>` runs through Bash (spec §4-3). This tool only points you to those paths.',
       inputSchema: {
         type: 'object',
         properties: { phase: phaseProp },
@@ -292,10 +293,10 @@ function refuseApprove(o: Record<string, unknown>): McpToolResult {
   const phase = str(o, 'phase');
   const target = isPhase(phase) ? phase : '<P0..P12>';
   return fail(
-    `Gate approval cannot be done over MCP — run \`${humanCmd(`gate approve ${target}`)}\` in the terminal.\n`
-    + 'That command is deliberately excluded from the permission allowlist, so a permission dialog '
-    + 'appears on every run and the final click that opens a gate is always a human (spec §4-3). Approving on '
-    + "your behalf through an MCP tool would bypass that, so this path refuses.\n"
+    `Gate approval cannot be done over MCP — ask the user to type \`${approveSlash(target)}\`.\n`
+    + 'Alternatively run `harness gate approve ' + target + '` alone through Bash: the hook raises a confirmation '
+    + 'dialog, and the user answers it (spec §4-3). Approving through an MCP tool would skip the user, so this '
+    + "path refuses.\n"
     + 'You can still submit: use `harness_gate_submit` to build a review packet and hand it to a human.',
   );
 }
@@ -379,7 +380,7 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       return ok(
         `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}\n`
         + `Review packet: ${path.relative(root, packet)}\n`
-        + `Approve in the terminal with \`${humanCmd(`gate approve ${phase}`)}\` — the final click is a human.`,
+        + `Next: the user approves with \`${approveSlash(phase)}\` — the final decision is a human's.`,
       );
     }
 

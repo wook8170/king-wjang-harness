@@ -67,10 +67,11 @@ flowchart LR
 
 - **Event journal is the source of truth.** `.harness/events.jsonl` is append-only. `state.json` is a *derived cache* — corrupt or delete it and the harness rebuilds it by replaying the journal. `harness doctor --repair` does exactly this.
 - **Three tracks, thirteen phases.** Design `P0–P6` · Build `P7–P9` · Ship `P10–P12`.
-- **Four hooks, one binary:**
+- **Five hooks, one binary:**
   - `SessionStart` — injects current phase, active wave, the wave's instructions, recent turn log, and any degradation warnings. Your agent wakes up knowing exactly where it is.
   - `PreToolUse` — denies source writes on the design track, deploy-class Bash on the design track, and hand-edits of the three harness-owned files, in **any** phase.
   - `PostToolUse` — records "real work happened" (writes / non-self Bash), so the Stop guard knows a turn needs settling.
+  - `UserPromptExpansion` — when the user types `/king-wjang-harness:approve <P>`, issues the ticket that lets the approval run.
   - `Stop` — blocks session end if there was activity on the active wave but the turn log wasn't updated. (An explicit "this was trivial" one-liner is an accepted escape hatch.)
 - **Waves & the design ledger.** A *wave* is a unit of work with a turn log and acceptance criteria. The *ledger* holds design nodes with versions; `node bump` propagates **STALE** to every wave that referenced the changed design — so nothing silently builds on an outdated decision.
 
@@ -120,7 +121,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1596 tests** (68 files) — **1572 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1665 tests** (69 files) — **1658 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -150,7 +151,7 @@ claude plugin marketplace add wook8170/king-wjang-harness
 claude plugin install king-wjang-harness@king-wjang-harness
 ```
 
-The plugin auto-wires all four hooks. The committed `core/dist/` means it works on clone — **no build step.**
+The plugin auto-wires all five hooks. The committed `core/dist/` means it works on clone — **no build step.**
 
 <details>
 <summary>Or from source (development)</summary>
@@ -205,11 +206,32 @@ harness --version
 | `harness backtrack <phase> --reason "…"` | Officially return to design from a later track |
 | `harness doctor [--repair [--force]] [--accept-policy]` | Integrity check · journal-replay recovery · policy-drift check (`--accept-policy` needs `HARNESS_ACCEPT_POLICY=1`, humans only) |
 | `harness gate submit <P0..P12>` | Put a phase's artifacts up for review |
-| `harness gate approve <P0..P12>` | **Human only** — the approval that opens the next phase (never allowlist it) |
+| `/king-wjang-harness:approve <P0..P12>` · `harness gate approve <P0..P12>` | **Human only** — the approval that opens the next phase; see [Approving a gate](#approving-a-gate) (never allowlist it) |
 | `harness report denials [--limit <n>]` | Recent tool calls the hooks denied — what got blocked, and why |
 | `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | Escalate to a human and stop the wave loop; clear it once decided |
 
 `harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
+
+### Approving a gate
+
+Approval is the user's decision. There are three ways to give it, and none needs the plugin's versioned path:
+
+| Way | What the user does | Recorded in the journal as |
+|---|---|---|
+| Slash command | Types `/king-wjang-harness:approve <P>` in Claude Code | `via: slash` |
+| Confirmation dialog | The agent runs `harness gate approve <P>` alone on one line; the user answers the dialog, which shows the phase, the artifacts and the evidence grade | `via: dialog` |
+| Terminal | Runs `harness gate approve <P>` in a real terminal, with the plugin's `bin/` on `PATH` | `via: terminal` |
+
+An agent cannot invoke the slash command: it sets `disable-model-invocation: true`, and Claude Code blocks the call.
+
+The hook refuses the dialog and points to the slash command in these cases, because it cannot guarantee that a person sees the dialog:
+
+- The permission mode is anything other than `default`, `acceptEdits` or `auto`. That includes `bypassPermissions`, `dontAsk` and `plan`.
+- The session is `-p` or the SDK, or the call comes from a subagent.
+- The command is chained, piped, substituted, or has a path or an environment prefix.
+- A `permissions.allow` rule in your settings covers `harness gate approve`. `harness doctor` warns about this too.
+
+Other human-only commands (`phase set --force`, `doctor --accept-policy`) run at the Claude Code prompt with a leading `!`, for example `!harness loop critical clear`.
 
 **Taking it off.** There is no `harness uninstall`, and that is deliberate: an agent must not be able
 to switch off the rules it is working under. Removal is a human action in a human terminal.
@@ -276,7 +298,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1596 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1665 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -287,7 +309,7 @@ product end-to-end*, not merely reads it. What it found:
 
 - **13 ship gates → 12 measured PASS** (the 13th, hook latency, re-measures cleanly on an idle machine):
   tests · types · self-contained clone · hook harmlessness · enforcement · the MCP **safety property**
-  (a gate cannot be approved without a human at a terminal) · determinism · supply chain
+  (a gate cannot be approved over MCP) · determinism · supply chain
   (`npm audit --omit=dev`: **0**) · secret history (gitleaks, 307 commits: **0** — that is what gitleaks' rules catch, which is narrower than what GitHub push protection blocks; the two disagreed on a real string during this audit) · CLI contract ·
   observability · packaging.
 - **Adversarial hook-bypass sweep — ~40 fresh notations** *beyond* the standing 300+ entry corpus, each
@@ -296,7 +318,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1596 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1665 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and
@@ -309,7 +331,7 @@ core — is a wall.
 ### What's built
 
 - ✅ Event journal, state replay, doctor recovery
-- ✅ Four hooks: session injection, design-track denial, activity tracking, stop settlement
+- ✅ Five hooks: session injection, design-track denial, activity tracking, approval-command check, stop settlement
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
@@ -329,6 +351,7 @@ core — is a wall.
 - **Layout-template declaration is not enforced** in the core; the design system checks tokens and frozen roots only.
 - `/remote-control` is **not provided by this plugin**; the session hint is conditional guidance, not an instruction.
 - A gate measures **amount, not quality**. It refuses text that is not prose, and refuses a submission that brings less than 80 characters the reviewed gates have not already seen — so padding a file, copying one with a character changed, or bolting thin files onto an approved set no longer opens a gate (measured: 13/13 → 0, 1 and 2 openings). What it cannot judge is whether 80 genuinely new characters are *good*; that stays with the human, and the review packet now puts every submitted path and its size in front of them.
+- **Approval paths do not prove a person is the caller.** Claude Code receives the dialog's answer and the hook never sees it, so `via: dialog` records that the dialog path ran. A declined dialog fires no hook event, so declines leave no record. An agent that writes the ticket file in a form the hook cannot read, or that drives a nested interactive session, can still get past this. Measured on Claude Code 2.1.319: a hook `ask` raised the dialog in `default`, `acceptEdits` and `auto`. The official docs say the classifier does not decide `ask`. Remote Control was not reproduced.
 - A person editing `.harness/events.jsonl` by hand is **out of the threat model** — the hooks stop the agent, not the owner.
 - The hook reads what it can resolve — `sh -c`, scripts up to 3 levels deep, and `npm run` scripts. **`make <target>` is not resolved** (parsing Makefiles is out of scope), and a script chain deeper than 3 levels is **not followed — it is denied**, because not seeing what the last step writes is not the same as it being safe.
 - **Interpreter program files are read the same way a shell script is** — when a program is handed to an interpreter as a *file* (`sed -f prog.sed`, `awk -f prog.awk`, `perl x.pl`, `python3 x.py`, `node x.js`, `bun`, `deno run`, `ruby`, `php`, `tclsh`, `lua`, `Rscript`), the hook reads that file and denies it if it writes a harness-owned path. Three bounds are deliberate: a program file **over 64 KB is skipped, not denied** (real bundles are large and hand-written forgers are tiny — a >64 KB forger is the disclosed cost of not blocking `node dist/cli.js`); an **interpreter the hook does not know** (exotic runtimes such as `julia`, `groovy`, `raku`) falls outside the enumerated set; and **a program that assembles a harness-owned path inside the language rather than writing it literally** — string concatenation (`".har" + "ness/…"`), `chr()` / `String.fromCharCode`, or base64 — is not caught by the literal-path check (relative `chdir(".harness")` into a protected directory *is* caught). Closing the interpreter long-tail and in-language obfuscation completely needs filesystem-layer enforcement, not hook body-reading; that is out of scope for the hook.
@@ -357,6 +380,7 @@ core — is a wall.
 | `SessionStart` | all | Prints the current phase, wave and unsettled work into the session context, and clears the previous session's activity marker in `.harness/.runtime/` |
 | `PreToolUse` | `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `Bash`, and MCP tools whose names look like writes | Denies a write that the current phase does not allow, such as a source write during the design track. It reads the tool input only to decide; it changes no files |
 | `PostToolUse` | same as above | When the tool could have changed files, writes a timestamp to `.harness/.runtime/last-activity`, so the `Stop` hook knows the turn did work |
+| `UserPromptExpansion` | `king-wjang-harness:approve` | When the user types the approval command, writes a short-lived ticket to `.harness/.runtime/approve-ticket` |
 | `Stop` | all | Blocks the session from ending while the turn log is unsettled, and tells Claude what to settle |
 
 The hooks never edit `~/.claude/`, your settings files, or permission rules. They write only inside the project's `.harness/.runtime/` directory. The `harness` CLI and MCP tools write the rest of `.harness/`, such as the event journal. The only files they delete are their own temporary files and activity markers there.

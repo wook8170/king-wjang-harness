@@ -18,7 +18,9 @@ import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir, eventsPath, humanCmd, denialsPath, isUnderTempDir } from './paths';
+import { harnessDir, runtimeDir, eventsPath, humanCmd, approveSlash, harnessCliPath, SLASH_COMMAND_NAME, denialsPath, isUnderTempDir } from './paths';
+import { approveAllowRule, askableMode, interactiveEntrypoint, issueDialogTicket, issueSlashTicket, parseApproveCall } from './approve';
+import { measuredOnlyViolation, recordedPaths } from './gate';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE, setsEnv } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
@@ -36,9 +38,17 @@ export interface HookInput {
   tool_name?: string;
   tool_input?: Record<string, any>;
   stop_hook_active?: boolean;
+  /** 권한 모드. 값이 없으면 창을 띄우지 않는다(approve.ts). */
+  permission_mode?: string;
+  /** 서브에이전트 안의 호출에만 있다. */
+  agent_id?: string;
+  /** UserPromptExpansion 입력. */
+  command_name?: string;
+  command_args?: string;
+  command_source?: string;
 }
 
-export type HookEvent = 'session-start' | 'pre-tool' | 'post-tool' | 'stop';
+export type HookEvent = 'session-start' | 'pre-tool' | 'post-tool' | 'stop' | 'user-prompt-expansion';
 
 /**
  * 훅이 **경로로** 판정하는 쓰기 도구. Bash 는 명령 문자열을 스캔해 따로 판정하므로 여기 없다.
@@ -434,6 +444,8 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       }
       case 'post-tool':
         return postTool(root, input);
+      case 'user-prompt-expansion':
+        return slashApproveTicket(root, state, input);
       case 'stop':
         return stopGuard(root, state, input, config.lang, degraded);
       default:
@@ -823,6 +835,91 @@ function recordDenial(root: string, input: HookInput, out: object | null): void 
       fs.writeFileSync(p, kept.join('\n') + '\n');
     }
   } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
+}
+
+/**
+ * 에이전트의 `harness gate approve <P>` 호출을 확인 창으로 올릴지, 왜 못 올리는지 판정한다.
+ * 조건은 전부 「사람에게 창이 반드시 뜬다」를 보장하기 위한 것이다. 하나라도 어긋나면 거부한다.
+ */
+function judgeApproveCall(
+  root: string,
+  state: HarnessState,
+  input: HookInput,
+  cmd: string,
+  degraded: Degraded | null,
+  L: (en: string, ko: string) => string,
+): { ask: object } | { why: string } {
+  const call = parseApproveCall(cmd);
+  if (!call) {
+    return { why: L(
+      'only the plain command `harness gate approve <P>`, alone on one line, can raise it.',
+      '`harness gate approve <P>` 를 그대로 한 줄 단독으로 실행할 때만 띄울 수 있다.',
+    ) };
+  }
+  if (degraded) {
+    return { why: L('the state is damaged, so what is being approved cannot be shown.', '상태가 손상돼 무엇을 승인하는지 보여 줄 수 없다.') };
+  }
+  if (input.agent_id) {
+    return { why: L('it came from a subagent.', '서브에이전트의 호출이다.') };
+  }
+  if (!interactiveEntrypoint()) {
+    return { why: L('this session has nobody at the prompt to answer it.', '이 세션에는 창에 답할 사람이 없다.') };
+  }
+  if (!askableMode(input.permission_mode)) {
+    return { why: L(
+      `permission mode \`${input.permission_mode ?? 'unknown'}\` does not guarantee that a person sees the dialog.`,
+      `권한 모드 \`${input.permission_mode ?? '알 수 없음'}\` 에서는 사람에게 창이 뜬다고 보장할 수 없다.`,
+    ) };
+  }
+  const allowed = approveAllowRule(root);
+  if (allowed) {
+    return { why: L(
+      `\`${allowed.rule}\` in ${allowed.file} allows this command, so the dialog may never appear. Remove that rule.`,
+      `${allowed.file} 의 \`${allowed.rule}\` 규칙이 이 명령을 허용해 창이 뜨지 않을 수 있다. 그 규칙을 지워야 한다.`,
+    ) };
+  }
+  const gate = state.gates[call.phase];
+  if (gate?.status !== 'submitted') {
+    return { why: L(
+      `gate ${call.phase} is not submitted (currently: ${gate?.status ?? 'pending'}).`,
+      `게이트 ${call.phase} 가 제출 상태가 아니다(현재: ${gate?.status ?? 'pending'}).`,
+    ) };
+  }
+  const notMeasured = measuredOnlyViolation(root, call.phase, gate.evidence);
+  if (notMeasured) return { why: notMeasured };
+  const paths = recordedPaths(root, call.phase) ?? [];
+  // 경로는 제출자(에이전트)가 정한 값이다 — 사람이 읽는 창에 그대로 싣지 않는다.
+  const shown = sanitizeUntrusted(paths.slice(0, 5).join(', ') + (paths.length > 5 ? ` +${paths.length - 5}` : ''), 300);
+  const hash = (gate.artifactHash ?? '').slice(0, 12);
+  const nonce = issueDialogTicket(root, call.phase, gate.artifactHash ?? '');
+  return { ask: {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: L(
+        `Approve gate ${call.phase}? Artifacts: ${shown} · evidence: ${gate.evidence} · hash: ${hash} · `
+        + `review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`,
+        `게이트 ${call.phase} 를 승인합니까? 산출물: ${shown} · 근거: ${gate.evidence} · 해시: ${hash} · `
+        + `리뷰 패킷: .harness/packets/${call.phase}.md. 승인하면 다음 페이즈가 열린다.`,
+      ),
+      // 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
+      updatedInput: { ...input.tool_input, command: `${harnessCliPath()} gate approve ${call.phase} --dialog-ticket ${nonce}` },
+    },
+  } };
+}
+
+/**
+ * 사용자가 슬래시 명령을 치면 표를 낸다. 본문의 `!` 명령이 곧바로 이 표를 쓴다.
+ * 표를 못 내도 조용히 끝낸다 — 표가 없으면 CLI 가 이유를 말하며 거부한다.
+ */
+function slashApproveTicket(root: string, state: HarnessState, input: HookInput): null {
+  if (input.command_name !== SLASH_COMMAND_NAME || input.command_source !== 'plugin') return null;
+  if (!interactiveEntrypoint()) return null;
+  const phase = (input.command_args ?? '').trim();
+  if (!isPhase(phase)) return null;
+  const gate = state.gates[phase];
+  if (gate?.status === 'submitted') issueSlashTicket(root, phase, gate.artifactHash ?? '');
+  return null;
 }
 
 function deny(reason: string, degraded: Degraded | null, lang: Lang = 'en'): object {
@@ -2175,11 +2272,11 @@ function preTool(
           `This copies the harness's own program (${path.basename(copied)}). The lock on `
           + '`gate approve` recognises harness invocations by name, so a renamed copy would run it '
           + 'without the check — and a PTY satisfies the terminal test. Run the installed `harness` '
-          + 'command instead. (Approval itself is always yours, in your own terminal.)',
+          + `command instead. (Approval itself is always the user's: \`${approveSlash('<P>')}\`.)`,
           `하네스 자신의 프로그램(${path.basename(copied)})을 복사하려는 명령이다. `
           + '`gate approve` 잠금은 하네스 호출을 **이름으로** 알아보므로, 이름을 바꾼 사본은 '
           + '검사를 건너뛴다(PTY 는 터미널 검사도 통과한다). 설치된 `harness` 명령을 그대로 쓰라. '
-          + '(승인 자체는 언제나 사용자가 자기 터미널에서 한다.)',
+          + `(승인 자체는 언제나 사용자의 일이다: \`${approveSlash('<P>')}\`.)`,
         ), degraded, lang);
       }
 
@@ -2405,12 +2502,12 @@ function preTool(
       return deny(L(
         '`phase set --force` skips the gate check, so an agent cannot run it — phase changes go '
         + 'through `harness gate submit <P>` then a human `harness gate approve <P>`. If bootstrap '
-        + 'or recovery genuinely needs it, **the user must run it themselves** in their terminal: '
-        + '`HARNESS_ALLOW_FORCE=1 ' + humanCmd('phase set <P> --force') + '`.',
+        + 'or recovery genuinely needs it, **the user must run it themselves** at the Claude Code prompt: '
+        + '`' + humanCmd('phase set <P> --force', 'HARNESS_ALLOW_FORCE=1') + '`.',
         '`phase set --force` 는 게이트 검사를 건너뛰므로 에이전트가 실행할 수 없다 — '
         + '페이즈 전환은 `harness gate submit <P>` → 사람 승인 `harness gate approve <P>` 로만 한다. '
-        + '부트스트랩·복구가 정말 필요하면 **사용자가 직접 터미널에서** '
-        + '`HARNESS_ALLOW_FORCE=1 ' + humanCmd('phase set <P> --force') + '` 를 실행해야 한다.',
+        + '부트스트랩·복구가 정말 필요하면 **사용자가 직접 Claude Code 프롬프트에서** '
+        + '`' + humanCmd('phase set <P> --force', 'HARNESS_ALLOW_FORCE=1') + '` 를 실행해야 한다.',
       ), degraded, lang);
     }
 
@@ -2423,7 +2520,7 @@ function preTool(
      * 「allowlist 에 넣지 마라」고 경고하는 것 자체가 그 취약함의 자인이다.
      *
      * `--force`·`--accept-policy` 와 **같은 형태**로 맞춘다: 훅이 에이전트 경로를 닫고,
-     * 사람은 자기 터미널에서 그대로 실행한다. 사람의 정상 경로에는 아무 비용도 없다 —
+     * 사람은 슬래시 명령이나 자기 터미널에서 실행한다. 사람의 정상 경로에는 아무 비용도 없다 —
      * 훅은 에이전트의 도구 호출에만 붙기 때문이다(그래서 env 잠금은 두지 않는다.
      * `gate approve` 는 탈출구가 아니라 **정상 흐름**이고, env 를 요구하면 문서·패킷·
      * 도움말이 가리키는 사람의 길이 통째로 어긋난다).
@@ -2435,17 +2532,27 @@ function preTool(
     // 막던 과차단을 여기서 좁힌다. 막으려던 것(인라인으로 켜기)은 그대로 막힌다.
     if (setsEnv(cmd, 'HARNESS_APPROVE_NO_TTY')
         || runsHarnessWith(cmd, /\bgate\b/, /\bapprove\b/)) {
+      const judged = judgeApproveCall(root, state, input, cmd, degraded, L);
+      if ('ask' in judged) return judged.ask;
       return deny(L(
-        'Approving a gate is the human\'s decision — an agent cannot run `harness gate approve`. '
+        `Approving a gate is the human's decision, and this call cannot raise a confirmation dialog: ${judged.why} `
         + 'Submit the artifacts and let the review packet be read: '
-        + '`harness gate submit <P> --evidence measured --paths <artifacts>`, then **the user approves** '
-        + 'in their terminal with `' + humanCmd('gate approve <P>') + '`. Everything else on the gate is open to '
+        + '`harness gate submit <P> --evidence measured --paths <artifacts>`, then **ask the user to type** '
+        + '`' + approveSlash('<P>') + '`. Everything else on the gate is open to '
         + 'you: `harness gate status`, `harness gate verify <P>`.',
-        '게이트 승인은 사람의 판단이라 에이전트가 `harness gate approve` 를 실행할 수 없다. '
+        `게이트 승인은 사람의 판단이고, 이 호출로는 확인 창을 띄울 수 없다: ${judged.why} `
         + '산출물을 제출해 리뷰 패킷이 읽히게 하라: '
-        + '`harness gate submit <P> --evidence measured --paths <산출물>`. 그 다음 **사용자가 직접** '
-        + '터미널에서 `' + humanCmd('gate approve <P>') + '` 로 승인한다. 나머지는 열려 있다: '
+        + '`harness gate submit <P> --evidence measured --paths <산출물>`. 그 다음 **사용자에게** '
+        + '`' + approveSlash('<P>') + '` 입력을 요청한다. 나머지는 열려 있다: '
         + '`harness gate status`·`harness gate verify <P>`.',
+      ), degraded, lang);
+    }
+    // 슬래시 명령은 사람이 친 입력에서만 표를 낸다. 에이전트가 하위 Claude 를 띄워 그 입력을
+    // 대신 치는 형태를 막는다(`-p` 는 진입점 검사가 한 번 더 막는다).
+    if (cmd.includes(':approve') && commandLines(cmd).some(l => /^\S*claude\b/u.test(l))) {
+      return deny(L(
+        `A nested Claude Code session cannot type the approval command. Ask the user to type \`${approveSlash('<P>')}\`.`,
+        `하위 Claude Code 세션으로 승인 명령을 입력할 수 없다. 사용자에게 \`${approveSlash('<P>')}\` 입력을 요청하라.`,
       ), degraded, lang);
     }
 
@@ -2465,13 +2572,13 @@ function preTool(
       return deny(L(
         '`doctor --accept-policy` re-pins the policy baseline, which clears the "policy changed" warning — '
         + 'so an agent cannot run it. The policy files decide what this hook blocks; accepting a change to '
-        + 'them is the user\'s judgement. **The user runs it themselves** in their terminal after reviewing '
-        + 'the diff: `HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '`. '
+        + 'them is the user\'s judgement. **The user runs it themselves** at the Claude Code prompt after reviewing '
+        + 'the diff: `' + humanCmd('doctor --accept-policy', 'HARNESS_ACCEPT_POLICY=1') + '`. '
         + 'Diagnosis is open to you: `harness doctor` reports the drift.',
         '`doctor --accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우는 '
         + '명령이라 에이전트가 실행할 수 없다. 정책 파일은 이 훅이 무엇을 막을지 정하고, 그 변경을 '
-        + '수용하는 것은 사용자의 판단이다 — **사용자가 직접 터미널에서** 차이를 확인한 뒤 '
-        + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` 로 실행한다. '
+        + '수용하는 것은 사용자의 판단이다 — **사용자가 직접 Claude Code 프롬프트에서** 차이를 확인한 뒤 '
+        + '`' + humanCmd('doctor --accept-policy', 'HARNESS_ACCEPT_POLICY=1') + '` 로 실행한다. '
         + '진단은 열려 있다: `harness doctor` 가 드리프트를 보고한다.',
       ), degraded, lang);
     }

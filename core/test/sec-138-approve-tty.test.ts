@@ -69,7 +69,7 @@ describe('[SEC-138] 승인 잠금은 두 겹이다 — 훅(형태) + CLI(TTY)', 
   it('거부문이 사람이 무엇을 하면 되는지 말한다 — 막다른 골목을 만들지 않는다', () => {
     const root = submitted();
     const msg = approve(root).err;
-    expect(msg).toMatch(/harness gate approve/);        // 사람이 칠 명령 그대로
+    expect(msg).toMatch(/\/king-wjang-harness:approve/); // 사람이 칠 명령 그대로
     expect(msg).toMatch(new RegExp(ENV));               // TTY 없는 사람 환경의 탈출구
   });
 

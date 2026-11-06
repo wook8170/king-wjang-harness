@@ -89,7 +89,7 @@ describe('[UX-122] 성공 문구가 실제로 무엇이 됐는지 말한다', ()
     fs.writeFileSync(path.join(root, 'concept.md'), `# 개념\n${'실측한 내용을 적는다. '.repeat(12)}\n`);
     const r = cli(root, ['gate', 'submit', 'P0', '--evidence', 'measured', '--paths', 'concept.md']);
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/harness gate approve P0/);
+    expect(r.out).toMatch(/\/king-wjang-harness:approve P0/);
   });
 });
 

@@ -65,12 +65,13 @@ import {
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
-import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd, eventsPath } from './paths';
+import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd, approveSlash, eventsPath } from './paths';
+import { consumeTicket, type ApprovalVia } from './approve';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
 /** 배선된 훅 이벤트. 이 밖의 값은 오타이거나 미지원 이벤트다 — 침묵하되 기록한다. */
-const HOOK_EVENTS: readonly string[] = ['session-start', 'pre-tool', 'post-tool', 'stop'];
+const HOOK_EVENTS: readonly string[] = ['session-start', 'pre-tool', 'post-tool', 'stop', 'user-prompt-expansion'];
 
 /**
  * `--name <값>` 의 값을 취한다. 다음 인자를 **거르지 않고 그대로** 쓴다 —
@@ -96,6 +97,7 @@ function flag(argv: string[], name: string): string | undefined {
  * 합집합은 실제 실패모드인 **오타**를 잡으면서 정당한 입력을 막을 여지가 없다.
  */
 export const VALUE_FLAGS: ReadonlySet<string> = new Set([
+  'dialog-ticket', 'via', 'project',
   'accept', 'acceptance', 'anchor', 'artboard', 'choose', 'defer-reason', 'detail', 'env',
   'evidence', 'for', 'from', 'goal', 'id', 'limit', 'milestone', 'name', 'option', 'out',
   'outcome', 'parent', 'path', 'paths', 'percent', 'phase', 'png', 'question', 'rationale',
@@ -553,6 +555,9 @@ function warnIfDiverged(root: string, current: HarnessState): void {
 
 export function run(argv: string[], root: string): number {
   const [cmd, sub, ...rest] = argv;
+  // 슬래시 명령 본문은 세션의 현재 디렉터리에서 돈다. 그 디렉터리는 `cd` 로 옮겨 갈 수 있고
+  // CLAUDE_PROJECT_DIR 도 없으므로(실측) 프로젝트 루트를 인자로 받는다.
+  if (cmd === 'gate' && sub === 'approve' && flag(rest, 'project')) root = path.resolve(flag(rest, 'project') as string);
 
   // 훅은 어떤 경우에도 세션을 깨지 않는다 — 바깥 catch보다 먼저 처리
   if (cmd === 'hook') {
@@ -866,11 +871,11 @@ export function run(argv: string[], root: string): number {
         // (§4-3)이 통째로 무력화된다. 이것은 코드로 막을 수 없는 한계라 **처음에 말하는 것**이
         // 유일한 방어다. stderr 로 보내 stdout 계약(JSON 파싱 가능)을 깨지 않는다.
         console.error(L(
-          'NOTE: do not add `harness gate approve` to your permission allowlist. The gate relies on the '
-          + 'permission dialog so that the final approval click is always a human — allowlisting it lets an '
-          + 'agent open gates on its own.',
-          '고지: `harness gate approve` 를 권한 allowlist 에 넣지 마라. 게이트는 권한 다이얼로그에 기대어 '
-          + '「승인의 최종 클릭은 사람」을 지킨다 — allowlist 에 넣으면 에이전트가 스스로 게이트를 열 수 있다.',
+          'NOTE: do not add `harness gate approve` to your permission allowlist. If a rule covers it, the hook '
+          + 'refuses to raise the confirmation dialog, and approval works only through '
+          + `\`${approveSlash('<P>')}\`.`,
+          '고지: `harness gate approve` 를 권한 허용 목록에 넣지 마라. 규칙이 이 명령을 덮으면 훅이 확인 창을 '
+          + `띄우지 않고 거부하므로 \`${approveSlash('<P>')}\` 로만 승인할 수 있다.`,
         ));
         return 0;
 
@@ -910,12 +915,12 @@ export function run(argv: string[], root: string): number {
               '`--accept-policy` re-pins the policy baseline and clears the "policy changed" warning, '
               + 'so it is locked by default — accepting a change to the files that decide what the hook '
               + 'blocks is the user\'s judgement, not an agent\'s. Review the diff, then run '
-              + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` yourself. '
+              + '`' + humanCmd('doctor --accept-policy', 'HARNESS_ACCEPT_POLICY=1') + '` yourself. '
               + 'Diagnosis is always open: plain `harness doctor` reports the drift.',
               '`--accept-policy` 는 정책 베이스라인을 재고정해 「정책이 바뀌었다」 경고를 지우므로 '
               + '기본 잠금이다 — 훅이 무엇을 막을지 정하는 파일의 변경을 수용하는 것은 에이전트가 '
               + '아니라 사용자의 판단이다. 차이를 확인한 뒤 사용자가 직접 '
-              + '`HARNESS_ACCEPT_POLICY=1 ' + humanCmd('doctor --accept-policy') + '` 로 실행하라. '
+              + '`' + humanCmd('doctor --accept-policy', 'HARNESS_ACCEPT_POLICY=1') + '` 로 실행하라. '
               + '진단은 언제나 열려 있다: 그냥 `harness doctor` 가 드리프트를 보고한다.',
             ),
           );
@@ -948,11 +953,11 @@ export function run(argv: string[], root: string): number {
               '`--force` skips the gate check and is locked by default — it stops the design-track '
               + 'enforcement from being undone in one line. The normal path is `harness gate submit <P>` '
               + '→ `harness gate approve <P>`. If bootstrap or recovery genuinely needs it, run '
-              + `\`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` yourself.`,
+              + `\`${humanCmd(`phase set ${phase} --force`, 'HARNESS_ALLOW_FORCE=1')}\` yourself.`,
               '`--force` 는 게이트 검사를 건너뛰므로 기본 잠금이다 — 설계 트랙 강제가 한 줄로 '
               + '풀리는 것을 막는다. 정상 경로는 `harness gate submit <P>` → `harness gate approve <P>`. '
               + '부트스트랩·복구로 정말 필요하면 사용자가 직접 '
-              + `\`HARNESS_ALLOW_FORCE=1 ${humanCmd(`phase set ${phase} --force`)}\` 로 실행하라.`,
+              + `\`${humanCmd(`phase set ${phase} --force`, 'HARNESS_ALLOW_FORCE=1')}\` 로 실행하라.`,
             ),
           );
         }
@@ -1041,7 +1046,7 @@ export function run(argv: string[], root: string): number {
                     + `for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` `
                     + '→ publish → `harness doc url <DOC-x> <url>`, then submit again.'
                   : '')
-                + `\nNext: a human approves it in their terminal:\n  ${humanCmd(`gate approve ${phase}`)}`,
+                + `\nNext: the user approves it by typing this in Claude Code:\n  ${approveSlash(phase)}`,
                 `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`
                 + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : '')
                 + (noDoc
@@ -1049,45 +1054,58 @@ export function run(argv: string[], root: string): number {
                     + `\`harness doc upsert --id <DOC-x> --path <파일> --phase ${phase}\` `
                     + '→ 발행 → `harness doc url <DOC-x> <url>` 로 이은 뒤 다시 제출하라.'
                   : '')
-                + `\n다음: 사람이 자기 터미널에서 승인한다:\n  ${humanCmd(`gate approve ${phase}`)}`,
+                + `\n다음: 사용자가 Claude Code 에 아래 명령을 입력해 승인한다:\n  ${approveSlash(phase)}`,
               ),
             );
             return 0;
           }
           case 'approve': {
-            // 이 명령은 **의도적으로 permission allowlist 에서 제외**한다(§4-3) — 실행마다
-            // 권한 다이얼로그가 떠서 승인의 최종 클릭은 항상 사람이 한다.
+            // 승인 경로는 셋이다(approve.ts): 터미널(TTY) · 확인 창(훅이 붙인 표) · 슬래시 명령(훅이 낸 표).
             //
-            // [SEC-138] 그런데 그 다이얼로그가 없는 환경(allowlist·bypassPermissions)에서는
-            // 훅 한 겹이 전부였고, 그 한 겹은 **형태를 세기 때문에** 사소한 난독화로 열렸다
-            // (`node -e` 문자열 결합 · `'appr''ove'` 따옴표 분리 · 바이너리 리네임 — 감정자가
-            // 세 형태 모두 실측 개통). `--force`·`--accept-policy` 는 훅+CLI 두 겹이라 같은
-            // 난독화를 버텼다 — **비대칭이 곧 결함**이었다.
-            //
-            // 두 번째 겹은 env 가 아니라 **TTY** 다. `gate approve` 는 탈출구가 아니라 정상
-            // 흐름이라 사람에게 env 를 요구하면 문서·리뷰 패킷·도움말이 가리키는 길이 통째로
-            // 어긋난다. 사람은 자기 터미널에 있으니 TTY 가 있고 에이전트의 도구 호출에는 없다 —
-            // **사람에게 비용 0, 그리고 형태를 세지 않으므로 아직 이름 붙지 않은 우회에도 선다.**
+            // [SEC-138] 훅 한 겹은 **형태를 세기 때문에** 사소한 난독화로 열린다(`node -e` 문자열
+            // 결합 · `'appr''ove'` 따옴표 분리 · 바이너리 리네임 — 감정자가 세 형태 모두 실측
+            // 개통). 그래서 형태를 세지 않는 두 번째 겹을 둔다. TTY 도 표도 없으면 거부한다.
             // TTY 가 없는 사람 환경(원격 파이프·CI)만 env 로 연다. 그 리터럴을 명령에 인라인으로
             // 붙여 켜는 것은 훅이 막는다 — 인라인으로 켤 수 있으면 그건 잠금이 아니다.
-            if (!process.stdin.isTTY && process.env.HARNESS_APPROVE_NO_TTY !== '1') {
+            const ticket = flag(rest, 'dialog-ticket');
+            const viaFlag = flag(rest, 'via');
+            let via: ApprovalVia;
+            if (ticket !== undefined || viaFlag !== undefined) {
+              if (ticket === undefined && viaFlag !== 'slash') {
+                throw new Error(L(`--via only accepts slash (got: ${String(viaFlag)})`, `--via 는 slash 만 받는다 (입력: ${String(viaFlag)})`));
+              }
+              const phase = requirePhase(rest[0], 'harness gate approve', lang);
+              const kind = ticket !== undefined ? 'dialog' as const : 'slash' as const;
+              if (!consumeTicket(root, kind, phase, readState(root).gates[phase]?.artifactHash, ticket)) {
+                throw new Error(L(
+                  'No valid approval ticket for this call. A ticket comes only from the confirmation dialog or '
+                  + `from typing the slash command, and it is single-use. Type \`${approveSlash(phase)}\` again; `
+                  + 'first check with `harness gate status` that the gate is submitted.',
+                  '이 호출에 유효한 승인 표가 없다. 표는 확인 창이나 슬래시 명령 입력에서만 나오고 한 번만 쓸 수 있다. '
+                  + `\`${approveSlash(phase)}\` 를 다시 입력하라. 먼저 \`harness gate status\` 로 제출 상태인지 확인한다.`,
+                ));
+              }
+              via = kind;
+            } else if (process.stdin.isTTY) {
+              via = 'terminal';
+            } else if (process.env.HARNESS_APPROVE_NO_TTY === '1') {
+              via = 'no-tty';
+            } else {
               throw new Error(L(
-                'Approving a gate is the human\'s final click, so it must come from a terminal — '
-                + 'this process has no TTY, which is what an agent\'s tool call looks like. '
-                + 'Run `' + humanCmd('gate approve <P>') + '` yourself in your terminal. Everything else on the '
-                + 'gate is open: `harness gate status`, `harness gate verify <P>`. If you really are '
-                + 'a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` '
+                'Approving a gate is the human\'s decision, and this process has no terminal, which is what an '
+                + `agent's tool call looks like. The user approves by typing \`${approveSlash('<P>')}\` in Claude Code. `
+                + 'Everything else on the gate is open: `harness gate status`, `harness gate verify <P>`. If you '
+                + 'really are a human without a TTY (a remote pipe or CI), set `HARNESS_APPROVE_NO_TTY=1` '
                 + 'yourself — but then nothing is checking that a person read the review packet.',
-                '게이트 승인은 사람의 최종 클릭이라 터미널에서 와야 한다 — 이 프로세스에는 TTY 가 '
-                + '없고, 그것이 곧 에이전트 도구 호출의 모습이다. `' + humanCmd('gate approve <P>') + '` 를 '
-                + '사용자가 직접 터미널에서 실행하라. 나머지는 열려 있다: `harness gate status`·'
-                + '`harness gate verify <P>`. TTY 없는 사람 환경(원격 파이프·CI)이 정말 필요하면 '
-                + '사용자가 직접 `HARNESS_APPROVE_NO_TTY=1` 을 켠다 — 다만 그 순간 리뷰 패킷을 '
-                + '사람이 읽었는지 검사하는 것이 아무것도 남지 않는다.',
+                '게이트 승인은 사람의 판단인데 이 프로세스에는 터미널이 없고, 그것이 곧 에이전트 도구 호출의 '
+                + `모습이다. 사용자가 Claude Code 에 \`${approveSlash('<P>')}\` 를 입력해 승인한다. 나머지는 `
+                + '열려 있다: `harness gate status`·`harness gate verify <P>`. TTY 없는 사람 환경(원격 '
+                + '파이프·CI)이 정말 필요하면 사용자가 직접 `HARNESS_APPROVE_NO_TTY=1` 을 켠다 — 다만 그 순간 '
+                + '리뷰 패킷을 사람이 읽었는지 검사하는 것이 아무것도 남지 않는다.',
               ));
             }
             const phase = requirePhase(rest[0], 'harness gate approve', lang);
-            const r = approveGate(root, phase);
+            const r = approveGate(root, phase, via);
             console.log(L(`${phase} approved — ${r.approvedAt} · evidence ${r.evidence}`, `${phase} 승인됨 — ${r.approvedAt} · 근거 ${r.evidence}`));
             return 0;
           }
