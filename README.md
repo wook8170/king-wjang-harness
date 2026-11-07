@@ -288,6 +288,7 @@ block feels wrong for your stack, this is the dial, not the source code.
 | `design_blocked_bash` | deploy commands (`npm publish`, `docker push`, `terraform apply`, …) | **Shipping commands that stay blocked** until the shipping track opens. Substring match, so no trailing flags. Your stack's own commands belong in the profile's `deploy_commands`. |
 | `design_system_frozen_roots` | `[]` | Directories where design-system files must not change once frozen. |
 | `block_raw_values` | `false` | Deny writes that hardcode raw colors/sizes instead of referencing semantic tokens. |
+| `audit_full_round_cap` | `3` | How many P6 rounds may run all four lenses. Agents cannot edit this file, so raising the number is the owner's approval of another full audit. |
 
 `.harness/config.yaml` is itself a protected file — an agent cannot rewrite it to widen its own
 permissions ([SEC-136]); you edit it in your terminal. Run `harness doctor` afterwards: a policy
@@ -335,7 +336,7 @@ core — is a wall.
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
-- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the lanekeeper plugin (`lanekeeper:quality-ux-adversarial`). P6 enters P7 only at `HIGH 0` (per-round re-audit, reconciliation table, code citations checked); P10 and P12 take two adversarial reviews as mandatory inputs — the implementation conformance audit and the changed-screen UX review on nine axes with persona task scenarios and design system visual comparison — and an open high from either blocks
+- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the lanekeeper plugin (`lanekeeper:quality-ux-adversarial`). P6 enters P7 at `HIGH 0`, checked by the gate (short re-audits for revisions that keep the structure, at most three full audits by default and then the owner decides, reconciliation table, code citations checked; `harness audit status` shows the rounds and what blocks the gate); P10 and P12 take two adversarial reviews as mandatory inputs — the implementation conformance audit and the changed-screen UX review on nine axes with persona task scenarios and design system visual comparison — and an open high from either blocks
 - ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
 - ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
 

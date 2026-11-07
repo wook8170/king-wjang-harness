@@ -38,7 +38,10 @@ files are still hand-edit-banned (change them with `harness` commands).
    The core generates the spec from the node (headless + 2x discipline baked in — it does not drive
    a browser itself). One `UX-x` = one scenario file. `--out` must land inside the project; the
    command refuses a path that escapes the root or lands in the source tree during the design track.
-3. **Wire the scenarios into CI** so they run on the skeleton (they will be red until P8 implements
+3. **Plan the design audit's carried items.** `harness audit status` lists them as `carryItems`. Each token
+   (`AUD-r3-MED-5`) goes to a planned wave's acceptance criteria, and a runtime item moved to testing also goes to
+   the scenario that exercises it. A HIGH moved to testing is closed later by the P9 conformance audit. `harness report rtm` keeps showing tokens that no completed wave carries.
+4. **Wire the scenarios into CI** so they run on the skeleton (they will be red until P8 implements
    the screens — that is expected; P7 only proves they *run*).
 
 ## Gate

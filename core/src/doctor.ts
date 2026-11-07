@@ -273,7 +273,8 @@ export function runDoctor(
 
   // 4. state 발산 → issues (복구 대상)
   if (current) {
-    for (const field of COMPARED_FIELDS) {
+    // 감사 형식 판은 저널에 기록이 있을 때만 대조한다. 판을 적기 전의 프로젝트는 양쪽 다 없다.
+    for (const field of replayed.auditFormat ? [...COMPARED_FIELDS, 'auditFormat' as const] : COMPARED_FIELDS) {
       const a = JSON.stringify(current[field]);
       const b = JSON.stringify(replayed[field]);
       if (a !== b) {

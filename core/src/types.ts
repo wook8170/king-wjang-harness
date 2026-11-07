@@ -75,6 +75,11 @@ export interface HarnessState {
   gates: Partial<Record<Phase, GateRecord>>;
   backtrack: { to: Phase; reason: string } | null;
   updatedAt: string;
+  /**
+   * P6 감사 회차 형식(audit.ts). `legacyThrough` 이하의 회차만 `Audit-Kind:` 없이 읽는다.
+   * 이 판 이전에 시작한 프로젝트에는 없고, 첫 세션이나 P6 제출에서 한 번 적힌다.
+   */
+  auditFormat?: { version: 1; legacyThrough: number };
 }
 
 export interface HarnessEvent {
@@ -115,4 +120,9 @@ export interface HarnessConfig {
   design_system_frozen_roots: string[];
   /** raw 값(색·간격·폰트 리터럴) 차단(§7 강제 3중의 훅 다리). 기본 off — 토큰 파일이 있어야 의미가 있다. */
   block_raw_values: boolean;
+  /**
+   * P6 네 렌즈 전체 감사의 상한(audit.ts). 이 파일은 정책 파일이라 에이전트가 고칠 수 없으므로,
+   * 상한을 올리는 것이 곧 오너의 「전체 감사 추가 승인」이다.
+   */
+  audit_full_round_cap: number;
 }

@@ -282,6 +282,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 | `design_blocked_bash` | 部署类命令（`npm publish`、`docker push`、`terraform apply` …） | **出货轨道开启前始终被拦截的部署命令。** 采用子串匹配，因此不要写结尾参数。技术栈特有命令交由 profile 的 `deploy_commands`。 |
 | `design_system_frozen_roots` | `[]` | 冻结后设计系统文件不得变更的目录。 |
 | `block_raw_values` | `false` | 拒绝硬编码原始颜色／尺寸而不引用语义 token 的写入。 |
+| `audit_full_round_cap` | `3` | P6 中可以运行全部四个视角的轮数。智能体无法编辑此文件，因此调高该值即代表所有者批准再做一次完整审计。 |
 
 `.harness/config.yaml` 本身就是受保护文件 —— 智能体无法改写它来扩大自己的权限（[SEC-136]）。
 请在你自己的终端里编辑。改完后运行 `harness doctor`：策略变更会写入日志，接受变更需要
@@ -325,7 +326,7 @@ rm -rf .harness/          # 只针对这个项目 —— 钩子会立即安静�
 - ✅ 波次生命周期、带 STALE 传播的设计台账、UX 证据关卡
 - ✅ 注入加固、互不干扰与无害不变量、已提交的自包含 dist
 - ✅ 审批**关卡**（`gate submit/approve/verify/sweep/feedback`）+ 制品注册表（`doc`）+ RTM（`report rtm`）
-- ✅ **阶段技能 —— 全部十三个阶段**（P0–P12：设计 `P0–P6`、构建 `P7–P9`、出货 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）（出货前的 UX 对抗式评审引用 lanekeeper 插件的 `lanekeeper:quality-ux-adversarial`。P6 只有在 `HIGH 0` 时才进入 P7（每轮重新审计、反映对照表、核对引用的代码）。P10 与 P12 把两项对抗式评审作为必需输入（实现一致性审计，以及变更界面的 UX 评审 —— 九个维度、按角色执行真实任务、设计系统视觉对照），任一项存在未关闭的 high 即阻止）
+- ✅ **阶段技能 —— 全部十三个阶段**（P0–P12：设计 `P0–P6`、构建 `P7–P9`、出货 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 智能体 + ADR（`adr`）（出货前的 UX 对抗式评审引用 lanekeeper 插件的 `lanekeeper:quality-ux-adversarial`。P6 只有在 `HIGH 0` 时才进入 P7，由门禁检查（不改变结构的修订做简短复审，完整审计默认最多三次，之后由所有者决定，反映对照表，核对引用的代码；`harness audit status` 显示各轮与阻止原因）。P10 与 P12 把两项对抗式评审作为必需输入（实现一致性审计，以及变更界面的 UX 评审 —— 九个维度、按角色执行真实任务、设计系统视觉对照），任一项存在未关闭的 high 即阻止）
 - ✅ **设计子系统** —— `design link/sync/baseline/html`、作为唯一真相源的交互式 HTML、令牌管线（`tokens gen/lint/swap`）
 - ✅ **构建与出货轨道** —— 技术栈画像（`profile`）、波次循环（`loop`）、视觉证据（`evidence`）、出货台账与判定（`ship`）
 

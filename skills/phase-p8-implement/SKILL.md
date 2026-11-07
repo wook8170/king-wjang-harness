@@ -24,6 +24,8 @@ accounts become a lie. Verification is not its job — that is P9 (`wave-verifie
      --refs F-1,F-2 --accept "a 200-row list renders within 1s,cancel restores stock"
    # → prints the wave id, e.g. wave-001
    ```
+   Items carried from the P6 audit go in `--accept` with their token, for example
+   `--accept "AUD-r3-MED-5 drafts stay out of the count"`; that is how the RTM connects them to this wave.
    `--goal` is required. The ids in `--refs` **must already exist** in the ledger (they were
    registered in design) or the wave is refused. Separate ids with commas and no spaces.
 2. **Activate it and brief the executor.**

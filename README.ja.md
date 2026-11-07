@@ -286,6 +286,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 | `design_blocked_bash` | デプロイ系コマンド（`npm publish`・`docker push`・`terraform apply` …） | **出荷トラックが開くまでブロックされるデプロイ系コマンド。** 部分文字列一致のため末尾フラグは書かない。スタック固有はプロファイルの `deploy_commands` が担う。 |
 | `design_system_frozen_roots` | `[]` | 凍結後にデザインシステムファイルを変更してはいけないディレクトリ。 |
 | `block_raw_values` | `false` | セマンティックトークンを参照せず raw な色・サイズを直書きする書き込みを拒否する。 |
+| `audit_full_round_cap` | `3` | P6 で四つのレンズをすべて実行できるラウンド数。エージェントはこのファイルを編集できないため、値を上げることが全体監査の追加に対するオーナーの承認になる。 |
 
 `.harness/config.yaml` 自体が保護ファイルだ — エージェントがこれを書き換えて自分の権限を広げる
 ことはできない（[SEC-136]）。人が自分のターミナルで編集する。編集後は `harness doctor` を実行する
@@ -331,7 +332,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 - ✅ ウェーブのライフサイクル、STALE伝播つき設計台帳、UXエビデンスゲート
 - ✅ インジェクション対策、非干渉・無害の不変条件、自己完結な dist のコミット
 - ✅ 承認**ゲート**（`gate submit/approve/verify/sweep/feedback`）+ 成果物レジストリ（`doc`）+ RTM（`report rtm`）
-- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）（出荷前の UX 敵対的レビューは lanekeeper プラグインの `lanekeeper:quality-ux-adversarial` を参照。P6 は `HIGH 0` で初めて P7 へ進む（ラウンドごとの再監査・反映対照表・引用コードの照合）。P10・P12 は二つの敵対的レビュー（実装適合性監査、変更画面の UX レビュー — 9軸・ペルソナのタスク遂行・デザインシステムの視覚照合）を必須入力とし、どちらかに未解決の high があれば止める）
+- ✅ **フェーズスキル —— 13フェーズすべて**（P0–P12: 設計 `P0–P6`・構築 `P7–P9`・出荷 `P10–P12`）+ researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor エージェント + ADR（`adr`）（出荷前の UX 敵対的レビューは lanekeeper プラグインの `lanekeeper:quality-ux-adversarial` を参照。P6 は `HIGH 0` で初めて P7 へ進み、ゲートがこれを検査する（構造を変えない改訂は短い再監査、全体監査は既定で 3 回までで以後はオーナーが決定、反映対照表、引用コードの照合。`harness audit status` でラウンドと阻止理由を確認する）。P10・P12 は二つの敵対的レビュー（実装適合性監査、変更画面の UX レビュー — 9軸・ペルソナのタスク遂行・デザインシステムの視覚照合）を必須入力とし、どちらかに未解決の high があれば止める）
 - ✅ **デザインサブシステム** —— `design link/sync/baseline/html`、インタラクティブHTMLの信頼できる情報源、トークンパイプライン（`tokens gen/lint/swap`）
 - ✅ **ビルド & 出荷トラック** —— スタックプロファイル（`profile`）、ウェーブループ（`loop`）、視覚的エビデンス（`evidence`）、出荷台帳と判定（`ship`）
 

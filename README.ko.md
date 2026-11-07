@@ -286,6 +286,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 | `design_blocked_bash` | 배포 명령들(`npm publish`·`docker push`·`terraform apply` …) | **출하 트랙이 열리기 전까지 막히는 배포성 명령.** 명령 안에 이 문자열이 들어 있기만 하면 걸리므로 뒤에 붙는 플래그는 적지 않는다. 스택별 명령은 프로파일의 `deploy_commands` 에 적는다. |
 | `design_system_frozen_roots` | `[]` | 동결한 뒤에는 디자인 시스템 파일을 바꿀 수 없는 디렉토리. |
 | `block_raw_values` | `false` | 시맨틱 토큰 대신 raw 색상·크기를 직접 쓰는 편집을 거부한다. |
+| `audit_full_round_cap` | `3` | P6 에서 네 렌즈를 모두 돌릴 수 있는 회차 수. 에이전트는 이 파일을 고칠 수 없어서, 값을 올리는 것이 곧 전체 감사 추가에 대한 오너 승인이다. |
 
 `.harness/config.yaml` 자체도 보호 파일이다. 그래서 에이전트는 이 파일을 고쳐 자기 권한을 넓힐 수
 없다([SEC-136]). 이 파일은 사람이 터미널에서 고친다. 고친 뒤에는 `harness doctor` 를 실행한다. 정책 변경은
@@ -330,7 +331,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 - ✅ 웨이브 수명주기, STALE 전파 설계 원장, UX 증적 게이트
 - ✅ 주입 방어, 비간섭·무해 불변식, 커밋된 자체완결 dist
 - ✅ 승인 **게이트** (`gate submit/approve/verify/sweep/feedback`) + 산출물 레지스트리 (`doc`) + RTM (`report rtm`)
-- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`) — 출하 전 UX 적대적 점검은 lanekeeper 플러그인(`lanekeeper:quality-ux-adversarial`)을 참조한다. P6 은 `HIGH 0` 이어야 P7 로 넘어간다(회차별 재감사, 반영 대조표, 인용 코드 대조). P10·P12 는 적대 검증 두 가지(구현 적합성 감사, 바뀐 화면 UX 적대 점검 — 9축·페르소나 과업 수행·디자인 시스템 시각 대조)를 필수 입력으로 받고, 둘 중 하나라도 열린 high 가 있으면 막는다
+- ✅ **페이즈 스킬 — 열세 페이즈 전부** (P0–P12: 설계 `P0–P6`, 구축 `P7–P9`, 출하 `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor 에이전트 + ADR (`adr`) — 출하 전 UX 적대적 점검은 lanekeeper 플러그인(`lanekeeper:quality-ux-adversarial`)을 참조한다. P6 은 `HIGH 0` 이어야 P7 로 넘어가고, 게이트가 이를 검사한다(구조를 바꾸지 않은 개정은 짧은 재감사, 전체 감사는 기본 3회까지이고 그 뒤는 오너 결정, 반영 대조표, 인용 코드 대조. `harness audit status` 로 회차와 막는 사유를 본다). P10·P12 는 적대 검증 두 가지(구현 적합성 감사, 바뀐 화면 UX 적대 점검 — 9축·페르소나 과업 수행·디자인 시스템 시각 대조)를 필수 입력으로 받고, 둘 중 하나라도 열린 high 가 있으면 막는다
 - ✅ **디자인 서브시스템** — `design link/sync/baseline/html`, 인터랙티브 HTML 정본, 토큰 파이프라인 (`tokens gen/lint/swap`)
 - ✅ **구축·출하 트랙** — 스택 프로파일(`profile`), 웨이브 루프(`loop`), 시각 증적(`evidence`), 출하 대장·판정(`ship`)
 

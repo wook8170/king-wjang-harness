@@ -5,7 +5,7 @@
  * Claude Code 의 실제 동작(창 표시 · 모드별 차이)은 단위 시험으로 잴 수 없어 2.1.319 실측으로
  * 확인했고, 여기서는 그 위에 세운 판정과 표의 규칙을 고정한다.
  */
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -71,6 +71,66 @@ function expand(root: string, over: Record<string, unknown> = {}): void {
   } as any);
 }
 
+/** 최신 회차에 HIGH-7 하나가 있고, 주어진 처리표를 둔 프로젝트. */
+function auditRoot(table: string): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-approve-'));
+  initHarness(root);
+  fs.mkdirSync(path.join(root, '.harness/audit'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.harness/audit/audit-r1.md'), [
+    'Audit-Kind: full', 'Lenses: logical coherence, ambiguity, blockers, UX walkthrough', '## Findings',
+    '| ID | Severity | Evidence | Phase | What | Direction |', '| HIGH-7 | HIGH | 03-feature.md:8 | P3 | the count is wrong | recount |', '', 'HIGH 1', '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(root, '.harness/audit/reconcile-r1.md'), table);
+  return root;
+}
+
+const slash = (root: string, args: string) => handleHook(root, 'user-prompt-expansion', { command_name: SLASH_NAME, command_source: 'plugin', command_args: args });
+
+describe('M3: 창이 없는 슬래시 경로도 승인 전에 오너 결정을 보여 준다', () => {
+  const ready = (): string => {
+    const root = auditRoot('| HIGH-7 | HIGH | owner-accepted | — | the owner takes this |\n');
+    quiet(() => run(['gate', 'submit', 'P6', '--evidence', 'claimed', '--paths', '.harness/audit/audit-r1.md,.harness/audit/reconcile-r1.md'], root));
+    return root;
+  };
+
+  it('첫 입력은 목록을 보이고 거부하며, 상태를 바꾸지 않는다', () => {
+    const root = ready();
+    slash(root, 'P6');
+    const errors: string[] = [];
+    const e = vi.spyOn(console, 'error').mockImplementation(m => { errors.push(String(m)); });
+    const code = run(['gate', 'approve', 'P6', '--via', 'slash'], root);
+    e.mockRestore();
+    expect(code).not.toBe(0);
+    expect(errors.join('\n')).toContain('HIGH-7');
+    expect(errors.join('\n')).toContain('--accept-risk');
+    expect(readState(root).gates.P6?.status).toBe('submitted');
+  });
+
+  it('`--accept-risk` 를 다시 입력하면 승인되고 저널에 남는다', () => {
+    const root = ready();
+    slash(root, 'P6 --accept-risk');
+    expect(quiet(() => run(['gate', 'approve', 'P6', '--accept-risk', '--via', 'slash'], root))).toBe(0);
+    expect(readState(root).gates.P6?.status).toBe('approved');
+    expect(approvedEvent(root)?.data.auditAcceptedHighs).toHaveLength(1);
+  });
+
+  it('`--accept-risk` 만으로는 사람의 표를 대신하지 못한다', () => {
+    const root = ready();
+    expect(quiet(() => run(['gate', 'approve', 'P6', '--accept-risk'], root))).not.toBe(0);
+    expect(readState(root).gates.P6?.status).toBe('submitted');
+  });
+
+  it('오너 결정이 없는 P6 은 입력을 늘리지 않는다', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-approve-'));
+    initHarness(root);
+    fs.mkdirSync(path.join(root, '.harness/audit'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.harness/audit/audit-r1.md'), 'Audit-Kind: full\nLenses: logical coherence, ambiguity, blockers, UX walkthrough\n## Findings\nNo finding was recorded by any of the four lenses in this round.\n\nHIGH 0\n');
+    quiet(() => run(['gate', 'submit', 'P6', '--evidence', 'claimed', '--paths', '.harness/audit/audit-r1.md'], root));
+    slash(root, 'P6');
+    expect(quiet(() => run(['gate', 'approve', 'P6', '--via', 'slash'], root))).toBe(0);
+  });
+});
+
 describe('확인 창 — 조건이 맞으면 ask 를 돌려준다', () => {
   for (const mode of ['default', 'acceptEdits', 'auto']) {
     it(`권한 모드 ${mode}`, () => {
@@ -84,6 +144,37 @@ describe('확인 창 — 조건이 맞으면 ask 를 돌려준다', () => {
     expect(reason).toContain('P0');
     expect(reason).toContain('concept.md');
     expect(reason).toContain('measured');
+  });
+
+  it('P6 창에는 이 승인으로 위험을 수용하는 HIGH 가 보인다', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-approve-'));
+    initHarness(root);
+    fs.mkdirSync(path.join(root, '.harness/audit'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.harness/audit/audit-r1.md'), [
+      'Audit-Kind: full', 'Lenses: logical coherence, ambiguity, blockers, UX walkthrough', '## Findings',
+      '| ID | Severity | Evidence | Phase | What | Direction |', '| HIGH-7 | HIGH | 03-feature.md:8 | P3 | the count is wrong | recount |', '', 'HIGH 1', '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(root, '.harness/audit/reconcile-r1.md'), '| HIGH-7 | HIGH | owner-accepted | — | the owner takes this until v2 |\n');
+    run(['gate', 'submit', 'P6', '--evidence', 'claimed', '--paths', '.harness/audit/audit-r1.md,.harness/audit/reconcile-r1.md'], root);
+    const reason: string = bash(root, 'harness gate approve P6').hookSpecificOutput.permissionDecisionReason;
+    expect(reason).toContain('HIGH-7');
+  });
+
+  it('L1: P6 에 위반이 있으면 창을 띄우기 전에 사유를 알린다', () => {
+    const root = auditRoot('| HIGH-7 | HIGH | not accepted | — | the fixer disagrees |\n');
+    run(['gate', 'submit', 'P6', '--evidence', 'claimed', '--paths', '.harness/audit/audit-r1.md,.harness/audit/reconcile-r1.md'], root);
+    expect(status(root)).toBeUndefined();
+    writeState(root, { ...readState(root), gates: { P6: { status: 'submitted', artifactHash: 'x', evidence: 'claimed' } } });
+    const out = bash(root, 'harness gate approve P6');
+    expect(decision(out)).not.toBe('ask');
+    expect(JSON.stringify(out)).toContain('HIGH-7');
+  });
+
+  it('H2: P6 창에는 번복 결정도 보인다', () => {
+    const root = auditRoot('| HIGH-7 | HIGH | owner-accepted | — | the owner takes this |\n| RC-2 | CONFLICT | owner-decided | — | the owner keeps the row |\n');
+    fs.writeFileSync(path.join(root, '.harness/audit/audit-r2.md'), 'Audit-Kind: short\nstructural change: no\n## New risks of this revision\nnone found in the changed paragraph\n## Findings\n\nHIGH 0\n');
+    run(['gate', 'submit', 'P6', '--evidence', 'claimed', '--paths', '.harness/audit/audit-r2.md,.harness/audit/reconcile-r1.md'], root);
+    expect(bash(root, 'harness gate approve P6').hookSpecificOutput.permissionDecisionReason).toContain('RC-2');
   });
 
   it('제출 경로에 넣은 문장이 창에 줄바꿈으로 끼어들지 못한다', () => {

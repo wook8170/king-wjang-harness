@@ -14,7 +14,7 @@ import { URL_SCHEME_RE } from './bashwrite';
 import * as tty from 'node:tty';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { initHarness, isInitialized, hasHarness, readState, writeState } from './state';
+import { initHarness, NEW_AUDIT_FORMAT, isInitialized, hasHarness, readState, writeState } from './state';
 import { appendEvent, resolveState, readJournal, replayState } from './events';
 import { createWave, activateWave, logTurn, completeWave, listWaves, markStale, UNSPECIFIED } from './wave';
 import { getNode, mergeNode, reviseNode, loadLedger } from './ledger';
@@ -66,6 +66,8 @@ import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
 import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd, approveSlash, eventsPath } from './paths';
+import { auditClosedItems, auditStatus } from './audit';
+import { sanitizeUntrusted } from './untrusted';
 import { consumeTicket, type ApprovalVia } from './approve';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
@@ -107,7 +109,7 @@ export const VALUE_FLAGS: ReadonlySet<string> = new Set([
 
 /** 값을 받지 않고 홀로 서는 플래그. */
 export const BOOL_FLAGS: ReadonlySet<string> = new Set([
-  'accept-policy', 'force', 'help', 'repair',
+  'accept-policy', 'accept-risk', 'force', 'help', 'repair',
 ]);
 
 /** 편집거리 — 오타에 「그럼 무엇이었나」를 붙이기 위한 최소 구현. */
@@ -836,7 +838,7 @@ export function run(argv: string[], root: string): number {
     switch (cmd) {
       case 'init':
         initHarness(root);
-        appendEvent(root, 'init', {});
+        appendEvent(root, 'init', { auditFormat: NEW_AUDIT_FORMAT });
         // OPS-76: 정책 베이스라인은 **여기서** 고정된다. init 이 config.yaml 을 막 썼으므로
         // 이 시점의 해시가 「사람이 아직 아무것도 손대지 않은 정책」이다. 이후 이 값과
         // 어긋나는 것은 전부 사후 변경이고, doctor 가 그것을 보고한다.
@@ -1105,8 +1107,23 @@ export function run(argv: string[], root: string): number {
               ));
             }
             const phase = requirePhase(rest[0], 'harness gate approve', lang);
+            // 확인 창은 승인 전에 오너 결정 목록을 보여 준다. 슬래시·터미널에는 창이 없으므로
+            // 목록을 보이고 거부한다. `--accept-risk` 를 사람이 다시 입력해야 효력이 생긴다.
+            const decided = phase === 'P6' ? auditStatus(root) : null;
+            const listed = decided
+              ? [...decided.acceptedHighs, ...decided.ownerDecisions].map(a => `- r${a.round} ${sanitizeUntrusted(a.id, 80)}: ${sanitizeUntrusted(a.reason, 300)}`)
+              : [];
+            if (listed.length > 0 && via !== 'dialog' && !rest.includes('--accept-risk')) {
+              throw new Error(L(
+                `Approving P6 also confirms these owner decisions and accepted risks:\n${listed.join('\n')}\n`
+                + `Read them, then approve by typing \`${approveSlash(phase)} --accept-risk\`.`,
+                `P6 을 승인하면 다음 오너 결정과 위험 수용도 함께 확정된다:\n${listed.join('\n')}\n`
+                + `읽어 본 뒤 \`${approveSlash(phase)} --accept-risk\` 를 입력해 승인한다.`,
+              ));
+            }
             const r = approveGate(root, phase, via);
             console.log(L(`${phase} approved — ${r.approvedAt} · evidence ${r.evidence}`, `${phase} 승인됨 — ${r.approvedAt} · 근거 ${r.evidence}`));
+            if (listed.length > 0) console.log(L(`Confirmed by this approval:\n${listed.join('\n')}`, `이 승인으로 확정한 항목:\n${listed.join('\n')}`));
             return 0;
           }
           case 'verify': {
@@ -1169,6 +1186,13 @@ export function run(argv: string[], root: string): number {
           }
           default: throw new Error(unknownSub('gate', sub, lang));
         }
+      }
+
+      case 'audit': {
+        if (sub === 'status') console.log(JSON.stringify(auditStatus(root), null, 2));
+        else if (sub === 'closed') console.log(JSON.stringify(auditClosedItems(root), null, 2));
+        else throw new Error(unknownSub('audit', sub, lang));
+        return 0;
       }
 
       case 'ship': {

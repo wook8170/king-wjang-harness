@@ -47,6 +47,7 @@
  * `core/test/eng-3i-residuals.test.ts` 가 전수 대조한다.
  */
 import * as crypto from 'node:crypto';
+import { auditStatus, ensureAuditFormat } from './audit';
 import { updateHashEntry } from './hash';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -607,6 +608,7 @@ export function submitGate(
   assertSubstantive(root, readArtifacts(root, paths));
   assertPhaseFit(root, phase, paths);
   assertNoShipBlockers(root, phase);
+  assertAuditRounds(root, phase, paths);
   const artifactHash = computeArtifactHash(root, paths);
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
@@ -651,6 +653,21 @@ function assertNoShipBlockers(root: string, phase: Phase): void {
     ko: `차단·높음 결함 ${blocking.length}건이 open 이거나 fixed 에 머문 채로 P10 을 제출할 수 없다: ${list} — `
       + '수정 → 새 감사자로 재측정 → `harness ship defect update <id> --status verified`, '
       + '또는 오너 결정을 `--status deferred --defer-reason "<사유>"` 로 남겨라',
+  }));
+}
+
+/**
+ * P6 제출·승인 검사(오너 결정 2026-11-07). 최신 회차의 HIGH·전체 감사 상한·처리표를 audit.ts 한 벌로
+ * 잰다. 승인 때 다시 재는 이유: 제출 뒤에 새 회차가 생기면 해시 대상 밖이라 해시가 잡지 못한다.
+ */
+function assertAuditRounds(root: string, phase: Phase, paths: string[]): void {
+  if (phase !== 'P6') return;
+  ensureAuditFormat(root);
+  const { violations } = auditStatus(root, paths);
+  if (violations.length === 0) return;
+  throw new Error(tr(root, {
+    en: `Cannot pass the P6 gate on the current audit rounds (see \`harness audit status\`):\n- ${violations.join('\n- ')}`,
+    ko: `현재 감사 회차로는 P6 게이트를 통과할 수 없다 (\`harness audit status\` 참고):\n- ${violations.join('\n- ')}`,
   }));
 }
 
@@ -716,6 +733,9 @@ export function approveGate(root: string, phase: Phase, via?: ApprovalVia): Gate
       }),
     );
   }
+  assertAuditRounds(root, phase, paths);
+  // 처리표의 오너 결정은 이 승인으로 효력을 갖는다(audit.ts). 무엇을 확정했는지 저널에 남긴다.
+  const audit = phase === 'P6' ? auditStatus(root) : null;
   // OPS-20: 위 submitGate 와 같은 이유 — 이벤트의 ts 가 유일한 승인 시각이다.
   // OPS-76: 승인 시점의 **정책 해시를 함께 찍는다**(재고정은 하지 않는다 — policy.ts 결정 (1)).
   // 승인 도장은 산출물에 찍는 것이지 정책 변경에 찍는 것이 아니므로 베이스라인은 건드리지
@@ -724,6 +744,8 @@ export function approveGate(root: string, phase: Phase, via?: ApprovalVia): Gate
     phase, artifactHash, evidence: current.evidence, paths, policyHash: computePolicyHash(root).hash,
     // 어느 경로로 승인됐는지를 남긴다. 호출자가 사람임을 증명하는 값은 아니다(approve.ts).
     ...(via ? { via } : {}),
+    ...(audit?.acceptedHighs.length ? { auditAcceptedHighs: audit.acceptedHighs } : {}),
+    ...(audit?.ownerDecisions.length ? { auditOwnerDecisions: audit.ownerDecisions } : {}),
   });
   const record: GateRecord = { ...current, status: 'approved', approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });

@@ -40,6 +40,8 @@ export const EVENT_TYPES = [
   // 폴드하지 않지만, 여기 등록하지 않으면 정책을 한 번 고정한 프로젝트에서 doctor 가
   // 「미지 이벤트 → 재생 불신」으로 판정해 `--repair` 가 복구를 거부한다.
   'policy-pinned',
+  // P6 감사 형식을 처음 적용한 시점. 재생에 들어가야 `doctor --repair` 가 값을 지우지 못한다.
+  'audit-format-pinned',
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
@@ -172,6 +174,7 @@ export const REPLAY_TYPES: ReadonlySet<string> = new Set([
   'phase-set', 'wave-activated', 'wave-completed', 'wave-stale',
   'gate-submitted', 'gate-approved', 'gate-invalidated',
   'backtrack-started', 'backtrack-cleared',
+  'init', 'audit-format-pinned',
 ]);
 
 /** 줄에서 타입만 싸게 뽑는다 — JSON.parse 없이. 못 뽑으면 undefined. */
@@ -270,6 +273,15 @@ export function replayState(events: HarnessEvent[]): HarnessState {
     const d = ev.data as Record<string, any>;
     if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
+      // 첫 기록만 따른다. 뒤에 붙은 기록으로 예전 회차의 범위를 넓히지 못한다.
+      case 'init':
+      case 'audit-format-pinned': {
+        const f = ev.type === 'init' ? d.auditFormat : d;
+        if (!s.auditFormat && f && f.version === 1 && Number.isInteger(f.legacyThrough) && f.legacyThrough >= 0) {
+          s.auditFormat = { version: 1, legacyThrough: f.legacyThrough };
+        }
+        break;
+      }
       case 'phase-set': if (isPhase(d.phase)) s.phase = d.phase; break;
       case 'wave-activated':
         if (typeof d.id === 'string' && d.id) s.activeWave = d.id;

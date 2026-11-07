@@ -40,8 +40,15 @@ summoned. The phase closes only when the **RTM shows nothing designed-but-not-ve
    against the approved design and locates every design invariant as `file:line`, holds or breaks,
    and ends with `HIGH N`. Write it to `.harness/audit/conformance-rN.md`. A HIGH loops back to P8
    (or, when the design itself is wrong, `harness backtrack`); re-audit in a new round with a
-   reconciliation table, as in P6. Only at `HIGH 0` does `harness phase set P10` open the ship track,
-   and the report goes to P10 as a mandatory input.
+   reconciliation table named `.harness/audit/conformance-reconcile-rN.md`, so it does not mix with the P6 tables. The P6
+   cap, risk acceptance and moves to testing do not apply here. Only at
+   `HIGH 0` does `harness phase set P10` open the ship track, and the report goes to P10 as a mandatory input.
+6. **Close the design audit's moved items.** `harness report rtm` lists every `AUD-r…` token from P6.
+   - A HIGH moved to testing closes only when the newest verdict for its token across the `conformance-rN.md` files is `holds`.
+     The dispatch of step 5 names these tokens. `harness ship verdict` refuses until then.
+   - A `test-transfer` MED or LOW closes when a completed wave carries its token in its acceptance criteria. The verdict
+     refuses until then too.
+   - A `carried` item is only shown. Handle it the same way, or tell the owner why it no longer applies.
 
 ## Gate
 
