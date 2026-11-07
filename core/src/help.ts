@@ -58,11 +58,19 @@ export const COMMANDS: CommandGroup[] = [
     summary: M('Phase gates — submit artifacts, then a human approves.', '페이즈 게이트 — 산출물을 제출하고 사람이 승인한다.'),
     subs: [
       { name: 'submit', args: '<P> --paths <a,b> [--evidence claimed|code|measured]', summary: M('Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.', '산출물을 심사에 올린다. 해시를 고정하고 리뷰 패킷을 남긴다. 빈 문서·자리표시자와 이미 다른 게이트를 연 내용은 거부한다.') },
-      { name: 'approve', args: '<P> [--dialog-ticket <t>] [--via slash] [--project <dir>]', summary: M('Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.', '제출된 게이트를 승인한다. 사람만 한다: /king-wjang-harness:approve <P> 를 입력하거나 확인 창에 답한다. 플래그는 플러그인이 쓰는 값이라 손으로 치지 않는다.') },
+      { name: 'approve', args: '<P> [--dialog-ticket <t>] [--via slash] [--accept-risk] [--project <dir>]', summary: M('Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.', '제출된 게이트를 승인한다. 사람만 한다: /king-wjang-harness:approve <P> 를 입력하거나 확인 창에 답한다. 플래그는 플러그인이 쓰는 값이라 손으로 치지 않는다.') },
       { name: 'verify', args: '<P>', summary: M('Re-check that submitted artifacts still match their pinned hash.', '제출 당시 해시와 현재 산출물이 같은지 다시 확인한다.') },
       { name: 'sweep', summary: M('Invalidate gates whose artifacts changed after approval.', '승인 후 산출물이 바뀐 게이트를 무효화한다.') },
       { name: 'status', summary: M('Print all gate records as JSON.', '전 게이트 레코드를 JSON 으로 출력한다.') },
       { name: 'feedback', args: '<P> [--from <file>]', summary: M('Collect reviewer/canvas comments as revision grounds; without --from, print what was collected.', '리뷰·캔버스 코멘트를 개정 근거로 수집한다. --from 없이 부르면 수집된 것을 출력한다.') },
+    ],
+  },
+  {
+    name: 'audit',
+    summary: M('P6 design audit rounds — read-only.', 'P6 설계 감사 회차 — 읽기 전용.'),
+    subs: [
+      { name: 'status', summary: M('Print the rounds, the full audit count against the cap, open and owner-accepted HIGH findings, the carry-over ledger, what blocks the P6 gate, and the next step, as JSON.', '회차, 전체 감사 횟수와 상한, 열린 HIGH 와 오너 수용 HIGH, 이월 대장, P6 게이트를 막는 사유, 다음 할 일을 JSON 으로 출력한다.') },
+      { name: 'closed', summary: M('Print the closed decisions, the moves to judge and the application check for the next auditor, as JSON. No HIGH counts or earlier round text.', '다음 감사자가 받을 닫힌 결정, 판정할 이동 항목, 반영 대조를 JSON 으로 출력한다. HIGH 개수와 앞 회차 본문은 싣지 않는다.') },
     ],
   },
   {

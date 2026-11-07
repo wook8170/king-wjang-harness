@@ -24,6 +24,13 @@ const writeDoc = (root: string, rel: string, body: string) => {
   fs.writeFileSync(abs, body);
 };
 
+/** P6 는 감사 회차를 요구한다(audit.ts). 다른 규칙을 시험하는 픽스처가 쓰는 깨끗한 1회차. */
+const AUDIT_R1 = '.harness/audit/audit-r1.md';
+const writeCleanAudit = (root: string) => writeDoc(root, AUDIT_R1, [
+  '# Design audit round 1', 'Audit-Kind: full', 'Lenses: logical coherence, ambiguity, blockers, UX walkthrough',
+  '', '## Findings', '', 'None of the four lenses recorded a finding against the design in this round.', '', 'HIGH 0', '',
+].join('\n'));
+
 /**
  * 실질성 검사를 통과하는 본문. 태그가 내용을 갈라 게이트마다 다른 해시가 나온다 —
  * 「같은 산출물로 두 게이트」를 픽스처가 우연히 만들지 않게.
@@ -744,8 +751,10 @@ describe('SEC-75 페이즈 적합성 — 레지스트리가 아는 산출물은 
     writeDoc(root, 'docs/audit-r1.md', body('audit'));
     registerDoc(root, 'DOC-1', 'docs/concept.md', 'P0');
     registerDoc(root, 'DOC-6', 'docs/audit-r1.md', 'P6');
+    writeCleanAudit(root);
+    registerDoc(root, 'DOC-7', AUDIT_R1, 'P6');
     expect(submitGate(root, 'P6', {
-      paths: ['docs/concept.md', 'docs/audit-r1.md'], evidence: 'claimed',
+      paths: ['docs/concept.md', 'docs/audit-r1.md', AUDIT_R1], evidence: 'claimed',
     }).status).toBe('submitted');
   });
 
@@ -759,8 +768,9 @@ describe('SEC-75 페이즈 적합성 — 레지스트리가 아는 산출물은 
     writeDoc(root, 'docs/concept.md', body('concept'));
     writeDoc(root, 'docs/audit-r1.md', body('audit'));
     registerDoc(root, 'DOC-1', 'docs/concept.md', 'P0');   // 리포트는 **미등록**
+    writeCleanAudit(root);
     expect(submitGate(root, 'P6', {
-      paths: ['docs/concept.md', 'docs/audit-r1.md'], evidence: 'claimed',
+      paths: ['docs/concept.md', 'docs/audit-r1.md', AUDIT_R1], evidence: 'claimed',
     }).status).toBe('submitted');
   });
 
@@ -907,8 +917,9 @@ describe('SEC-79 계열: 거의 같은 문서로 다른 게이트를 열 수 없
     }
     writeDoc(root, 'docs/audit.md', `${HDR}Audit. Every prior phase document was re-read against the `
       + 'shipped code. Two gaps were found in the contract layer and both are recorded with evidence.');
+    writeCleanAudit(root);
     expect(() => submitGate(root, 'P6', {
-      paths: ['docs/audit.md', 'docs/P0.md', 'docs/P1.md', 'docs/P2.md'], evidence: 'measured',
+      paths: ['docs/audit.md', 'docs/P0.md', 'docs/P1.md', 'docs/P2.md', AUDIT_R1], evidence: 'measured',
     })).not.toThrow();
   });
 
@@ -991,7 +1002,8 @@ describe('SEC-79 계열: 새 텍스트의 절대량으로 판정한다', () => {
 describe('UTIL-A1: 앞의 게이트가 전부 승인돼야 페이즈가 열린다', () => {
   const approveAt = (root: string, phase: Parameters<typeof approveGate>[1], rel: string) => {
     writeDoc(root, rel, body(String(phase)));
-    submitGate(root, phase, { paths: [rel], evidence: 'measured' });
+    if (phase === 'P6') writeCleanAudit(root);
+    submitGate(root, phase, { paths: phase === 'P6' ? [rel, AUDIT_R1] : [rel], evidence: 'measured' });
     approveGate(root, phase);
   };
 

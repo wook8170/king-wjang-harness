@@ -8,6 +8,72 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+The P6 design audit now has an end condition and a limit on how often it repeats, and the gate checks them.
+Real projects ran 16 and 7 rounds with four auditors in each, because the only exit was "newest round HIGH 0",
+and fixing a MED or LOW finding forced another four-lens round.
+
+### Changed — when the P6 audit ends
+
+- **HIGH 0 ends it.** MED and LOW go into the reconciliation table. If documents changed at that point, only
+  the changed paragraphs get a short re-audit.
+- **HIGH is narrower.** A finding is HIGH only when it blocks implementation or would be hard to reverse (public
+  contract or stored format, data loss or migration, security or permission boundary, product scope conflict), and
+  has checkable evidence: `path:line`, `repro:`, or a document citation with a scenario step for UX findings.
+- **Short re-audits** are allowed for any revision that keeps the structure. `skills/phase-p6-audit/SKILL.md` lists
+  what counts as structural, and the short round's auditor writes `structural change: yes|no`.
+- **At most three full audits, counted over the whole project.** `audit_full_round_cap` in `.harness/config.yaml` changes
+  the number, and only a value matching the pinned policy baseline is used. With HIGH findings left at the cap, the owner
+  picks for each: fix and re-audit, accept the risk, or approve another full audit. This is not an automatic pass.
+- **Closed items stay closed.** The auditor reads closed decisions from `harness audit closed`, and nothing about the
+  design's reasoning or HIGH trend. A closed item can return only when its text or code changed, or with new evidence at `path:line`. Owner
+  decisions are not overturned; they can only be flagged for the owner.
+- **Runtime doubts go to tests.** Deadlocks, races and timing become `test-transfer` items instead of more revisions,
+  unless the text alone proves the design cannot work.
+- **Carry-over ledger.** `carried` and `test-transfer` rows are collected by `harness audit status`. Their `AUD-r…` tokens
+  go in wave acceptance criteria, and the RTM marks the open ones. `carried` items are only shown.
+- **Reversal conflicts** stop the fixing and go to the owner, who picks one side.
+- **Application check.** Confirmed fixes are compared with the revised text sentence by sentence before a re-audit.
+
+### Added
+
+- `harness audit status` (read-only) prints the rounds, the full audit count, the ledger, what blocks the gate and the next step.
+  `harness audit closed` prints what the next auditor receives.
+- `state.json` records the audit format. A project started with `harness init` needs `Audit-Kind:` on every round.
+- `harness gate submit P6` and the approval now refuse a round with open HIGH findings, a last line that disagrees with the
+  findings table, a lowered severity, a full audit beyond the cap, a finding with no reconciliation row, a HIGH with no
+  checkable evidence, an unresolved reversal conflict, or a missing application check. P6 also needs at least one audit round
+  in `.harness/audit/` now.
+- HIGH findings cannot be carried. A HIGH moved to testing stays open until the next round's auditor upholds it under
+  `## Classification check`; an overturned move must return as a HIGH.
+- `owner-accepted` and `owner-decided` rows take effect only with the owner's P6 approval. They appear in the review packet
+  and the approval dialog, and the approval event records them as `auditAcceptedHighs` and `auditOwnerDecisions`. The slash
+  command and the terminal list them and refuse until `--accept-risk` is given. No new approval path was added.
+- An `## Owner re-check needed` item must name a real owner row, or it counts as an open HIGH.
+- `harness ship verdict` refuses a HIGH moved to testing until the newest verdict across the `conformance-rN.md` files marks its token `holds`, and a
+  `test-transfer` MED or LOW until a completed wave carries its token.
+
+### Upgrading with rounds in progress
+
+An older project records, once, the last round that exists at its next session start or P6 submission. Those rounds are read
+as they are: no `Audit-Kind:` line means a full audit, and `HIGH N` comes from the last line. They count toward the cap. Later
+rounds need the line. An approved P6 gate is not reopened. A resubmission whose newest old round has no `HIGH N` line is refused
+until the last line reads `HIGH N`; the rule is to run a short re-audit, but old rounds are trusted as they stand, so the gate cannot
+tell a re-audit from an added line. A P6 submitted before the upgrade is judged at approval and may need resubmitting.
+
+### Known limits
+
+The main session writes the merged round file, so the code cannot prove that an auditor wrote an `upheld` line or that every
+lens finding was copied, and a round edited consistently before submission is not detected. The `holds` row is written the same
+way. Old rounds are trusted as they stand. `harness audit closed` prints reason cells unfiltered, so keeping arguments out of them
+rests on the written rule. Typing `--accept-risk` the first time skips the list on the slash path. Short re-audits have no cap. The gate cannot judge whether a revision is truly non-structural; that line comes from the
+auditor.
+
+### Planned
+
+- One place for each fact: a canonical location plus a mechanical check for duplicates, so that one fix does not
+  have to spread across documents (the cause of rounds r8 and r9 in the measured project). Not in this change.
+- Comparing lens reports with the merged round file, so that a HIGH cannot be dropped while merging. Not in this change.
+
 ## [0.1.8] — 2026-11-06
 
 Gate approval no longer requires typing a versioned cache path into a terminal.

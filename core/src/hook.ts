@@ -20,6 +20,7 @@ import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
 import { harnessDir, runtimeDir, eventsPath, humanCmd, approveSlash, harnessCliPath, SLASH_COMMAND_NAME, denialsPath, isUnderTempDir } from './paths';
 import { approveAllowRule, askableMode, interactiveEntrypoint, issueDialogTicket, issueSlashTicket, parseApproveCall } from './approve';
+import { auditStatus, ensureAuditFormat } from './audit';
 import { measuredOnlyViolation, recordedPaths } from './gate';
 import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE, setsEnv } from './bashwrite';
@@ -430,6 +431,8 @@ export function handleHook(root: string, event: HookEvent, input: HookInput): ob
       } catch {
         // 저널을 못 읽는 것 자체는 아래 판정을 막지 않는다 — 무해 계약이 우선이다.
       }
+      // 업그레이드 뒤 첫 세션에서 예전 회차의 끝을 적는다. 그 세션에서 쓰는 회차부터 새 형식이다.
+      try { ensureAuditFormat(root); } catch { /* 훅은 막지 않는다. P6 제출이 다시 적는다 */ }
     }
     const config = loadConfig(root);
     switch (event) {
@@ -888,19 +891,29 @@ function judgeApproveCall(
   const notMeasured = measuredOnlyViolation(root, call.phase, gate.evidence);
   if (notMeasured) return { why: notMeasured };
   const paths = recordedPaths(root, call.phase) ?? [];
+  // 승인이 거부될 것을 창을 띄운 뒤에 알리지 않는다.
+  const audit = call.phase === 'P6' ? auditStatus(root, paths) : null;
+  if (audit && audit.violations.length > 0) return { why: sanitizeUntrusted(audit.violations.join(' '), 1000) };
   // 경로는 제출자(에이전트)가 정한 값이다 — 사람이 읽는 창에 그대로 싣지 않는다.
   const shown = sanitizeUntrusted(paths.slice(0, 5).join(', ') + (paths.length > 5 ? ` +${paths.length - 5}` : ''), 300);
   const hash = (gate.artifactHash ?? '').slice(0, 12);
   const nonce = issueDialogTicket(root, call.phase, gate.artifactHash ?? '');
+  // 처리표의 위험 수용은 이 승인으로 효력을 갖는다 — 승인하는 사람이 창에서 그 사실을 봐야 한다.
+  const accepted = audit ? sanitizeUntrusted(audit.acceptedHighs.map(a => a.id).join(', '), 300) : '';
+  const decided = audit ? sanitizeUntrusted(audit.ownerDecisions.map(a => a.id).join(', '), 300) : '';
   return { ask: {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'ask',
       permissionDecisionReason: L(
         `Approve gate ${call.phase}? Artifacts: ${shown} · evidence: ${gate.evidence} · hash: ${hash} · `
-        + `review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`,
+        + `review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`
+        + (accepted ? ` Saying yes also accepts the risk of these HIGH findings: ${accepted}.` : '')
+        + (decided ? ` It also confirms these owner decisions: ${decided}.` : ''),
         `게이트 ${call.phase} 를 승인합니까? 산출물: ${shown} · 근거: ${gate.evidence} · 해시: ${hash} · `
-        + `리뷰 패킷: .harness/packets/${call.phase}.md. 승인하면 다음 페이즈가 열린다.`,
+        + `리뷰 패킷: .harness/packets/${call.phase}.md. 승인하면 다음 페이즈가 열린다.`
+        + (accepted ? ` 승인하면 다음 HIGH 의 위험도 수용한다: ${accepted}.` : '')
+        + (decided ? ` 다음 오너 결정도 확정한다: ${decided}.` : ''),
       ),
       // 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
       updatedInput: { ...input.tool_input, command: `${harnessCliPath()} gate approve ${call.phase} --dialog-ticket ${nonce}` },
@@ -915,7 +928,8 @@ function judgeApproveCall(
 function slashApproveTicket(root: string, state: HarnessState, input: HookInput): null {
   if (input.command_name !== SLASH_COMMAND_NAME || input.command_source !== 'plugin') return null;
   if (!interactiveEntrypoint()) return null;
-  const phase = (input.command_args ?? '').trim();
+  // `--accept-risk` 는 P6 의 오너 결정 목록을 읽었다는 표시다(cli.ts). 표를 내는 조건은 바꾸지 않는다.
+  const phase = (input.command_args ?? '').trim().replace(/\s+--accept-risk$/u, '');
   if (!isPhase(phase)) return null;
   const gate = state.gates[phase];
   if (gate?.status === 'submitted') issueSlashTicket(root, phase, gate.artifactHash ?? '');

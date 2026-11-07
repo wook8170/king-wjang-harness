@@ -16,8 +16,16 @@
  * 다시 돌리면 `failed: 0` 인 고정점에서 멈춘다. 그 고정점만 광고에 쓴다.
  *
  * 사용:  node scripts/measure-test-counts.mjs
- * (배포본은 `git stash create` + `git archive` 로 뜬다 — 커밋하지 않고도 실물을 잰다.
+ * (배포본은 지금 작업 트리에서 뜬다 — 수정한 파일과 추적되지 않는 새 파일을 담고, `.gitignore`
+ *  대상은 뺀다. 임시 인덱스로 트리를 만들므로 실제 인덱스는 그대로다. 그래서 커밋 전에도 실물을
+ *  잴 수 있다. 다만 `sha` 는 HEAD 이므로 광고할 값은 커밋한 뒤에 잰다.
  *  `node_modules` 는 심볼릭 링크로 걸어 설치 시간을 들이지 않는다.)
+ *
+ * **파일을 불러오지 못한 측정은 실패다.** 그 파일의 시험은 하나도 수집되지 않아 `Tests` 줄에는
+ * 실패로 나오지 않는다. 실제로 새 파일이 배포본에서 빠져 1765건이 452건으로 줄었는데 `failed: 0`
+ * 으로 기록됐다. 그래서 `Test Files` 줄의 실패 수를 함께 기록하고, 불러오기 실패가 있으면 기록을
+ * 덮지 않고 0 이 아닌 코드로 끝낸다. 시험이 실패한 파일은 막지 않고 알리기만 한다 — 위 자기참조로
+ * `doc-claims` 가 첫 회에 실패하므로, 막으면 기록을 고칠 수 없어 측정이 영영 끝나지 않는다.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -28,39 +36,81 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(REPO, 'docs', 'test-counts.json');
 
-/** vitest 요약 한 줄에서 수치를 뽑는다 — 리포터 JSON 을 켜면 이 스크립트가 그 포맷에 묶인다. */
-function runSuite(cwd) {
-  const r = spawnSync('npx', ['vitest', 'run'], { cwd, encoding: 'utf8', env: process.env });
-  const text = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+/** vitest 요약에서 수치를 뽑는다 — 리포터 JSON 을 켜면 이 스크립트가 그 포맷에 묶인다. */
+export function parseSuiteOutput(raw) {
+  const text = raw.replace(/\u001b\[[0-9;]*m/g, '');
   const files = /Test Files\s+(.*)/.exec(text)?.[1] ?? '';
   const tests = /Tests\s+(.*)/.exec(text)?.[1] ?? '';
   const num = (s, kind) => Number(new RegExp(`(\\d+)\\s+${kind}`).exec(s)?.[1] ?? 0);
   const total = (s) => Number(/\((\d+)\)\s*$/.exec(s.trim())?.[1] ?? 0);
+  const failedFiles = num(files, 'failed');
+  const failed = num(tests, 'failed');
+  // 시험이 실패한 파일에는 실패한 시험이 한 건 이상 있다. 그 수를 넘는 실패 파일은 불러오지 못한 파일이다.
+  const header = Number(/Failed Suites\s+(\d+)/.exec(text)?.[1] ?? 0);
   return {
     files: total(files),
+    failedFiles,
+    loadFailures: Math.max(header, failedFiles - failed),
     tests: total(tests),
     passed: num(tests, 'passed'),
     skipped: num(tests, 'skipped'),
-    failed: num(tests, 'failed'),
+    failed,
   };
 }
 
-const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).trim();
-
-console.log('# measuring repo suite …');
-const repo = runSuite(REPO);
-
-console.log('# measuring published-package suite (git archive) …');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-counts-'));
-const stash = execFileSync('git', ['stash', 'create'], { cwd: REPO, encoding: 'utf8' }).trim() || sha;
-execFileSync('bash', ['-c', `git archive ${stash} | tar -x -C ${tmp}`], { cwd: REPO });
-fs.symlinkSync(path.join(REPO, 'node_modules'), path.join(tmp, 'node_modules'));
-const archive = runSuite(tmp);
-
-const record = { measuredAt: new Date().toISOString(), sha, repo, archive };
-fs.writeFileSync(OUT, `${JSON.stringify(record, null, 2)}\n`);
-console.log(JSON.stringify(record, null, 2));
-console.log(`\n# wrote ${path.relative(REPO, OUT)}`);
-if (repo.failed > 0 || archive.failed > 0) {
-  console.error('# NOTE: a suite had failures — the counts are still recorded, but fix them before advertising.');
+/** README 에 쓸 수 없는 측정의 사유. 비어 있으면 쓸 수 있다. 요약을 못 읽은 것도 실패다. */
+export function suiteProblems(name, suite) {
+  const out = [];
+  if (suite.files === 0) out.push(`${name}: no vitest summary could be read`);
+  if (suite.loadFailures > 0) out.push(`${name}: ${suite.loadFailures} test file(s) could not be loaded`);
+  return out;
 }
+
+/** 작업 트리 그대로의 트리 id. `git add -A` 는 `.gitignore` 를 따르고, 임시 인덱스에만 기록한다. */
+export function snapshotTree(repo) {
+  const git = (args, env = process.env) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', env }).trim();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-index-'));
+  try {
+    const index = path.join(dir, 'index');
+    fs.copyFileSync(path.resolve(repo, git(['rev-parse', '--git-path', 'index'])), index);
+    const env = { ...process.env, GIT_INDEX_FILE: index };
+    git(['add', '-A'], env);
+    return git(['write-tree'], env);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function runSuite(cwd) {
+  const r = spawnSync('npx', ['vitest', 'run'], { cwd, encoding: 'utf8', env: process.env });
+  return parseSuiteOutput(`${r.stdout ?? ''}${r.stderr ?? ''}`);
+}
+
+function main() {
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO, encoding: 'utf8' }).trim();
+
+  console.log('# measuring repo suite …');
+  const repo = runSuite(REPO);
+
+  console.log('# measuring published-package suite (git archive of the working tree) …');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kwh-counts-'));
+  execFileSync('bash', ['-c', `git archive ${snapshotTree(REPO)} | tar -x -C ${tmp}`], { cwd: REPO });
+  fs.symlinkSync(path.join(REPO, 'node_modules'), path.join(tmp, 'node_modules'));
+  const archive = runSuite(tmp);
+
+  const record = { measuredAt: new Date().toISOString(), sha, repo, archive };
+  console.log(JSON.stringify(record, null, 2));
+  const problems = [...suiteProblems('repo', repo), ...suiteProblems('archive', archive)];
+  if (problems.length > 0) {
+    console.error(`# MEASUREMENT FAILED — not recorded, do not advertise these counts:\n# ${problems.join('\n# ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  fs.writeFileSync(OUT, `${JSON.stringify(record, null, 2)}\n`);
+  console.log(`\n# wrote ${path.relative(REPO, OUT)}`);
+  if (repo.failedFiles > 0 || archive.failedFiles > 0) {
+    console.error('# NOTE: a suite had failures — the counts are still recorded, but fix them before advertising.');
+  }
+}
+
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) main();

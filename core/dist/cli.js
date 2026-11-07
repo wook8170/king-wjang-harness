@@ -125,17 +125,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path22) {
-      const ctrl = callVisitor(key, node, visitor, path22);
+    function visit_(key, node, visitor, path23) {
+      const ctrl = callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path22, ctrl);
-        return visit_(key, ctrl, visitor, path22);
+        replaceNode(key, path23, ctrl);
+        return visit_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path22 = Object.freeze(path22.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path22);
+            const ci = visit_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -146,13 +146,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path22 = Object.freeze(path22.concat(node));
-          const ck = visit_("key", node.key, visitor, path22);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = visit_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path22);
+          const cv = visit_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -173,17 +173,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path22) {
-      const ctrl = await callVisitor(key, node, visitor, path22);
+    async function visitAsync_(key, node, visitor, path23) {
+      const ctrl = await callVisitor(key, node, visitor, path23);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path22, ctrl);
-        return visitAsync_(key, ctrl, visitor, path22);
+        replaceNode(key, path23, ctrl);
+        return visitAsync_(key, ctrl, visitor, path23);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path22 = Object.freeze(path22.concat(node));
+          path23 = Object.freeze(path23.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path22);
+            const ci = await visitAsync_(i, node.items[i], visitor, path23);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -194,13 +194,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path22 = Object.freeze(path22.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path22);
+          path23 = Object.freeze(path23.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path23);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path22);
+          const cv = await visitAsync_("value", node.value, visitor, path23);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -227,23 +227,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path22) {
+    function callVisitor(key, node, visitor, path23) {
       if (typeof visitor === "function")
-        return visitor(key, node, path22);
+        return visitor(key, node, path23);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path22);
+        return visitor.Map?.(key, node, path23);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path22);
+        return visitor.Seq?.(key, node, path23);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path22);
+        return visitor.Pair?.(key, node, path23);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path22);
+        return visitor.Scalar?.(key, node, path23);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path22);
+        return visitor.Alias?.(key, node, path23);
       return void 0;
     }
-    function replaceNode(key, path22, node) {
-      const parent = path22[path22.length - 1];
+    function replaceNode(key, path23, node) {
+      const parent = path23[path23.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -853,10 +853,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path22, value) {
+    function collectionFromPath(schema, path23, value) {
       let v = value;
-      for (let i = path22.length - 1; i >= 0; --i) {
-        const k = path22[i];
+      for (let i = path23.length - 1; i >= 0; --i) {
+        const k = path23[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -875,7 +875,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path22) => path22 == null || typeof path22 === "object" && !!path22[Symbol.iterator]().next().done;
+    var isEmptyPath = (path23) => path23 == null || typeof path23 === "object" && !!path23[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -905,11 +905,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path22, value) {
-        if (isEmptyPath(path22))
+      addIn(path23, value) {
+        if (isEmptyPath(path23))
           this.add(value);
         else {
-          const [key, ...rest] = path22;
+          const [key, ...rest] = path23;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -923,8 +923,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path22) {
-        const [key, ...rest] = path22;
+      deleteIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -938,8 +938,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path22, keepScalar) {
-        const [key, ...rest] = path22;
+      getIn(path23, keepScalar) {
+        const [key, ...rest] = path23;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path22) {
-        const [key, ...rest] = path22;
+      hasIn(path23) {
+        const [key, ...rest] = path23;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -968,8 +968,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path22, value) {
-        const [key, ...rest] = path22;
+      setIn(path23, value) {
+        const [key, ...rest] = path23;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3484,9 +3484,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path22, value) {
+      addIn(path23, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path22, value);
+          this.contents.addIn(path23, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3561,14 +3561,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path22) {
-        if (Collection.isEmptyPath(path22)) {
+      deleteIn(path23) {
+        if (Collection.isEmptyPath(path23)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path22) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path23) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3583,10 +3583,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path22, keepScalar) {
-        if (Collection.isEmptyPath(path22))
+      getIn(path23, keepScalar) {
+        if (Collection.isEmptyPath(path23))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path22, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path23, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3597,10 +3597,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path22) {
-        if (Collection.isEmptyPath(path22))
+      hasIn(path23) {
+        if (Collection.isEmptyPath(path23))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path22) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path23) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3617,13 +3617,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path22, value) {
-        if (Collection.isEmptyPath(path22)) {
+      setIn(path23, value) {
+        if (Collection.isEmptyPath(path23)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path22), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path23), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path22, value);
+          this.contents.setIn(path23, value);
         }
       }
       /**
@@ -4009,10 +4009,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep7, value } = collItem;
+        const { start, key, sep: sep8, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep7?.[0],
+          next: key ?? sep8?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4026,7 +4026,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep7) {
+          if (!keyProps.anchor && !keyProps.tag && !sep8) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4050,7 +4050,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep7 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep8 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4066,7 +4066,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep7, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep8, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4157,7 +4157,7 @@ var require_resolve_end = __commonJS({
       let comment2 = "";
       if (end) {
         let hasSpace = false;
-        let sep7 = "";
+        let sep8 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4171,13 +4171,13 @@ var require_resolve_end = __commonJS({
               if (!comment2)
                 comment2 = cb;
               else
-                comment2 += sep7 + cb;
-              sep7 = "";
+                comment2 += sep8 + cb;
+              sep8 = "";
               break;
             }
             case "newline":
               if (comment2)
-                sep7 += source;
+                sep8 += source;
               hasSpace = true;
               break;
             default:
@@ -4220,18 +4220,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep7, value } = collItem;
+        const { start, key, sep: sep8, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep7?.[0],
+          next: key ?? sep8?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep7 && !value) {
+          if (!props.anchor && !props.tag && !sep8 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4285,8 +4285,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep7 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep7, null, props, onError);
+        if (!isMap && !sep8 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep8, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4298,7 +4298,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep7 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep8 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4309,8 +4309,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep7)
-                for (const st of sep7) {
+              if (sep8)
+                for (const st of sep8) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4327,7 +4327,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep7, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep8, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4507,7 +4507,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep7 = "";
+      let sep8 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4524,24 +4524,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep7 + indent.slice(trimIndent) + content;
-          sep7 = "\n";
+          value += sep8 + indent.slice(trimIndent) + content;
+          sep8 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep7 === " ")
-            sep7 = "\n";
-          else if (!prevMoreIndented && sep7 === "\n")
-            sep7 = "\n\n";
-          value += sep7 + indent.slice(trimIndent) + content;
-          sep7 = "\n";
+          if (sep8 === " ")
+            sep8 = "\n";
+          else if (!prevMoreIndented && sep8 === "\n")
+            sep8 = "\n\n";
+          value += sep8 + indent.slice(trimIndent) + content;
+          sep8 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep7 === "\n")
+          if (sep8 === "\n")
             value += "\n";
           else
-            sep7 = "\n";
+            sep8 = "\n";
         } else {
-          value += sep7 + content;
-          sep7 = " ";
+          value += sep8 + content;
+          sep8 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4723,25 +4723,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep7 = " ";
+      let sep8 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep7 === "\n")
-            res += sep7;
+          if (sep8 === "\n")
+            res += sep8;
           else
-            sep7 = "\n";
+            sep8 = "\n";
         } else {
-          res += sep7 + match[1];
-          sep7 = " ";
+          res += sep8 + match[1];
+          sep8 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep7 + (match?.[1] ?? "");
+      return res + sep8 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5551,14 +5551,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep7, value }) {
+    function stringifyItem({ start, key, sep: sep8, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep7)
-        for (const st of sep7)
+      if (sep8)
+        for (const st of sep8)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -5583,9 +5583,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path22) => {
+    visit.itemAtPath = (cst, path23) => {
       let item = cst;
-      for (const [field, index] of path22) {
+      for (const [field, index] of path23) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5594,23 +5594,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path22) => {
-      const parent = visit.itemAtPath(cst, path22.slice(0, -1));
-      const field = path22[path22.length - 1][0];
+    visit.parentCollection = (cst, path23) => {
+      const parent = visit.itemAtPath(cst, path23.slice(0, -1));
+      const field = path23[path23.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path22, item, visitor) {
-      let ctrl = visitor(item, path22);
+    function _visit(path23, item, visitor) {
+      let ctrl = visitor(item, path23);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path22.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path23.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5621,10 +5621,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path22);
+            ctrl = ctrl(item, path23);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path22) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path23) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6725,18 +6725,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep7;
+          let sep8;
           if (scalar.end) {
-            sep7 = scalar.end;
-            sep7.push(this.sourceToken);
+            sep8 = scalar.end;
+            sep8.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep7 = [this.sourceToken];
+            sep8 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep7 }]
+            items: [{ start, key: scalar, sep: sep8 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6889,15 +6889,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep7 = it.sep;
-                  sep7.push(this.sourceToken);
+                  const sep8 = it.sep;
+                  sep8.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep7 }]
+                    items: [{ start: start2, key, sep: sep8 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -6926,14 +6926,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs26 = this.flowScalar(this.type);
+              const fs27 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs26, sep: [] });
+                map.items.push({ start, key: fs27, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs26);
+                this.stack.push(fs27);
               } else {
-                Object.assign(it, { key: fs26, sep: [] });
+                Object.assign(it, { key: fs27, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7061,13 +7061,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs26 = this.flowScalar(this.type);
+              const fs27 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs26, sep: [] });
+                fc.items.push({ start: [], key: fs27, sep: [] });
               else if (it.sep)
-                this.stack.push(fs26);
+                this.stack.push(fs27);
               else
-                Object.assign(it, { key: fs26, sep: [] });
+                Object.assign(it, { key: fs27, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7091,13 +7091,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep7 = fc.end.splice(1, fc.end.length);
-            sep7.push(this.sourceToken);
+            const sep8 = fc.end.splice(1, fc.end.length);
+            sep8.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep7 }]
+              items: [{ start, key: fc, sep: sep8 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7385,7 +7385,7 @@ __export(cli_exports, {
   unknownFlags: () => unknownFlags
 });
 module.exports = __toCommonJS(cli_exports);
-var fs25 = __toESM(require("fs"));
+var fs26 = __toESM(require("fs"));
 
 // core/src/budget.ts
 var HOOK_BUDGET_MS = 1e4;
@@ -8797,7 +8797,7 @@ function mentionsPath(cmd, needles) {
 
 // core/src/cli.ts
 var tty = __toESM(require("tty"));
-var path21 = __toESM(require("path"));
+var path22 = __toESM(require("path"));
 var import_node_crypto2 = require("crypto");
 
 // core/src/state.ts
@@ -8938,7 +8938,8 @@ var DEFAULT_CONFIG = {
     "pulumi up"
   ],
   design_system_frozen_roots: [],
-  block_raw_values: false
+  block_raw_values: false,
+  audit_full_round_cap: 3
 };
 var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
 var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
@@ -8978,7 +8979,8 @@ function parseConfig(p) {
     design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
     design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
     design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
-    block_raw_values: raw.block_raw_values === true
+    block_raw_values: raw.block_raw_values === true,
+    audit_full_round_cap: Number.isInteger(raw.audit_full_round_cap) && raw.audit_full_round_cap >= 1 ? raw.audit_full_round_cap : DEFAULT_CONFIG.audit_full_round_cap
   };
 }
 var KNOWN_CONFIG_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
@@ -9020,6 +9022,7 @@ function tr(root, m) {
 
 // core/src/state.ts
 var SCHEMA_VERSION = 1;
+var NEW_AUDIT_FORMAT = { version: 1, legacyThrough: 0 };
 function defaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -9110,7 +9113,7 @@ function initHarness(root) {
   ].join("\n"));
   fs3.writeFileSync(eventsPath(root), "");
   const tmp = `${statePath(root)}.tmp-${process.pid}`;
-  fs3.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + "\n");
+  fs3.writeFileSync(tmp, JSON.stringify({ ...defaultState(), auditFormat: NEW_AUDIT_FORMAT }, null, 2) + "\n");
   fs3.renameSync(tmp, statePath(root));
 }
 
@@ -9278,7 +9281,9 @@ var EVENT_TYPES = [
   // OPS-76: 정책 베이스라인 고정(init·`doctor --accept-policy`). 상태 무변이라 replayState 는
   // 폴드하지 않지만, 여기 등록하지 않으면 정책을 한 번 고정한 프로젝트에서 doctor 가
   // 「미지 이벤트 → 재생 불신」으로 판정해 `--repair` 가 복구를 거부한다.
-  "policy-pinned"
+  "policy-pinned",
+  // P6 감사 형식을 처음 적용한 시점. 재생에 들어가야 `doctor --repair` 가 값을 지우지 못한다.
+  "audit-format-pinned"
 ];
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
 var MASK = "***MASKED***";
@@ -9369,7 +9374,9 @@ var REPLAY_TYPES = /* @__PURE__ */ new Set([
   "gate-approved",
   "gate-invalidated",
   "backtrack-started",
-  "backtrack-cleared"
+  "backtrack-cleared",
+  "init",
+  "audit-format-pinned"
 ]);
 var TYPE_RE = /"type"\s*:\s*"([a-z-]+)"/;
 var LITERAL = '"type":"';
@@ -9416,6 +9423,15 @@ function replayState(events) {
     const d = ev.data;
     if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
+      // 첫 기록만 따른다. 뒤에 붙은 기록으로 예전 회차의 범위를 넓히지 못한다.
+      case "init":
+      case "audit-format-pinned": {
+        const f2 = ev.type === "init" ? d.auditFormat : d;
+        if (!s.auditFormat && f2 && f2.version === 1 && Number.isInteger(f2.legacyThrough) && f2.legacyThrough >= 0) {
+          s.auditFormat = { version: 1, legacyThrough: f2.legacyThrough };
+        }
+        break;
+      }
       case "phase-set":
         if (isPhase(d.phase)) s.phase = d.phase;
         break;
@@ -11829,7 +11845,7 @@ function runDoctor(root, opts = {}) {
     trustworthy = false;
   }
   if (current) {
-    for (const field of COMPARED_FIELDS) {
+    for (const field of replayed.auditFormat ? [...COMPARED_FIELDS, "auditFormat"] : COMPARED_FIELDS) {
       const a = JSON.stringify(current[field]);
       const b = JSON.stringify(replayed[field]);
       if (a !== b) {
@@ -12526,19 +12542,563 @@ function buildVerifierBrief(root, waveId) {
   return lines.join("\n");
 }
 
+// core/src/audit.ts
+var fs17 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
+var AUDIT_DIR = ".harness/audit";
+var DECISIONS = ["accepted", "not accepted", "owner-decided", "owner-accepted", "carried", "test-transfer"];
+var DOC_CHANGING = ["accepted", "owner-decided"];
+var NEEDS_REASON = ["not accepted", "owner-decided", "owner-accepted", "carried", "test-transfer"];
+var NEEDS_LOCATION = ["carried", "test-transfer"];
+var ROUND_FILE_RE = /^audit-r([1-9]\d*)\.md$/u;
+var BAD_NUMBER_RE = /^(?:audit|reconcile)-r0\d*\.md$/u;
+var APPLICATION_CHECK_RE = /^##\s+Application check$/iu;
+var TABLE_RULE_RE = /^\|[-:\s|]+\|$/u;
+var LENS_TOKENS = [/logical/i, /ambiguity/i, /blockers|feasibility/i, /ux/i];
+function tableCells(line) {
+  const t = line.trim();
+  if (!t.startsWith("|")) return null;
+  return t.replace(/^\|/u, "").replace(/\|$/u, "").split(/(?<!\\)\|/u).map((c) => c.trim());
+}
+var plainCell = (c) => c.replace(/[*`]/gu, "").trim();
+var asSeverity = (c) => {
+  const m = /^(HIGH|MED|LOW)/iu.exec(plainCell(c ?? ""));
+  return m ? m[1].toUpperCase() : null;
+};
+function sectionLines(text, heading) {
+  let out = null;
+  let inside = false;
+  for (const line of text.split("\n")) {
+    if (/^##\s/u.test(line)) {
+      inside = heading.test(line.trim());
+      if (inside) out ??= [];
+    } else if (inside) out?.push(line);
+  }
+  return out;
+}
+function parseFindings(text) {
+  const lines = sectionLines(text, /^##\s+Findings\b/iu);
+  if (!lines) return null;
+  const out = [];
+  for (const line of lines) {
+    const cells = tableCells(line);
+    const severity = asSeverity(cells?.[1]);
+    if (cells && severity) out.push({ id: plainCell(cells[0]), severity, evidence: cells[2] ?? "" });
+  }
+  return out;
+}
+function parseReconcile(text) {
+  const out = [];
+  for (const line of text.split("\n")) {
+    const cells = tableCells(line);
+    if (!cells) continue;
+    const severity = asSeverity(cells[1]) ?? (plainCell(cells[1] ?? "") === "CONFLICT" ? "CONFLICT" : null);
+    if (!severity) continue;
+    out.push({
+      id: plainCell(cells[0]),
+      severity,
+      decision: plainCell(cells[2] ?? "").toLowerCase(),
+      appliedAt: (cells[3] ?? "").trim(),
+      reason: (cells[4] ?? "").trim()
+    });
+  }
+  return out;
+}
+function parseApplied(text) {
+  const lines = sectionLines(text, APPLICATION_CHECK_RE);
+  if (!lines) return null;
+  const out = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    const cells = tableCells(line);
+    const result = plainCell(cells?.[cells.length - 1] ?? "").toLowerCase();
+    if (!cells || result !== "applied" && result !== "missing") continue;
+    const id = plainCell(cells[0]).replace(/\.\d+$/u, "");
+    if (out.get(id) !== "missing") out.set(id, result);
+  }
+  return out;
+}
+function parseClassification(text) {
+  const out = /* @__PURE__ */ new Map();
+  for (const line of sectionLines(text, /^##\s+Classification check$/iu) ?? []) {
+    const cells = tableCells(line);
+    const verdict = plainCell(cells?.[1] ?? "").toLowerCase();
+    if (cells && (verdict === "upheld" || verdict === "overturned")) out.set(plainCell(cells[0]), verdict);
+  }
+  return out;
+}
+function parseConflicts(text) {
+  const out = [];
+  for (const line of sectionLines(text, /^##\s+Reversal conflicts$/iu) ?? []) {
+    const id = plainCell(tableCells(line)?.[0] ?? "");
+    if (/^RC-\S+$/u.test(id)) out.push(id);
+  }
+  return out;
+}
+function parseRechecks(text) {
+  const lines = (sectionLines(text, /^##\s+Owner re-check needed\b/iu) ?? []).map((l) => l.trim());
+  return lines.filter((l, i) => {
+    if (l.startsWith("- ")) return !/^-\s*(?:none\b|없음)/iu.test(l);
+    if (!l.startsWith("|") || TABLE_RULE_RE.test(l)) return false;
+    return !TABLE_RULE_RE.test(lines[i + 1] ?? "");
+  });
+}
+function hasCheckableEvidence(evidence) {
+  const isPathLine = [...evidence.matchAll(/([\w./-]*[A-Za-z][\w./-]*):\d+/gu)].some((hit) => !/(?:^|[\d-])T\d{1,2}$/u.test(hit[1]));
+  return isPathLine || /(?<![\w:./-])(?<!\d{4}-\d{2}-\d{2}\s)0[0-5]:0*[1-9]\d*\b(?!:)/u.test(evidence) || /(?:^|\s)(?:repro|재현)\s*:/iu.test(evidence) || /\bUX-\d+\b.*\bS\d+-\d+\b/u.test(evidence);
+}
+var hasId = (text, id) => {
+  const esc3 = id.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}-])${esc3}(?![\\p{L}\\p{N}-])`, "u").test(text);
+};
+function readRounds(root, violations, m) {
+  const dir = path13.join(root, AUDIT_DIR);
+  let names;
+  try {
+    names = fs17.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const rounds = [];
+  for (const name of names) {
+    if (BAD_NUMBER_RE.test(name)) {
+      violations.push(m({
+        en: `${AUDIT_DIR}/${name}: round numbers start at 1 and have no leading zero. Rename it.`,
+        ko: `${AUDIT_DIR}/${name}: \uD68C\uCC28 \uBC88\uD638\uB294 1 \uBD80\uD130\uC774\uACE0 \uC55E\uC790\uB9AC\uC5D0 0 \uC744 \uC4F0\uC9C0 \uC54A\uB294\uB2E4. \uC774\uB984\uC744 \uACE0\uCCD0\uB77C.`
+      }));
+    }
+    const hit = ROUND_FILE_RE.exec(name);
+    if (!hit) continue;
+    const n = Number(hit[1]);
+    const rel = `${AUDIT_DIR}/${name}`;
+    let text;
+    try {
+      text = fs17.readFileSync(path13.join(dir, name), "utf8");
+    } catch {
+      violations.push(m({ en: `Cannot read ${rel}.`, ko: `${rel} \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4.` }));
+      text = "";
+    }
+    const kindLine = /^Audit-Kind:[ \t]*(full|short)[ \t]*$/mu.exec(text);
+    const last = text.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? "";
+    const highLine = /^HIGH (\d+)$/u.exec(last);
+    let rows = null;
+    let applied = null;
+    try {
+      const table2 = fs17.readFileSync(path13.join(dir, `reconcile-r${n}.md`), "utf8");
+      rows = parseReconcile(table2);
+      applied = parseApplied(table2);
+    } catch {
+    }
+    rounds.push({
+      n,
+      rel,
+      text,
+      rows,
+      applied,
+      classification: kindLine ? parseClassification(text) : /* @__PURE__ */ new Map(),
+      conflicts: kindLine ? parseConflicts(text) : [],
+      rechecks: kindLine ? parseRechecks(text) : [],
+      kind: kindLine?.[1] === "short" ? "short" : "full",
+      labelled: kindLine !== null,
+      high: highLine ? Number(highLine[1]) : null,
+      findings: kindLine ? parseFindings(text) : null
+    });
+  }
+  return rounds.sort((a, b) => a.n - b.n);
+}
+function checkAgainstPrior(r, prior, out, m) {
+  for (const f2 of prior.findings ?? []) {
+    const row = prior.rows?.find((x) => x.id === f2.id);
+    if (!row) continue;
+    if (f2.severity === "HIGH" && row.decision === "test-transfer") {
+      const verdict = r.classification.get(f2.id);
+      if (!verdict) {
+        out.push(m({
+          en: `${r.rel}: HIGH ${f2.id} was moved to testing in the previous round, but \`## Classification check\` has no upheld or overturned row for it.`,
+          ko: `${r.rel}: \uC55E \uD68C\uCC28\uC5D0\uC11C \uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH ${f2.id} \uC758 upheld\xB7overturned \uD589\uC774 \`## Classification check\` \uC5D0 \uC5C6\uB2E4.`
+        }));
+      } else if (verdict === "overturned" && !r.findings?.some((x) => x.id === f2.id && x.severity === "HIGH")) {
+        out.push(m({
+          en: `${r.rel}: the auditor overturned the move of ${f2.id}, so it must be a HIGH row in this round's findings table.`,
+          ko: `${r.rel}: \uAC10\uC0AC\uC790\uAC00 ${f2.id} \uC758 \uC2DC\uD5D8 \uC804\uD658\uC744 \uB4A4\uC9D1\uC5C8\uC73C\uBBC0\uB85C \uC774 \uD68C\uCC28\uC758 \uC9C0\uC801 \uD45C\uC5D0 HIGH \uD589\uC73C\uB85C \uC788\uC5B4\uC57C \uD55C\uB2E4.`
+        }));
+      }
+    }
+    if (DOC_CHANGING.includes(row.decision)) {
+      const result = prior.applied?.get(f2.id);
+      const file = `${AUDIT_DIR}/reconcile-r${prior.n}.md`;
+      if (result === void 0) {
+        out.push(m({
+          en: `${file}: \`## Application check\` has no result for ${f2.id}. Compare each confirmed sentence with the revised text before the re-audit.`,
+          ko: `${file}: \`## Application check\` \uC5D0 ${f2.id} \uC758 \uACB0\uACFC\uAC00 \uC5C6\uB2E4. \uC7AC\uAC10\uC0AC \uC804\uC5D0 \uD655\uC815 \uBB38\uC7A5\uC744 \uAC1C\uC815\uBCF8\uACFC \uBB38\uC7A5\uBCC4\uB85C \uB300\uC870\uD558\uB77C.`
+        }));
+      } else if (result === "missing") {
+        out.push(m({
+          en: `${file}: the fix for ${f2.id} is marked missing. Apply it${f2.severity === "HIGH" ? "; this HIGH stays open until then" : ""}.`,
+          ko: `${file}: ${f2.id} \uC758 \uC218\uC815\uC774 \uBBF8\uBC18\uC601\uC774\uB2E4. \uBC18\uC601\uD558\uB77C${f2.severity === "HIGH" ? ". \uADF8\uB54C\uAE4C\uC9C0 \uC774 HIGH \uB294 \uB2EB\uD788\uC9C0 \uC54A\uB294\uB2E4" : ""}.`
+        }));
+      }
+    }
+  }
+}
+function checkLabelledRound(r, prior, out, m) {
+  if (r.high === null) {
+    out.push(m({ en: `${r.rel}: the last line must be \`HIGH N\`.`, ko: `${r.rel}: \uB05D \uC904\uC740 \`HIGH N\` \uC774\uC5B4\uC57C \uD55C\uB2E4.` }));
+  }
+  if (r.findings === null) {
+    out.push(m({ en: `${r.rel}: there is no \`## Findings\` section.`, ko: `${r.rel}: \`## Findings\` \uC808\uC774 \uC5C6\uB2E4.` }));
+  } else if (r.high !== null) {
+    const counted = r.findings.filter((f2) => f2.severity === "HIGH").length;
+    if (counted !== r.high) {
+      out.push(m({
+        en: `${r.rel}: the last line says HIGH ${r.high} but the findings table has ${counted} HIGH row(s). A HIGH leaves the count only by being fixed and re-audited.`,
+        ko: `${r.rel}: \uB05D \uC904\uC740 HIGH ${r.high} \uC778\uB370 \uC9C0\uC801 \uD45C\uC758 HIGH \uD589\uC740 ${counted}\uAC1C\uB2E4. HIGH \uB294 \uACE0\uCE58\uACE0 \uC7AC\uAC10\uC0AC\uD574\uC57C \uC22B\uC790\uC5D0\uC11C \uBE60\uC9C4\uB2E4.`
+      }));
+    }
+  }
+  if (prior?.findings) checkAgainstPrior(r, prior, out, m);
+  if (r.kind === "full") {
+    const lenses = /^Lenses:(.*)$/mu.exec(r.text)?.[1] ?? "";
+    if (!LENS_TOKENS.every((t) => t.test(lenses))) {
+      out.push(m({
+        en: `${r.rel}: a full audit needs a \`Lenses:\` line naming all four lenses (logical coherence, ambiguity, blockers, UX walkthrough).`,
+        ko: `${r.rel}: \uC804\uCCB4 \uAC10\uC0AC\uC5D0\uB294 \uB124 \uB80C\uC988\uB97C \uBAA8\uB450 \uC801\uC740 \`Lenses:\` \uC904\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4 (logical coherence, ambiguity, blockers, UX walkthrough).`
+      }));
+    }
+  } else {
+    if (!prior) {
+      out.push(m({ en: `${r.rel}: the first round must be a full audit.`, ko: `${r.rel}: \uCCAB \uD68C\uCC28\uB294 \uC804\uCCB4 \uAC10\uC0AC\uC5EC\uC57C \uD55C\uB2E4.` }));
+    }
+    if (!/^##\s+New risks/imu.test(r.text)) {
+      out.push(m({ en: `${r.rel}: a short re-audit needs a \`## New risks of this revision\` section.`, ko: `${r.rel}: \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uC5D0\uB294 \`## New risks of this revision\` \uC808\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4.` }));
+    }
+    const scope = /^structural change:[ \t]*(yes|no)[ \t]*$/imu.exec(r.text)?.[1]?.toLowerCase();
+    if (scope === void 0) {
+      out.push(m({ en: `${r.rel}: a short re-audit needs a \`structural change: yes|no\` line from the auditor.`, ko: `${r.rel}: \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uC5D0\uB294 \uAC10\uC0AC\uC790\uAC00 \uC801\uC740 \`structural change: yes|no\` \uC904\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4.` }));
+    } else if (scope === "yes") {
+      out.push(m({ en: `${r.rel}: the auditor found a structural change, so this revision needs all four lenses.`, ko: `${r.rel}: \uAC10\uC0AC\uC790\uAC00 \uAD6C\uC870 \uBCC0\uACBD\uC744 \uD655\uC778\uD588\uC73C\uBBC0\uB85C \uC774 \uAC1C\uC815\uC740 \uB124 \uB80C\uC988 \uC804\uCCB4 \uAC10\uC0AC\uAC00 \uD544\uC694\uD558\uB2E4.` }));
+    }
+  }
+  const owed = (prior?.findings ?? []).filter((f2) => f2.severity === "HIGH").filter((f2) => prior?.rows?.find((x) => x.id === f2.id)?.decision !== "owner-accepted").filter((f2) => !hasId(r.text, f2.id));
+  if (owed.length > 0) {
+    out.push(m({
+      en: `${r.rel}: this round does not mention HIGH finding(s) of the previous round: ${owed.map((f2) => f2.id).join(", ")}.`,
+      ko: `${r.rel}: \uC774 \uD68C\uCC28\uAC00 \uC55E \uD68C\uCC28\uC758 HIGH \uB97C \uB2E4\uB8E8\uC9C0 \uC54A\uC558\uB2E4: ${owed.map((f2) => f2.id).join(", ")}.`
+    }));
+  }
+}
+function checkReconcile(r, out, m) {
+  const findings = r.findings ?? [];
+  const file = `${AUDIT_DIR}/reconcile-r${r.n}.md`;
+  for (const id of r.conflicts) {
+    const row = r.rows?.find((x) => x.id === id);
+    if (row?.decision !== "owner-decided" || !row.reason) {
+      out.push(m({
+        en: `${r.rel}: reversal conflict ${id} needs the owner's choice. Stop fixing, show both sides, and record it in ${file} as \`owner-decided\` with the reason.`,
+        ko: `${r.rel}: \uBC88\uBCF5 \uCDA9\uB3CC ${id} \uC740 \uC624\uB108\uAC00 \uACE8\uB77C\uC57C \uD55C\uB2E4. \uC218\uC815\uC744 \uBA48\uCD94\uACE0 \uC591\uCABD \uADFC\uAC70\uB97C \uBCF4\uC778 \uB4A4 ${file} \uC5D0 \uC0AC\uC720\uC640 \uD568\uAED8 \`owner-decided\` \uB85C \uC801\uC5B4\uB77C.`
+      }));
+    }
+  }
+  if (findings.length === 0) return;
+  if (r.rows === null) {
+    out.push(m({ en: `${file} is missing: it needs one row per finding of ${r.rel}.`, ko: `${file} \uC774 \uC5C6\uB2E4: ${r.rel} \uC758 \uC9C0\uC801\uB9C8\uB2E4 \uD55C \uD589\uC774 \uD544\uC694\uD558\uB2E4.` }));
+    return;
+  }
+  for (const f2 of findings) {
+    const row = r.rows.find((x) => x.id === f2.id);
+    if (!row) {
+      out.push(m({ en: `${file}: no row for finding ${f2.id}.`, ko: `${file}: \uC9C0\uC801 ${f2.id} \uC758 \uD589\uC774 \uC5C6\uB2E4.` }));
+      continue;
+    }
+    if (row.severity !== f2.severity) {
+      out.push(m({
+        en: `${file}: ${f2.id} is ${f2.severity} in the audit but ${row.severity} here. Lowering a severity is not a fix.`,
+        ko: `${file}: ${f2.id} \uB294 \uAC10\uC0AC\uC5D0\uC11C ${f2.severity} \uC778\uB370 \uC5EC\uAE30\uC11C\uB294 ${row.severity} \uB2E4. \uC2EC\uAC01\uB3C4\uB97C \uB0AE\uCD94\uB294 \uAC83\uC740 \uC218\uC815\uC774 \uC544\uB2C8\uB2E4.`
+      }));
+    }
+    if (!DECISIONS.includes(row.decision)) {
+      out.push(m({
+        en: `${file}: ${f2.id} has an unknown decision "${row.decision}" (one of ${DECISIONS.join(", ")}).`,
+        ko: `${file}: ${f2.id} \uC758 \uACB0\uC815 "${row.decision}" \uC744 \uC54C \uC218 \uC5C6\uB2E4 (${DECISIONS.join(", ")} \uC911 \uD558\uB098).`
+      }));
+    } else if (NEEDS_REASON.includes(row.decision) && !row.reason) {
+      out.push(m({ en: `${file}: ${f2.id} is "${row.decision}" without a reason.`, ko: `${file}: ${f2.id} \uAC00 \uC0AC\uC720 \uC5C6\uC774 "${row.decision}" \uC774\uB2E4.` }));
+    }
+    if (NEEDS_LOCATION.includes(row.decision) && /^(?:[-—–]*)$/u.test(row.appliedAt)) {
+      out.push(m({
+        en: `${file}: ${f2.id} is "${row.decision}" without a target in the Applied at column (F-x acceptance criterion, P7 scenario or P9 check).`,
+        ko: `${file}: ${f2.id} \uAC00 "${row.decision}" \uC778\uB370 \uBC18\uC601 \uC704\uCE58 \uCE78\uC5D0 \uC62E\uAE34 \uACF3\uC774 \uC5C6\uB2E4 (F-x \uC218\uC6A9 \uAE30\uC900, P7 \uC2DC\uB098\uB9AC\uC624, P9 \uAC80\uC99D \uD56D\uBAA9).`
+      }));
+    }
+    if (f2.severity === "HIGH" && row.decision === "carried") {
+      out.push(m({
+        en: `${file}: HIGH ${f2.id} cannot be carried over. Only MED and LOW go to the carry-over ledger; only an auditor can change a severity.`,
+        ko: `${file}: HIGH ${f2.id} \uB294 \uC774\uC6D4\uD560 \uC218 \uC5C6\uB2E4. \uC774\uC6D4 \uB300\uC7A5\uC5D0\uB294 MED\xB7LOW \uB9CC \uB4E4\uC5B4\uAC00\uACE0, \uC2EC\uAC01\uB3C4\uB294 \uAC10\uC0AC\uC790\uB9CC \uBC14\uAFBC\uB2E4.`
+      }));
+    }
+  }
+}
+var roundNumbers = (root) => {
+  try {
+    return fs17.readdirSync(path13.join(root, AUDIT_DIR)).flatMap((f2) => {
+      const hit = ROUND_FILE_RE.exec(f2);
+      return hit ? [Number(hit[1])] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+function ensureAuditFormat(root) {
+  const state = readState(root);
+  if (state.auditFormat) return;
+  const auditFormat = { version: 1, legacyThrough: Math.max(0, ...roundNumbers(root)) };
+  appendEvent(root, "audit-format-pinned", auditFormat);
+  writeState(root, { ...state, auditFormat });
+}
+function legacyThrough(root) {
+  let pinned;
+  try {
+    pinned = readState(root).auditFormat?.legacyThrough;
+  } catch {
+  }
+  return pinned ?? Math.max(0, ...roundNumbers(root));
+}
+function effectiveCap(root) {
+  const configured = loadConfig(root).audit_full_round_cap;
+  const fallback = DEFAULT_CONFIG.audit_full_round_cap;
+  if (configured === fallback) return { cap: fallback, untrusted: null };
+  try {
+    const pin = pinnedPolicy(root);
+    if (pin !== null && pin.hash === computePolicyHash(root).hash) return { cap: configured, untrusted: null };
+  } catch {
+  }
+  return { cap: fallback, untrusted: configured };
+}
+function auditStatus(root, submittedPaths) {
+  const m = (x) => tr(root, x);
+  const violations = [];
+  const { cap, untrusted } = effectiveCap(root);
+  const rounds = readRounds(root, violations, m);
+  const legacyEnd = legacyThrough(root);
+  let fullRounds = 0;
+  let seenLabelled = false;
+  const acceptedHighs = [];
+  const ownerDecisions = [];
+  const transferredHighs = [];
+  const carryItems = [];
+  rounds.forEach((r, i) => {
+    if (r.kind === "full") fullRounds++;
+    if (!r.labelled) {
+      if (seenLabelled || r.n > legacyEnd) {
+        violations.push(m({
+          en: `${r.rel}: there is no \`Audit-Kind:\` line. Only rounds from before this project adopted the format (r${legacyEnd} and earlier) may omit it.`,
+          ko: `${r.rel}: \`Audit-Kind:\` \uC904\uC774 \uC5C6\uB2E4. \uC774 \uD504\uB85C\uC81D\uD2B8\uAC00 \uD615\uC2DD\uC744 \uC801\uC6A9\uD558\uAE30 \uC804\uC758 \uD68C\uCC28(r${legacyEnd} \uAE4C\uC9C0)\uB9CC \uC0DD\uB7B5\uD560 \uC218 \uC788\uB2E4.`
+        }));
+      }
+      return;
+    }
+    seenLabelled = true;
+    if (r.kind === "full" && fullRounds > cap) {
+      violations.push(m({
+        en: `${r.rel} is full audit number ${fullRounds} but the cap is ${cap}. Another full audit is the owner's decision: raise \`audit_full_round_cap\` in .harness/config.yaml.`,
+        ko: `${r.rel} \uC740 ${fullRounds}\uBC88\uC9F8 \uC804\uCCB4 \uAC10\uC0AC\uC778\uB370 \uC0C1\uD55C\uC740 ${cap}\uD68C\uB2E4. \uC804\uCCB4 \uAC10\uC0AC \uCD94\uAC00\uB294 \uC624\uB108\uC758 \uACB0\uC815\uC774\uB2E4: .harness/config.yaml \uC758 \`audit_full_round_cap\` \uC744 \uC624\uB108\uAC00 \uC62C\uB9B0\uB2E4.`
+      }));
+    }
+    checkLabelledRound(r, rounds[i - 1], violations, m);
+    checkReconcile(r, violations, m);
+    for (const row of r.rows ?? []) {
+      if (row.decision === "owner-decided") ownerDecisions.push({ round: r.n, id: row.id, reason: row.reason });
+    }
+    for (const f2 of r.findings ?? []) {
+      const row = r.rows?.find((x) => x.id === f2.id);
+      if (!row) continue;
+      if (f2.severity === "HIGH" && row.decision === "owner-accepted") acceptedHighs.push({ round: r.n, id: f2.id, reason: row.reason });
+      if (row.decision !== "carried" && row.decision !== "test-transfer") continue;
+      const verdict = rounds[i + 1]?.classification.get(f2.id);
+      if (verdict === "overturned" || f2.severity === "HIGH" && verdict !== "upheld") continue;
+      if (f2.severity === "HIGH") transferredHighs.push({ round: r.n, id: f2.id, reason: row.reason });
+      carryItems.push({
+        token: `AUD-r${r.n}-${f2.id}`,
+        round: r.n,
+        id: f2.id,
+        severity: f2.severity,
+        decision: row.decision,
+        target: row.appliedAt,
+        reason: row.reason,
+        closure: f2.severity === "HIGH" ? "conformance" : "wave"
+      });
+    }
+  });
+  if (untrusted !== null && fullRounds > cap) {
+    violations.push(m({
+      en: `audit_full_round_cap is ${untrusted} but the policy files differ from the pinned baseline, so the default ${cap} applies. The owner re-pins with \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\`.`,
+      ko: `audit_full_round_cap \uC774 ${untrusted} \uC778\uB370 \uC815\uCC45 \uD30C\uC77C\uC774 \uACE0\uC815\uB41C \uAE30\uC900\uC120\uACFC \uB2EC\uB77C \uAE30\uBCF8\uAC12 ${cap} \uC744 \uC4F4\uB2E4. \uC624\uB108\uAC00 \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\` \uB85C \uC7AC\uACE0\uC815\uD574\uC57C \uD55C\uB2E4.`
+    }));
+  }
+  const capReached = fullRounds >= cap;
+  const openHighs = [];
+  const pendingTransfers = [];
+  let next = "ready";
+  const newest = rounds[rounds.length - 1];
+  if (!newest) {
+    violations.push(m({
+      en: `No audit round in ${AUDIT_DIR}/: P6 needs at least one full audit (audit-r1.md).`,
+      ko: `${AUDIT_DIR}/ \uC5D0 \uAC10\uC0AC \uD68C\uCC28\uAC00 \uC5C6\uB2E4: P6 \uC5D0\uB294 \uC804\uCCB4 \uAC10\uC0AC\uAC00 \uD55C \uD68C \uC774\uC0C1 \uD544\uC694\uD558\uB2E4 (audit-r1.md).`
+    }));
+    next = "run-full-audit";
+  } else if (newest.high === null && !newest.labelled) {
+    violations.push(m({
+      en: `${newest.rel} does not end with \`HIGH N\`, so its result cannot be read. Run a short re-audit in the current format.`,
+      ko: `${newest.rel} \uC774 \`HIGH N\` \uC73C\uB85C \uB05D\uB098\uC9C0 \uC54A\uC544 \uACB0\uACFC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4. \uD604\uC7AC \uD615\uC2DD\uC73C\uB85C \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uB97C \uB3CC\uB824\uB77C.`
+    }));
+    next = "short-reaudit";
+  } else {
+    if (newest.labelled) {
+      const rows = newest.rows ?? [];
+      for (const f2 of newest.findings ?? []) {
+        if (f2.severity !== "HIGH") continue;
+        const decision = rows.find((x) => x.id === f2.id)?.decision;
+        if (decision === "test-transfer") pendingTransfers.push(f2.id);
+        else if (decision !== "owner-accepted") openHighs.push(f2.id);
+        if (!hasCheckableEvidence(f2.evidence)) {
+          violations.push(m({
+            en: `${newest.rel}: HIGH ${f2.id} has no checkable evidence (path:line, repro:, or a UX node with a scenario step). Ask the auditor for evidence or a new severity.`,
+            ko: `${newest.rel}: HIGH ${f2.id} \uC5D0 \uD655\uC778\uD560 \uC218 \uC788\uB294 \uADFC\uAC70\uAC00 \uC5C6\uB2E4 (\uACBD\uB85C:\uC904, \uC7AC\uD604:, UX \uB178\uB4DC\uC640 \uC2DC\uB098\uB9AC\uC624 \uB2E8\uACC4). \uAC10\uC0AC\uC790\uC5D0\uAC8C \uADFC\uAC70\uB098 \uC0C8 \uD310\uC815\uC744 \uBC1B\uC544\uB77C.`
+          }));
+        }
+      }
+      for (const line of newest.rechecks) {
+        const ref = /\br(\d+)\/[`(.]*([^\s:|,`)\]]+)/u.exec(line);
+        const id = ref?.[2].replace(/\.+$/u, "");
+        const row = ref ? rounds.find((x) => x.n === Number(ref[1]))?.rows?.find((x) => x.id === id) : void 0;
+        if (row?.decision !== "owner-decided" && row?.decision !== "owner-accepted") {
+          openHighs.push(`re-check without an owner decision (r<N>/<ID>): ${line.slice(0, 80)}`);
+        }
+      }
+    } else if ((newest.high ?? 0) > 0) {
+      const accepted = (newest.rows ?? []).filter((x) => x.severity === "HIGH" && x.decision === "owner-accepted" && x.reason);
+      if (accepted.length >= (newest.high ?? 0)) {
+        acceptedHighs.push(...accepted.map((x) => ({ round: newest.n, id: x.id, reason: x.reason })));
+      } else openHighs.push(`${newest.rel}: HIGH ${newest.high}`);
+    }
+    const changed = (newest.rows ?? []).some((x) => DOC_CHANGING.includes(x.decision) || /\[r\d+\]/u.test(x.appliedAt));
+    if (openHighs.length > 0) {
+      violations.push(m({
+        en: `${newest.rel} has open HIGH finding(s): ${openHighs.join(", ")}.`,
+        ko: `${newest.rel} \uC5D0 \uC5F4\uB9B0 HIGH \uAC00 \uC788\uB2E4: ${openHighs.join(", ")}.`
+      }));
+      next = capReached ? "owner-decision" : "fix-and-reaudit";
+    } else if (pendingTransfers.length > 0) {
+      violations.push(m({
+        en: `${pendingTransfers.join(", ")} moved to testing but still count as HIGH until the next auditor upholds the move in a short round (audit-r${newest.n + 1}.md).`,
+        ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 ${pendingTransfers.join(", ")} \uB294 \uB2E4\uC74C \uAC10\uC0AC\uC790\uAC00 \uC9E7\uC740 \uC7AC\uAC10\uC0AC(audit-r${newest.n + 1}.md)\uC5D0\uC11C upheld \uB85C \uD655\uC778\uD560 \uB54C\uAE4C\uC9C0 HIGH \uB85C \uB0A8\uB294\uB2E4.`
+      }));
+      next = "short-reaudit";
+    } else if (changed) {
+      violations.push(m({
+        en: `reconcile-r${newest.n}.md records document changes after ${newest.rel}. Re-audit the changed paragraphs in a short round (audit-r${newest.n + 1}.md).`,
+        ko: `reconcile-r${newest.n}.md \uC5D0 ${newest.rel} \uB4A4\uC758 \uBB38\uC11C \uC218\uC815\uC774 \uC801\uD600 \uC788\uB2E4. \uACE0\uCE5C \uBB38\uB2E8\uC744 \uC9E7\uC740 \uC7AC\uAC10\uC0AC(audit-r${newest.n + 1}.md)\uB85C \uD655\uC778\uD558\uB77C.`
+      }));
+      next = "short-reaudit";
+    }
+  }
+  if (newest && submittedPaths) {
+    const have = new Set(submittedPaths.map((p) => path13.normalize(p).split(path13.sep).join("/")));
+    const needed = [newest.rel, ...rounds.filter((r) => r.rows !== null).map((r) => `${AUDIT_DIR}/reconcile-r${r.n}.md`)];
+    const missing = needed.filter((p) => !have.has(p));
+    if (missing.length > 0) {
+      violations.push(m({
+        en: `The P6 submission must include the newest round and every reconciliation table. Missing: ${missing.join(", ")}.`,
+        ko: `P6 \uC81C\uCD9C\uC5D0\uB294 \uCD5C\uC2E0 \uD68C\uCC28\uC640 \uBAA8\uB4E0 \uCC98\uB9AC\uD45C\uAC00 \uB4E4\uC5B4\uAC00\uC57C \uD55C\uB2E4. \uBE60\uC9C4 \uAC83: ${missing.join(", ")}.`
+      }));
+    }
+  }
+  if (next === "ready" && violations.length > 0) next = "fix-format";
+  return {
+    rounds: rounds.map(({ n, rel, kind, labelled, high }) => ({ n, rel, kind, labelled, high })),
+    fullRounds,
+    cap,
+    capReached,
+    openHighs,
+    acceptedHighs,
+    ownerDecisions,
+    transferredHighs,
+    carryItems,
+    violations,
+    next
+  };
+}
+function conformanceHolds(root) {
+  const verdicts = [];
+  try {
+    const dir = path13.join(root, AUDIT_DIR);
+    const files = fs17.readdirSync(dir).flatMap((f2) => {
+      const hit = /^conformance-r([1-9]\d*)\.md$/u.exec(f2);
+      return hit ? [{ f: f2, n: Number(hit[1]) }] : [];
+    }).sort((x, y) => x.n - y.n);
+    for (const { f: f2 } of files) {
+      for (const line of fs17.readFileSync(path13.join(dir, f2), "utf8").split("\n")) {
+        const cells = tableCells(line);
+        const results = (cells ?? []).map((c) => plainCell(c).toLowerCase());
+        if (cells && (results.includes("holds") || results.includes("breaks"))) {
+          verdicts.push({ cells, holds: !results.includes("breaks") });
+        }
+      }
+    }
+  } catch {
+    return () => false;
+  }
+  return (token) => {
+    const latest = verdicts.filter((v) => v.cells.some((c) => hasId(c, token))).pop();
+    return latest?.holds ?? false;
+  };
+}
+function carryItemGaps(root) {
+  const items = auditStatus(root).carryItems;
+  if (items.length === 0) return [];
+  let criteria = [];
+  try {
+    criteria = listWaves(root).filter((w) => w.status === "done").flatMap((w) => w.acceptance);
+  } catch {
+  }
+  const holds = conformanceHolds(root);
+  return items.filter((c) => c.closure === "conformance" ? !holds(c.token) : !criteria.some((a) => hasId(a, c.token)));
+}
+function auditClosedItems(root) {
+  const rounds = readRounds(root, [], (x) => tr(root, x));
+  const newest = rounds[rounds.length - 1];
+  const out = { closed: [], moved: [], applicationCheck: [] };
+  for (const r of rounds) {
+    for (const row of r.rows ?? []) {
+      if (r === newest && NEEDS_LOCATION.includes(row.decision)) {
+        out.moved.push({ round: r.n, id: row.id, severity: row.severity, decision: row.decision, reason: row.reason, appliedAt: row.appliedAt });
+      } else {
+        out.closed.push({ round: r.n, id: row.id, decision: row.decision, evidence: row.reason, appliedAt: row.appliedAt });
+      }
+    }
+  }
+  if (newest) {
+    try {
+      const table2 = fs17.readFileSync(path13.join(root, AUDIT_DIR, `reconcile-r${newest.n}.md`), "utf8");
+      out.applicationCheck = (sectionLines(table2, APPLICATION_CHECK_RE) ?? []).filter((l) => l.trim().startsWith("|"));
+    } catch {
+    }
+  }
+  return out;
+}
+
 // core/src/ship.ts
-var fs20 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
+var fs21 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
 var YAML7 = __toESM(require_dist());
 
 // core/src/gate.ts
 var crypto5 = __toESM(require("crypto"));
-var fs18 = __toESM(require("fs"));
-var path14 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path15 = __toESM(require("path"));
 
 // core/src/registry.ts
-var fs17 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
+var fs18 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
 var crypto4 = __toESM(require("crypto"));
 var YAML6 = __toESM(require_dist());
 function toDocNode(v) {
@@ -12561,10 +13121,10 @@ function toDocNode(v) {
   return node;
 }
 function readEntries(root) {
-  if (!fs17.existsSync(registryPath(root))) return { entries: [] };
+  if (!fs18.existsSync(registryPath(root))) return { entries: [] };
   let doc;
   try {
-    doc = YAML6.parse(fs17.readFileSync(registryPath(root), "utf8"));
+    doc = YAML6.parse(fs18.readFileSync(registryPath(root), "utf8"));
   } catch (e) {
     return { entries: [], parseError: e.message };
   }
@@ -12574,8 +13134,8 @@ function readEntries(root) {
 function writeEntries(root, entries) {
   const target = registryPath(root);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs17.writeFileSync(tmp, YAML6.stringify({ docs: entries }));
-  fs17.renameSync(tmp, target);
+  fs18.writeFileSync(tmp, YAML6.stringify({ docs: entries }));
+  fs18.renameSync(tmp, target);
 }
 function inspectRegistry(root) {
   const { entries, parseError } = readEntries(root);
@@ -12619,10 +13179,10 @@ function upsertDoc(root, node) {
   writeEntries(root, entries);
 }
 function computeDocHash(root, doc) {
-  const abs = path13.join(root, doc.path);
+  const abs = path14.join(root, doc.path);
   let buf;
   try {
-    buf = fs17.readFileSync(abs);
+    buf = fs18.readFileSync(abs);
   } catch {
     throw new Error(
       tr(root, {
@@ -12775,9 +13335,9 @@ function docsForPhase(root, phase) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs18.realpathSync(path14.resolve(root, rel));
-    const r = path14.relative(fs18.realpathSync(root), real);
-    return r && !r.startsWith(`..${path14.sep}`) && r !== ".." && !path14.isAbsolute(r) ? r : rel;
+    const real = fs19.realpathSync(path15.resolve(root, rel));
+    const r = path15.relative(fs19.realpathSync(root), real);
+    return r && !r.startsWith(`..${path15.sep}`) && r !== ".." && !path15.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
   }
@@ -12799,7 +13359,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs18.readFileSync(path14.resolve(root, rel));
+    return fs19.readFileSync(path15.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -12948,7 +13508,7 @@ function assertNewMaterial(root, phase, paths, gates) {
     );
   }
 }
-var normRel = (p) => path14.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel = (p) => path15.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
   const want = new Set(paths.map(normRel));
   const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
@@ -12991,7 +13551,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs18.readFileSync(path14.resolve(root, rel)).toString("utf8");
+      text = fs19.readFileSync(path15.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -13040,6 +13600,7 @@ function submitGate(root, phase, opts) {
   assertSubstantive(root, readArtifacts(root, paths));
   assertPhaseFit(root, phase, paths);
   assertNoShipBlockers(root, phase);
+  assertAuditRounds(root, phase, paths);
   const artifactHash = computeArtifactHash(root, paths);
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
@@ -13071,6 +13632,18 @@ function assertNoShipBlockers(root, phase) {
   throw new Error(tr(root, {
     en: `Cannot submit P10 while ${blocking.length} blocker or high defect(s) are open or only fixed: ${list} \u2014 fix, re-measure with a fresh auditor, then \`harness ship defect update <id> --status verified\`; or record the owner's decision with \`--status deferred --defer-reason "<why>"\``,
     ko: `\uCC28\uB2E8\xB7\uB192\uC74C \uACB0\uD568 ${blocking.length}\uAC74\uC774 open \uC774\uAC70\uB098 fixed \uC5D0 \uBA38\uBB38 \uCC44\uB85C P10 \uC744 \uC81C\uCD9C\uD560 \uC218 \uC5C6\uB2E4: ${list} \u2014 \uC218\uC815 \u2192 \uC0C8 \uAC10\uC0AC\uC790\uB85C \uC7AC\uCE21\uC815 \u2192 \`harness ship defect update <id> --status verified\`, \uB610\uB294 \uC624\uB108 \uACB0\uC815\uC744 \`--status deferred --defer-reason "<\uC0AC\uC720>"\` \uB85C \uB0A8\uACA8\uB77C`
+  }));
+}
+function assertAuditRounds(root, phase, paths) {
+  if (phase !== "P6") return;
+  ensureAuditFormat(root);
+  const { violations } = auditStatus(root, paths);
+  if (violations.length === 0) return;
+  throw new Error(tr(root, {
+    en: `Cannot pass the P6 gate on the current audit rounds (see \`harness audit status\`):
+- ${violations.join("\n- ")}`,
+    ko: `\uD604\uC7AC \uAC10\uC0AC \uD68C\uCC28\uB85C\uB294 P6 \uAC8C\uC774\uD2B8\uB97C \uD1B5\uACFC\uD560 \uC218 \uC5C6\uB2E4 (\`harness audit status\` \uCC38\uACE0):
+- ${violations.join("\n- ")}`
   }));
 }
 function measuredOnlyViolation(root, phase, evidence) {
@@ -13111,6 +13684,8 @@ function approveGate(root, phase, via) {
       })
     );
   }
+  assertAuditRounds(root, phase, paths);
+  const audit = phase === "P6" ? auditStatus(root) : null;
   const ev = appendEvent(root, "gate-approved", {
     phase,
     artifactHash,
@@ -13118,14 +13693,16 @@ function approveGate(root, phase, via) {
     paths,
     policyHash: computePolicyHash(root).hash,
     // 어느 경로로 승인됐는지를 남긴다. 호출자가 사람임을 증명하는 값은 아니다(approve.ts).
-    ...via ? { via } : {}
+    ...via ? { via } : {},
+    ...audit?.acceptedHighs.length ? { auditAcceptedHighs: audit.acceptedHighs } : {},
+    ...audit?.ownerDecisions.length ? { auditOwnerDecisions: audit.ownerDecisions } : {}
   });
   const record = { ...current, status: "approved", approvedAt: ev.ts };
   writeState(root, { ...state, gates: { ...state.gates, [phase]: record } });
   return record;
 }
 function feedbackPath(root, phase) {
-  return path14.join(packetsDir(root), `${phase}.feedback.md`);
+  return path15.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function recordGateFeedback(root, phase, raw) {
   const stripBullet = (l) => l.replace(/^\s*[-*+]\s+/, "");
@@ -13139,8 +13716,8 @@ function recordGateFeedback(root, phase, raw) {
     );
   }
   const ev = appendEvent(root, "gate-feedback", { phase, count: lines.length });
-  fs18.mkdirSync(packetsDir(root), { recursive: true });
-  fs18.appendFileSync(
+  fs19.mkdirSync(packetsDir(root), { recursive: true });
+  fs19.appendFileSync(
     feedbackPath(root, phase),
     `
 ## ${ev.ts} \u2014 ${tr(root, { en: `${lines.length} comment(s)`, ko: `${lines.length}\uAC74` })}
@@ -13152,7 +13729,7 @@ ${lines.map((l) => `- ${l}`).join("\n")}
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs18.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs19.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -13248,8 +13825,8 @@ function setPhaseViaGate(root, phase) {
 }
 
 // core/src/report.ts
-var fs19 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
+var fs20 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
 var trFor3 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -13294,10 +13871,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs19.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs19.readdirSync(wavesDir(root));
+    files = fs20.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -13313,14 +13890,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs19.readdirSync(dir);
+    files = fs20.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs19.statSync(path15.join(dir, f2));
+      const st = fs20.statSync(path16.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -13458,6 +14035,12 @@ function renderRtm(root) {
     );
   }
   out.push("", `## ${t(GAPS_HEADING)}`, "", ...gapLines(rows, t));
+  const carry = auditStatus(root).carryItems;
+  if (carry.length > 0) {
+    const open = new Set(carryItemGaps(root).map((g) => g.token));
+    out.push("", `## ${t({ en: "Design audit items carried to P7~P9", ko: "P7~P9 \uB85C \uB118\uAE34 \uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9" })}`, "");
+    out.push(...carry.map((c) => `- \`${cell2(c.token)}\` ${c.severity} ${c.decision} \u2192 ${cell2(c.target)}: ${open.has(c.token) ? `**${c.closure === "conformance" ? t({ en: "not marked holds in the newest conformance audit", ko: "\uCD5C\uC2E0 \uC801\uD569\uC131 \uAC10\uC0AC\uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4" }) : t({ en: "no completed wave carries this token in its acceptance criteria", ko: "\uC774 \uD45C\uC2DD\uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4" })}**` : c.closure === "conformance" ? t({ en: "holds in the conformance audit", ko: "\uC801\uD569\uC131 \uAC10\uC0AC\uC5D0\uC11C holds" }) : t({ en: "covered by a completed wave", ko: "\uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uB2E4\uB8F8" })}`));
+  }
   out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
@@ -13638,6 +14221,49 @@ function buildReviewPacket(root, phase) {
       }));
     }
   }
+  if (phase === "P6") {
+    const audit = auditStatus(root, recordedPaths(root, phase) ?? void 0);
+    out.push(`## ${t({ en: "Design audit rounds", ko: "\uC124\uACC4 \uAC10\uC0AC \uD68C\uCC28" })}`, "");
+    out.push(t({
+      en: `Full audits: ${audit.fullRounds} of ${audit.cap} allowed.`,
+      ko: `\uC804\uCCB4 \uAC10\uC0AC: ${audit.fullRounds}\uD68C (\uC0C1\uD55C ${audit.cap}\uD68C).`
+    }), "");
+    out.push(
+      `| ${t({ en: "Round", ko: "\uD68C\uCC28" })} | ${t({ en: "Kind", ko: "\uC885\uB958" })} | HIGH |`,
+      "|---|---|---:|",
+      ...audit.rounds.map((r) => `| r${r.n} | ${r.kind}${r.labelled ? "" : t({ en: " (old format)", ko: " (\uC608\uC804 \uD615\uC2DD)" })} | ${r.high ?? "?"} |`),
+      ""
+    );
+    const listed = (h) => `- r${h.round} ${sanitizeUntrusted(h.id, 80)}: ${sanitizeUntrusted(h.reason, 300)}`;
+    if (audit.acceptedHighs.length > 0) {
+      out.push(`### ${t({ en: "HIGH findings whose risk this approval accepts", ko: "\uC774 \uC2B9\uC778\uC73C\uB85C \uC704\uD5D8\uC744 \uC218\uC6A9\uD558\uB294 HIGH" })}`, "");
+      out.push(...audit.acceptedHighs.map(listed), "");
+    }
+    if (audit.ownerDecisions.length > 0) {
+      out.push(`### ${t({ en: "Owner decisions this approval confirms", ko: "\uC774 \uC2B9\uC778\uC73C\uB85C \uD655\uC815\uD558\uB294 \uC624\uB108 \uACB0\uC815" })}`, "");
+      out.push(...audit.ownerDecisions.map(listed), "");
+    }
+    if (audit.transferredHighs.length > 0) {
+      out.push(`### ${t({ en: "HIGH findings moved to testing, upheld by the next auditor", ko: "\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH (\uB2E4\uC74C \uAC10\uC0AC\uC790\uAC00 \uD655\uC778)" })}`, "");
+      out.push(...audit.transferredHighs.map(listed), "");
+    }
+    if (audit.carryItems.length > 0) {
+      out.push(`### ${t({ en: "Carried to P7~P9", ko: "P7~P9 \uB85C \uB118\uAE30\uB294 \uD56D\uBAA9" })}: ${audit.carryItems.length}`, "");
+      out.push(...audit.carryItems.map((c) => `- \`${sanitizeUntrusted(c.token, 80)}\` ${c.decision} \u2192 ${sanitizeUntrusted(c.target, 200)}`), "");
+    }
+    blockers.push(...audit.violations.map((v) => sanitizeUntrusted(v)));
+  }
+  if (phase === "P9" || phase === "P10") {
+    for (const g of carryItemGaps(root)) {
+      blockers.push(g.closure === "conformance" ? t({
+        en: `design audit item \`${g.token}\` (HIGH moved to testing) is not marked holds in the newest conformance-rN.md`,
+        ko: `\uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 \`${g.token}\` (\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH) \uC774 \uCD5C\uC2E0 conformance-rN.md \uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4`
+      }) : t({
+        en: `design audit item \`${g.token}\` (${g.decision}) has no completed wave carrying it in its acceptance criteria`,
+        ko: `\uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 \`${g.token}\` (${g.decision}) \uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4`
+      }));
+    }
+  }
   out.push(`## ${t(BLOCKERS_HEADING)}`, "");
   out.push(...blockers.length === 0 ? [t({
     en: "No blockers \u2014 approval review can proceed on the artifacts above.",
@@ -13717,7 +14343,7 @@ function renderDenials(root, limit = 20) {
   const t = trFor3(langFor(root));
   let raw;
   try {
-    raw = fs19.readFileSync(denialsPath(root), "utf8");
+    raw = fs20.readFileSync(denialsPath(root), "utf8");
   } catch {
     return t({
       en: "No denials recorded yet \u2014 nothing has been blocked in this project since the harness was installed. This file only appears the first time a tool call is denied.",
@@ -13746,10 +14372,10 @@ function renderDenials(root, limit = 20) {
 
 // core/src/ship.ts
 var trFor4 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path16.join(harnessDir(root), "ship");
-var defectsPath = (root) => path16.join(shipDir(root), "defects.yaml");
-var readinessPath = (root) => path16.join(shipDir(root), "readiness.md");
-var deploymentsPath = (root) => path16.join(shipDir(root), "deployments.yaml");
+var shipDir = (root) => path17.join(harnessDir(root), "ship");
+var defectsPath = (root) => path17.join(shipDir(root), "defects.yaml");
+var readinessPath = (root) => path17.join(shipDir(root), "readiness.md");
+var deploymentsPath = (root) => path17.join(shipDir(root), "deployments.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 var SHIP_BLOCKING_SEVERITIES = ["blocker", "high"];
@@ -13759,16 +14385,16 @@ function shipBlockingDefects(root) {
   );
 }
 function writeAtomic(target, content) {
-  fs20.mkdirSync(path16.dirname(target), { recursive: true });
+  fs21.mkdirSync(path17.dirname(target), { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
-  fs20.writeFileSync(tmp, content);
-  fs20.renameSync(tmp, target);
+  fs21.writeFileSync(tmp, content);
+  fs21.renameSync(tmp, target);
 }
 function readRecords(root, file, key, to) {
-  if (!fs20.existsSync(file)) return [];
+  if (!fs21.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML7.parse(fs20.readFileSync(file, "utf8"));
+    doc = YAML7.parse(fs21.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -14050,16 +14676,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs20.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs21.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs20.readdirSync(wavesDir(root));
+    files = fs21.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs20.readFileSync(path16.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs21.readFileSync(path17.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -14096,6 +14722,15 @@ function shipVerdict(root) {
         }));
       }
     }
+  }
+  for (const g of carryItemGaps(root).filter((x) => x.decision === "test-transfer")) {
+    reasons.push(g.closure === "conformance" ? t({
+      en: `design audit item ${g.token} is a HIGH moved to testing, and the newest conformance audit does not mark it holds`,
+      ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH ${g.token} \uC774 \uCD5C\uC2E0 \uC801\uD569\uC131 \uAC10\uC0AC\uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4`
+    }) : t({
+      en: `design audit item ${g.token} was moved to testing, but no completed wave carries it in its acceptance criteria`,
+      ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 \uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 ${g.token} \uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4`
+    }));
   }
   const state = attempt2(() => readState(root));
   if (!state.ok) {
@@ -14264,11 +14899,19 @@ var COMMANDS = [
     summary: M2("Phase gates \u2014 submit artifacts, then a human approves.", "\uD398\uC774\uC988 \uAC8C\uC774\uD2B8 \u2014 \uC0B0\uCD9C\uBB3C\uC744 \uC81C\uCD9C\uD558\uACE0 \uC0AC\uB78C\uC774 \uC2B9\uC778\uD55C\uB2E4."),
     subs: [
       { name: "submit", args: "<P> --paths <a,b> [--evidence claimed|code|measured]", summary: M2("Submit artifacts for review; pins their hash and writes a review packet. Rejects empty or placeholder artifacts, and content that already opened another gate.", "\uC0B0\uCD9C\uBB3C\uC744 \uC2EC\uC0AC\uC5D0 \uC62C\uB9B0\uB2E4. \uD574\uC2DC\uB97C \uACE0\uC815\uD558\uACE0 \uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB0A8\uAE34\uB2E4. \uBE48 \uBB38\uC11C\xB7\uC790\uB9AC\uD45C\uC2DC\uC790\uC640 \uC774\uBBF8 \uB2E4\uB978 \uAC8C\uC774\uD2B8\uB97C \uC5F0 \uB0B4\uC6A9\uC740 \uAC70\uBD80\uD55C\uB2E4.") },
-      { name: "approve", args: "<P> [--dialog-ticket <t>] [--via slash] [--project <dir>]", summary: M2("Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4: /king-wjang-harness:approve <P> \uB97C \uC785\uB825\uD558\uAC70\uB098 \uD655\uC778 \uCC3D\uC5D0 \uB2F5\uD55C\uB2E4. \uD50C\uB798\uADF8\uB294 \uD50C\uB7EC\uADF8\uC778\uC774 \uC4F0\uB294 \uAC12\uC774\uB77C \uC190\uC73C\uB85C \uCE58\uC9C0 \uC54A\uB294\uB2E4.") },
+      { name: "approve", args: "<P> [--dialog-ticket <t>] [--via slash] [--accept-risk] [--project <dir>]", summary: M2("Approve a submitted gate. Humans only: type /king-wjang-harness:approve <P>, or answer the confirmation dialog. The flags are for the plugin, not for typing.", "\uC81C\uCD9C\uB41C \uAC8C\uC774\uD2B8\uB97C \uC2B9\uC778\uD55C\uB2E4. \uC0AC\uB78C\uB9CC \uD55C\uB2E4: /king-wjang-harness:approve <P> \uB97C \uC785\uB825\uD558\uAC70\uB098 \uD655\uC778 \uCC3D\uC5D0 \uB2F5\uD55C\uB2E4. \uD50C\uB798\uADF8\uB294 \uD50C\uB7EC\uADF8\uC778\uC774 \uC4F0\uB294 \uAC12\uC774\uB77C \uC190\uC73C\uB85C \uCE58\uC9C0 \uC54A\uB294\uB2E4.") },
       { name: "verify", args: "<P>", summary: M2("Re-check that submitted artifacts still match their pinned hash.", "\uC81C\uCD9C \uB2F9\uC2DC \uD574\uC2DC\uC640 \uD604\uC7AC \uC0B0\uCD9C\uBB3C\uC774 \uAC19\uC740\uC9C0 \uB2E4\uC2DC \uD655\uC778\uD55C\uB2E4.") },
       { name: "sweep", summary: M2("Invalidate gates whose artifacts changed after approval.", "\uC2B9\uC778 \uD6C4 \uC0B0\uCD9C\uBB3C\uC774 \uBC14\uB010 \uAC8C\uC774\uD2B8\uB97C \uBB34\uD6A8\uD654\uD55C\uB2E4.") },
       { name: "status", summary: M2("Print all gate records as JSON.", "\uC804 \uAC8C\uC774\uD2B8 \uB808\uCF54\uB4DC\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
       { name: "feedback", args: "<P> [--from <file>]", summary: M2("Collect reviewer/canvas comments as revision grounds; without --from, print what was collected.", "\uB9AC\uBDF0\xB7\uCE94\uBC84\uC2A4 \uCF54\uBA58\uD2B8\uB97C \uAC1C\uC815 \uADFC\uAC70\uB85C \uC218\uC9D1\uD55C\uB2E4. --from \uC5C6\uC774 \uBD80\uB974\uBA74 \uC218\uC9D1\uB41C \uAC83\uC744 \uCD9C\uB825\uD55C\uB2E4.") }
+    ]
+  },
+  {
+    name: "audit",
+    summary: M2("P6 design audit rounds \u2014 read-only.", "P6 \uC124\uACC4 \uAC10\uC0AC \uD68C\uCC28 \u2014 \uC77D\uAE30 \uC804\uC6A9."),
+    subs: [
+      { name: "status", summary: M2("Print the rounds, the full audit count against the cap, open and owner-accepted HIGH findings, the carry-over ledger, what blocks the P6 gate, and the next step, as JSON.", "\uD68C\uCC28, \uC804\uCCB4 \uAC10\uC0AC \uD69F\uC218\uC640 \uC0C1\uD55C, \uC5F4\uB9B0 HIGH \uC640 \uC624\uB108 \uC218\uC6A9 HIGH, \uC774\uC6D4 \uB300\uC7A5, P6 \uAC8C\uC774\uD2B8\uB97C \uB9C9\uB294 \uC0AC\uC720, \uB2E4\uC74C \uD560 \uC77C\uC744 JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4.") },
+      { name: "closed", summary: M2("Print the closed decisions, the moves to judge and the application check for the next auditor, as JSON. No HIGH counts or earlier round text.", "\uB2E4\uC74C \uAC10\uC0AC\uC790\uAC00 \uBC1B\uC744 \uB2EB\uD78C \uACB0\uC815, \uD310\uC815\uD560 \uC774\uB3D9 \uD56D\uBAA9, \uBC18\uC601 \uB300\uC870\uB97C JSON \uC73C\uB85C \uCD9C\uB825\uD55C\uB2E4. HIGH \uAC1C\uC218\uC640 \uC55E \uD68C\uCC28 \uBCF8\uBB38\uC740 \uC2E3\uC9C0 \uC54A\uB294\uB2E4.") }
     ]
   },
   {
@@ -14620,14 +15263,14 @@ Run \`harness --help\` for the full usage.`;
 }
 
 // core/src/hook.ts
-var fs23 = __toESM(require("fs"));
-var path19 = __toESM(require("path"));
+var fs24 = __toESM(require("fs"));
+var path20 = __toESM(require("path"));
 
 // core/src/usage.ts
-var fs21 = __toESM(require("fs"));
-var path17 = __toESM(require("path"));
+var fs22 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
 var TIER_ORDER = ["normal", "reduce", "settle-every-turn", "final-handoff"];
-var tierFile = (root) => path17.join(runtimeDir(root), "usage-tier");
+var tierFile = (root) => path18.join(runtimeDir(root), "usage-tier");
 function tierFor(percent) {
   if (typeof percent !== "number" || Number.isNaN(percent)) return "normal";
   if (percent >= 99) return "final-handoff";
@@ -14660,12 +15303,12 @@ function guidanceFor(tier, lang = DEFAULT_LANG) {
   return pick(GUIDANCE[tier] ?? GUIDANCE.normal, lang);
 }
 function recordTier(root, tier) {
-  fs21.mkdirSync(runtimeDir(root), { recursive: true });
-  fs21.writeFileSync(tierFile(root), tier + "\n");
+  fs22.mkdirSync(runtimeDir(root), { recursive: true });
+  fs22.writeFileSync(tierFile(root), tier + "\n");
 }
 function lastTier(root) {
   try {
-    const v = fs21.readFileSync(tierFile(root), "utf8").trim();
+    const v = fs22.readFileSync(tierFile(root), "utf8").trim();
     return TIER_ORDER.includes(v) ? v : "normal";
   } catch {
     return "normal";
@@ -14673,8 +15316,8 @@ function lastTier(root) {
 }
 
 // core/src/profile.ts
-var fs22 = __toESM(require("fs"));
-var path18 = __toESM(require("path"));
+var fs23 = __toESM(require("fs"));
+var path19 = __toESM(require("path"));
 var YAML8 = __toESM(require_dist());
 var trFor5 = (lang) => (m) => pick(m, lang);
 var GENERIC = "generic";
@@ -14699,14 +15342,14 @@ var GENERIC_FLOOR = Object.freeze({
   origin: "floor",
   dir: ""
 });
-var localProfileDir = (root) => path18.join(harnessDir(root), "profile");
+var localProfileDir = (root) => path19.join(harnessDir(root), "profile");
 function bundledProfilesDir() {
-  return path18.resolve(__dirname, "..", "..", "profiles");
+  return path19.resolve(__dirname, "..", "..", "profiles");
 }
 var errMsg = (e) => e instanceof Error ? e.message : String(e);
 function isDir(p) {
   try {
-    return fs22.statSync(p).isDirectory();
+    return fs23.statSync(p).isDirectory();
   } catch {
     return false;
   }
@@ -14744,10 +15387,10 @@ function readList(m, key, fallback, yamlPath, problems, required, t) {
   return parsed.list;
 }
 function readCommands(dir, problems, t) {
-  const p = path18.join(dir, "commands.yaml");
+  const p = path19.join(dir, "commands.yaml");
   let text;
   try {
-    text = fs22.readFileSync(p, "utf8");
+    text = fs23.readFileSync(p, "utf8");
   } catch {
     problems.push(t({
       en: `${p} is missing \u2014 continuing without a command mapping. When the core asks for the test, build or deploy command the answer will be "undefined", and every P7\u2013P9 automatic decision falls to a human`,
@@ -14789,12 +15432,12 @@ function readCommands(dir, problems, t) {
   return out;
 }
 function readProfileDir(dir, origin, problems, t) {
-  const yamlPath = path18.join(dir, "profile.yaml");
+  const yamlPath = path19.join(dir, "profile.yaml");
   let text;
   try {
-    text = fs22.readFileSync(yamlPath, "utf8");
+    text = fs23.readFileSync(yamlPath, "utf8");
   } catch (e) {
-    if (fs22.existsSync(path18.join(dir, "commands.yaml"))) {
+    if (fs23.existsSync(path19.join(dir, "commands.yaml"))) {
       text = "name: local";
     } else {
       problems.push(t({
@@ -14822,7 +15465,7 @@ function readProfileDir(dir, origin, problems, t) {
     return null;
   }
   const m = raw;
-  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path18.basename(dir);
+  const name = typeof m.name === "string" && m.name.trim() ? m.name.trim() : path19.basename(dir);
   const description = typeof m.description === "string" ? m.description.trim() : void 0;
   return {
     name,
@@ -14851,7 +15494,7 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
   const problems = [];
   const wanted = typeof name === "string" && name.trim() ? name.trim() : loadConfig(root).profile || GENERIC;
   const local = localProfileDir(root);
-  if (fs22.existsSync(local)) {
+  if (fs23.existsSync(local)) {
     if (!isDir(local)) {
       problems.push(t({
         en: `${local} is not a directory \u2014 skipping the project-local profile`,
@@ -14870,8 +15513,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
         ko: `\uD504\uB85C\uD30C\uC77C \uC774\uB984 '${wanted}' \uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uB2E4(\uC601\uC22B\uC790\xB7. _ - \uB9CC \uD5C8\uC6A9) \u2014 generic \uC73C\uB85C \uC9C4\uD589\uD55C\uB2E4. \`.harness/config.yaml\` \uC758 \`profile\` \uC744 \uACE0\uCCD0\uB77C`
       })
     );
-  } else if (isDir(path18.join(bundled, wanted))) {
-    const p = readProfileDir(path18.join(bundled, wanted), "bundled", problems, t);
+  } else if (isDir(path19.join(bundled, wanted))) {
+    const p = readProfileDir(path19.join(bundled, wanted), "bundled", problems, t);
     if (p) return { profile: p, problems };
   } else {
     problems.push(
@@ -14881,8 +15524,8 @@ function resolve6(root, name, lang = DEFAULT_LANG) {
       })
     );
   }
-  if (wanted !== GENERIC && isDir(path18.join(bundled, GENERIC))) {
-    const p = readProfileDir(path18.join(bundled, GENERIC), "bundled", problems, t);
+  if (wanted !== GENERIC && isDir(path19.join(bundled, GENERIC))) {
+    const p = readProfileDir(path19.join(bundled, GENERIC), "bundled", problems, t);
     if (p) return { profile: p, problems };
   }
   problems.push(
@@ -15059,7 +15702,7 @@ function isHarnessStateShape(s) {
 function handleHook(root, event, input) {
   realCache = /* @__PURE__ */ new Map();
   try {
-    if (!fs23.existsSync(harnessDir(root))) return null;
+    if (!fs24.existsSync(harnessDir(root))) return null;
     let state;
     let degraded = null;
     try {
@@ -15069,7 +15712,7 @@ function handleHook(root, event, input) {
     } catch {
       let size = 0;
       try {
-        size = fs23.statSync(eventsPath(root)).size;
+        size = fs24.statSync(eventsPath(root)).size;
       } catch {
         size = 0;
       }
@@ -15088,6 +15731,10 @@ function handleHook(root, event, input) {
         if (journal.corruptLines > 0) {
           degraded = { corruptLines: journal.corruptLines, stateDamaged: false };
         }
+      } catch {
+      }
+      try {
+        ensureAuditFormat(root);
       } catch {
       }
     }
@@ -15120,9 +15767,9 @@ function handleHook(root, event, input) {
 function logHookError(root, event, err) {
   try {
     const dir = runtimeDir(root);
-    fs23.mkdirSync(dir, { recursive: true });
-    fs23.appendFileSync(
-      path19.join(dir, "hook-errors.log"),
+    fs24.mkdirSync(dir, { recursive: true });
+    fs24.appendFileSync(
+      path20.join(dir, "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${event} ${String(err)}
 `
     );
@@ -15329,11 +15976,11 @@ function recordDenial(root, input, out) {
       reason: maskSecrets(oneLine(String(d.permissionDecisionReason ?? ""))).slice(0, 400)
     });
     const p = denialsPath(root);
-    fs23.mkdirSync(path19.dirname(p), { recursive: true });
-    fs23.appendFileSync(p, line + "\n");
-    if (fs23.statSync(p).size > DENIALS_ROTATE_BYTES) {
-      const kept = fs23.readFileSync(p, "utf8").split("\n").filter(Boolean).slice(-DENIALS_KEEP);
-      fs23.writeFileSync(p, kept.join("\n") + "\n");
+    fs24.mkdirSync(path20.dirname(p), { recursive: true });
+    fs24.appendFileSync(p, line + "\n");
+    if (fs24.statSync(p).size > DENIALS_ROTATE_BYTES) {
+      const kept = fs24.readFileSync(p, "utf8").split("\n").filter(Boolean).slice(-DENIALS_KEEP);
+      fs24.writeFileSync(p, kept.join("\n") + "\n");
     }
   } catch {
   }
@@ -15378,16 +16025,20 @@ function judgeApproveCall(root, state, input, cmd, degraded, L) {
   const notMeasured = measuredOnlyViolation(root, call.phase, gate.evidence);
   if (notMeasured) return { why: notMeasured };
   const paths = recordedPaths(root, call.phase) ?? [];
+  const audit = call.phase === "P6" ? auditStatus(root, paths) : null;
+  if (audit && audit.violations.length > 0) return { why: sanitizeUntrusted(audit.violations.join(" "), 1e3) };
   const shown = sanitizeUntrusted(paths.slice(0, 5).join(", ") + (paths.length > 5 ? ` +${paths.length - 5}` : ""), 300);
   const hash = (gate.artifactHash ?? "").slice(0, 12);
   const nonce = issueDialogTicket(root, call.phase, gate.artifactHash ?? "");
+  const accepted = audit ? sanitizeUntrusted(audit.acceptedHighs.map((a) => a.id).join(", "), 300) : "";
+  const decided = audit ? sanitizeUntrusted(audit.ownerDecisions.map((a) => a.id).join(", "), 300) : "";
   return { ask: {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "ask",
       permissionDecisionReason: L(
-        `Approve gate ${call.phase}? Artifacts: ${shown} \xB7 evidence: ${gate.evidence} \xB7 hash: ${hash} \xB7 review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`,
-        `\uAC8C\uC774\uD2B8 ${call.phase} \uB97C \uC2B9\uC778\uD569\uB2C8\uAE4C? \uC0B0\uCD9C\uBB3C: ${shown} \xB7 \uADFC\uAC70: ${gate.evidence} \xB7 \uD574\uC2DC: ${hash} \xB7 \uB9AC\uBDF0 \uD328\uD0B7: .harness/packets/${call.phase}.md. \uC2B9\uC778\uD558\uBA74 \uB2E4\uC74C \uD398\uC774\uC988\uAC00 \uC5F4\uB9B0\uB2E4.`
+        `Approve gate ${call.phase}? Artifacts: ${shown} \xB7 evidence: ${gate.evidence} \xB7 hash: ${hash} \xB7 review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.` + (accepted ? ` Saying yes also accepts the risk of these HIGH findings: ${accepted}.` : "") + (decided ? ` It also confirms these owner decisions: ${decided}.` : ""),
+        `\uAC8C\uC774\uD2B8 ${call.phase} \uB97C \uC2B9\uC778\uD569\uB2C8\uAE4C? \uC0B0\uCD9C\uBB3C: ${shown} \xB7 \uADFC\uAC70: ${gate.evidence} \xB7 \uD574\uC2DC: ${hash} \xB7 \uB9AC\uBDF0 \uD328\uD0B7: .harness/packets/${call.phase}.md. \uC2B9\uC778\uD558\uBA74 \uB2E4\uC74C \uD398\uC774\uC988\uAC00 \uC5F4\uB9B0\uB2E4.` + (accepted ? ` \uC2B9\uC778\uD558\uBA74 \uB2E4\uC74C HIGH \uC758 \uC704\uD5D8\uB3C4 \uC218\uC6A9\uD55C\uB2E4: ${accepted}.` : "") + (decided ? ` \uB2E4\uC74C \uC624\uB108 \uACB0\uC815\uB3C4 \uD655\uC815\uD55C\uB2E4: ${decided}.` : "")
       ),
       // 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
       updatedInput: { ...input.tool_input, command: `${harnessCliPath()} gate approve ${call.phase} --dialog-ticket ${nonce}` }
@@ -15397,7 +16048,7 @@ function judgeApproveCall(root, state, input, cmd, degraded, L) {
 function slashApproveTicket(root, state, input) {
   if (input.command_name !== SLASH_COMMAND_NAME || input.command_source !== "plugin") return null;
   if (!interactiveEntrypoint()) return null;
-  const phase = (input.command_args ?? "").trim();
+  const phase = (input.command_args ?? "").trim().replace(/\s+--accept-risk$/u, "");
   if (!isPhase(phase)) return null;
   const gate = state.gates[phase];
   if (gate?.status === "submitted") issueSlashTicket(root, phase, gate.artifactHash ?? "");
@@ -15423,27 +16074,27 @@ function realOrSelf(p) {
 }
 function realOrSelfUncached(p) {
   try {
-    return fs23.realpathSync.native(p);
+    return fs24.realpathSync.native(p);
   } catch {
     try {
-      const target = fs23.readlinkSync(p);
-      return realOrSelf(path19.isAbsolute(target) ? target : path19.join(path19.dirname(p), target));
+      const target = fs24.readlinkSync(p);
+      return realOrSelf(path20.isAbsolute(target) ? target : path20.join(path20.dirname(p), target));
     } catch {
     }
-    const parent = path19.dirname(p);
+    const parent = path20.dirname(p);
     if (parent === p) return p;
-    return path19.join(realOrSelf(parent), path19.basename(p));
+    return path20.join(realOrSelf(parent), path20.basename(p));
   }
 }
 function relPath(root, p) {
-  return path19.relative(root, path19.resolve(root, p));
+  return path20.relative(root, path20.resolve(root, p));
 }
 function realRelPath(root, p) {
-  const abs = path19.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
-  return path19.relative(realOrSelf(root), realOrSelf(abs));
+  const abs = path20.isAbsolute(p) ? p : `${root.replace(/[/]+$/, "")}/${p}`;
+  return path20.relative(realOrSelf(root), realOrSelf(abs));
 }
 function isOutsideRoot(rel) {
-  return rel === ".." || rel.startsWith(`..${path19.sep}`) || path19.isAbsolute(rel);
+  return rel === ".." || rel.startsWith(`..${path20.sep}`) || path20.isAbsolute(rel);
 }
 var SCRIPT_RUNNERS = /* @__PURE__ */ new Set([...SHELLS_TAKING_C, "source", "."]);
 var DIRECT_SCRIPT_EXT = new RegExp(`\\.(${[...SHELLS_TAKING_C].join("|")})$`);
@@ -15476,19 +16127,19 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
           continue;
         }
         try {
-          const st0 = fs23.statSync(path19.resolve(root, candidate));
+          const st0 = fs24.statSync(path20.resolve(root, candidate));
           if (!st0.isFile()) continue;
           if (st0.size > SCRIPT_MAX_BYTES) {
             unread.push(candidate);
             continue;
           }
-          outside.push(fs23.readFileSync(path19.resolve(root, candidate), "utf8"));
+          outside.push(fs24.readFileSync(path20.resolve(root, candidate), "utf8"));
         } catch {
         }
         continue;
       }
-      const abs = path19.resolve(root, candidate);
-      const st = fs23.statSync(abs);
+      const abs = path20.resolve(root, candidate);
+      const st = fs24.statSync(abs);
       if (!st.isFile()) continue;
       if (atLimit) {
         tooDeep.push(candidate);
@@ -15498,7 +16149,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
         unread.push(candidate);
         continue;
       }
-      const body = fs23.readFileSync(abs, "utf8");
+      const body = fs24.readFileSync(abs, "utf8");
       out.push(body);
       const sub = invokedScriptBodies(root, body, depth + 1, seen);
       out.push(...sub.bodies);
@@ -15511,7 +16162,7 @@ function invokedScriptBodies(root, cmd, depth = 0, seen = /* @__PURE__ */ new Se
   const npmRun = /(?:^|[\s;&|`("'])(?:npm|pnpm|yarn|bun)\s+run(?:-script)?\s+([\w:.-]+)/.exec(cmd);
   if (npmRun) {
     try {
-      const pkg = JSON.parse(fs23.readFileSync(path19.join(root, "package.json"), "utf8"));
+      const pkg = JSON.parse(fs24.readFileSync(path20.join(root, "package.json"), "utf8"));
       const script = pkg.scripts?.[npmRun[1]];
       if (typeof script === "string" && !seen.has(`npm:${npmRun[1]}`)) {
         seen.add(`npm:${npmRun[1]}`);
@@ -15538,11 +16189,11 @@ function interpreterProgramBodies(root, cmd) {
     if (seen.has(candidate)) continue;
     seen.add(candidate);
     try {
-      const abs = path19.resolve(root, candidate);
-      const st = fs23.statSync(abs);
+      const abs = path20.resolve(root, candidate);
+      const st = fs24.statSync(abs);
       if (!st.isFile()) continue;
       if (st.size > SCRIPT_MAX_BYTES) continue;
-      bodies.push(fs23.readFileSync(abs, "utf8"));
+      bodies.push(fs24.readFileSync(abs, "utf8"));
     } catch {
     }
   }
@@ -15568,11 +16219,11 @@ function readPatchTargets(root, files) {
   if (files.length === 0) return null;
   const out = [];
   for (const rel of files) {
-    const abs = path19.isAbsolute(rel) ? rel : path19.resolve(root, rel);
+    const abs = path20.isAbsolute(rel) ? rel : path20.resolve(root, rel);
     let body;
     try {
-      if (fs23.statSync(abs).size > PATCH_READ_CAP) return null;
-      body = fs23.readFileSync(abs, "utf8");
+      if (fs24.statSync(abs).size > PATCH_READ_CAP) return null;
+      body = fs24.readFileSync(abs, "utf8");
     } catch {
       return null;
     }
@@ -15652,22 +16303,22 @@ function protectedByGlob(target) {
   return CORE_FILES.find((f2) => re.test(f2)) ?? POLICY_PREFIXES.map((pre) => `${pre}profile.yaml`).find((f2) => re.test(f2));
 }
 function harnessProgramFiles() {
-  const install = path19.resolve(__dirname, "..", "..");
+  const install = path20.resolve(__dirname, "..", "..");
   return [
-    path19.join(install, "core", "dist", "cli.js"),
-    path19.join(install, "core", "dist", "mcp.js"),
-    path19.join(install, "core", "src", "cli.ts"),
-    path19.join(install, "core", "src", "mcp.ts"),
-    path19.join(install, "core", "src", "hook.ts"),
-    path19.join(install, "bin", "harness"),
-    path19.join(install, "bin", "harness-hook")
+    path20.join(install, "core", "dist", "cli.js"),
+    path20.join(install, "core", "dist", "mcp.js"),
+    path20.join(install, "core", "src", "cli.ts"),
+    path20.join(install, "core", "src", "mcp.ts"),
+    path20.join(install, "core", "src", "hook.ts"),
+    path20.join(install, "bin", "harness"),
+    path20.join(install, "bin", "harness-hook")
   ];
 }
 var INTERPRETER_HEADS = new RegExp(
   `^(${[...NON_SHELL_INTERPRETERS, ...SHELLS_TAKING_C].join("|")})$`
 );
 function runsProgramDirectly(root, line, prog) {
-  const same = (t) => realOrSelf(path19.isAbsolute(t) ? t : path19.resolve(root, t)) === realOrSelf(prog);
+  const same = (t) => realOrSelf(path20.isAbsolute(t) ? t : path20.resolve(root, t)) === realOrSelf(prog);
   const tokens = line.split(/\s+/).filter(Boolean);
   const first = tokens[0] ?? "";
   if (first && same(first)) return true;
@@ -15680,7 +16331,7 @@ function copiesHarnessProgram(root, cmd) {
   const real = progs.map((f2) => realOrSelf(f2));
   const lines = commandLines(cmd);
   for (const m of pathLikeMentions(cmd)) {
-    const abs = realOrSelf(path19.isAbsolute(m) ? m : path19.resolve(root, m));
+    const abs = realOrSelf(path20.isAbsolute(m) ? m : path20.resolve(root, m));
     const i = real.indexOf(abs);
     if (i === -1) continue;
     if (lines.some((l) => runsProgramDirectly(root, l, progs[i]))) continue;
@@ -15757,12 +16408,12 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   }
   const aliasOfCore = (() => {
     try {
-      const abs = path19.resolve(root, raw);
-      const st = fs23.statSync(abs);
+      const abs = path20.resolve(root, raw);
+      const st = fs24.statSync(abs);
       if (!st.isFile() || st.nlink < 2) return void 0;
       for (const core of CORE_FILES) {
         try {
-          const cs = fs23.statSync(path19.join(root, core));
+          const cs = fs24.statSync(path20.join(root, core));
           if (cs.dev === st.dev && cs.ino === st.ino) return core;
         } catch {
         }
@@ -15802,7 +16453,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
     );
   }
   const bundleDir = realOrSelf(bundledProfilesDir());
-  const bundleHit = [raw].map((r) => realOrSelf(path19.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path19.sep}`));
+  const bundleHit = [raw].map((r) => realOrSelf(path20.resolve(root, r))).find((abs) => abs === bundleDir || abs.startsWith(`${bundleDir}${path20.sep}`));
   if (raw && bundleHit) {
     return deny(
       L(
@@ -15829,7 +16480,7 @@ function judgeWritePath(root, state, config, rawPath, degraded, fromBash, getPro
   if (!coreOnly && SHIP_PHASES.includes(state.phase)) {
     const inRoot = !isOutsideRoot(rel) || !isOutsideRoot(realRel);
     const target = !isOutsideRoot(rel) ? rel : realRel;
-    const isNew = inRoot && target !== "" && !fs23.existsSync(path19.join(root, target));
+    const isNew = inRoot && target !== "" && !fs24.existsSync(path20.join(root, target));
     if (isNew && !target.startsWith(".harness/") && !/^[^/]+\.md$/.test(target)) {
       return deny(L(
         // [UTIL-149] **강제하지 않는 것을 강제한다고 말하지 않는다.** 예전 문구는 「이 구간은
@@ -16027,8 +16678,8 @@ function preTool(root, state, config, input, degraded) {
       const copied = copiesHarnessProgram(root, cmd);
       if (copied) {
         return deny(L(
-          `This copies the harness's own program (${path19.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always the user's: \`${approveSlash("<P>")}\`.)`,
-          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path19.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uC758 \uC77C\uC774\uB2E4: \`${approveSlash("<P>")}\`.)`
+          `This copies the harness's own program (${path20.basename(copied)}). The lock on \`gate approve\` recognises harness invocations by name, so a renamed copy would run it without the check \u2014 and a PTY satisfies the terminal test. Run the installed \`harness\` command instead. (Approval itself is always the user's: \`${approveSlash("<P>")}\`.)`,
+          `\uD558\uB124\uC2A4 \uC790\uC2E0\uC758 \uD504\uB85C\uADF8\uB7A8(${path20.basename(copied)})\uC744 \uBCF5\uC0AC\uD558\uB824\uB294 \uBA85\uB839\uC774\uB2E4. \`gate approve\` \uC7A0\uAE08\uC740 \uD558\uB124\uC2A4 \uD638\uCD9C\uC744 **\uC774\uB984\uC73C\uB85C** \uC54C\uC544\uBCF4\uBBC0\uB85C, \uC774\uB984\uC744 \uBC14\uAFBC \uC0AC\uBCF8\uC740 \uAC80\uC0AC\uB97C \uAC74\uB108\uB6F4\uB2E4(PTY \uB294 \uD130\uBBF8\uB110 \uAC80\uC0AC\uB3C4 \uD1B5\uACFC\uD55C\uB2E4). \uC124\uCE58\uB41C \`harness\` \uBA85\uB839\uC744 \uADF8\uB300\uB85C \uC4F0\uB77C. (\uC2B9\uC778 \uC790\uCCB4\uB294 \uC5B8\uC81C\uB098 \uC0AC\uC6A9\uC790\uC758 \uC77C\uC774\uB2E4: \`${approveSlash("<P>")}\`.)`
         ), degraded, lang);
       }
       const blind0 = scan.blindTargets[0];
@@ -16238,8 +16889,8 @@ ${note}` };
 }
 
 // core/src/migrate.ts
-var fs24 = __toESM(require("fs"));
-var path20 = __toESM(require("path"));
+var fs25 = __toESM(require("fs"));
+var path21 = __toESM(require("path"));
 var CANDIDATES = [
   {
     name: "handoff-guard",
@@ -16285,10 +16936,10 @@ var CANDIDATES = [
 function detectLegacyTools(homeDir, lang = DEFAULT_LANG) {
   const found = [];
   for (const c of CANDIDATES) {
-    const p = path20.join(homeDir, c.rel);
+    const p = path21.join(homeDir, c.rel);
     let st;
     try {
-      st = fs24.statSync(p);
+      st = fs25.statSync(p);
     } catch {
       continue;
     }
@@ -16330,7 +16981,7 @@ function migrationReport(tools, lang = DEFAULT_LANG) {
 }
 function legacyHarnessGitignore(root) {
   try {
-    const body = fs24.readFileSync(path20.join(runtimeDir(root), ".gitignore"), "utf8");
+    const body = fs25.readFileSync(path21.join(runtimeDir(root), ".gitignore"), "utf8");
     return body.trim() === "*";
   } catch {
     return false;
@@ -16391,6 +17042,7 @@ var VALUE_FLAGS = /* @__PURE__ */ new Set([
 ]);
 var BOOL_FLAGS = /* @__PURE__ */ new Set([
   "accept-policy",
+  "accept-risk",
   "force",
   "help",
   "repair"
@@ -16464,10 +17116,10 @@ function explainUnknownFlag(tok, allowed) {
 }
 function logHookIssue(root, msg) {
   try {
-    if (!fs25.existsSync(harnessDir(root))) return;
-    fs25.mkdirSync(runtimeDir(root), { recursive: true });
-    fs25.appendFileSync(
-      path21.join(runtimeDir(root), "hook-errors.log"),
+    if (!fs26.existsSync(harnessDir(root))) return;
+    fs26.mkdirSync(runtimeDir(root), { recursive: true });
+    fs26.appendFileSync(
+      path22.join(runtimeDir(root), "hook-errors.log"),
       `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `
     );
@@ -16497,7 +17149,7 @@ function readAllStdin() {
   for (; ; ) {
     let n;
     try {
-      n = fs25.readSync(0, buf, 0, CHUNK, null);
+      n = fs26.readSync(0, buf, 0, CHUNK, null);
     } catch (err) {
       const code = err.code;
       if (code === "EAGAIN") {
@@ -16529,7 +17181,7 @@ function assertOutputAllowed(root, out, targets, lang, what) {
     ));
   }
   for (const t of targets) {
-    const rel = path21.relative(root, path21.resolve(root, t));
+    const rel = path22.relative(root, path22.resolve(root, t));
     if (OWNED_FILES.includes(rel)) {
       throw new Error(L(
         `${what.en} would overwrite \`${rel}\`, which only harness commands may change \u2014 the journal is the audit trail and the state store is derived from it. Choose a different --out path.`,
@@ -16541,7 +17193,7 @@ function assertOutputAllowed(root, out, targets, lang, what) {
   if (!DESIGN_PHASES.includes(phase)) return;
   const profile = loadProfile(root);
   for (const t of targets) {
-    const rel = path21.relative(root, path21.resolve(root, t));
+    const rel = path22.relative(root, path22.resolve(root, t));
     if (isSourcePath(profile, rel) || isSourceTree(profile, rel)) {
       throw new Error(L(
         `Cannot write ${rel} in the design track (${phase}) \u2014 it lands in the source paths this project's profile declares (profile ${profile.name}, source_globs: ${(profile.sourceGlobs ?? []).join(", ")}). Generate into the design area, or move to the build track first.`,
@@ -16569,7 +17221,7 @@ function requirePhase(raw, cmd, lang) {
 function harnessVersion() {
   for (const rel of ["../../package.json", "../package.json"]) {
     try {
-      const v = JSON.parse(fs25.readFileSync(path21.resolve(__dirname, rel), "utf8")).version;
+      const v = JSON.parse(fs26.readFileSync(path22.resolve(__dirname, rel), "utf8")).version;
       if (typeof v === "string" && v) return `v${v}`;
     } catch {
     }
@@ -16578,7 +17230,7 @@ function harnessVersion() {
 }
 function buildId() {
   try {
-    const h = (0, import_node_crypto2.createHash)("sha256").update(fs25.readFileSync(__filename)).digest("hex");
+    const h = (0, import_node_crypto2.createHash)("sha256").update(fs26.readFileSync(__filename)).digest("hex");
     return h.slice(0, 8);
   } catch {
     return "unknown";
@@ -16590,15 +17242,15 @@ function warnUnresolvedEvidence(root, evidence, lang) {
   if (URL_SCHEME_RE.test(raw)) return;
   const p0 = raw.replace(/:\d+(?::\d+)?$/, "");
   if (!p0 || !/[/.]/.test(p0)) return;
-  if (path21.isAbsolute(p0)) return;
-  if (fs25.existsSync(path21.resolve(root, p0))) return;
+  if (path22.isAbsolute(p0)) return;
+  if (fs26.existsSync(path22.resolve(root, p0))) return;
   console.error(lang === "ko" ? `\uACBD\uACE0: \uADFC\uAC70 \uACBD\uB85C\uAC00 \uC774 \uD504\uB85C\uC81D\uD2B8\uC5D0 \uC5C6\uB2E4 \u2014 ${p0}. \uACB0\uD568\uC740 \uB4F1\uC7AC\uD588\uB2E4. \uC2E4\uC81C \uD30C\uC77C\uC744 \uAC00\uB9AC\uD0A4\uAC8C \uACE0\uCE58\uB824\uBA74 \`harness ship defect update <id> --evidence <\uACBD\uB85C:\uC904>\` \uC744 \uC4F0\uB77C.` : `Warning: the evidence path does not exist in this project \u2014 ${p0}. The defect was recorded. Point it at a real file with \`harness ship defect update <id> --evidence <path:line>\`.`);
 }
 var DIVERGE_CHECK_MAX_BYTES = 8 * 1024 * 1024;
 function warnIfDiverged(root, current) {
   try {
     const p = eventsPath(root);
-    if (fs25.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;
+    if (fs26.statSync(p).size > DIVERGE_CHECK_MAX_BYTES) return;
     const { events } = readJournal(root);
     const replayed = replayState(events);
     const diffs = [];
@@ -16618,7 +17270,7 @@ function warnIfDiverged(root, current) {
 }
 function run(argv, root) {
   const [cmd, sub, ...rest] = argv;
-  if (cmd === "gate" && sub === "approve" && flag(rest, "project")) root = path21.resolve(flag(rest, "project"));
+  if (cmd === "gate" && sub === "approve" && flag(rest, "project")) root = path22.resolve(flag(rest, "project"));
   if (cmd === "hook") {
     try {
       if (sub === void 0 || sub === "--help" || sub === "-h" || sub === "help") {
@@ -16767,7 +17419,7 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
     switch (cmd) {
       case "init":
         initHarness(root);
-        appendEvent(root, "init", {});
+        appendEvent(root, "init", { auditFormat: NEW_AUDIT_FORMAT });
         pinPolicy(root, "init");
         console.log(L(".harness/ initialised \u2014 run `harness --help` to see the command map.", ".harness/ \uCD08\uAE30\uD654 \uC644\uB8CC \u2014 `harness --help` \uB85C \uBA85\uB839 \uC9C0\uB3C4\uB97C \uBCFC \uC218 \uC788\uB2E4."));
         console.log(L(
@@ -16848,9 +17500,9 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
             const r = submitGate(root, phase, { paths: csv(flag(args, "paths")), evidence });
             let packet = "";
             try {
-              fs25.mkdirSync(packetsDir(root), { recursive: true });
-              packet = path21.join(packetsDir(root), `${phase}.md`);
-              fs25.writeFileSync(packet, buildReviewPacket(root, phase));
+              fs26.mkdirSync(packetsDir(root), { recursive: true });
+              packet = path22.join(packetsDir(root), `${phase}.md`);
+              fs26.writeFileSync(packet, buildReviewPacket(root, phase));
             } catch (e) {
               console.error(L(`Review packet generation failed (the submission still stands) \u2014 ${String(e)}`, `\uB9AC\uBDF0 \uD328\uD0B7 \uC0DD\uC131 \uC2E4\uD328(\uC81C\uCD9C\uC740 \uC720\uD6A8) \u2014 ${String(e)}`));
               packet = "";
@@ -16859,12 +17511,12 @@ Running one by hand does nothing harmful \u2014 it just judges that payload.`,
             console.log(
               L(
                 `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}` + (packet ? `
-Review packet: ${path21.relative(root, packet)}` : "") + (noDoc ? `
+Review packet: ${path22.relative(root, packet)}` : "") + (noDoc ? `
 Note: no document is registered for ${phase}, so the packet says it is not grounds for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` \u2192 publish \u2192 \`harness doc url <DOC-x> <url>\`, then submit again.` : "") + `
 Next: the user approves it by typing this in Claude Code:
   ${approveSlash(phase)}`,
                 `${phase} \uC81C\uCD9C\uB428 \u2014 \uD574\uC2DC ${r.artifactHash?.slice(0, 12)} \xB7 \uADFC\uAC70 ${r.evidence}` + (packet ? `
-\uB9AC\uBDF0 \uD328\uD0B7: ${path21.relative(root, packet)}` : "") + (noDoc ? `
+\uB9AC\uBDF0 \uD328\uD0B7: ${path22.relative(root, packet)}` : "") + (noDoc ? `
 \uCC38\uACE0: ${phase} \uC5D0 \uB4F1\uB85D\uB41C \uBB38\uC11C\uAC00 \uC5C6\uC5B4 \uD328\uD0B7\uC774 \u300C\uC2B9\uC778 \uADFC\uAC70\uAC00 \uC544\uB2C8\uB2E4\u300D\uB77C\uACE0 \uC801\uB294\uB2E4. \`harness doc upsert --id <DOC-x> --path <\uD30C\uC77C> --phase ${phase}\` \u2192 \uBC1C\uD589 \u2192 \`harness doc url <DOC-x> <url>\` \uB85C \uC774\uC740 \uB4A4 \uB2E4\uC2DC \uC81C\uCD9C\uD558\uB77C.` : "") + `
 \uB2E4\uC74C: \uC0AC\uC6A9\uC790\uAC00 Claude Code \uC5D0 \uC544\uB798 \uBA85\uB839\uC744 \uC785\uB825\uD574 \uC2B9\uC778\uD55C\uB2E4:
   ${approveSlash(phase)}`
@@ -16900,8 +17552,23 @@ Next: the user approves it by typing this in Claude Code:
               ));
             }
             const phase = requirePhase(rest[0], "harness gate approve", lang);
+            const decided = phase === "P6" ? auditStatus(root) : null;
+            const listed = decided ? [...decided.acceptedHighs, ...decided.ownerDecisions].map((a) => `- r${a.round} ${sanitizeUntrusted(a.id, 80)}: ${sanitizeUntrusted(a.reason, 300)}`) : [];
+            if (listed.length > 0 && via !== "dialog" && !rest.includes("--accept-risk")) {
+              throw new Error(L(
+                `Approving P6 also confirms these owner decisions and accepted risks:
+${listed.join("\n")}
+Read them, then approve by typing \`${approveSlash(phase)} --accept-risk\`.`,
+                `P6 \uC744 \uC2B9\uC778\uD558\uBA74 \uB2E4\uC74C \uC624\uB108 \uACB0\uC815\uACFC \uC704\uD5D8 \uC218\uC6A9\uB3C4 \uD568\uAED8 \uD655\uC815\uB41C\uB2E4:
+${listed.join("\n")}
+\uC77D\uC5B4 \uBCF8 \uB4A4 \`${approveSlash(phase)} --accept-risk\` \uB97C \uC785\uB825\uD574 \uC2B9\uC778\uD55C\uB2E4.`
+              ));
+            }
             const r = approveGate(root, phase, via);
             console.log(L(`${phase} approved \u2014 ${r.approvedAt} \xB7 evidence ${r.evidence}`, `${phase} \uC2B9\uC778\uB428 \u2014 ${r.approvedAt} \xB7 \uADFC\uAC70 ${r.evidence}`));
+            if (listed.length > 0) console.log(L(`Confirmed by this approval:
+${listed.join("\n")}`, `\uC774 \uC2B9\uC778\uC73C\uB85C \uD655\uC815\uD55C \uD56D\uBAA9:
+${listed.join("\n")}`));
             return 0;
           }
           case "verify": {
@@ -16932,10 +17599,10 @@ Next: the user approves it by typing this in Claude Code:
               console.log(existing || (lang === "ko" ? `${phase} \uC5D0 \uC218\uC9D1\uB41C \uB9AC\uBDF0 \uD53C\uB4DC\uBC31\uC774 \uC5C6\uB2E4 \u2014 \`harness gate feedback ${phase} --from <\uCF54\uBA58\uD2B8\uD30C\uC77C>\` \uB85C \uC218\uC9D1\uD558\uB77C.` : `No review feedback collected for ${phase} \u2014 collect it with \`harness gate feedback ${phase} --from <comments-file>\`.`));
               return 0;
             }
-            const fromPath = path21.resolve(root, from);
+            const fromPath = path22.resolve(root, from);
             let body;
             try {
-              body = fs25.readFileSync(fromPath, "utf8");
+              body = fs26.readFileSync(fromPath, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the comments file: ${from} (looked in ${fromPath}). Paths are resolved from the project root.`,
@@ -16943,14 +17610,20 @@ Next: the user approves it by typing this in Claude Code:
               ));
             }
             const n = recordGateFeedback(root, phase, body);
-            console.log(lang === "ko" ? `${phase} \uB9AC\uBDF0 \uD53C\uB4DC\uBC31 ${n}\uAC74 \uC218\uC9D1 \u2014 ${path21.relative(root, feedbackPath(root, phase))}
-\uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB2E4\uC2DC \uB9CC\uB4E4\uBA74(\`harness report packet ${phase}\`) \uAC1C\uC815 \uADFC\uAC70\uB85C \uC2E4\uB9B0\uB2E4.` : `Collected ${n} review comment(s) for ${phase} \u2014 ${path21.relative(root, feedbackPath(root, phase))}
+            console.log(lang === "ko" ? `${phase} \uB9AC\uBDF0 \uD53C\uB4DC\uBC31 ${n}\uAC74 \uC218\uC9D1 \u2014 ${path22.relative(root, feedbackPath(root, phase))}
+\uB9AC\uBDF0 \uD328\uD0B7\uC744 \uB2E4\uC2DC \uB9CC\uB4E4\uBA74(\`harness report packet ${phase}\`) \uAC1C\uC815 \uADFC\uAC70\uB85C \uC2E4\uB9B0\uB2E4.` : `Collected ${n} review comment(s) for ${phase} \u2014 ${path22.relative(root, feedbackPath(root, phase))}
 Regenerate the packet (\`harness report packet ${phase}\`) to include them as revision grounds.`);
             return 0;
           }
           default:
             throw new Error(unknownSub("gate", sub, lang));
         }
+      }
+      case "audit": {
+        if (sub === "status") console.log(JSON.stringify(auditStatus(root), null, 2));
+        else if (sub === "closed") console.log(JSON.stringify(auditClosedItems(root), null, 2));
+        else throw new Error(unknownSub("audit", sub, lang));
+        return 0;
       }
       case "ship": {
         const args = [sub, ...rest];
@@ -17109,8 +17782,8 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const src = generatePlaywrightSpec(root, uxNodeId, { waveId: flag(args, "wave") });
             const out = flag(args, "out") ?? specFileNameFor(uxNodeId);
             assertOutputAllowed(root, out, [out], lang, { en: "The generated spec", ko: "\uC0DD\uC131\uB41C \uC2A4\uD399\uC740" });
-            fs25.mkdirSync(path21.dirname(path21.resolve(root, out)), { recursive: true });
-            fs25.writeFileSync(path21.resolve(root, out), src);
+            fs26.mkdirSync(path22.dirname(path22.resolve(root, out)), { recursive: true });
+            fs26.writeFileSync(path22.resolve(root, out), src);
             console.log(out);
             return 0;
           }
@@ -17135,7 +17808,7 @@ Regenerate the packet (\`harness report packet ${phase}\`) to include them as re
             const out = flag(args, "out");
             if (out) assertOutputAllowed(root, out, [out], lang, { en: "The generated packet", ko: "\uC0DD\uC131\uB41C \uD328\uD0B7\uC740" });
             if (out) {
-              fs25.writeFileSync(path21.resolve(root, out), html);
+              fs26.writeFileSync(path22.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -17163,8 +17836,8 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const cmdKey = req(rest[0], "harness profile cmd <key>");
             const c = commandFor(p, cmdKey);
             if (!c) {
-              const localFile = path21.join(localProfileDir(root), "commands.yaml");
-              const where = p.origin === "local" && p.dir ? path21.join(p.dir, "commands.yaml") : L(`${localFile} (project-local, always wins)`, `${localFile} (\uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \u2014 \uD56D\uC0C1 \uC6B0\uC120)`);
+              const localFile = path22.join(localProfileDir(root), "commands.yaml");
+              const where = p.origin === "local" && p.dir ? path22.join(p.dir, "commands.yaml") : L(`${localFile} (project-local, always wins)`, `${localFile} (\uD504\uB85C\uC81D\uD2B8 \uB85C\uCEEC \u2014 \uD56D\uC0C1 \uC6B0\uC120)`);
               const why = problems.length > 0 ? L(`
   ${problems.join("\n  ")}`, `
   ${problems.join("\n  ")}`) : "";
@@ -17202,10 +17875,10 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
                 )
               );
             }
-            const fromAbs = path21.resolve(root, from);
+            const fromAbs = path22.resolve(root, from);
             let content;
             try {
-              content = fs25.readFileSync(fromAbs, "utf8");
+              content = fs26.readFileSync(fromAbs, "utf8");
             } catch {
               throw new Error(L(
                 `Cannot read the canvas content file: ${fromAbs} \u2014 the core never touches the network, so an agent must fetch the canvas (WebFetch) and save it to a file first. Check the path, then pass it with \`--from <file>\`.`,
@@ -17252,7 +17925,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const out = flag(args, "out");
             const html = generateSourceOfTruthHtml(root);
             if (out) {
-              fs25.writeFileSync(path21.resolve(root, out), html);
+              fs26.writeFileSync(path22.resolve(root, out), html);
               console.log(out);
             } else console.log(html);
             return 0;
@@ -17278,15 +17951,15 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             assertOutputAllowed(
               root,
               out,
-              targets.map(([name]) => path21.join(out, name)),
+              targets.map(([name]) => path22.join(out, name)),
               lang,
               { en: "Generated tokens", ko: "\uC0DD\uC131\uBB3C\uC740" }
             );
-            fs25.mkdirSync(path21.resolve(root, out), { recursive: true });
+            fs26.mkdirSync(path22.resolve(root, out), { recursive: true });
             for (const [name, content] of targets) {
-              fs25.writeFileSync(path21.resolve(root, out, name), content);
+              fs26.writeFileSync(path22.resolve(root, out, name), content);
             }
-            console.log(targets.map(([n]) => path21.join(out, n)).join("\n"));
+            console.log(targets.map(([n]) => path22.join(out, n)).join("\n"));
             return 0;
           }
           case "lint": {
@@ -17297,7 +17970,7 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
               if (isTokenFile(root, f2)) continue;
               let src = "";
               try {
-                src = fs25.readFileSync(path21.resolve(root, f2), "utf8");
+                src = fs26.readFileSync(path22.resolve(root, f2), "utf8");
               } catch {
                 throw new Error(L(
                   `Cannot read the file to lint: ${f2} \u2014 check the path. A file that was not read is not a file that is clean`,
@@ -17316,13 +17989,13 @@ ${problems.map((p) => `  - ${p}`).join("\n")}`));
             const overridePath = flag(args, "with");
             if (!overridePath) throw new Error(L("Usage: harness tokens swap --with <override-theme.json> [--out <path>]", "\uC0AC\uC6A9\uBC95: harness tokens swap --with <\uB300\uCCB4\uD14C\uB9C8.json> [--out <\uACBD\uB85C>]"));
             const doc = loadTokens(root);
-            const overrides = JSON.parse(fs25.readFileSync(path21.resolve(root, overridePath), "utf8"));
+            const overrides = JSON.parse(fs26.readFileSync(path22.resolve(root, overridePath), "utf8"));
             const swapped = swapTokens(doc, overrides);
             assertSwapIsMeaningful(doc, swapped);
             const changed = diffTokens(doc, swapped);
             const out = flag(args, "out");
             if (out) assertOutputAllowed(root, out, [out], lang, { en: "The swapped CSS", ko: "\uC2A4\uC651\uB41C CSS \uB294" });
-            if (out) fs25.writeFileSync(path21.resolve(root, out), generateCss(swapped, lang));
+            if (out) fs26.writeFileSync(path22.resolve(root, out), generateCss(swapped, lang));
             console.log(L(
               `Swap is meaningful \u2014 ${changed.length} token(s) changed` + (out ? ` \xB7 CSS written to ${out}` : " \xB7 dry run: nothing was written. Pass `--out <file.css>` to write the swapped CSS."),
               `\uC2A4\uC651 \uC720\uD6A8 \u2014 \uBCC0\uACBD \uD1A0\uD070 ${changed.length}\uAC74` + (out ? ` \xB7 CSS \uAE30\uB85D \u2192 ${out}` : " \xB7 \uB4DC\uB77C\uC774\uB7F0: \uC544\uBB34\uAC83\uB3C4 \uAE30\uB85D\uD558\uC9C0 \uC54A\uC558\uB2E4. \uAE30\uB85D\uD558\uB824\uBA74 `--out <\uD30C\uC77C.css>` \uB97C \uB118\uACA8\uB77C.")
