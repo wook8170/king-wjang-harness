@@ -1,18 +1,22 @@
 {
-  "measuredAt": "2026-11-07T02:23:52.722Z",
-  "sha": "4f5bf2441de33babfd47b6c875293439bf9dd2dd",
+  "measuredAt": "2026-11-07T02:49:06.561Z",
+  "sha": "373d4cae248edb41842704ac42a2d458435eda3f",
   "repo": {
-    "files": 71,
-    "tests": 1765,
-    "passed": 1758,
+    "files": 72,
+    "failedFiles": 0,
+    "loadFailures": 0,
+    "tests": 1808,
+    "passed": 1806,
     "skipped": 2,
-    "failed": 5
+    "failed": 0
   },
   "archive": {
-    "files": 69,
-    "tests": 452,
-    "passed": 451,
-    "skipped": 1,
+    "files": 72,
+    "failedFiles": 0,
+    "loadFailures": 0,
+    "tests": 1808,
+    "passed": 1801,
+    "skipped": 7,
     "failed": 0
   }
 }
