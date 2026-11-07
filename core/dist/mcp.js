@@ -10312,8 +10312,9 @@ var crypto5 = __toESM(require("crypto"));
 var fs18 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
 var path15 = __toESM(require("path"));
-var DIALOG_TTL_MS = 30 * 60 * 1e3;
+var DIALOG_TTL_MS = 10 * 60 * 1e3;
 var SLASH_TTL_MS = 60 * 1e3;
+var DIALOG_REASK_MS = 2 * 60 * 1e3;
 function settingsFiles(root) {
   const home = process.env.CLAUDE_CONFIG_DIR ?? path15.join(os2.homedir(), ".claude");
   return [
@@ -10331,9 +10332,12 @@ function ruleMatches(rule, commands) {
   return commands.some((c) => re.test(c));
 }
 function approveAllowRule(root) {
-  const commands = PHASES.flatMap((p) => ["harness", harnessCliPath()].flatMap((h) => [
+  const cli = harnessCliPath();
+  const heads = ["harness", cli, cli.replace(/^'|'$/gu, "")];
+  const commands = PHASES.flatMap((p) => heads.flatMap((h) => [
     `${h} gate approve ${p}`,
-    `${h} gate approve ${p} --dialog-ticket 0`
+    `${h} gate approve ${p} --dialog-ticket 0`,
+    `${h} gate approve ${p} --project x --dialog-ticket 0`
   ]));
   for (const file of settingsFiles(root)) {
     let allow;
@@ -10918,8 +10922,8 @@ function refuseApprove(o) {
   const phase = str(o, "phase");
   const target = isPhase(phase) ? phase : "<P0..P12>";
   return fail(
-    `Gate approval cannot be done over MCP \u2014 ask the user to type \`${approveSlash(target)}\`.
-Alternatively run \`harness gate approve ` + target + "` alone through Bash: the hook raises a confirmation dialog, and the user answers it (spec \xA74-3). Approving through an MCP tool would skip the user, so this path refuses.\nYou can still submit: use `harness_gate_submit` to build a review packet and hand it to a human."
+    "Gate approval cannot be done over MCP. Run `harness gate approve " + target + `\` alone through Bash: the hook raises a confirmation dialog, and the user answers it (spec \xA74-3). Approving through an MCP tool would skip the user, so this path refuses. Only if the hook refuses the dialog, the user can type \`${approveSlash(target)}\`.
+You can still submit: use \`harness_gate_submit\` to build a review packet and hand it to a human.`
   );
 }
 function callTool(root, name, args) {
@@ -10976,7 +10980,7 @@ Warning: review packet generation failed (the submission still stands) \u2014 ${
       return ok(
         `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
 Review packet: ${path18.relative(root, packet)}
-Next: the user approves with \`${approveSlash(phase)}\` \u2014 the final decision is a human's.`
+Next: run \`harness gate approve ${phase}\` alone through Bash. The user answers the dialog, and the final decision is theirs. Only if the hook refuses the dialog, the user can type \`${approveSlash(phase)}\`.`
       );
     }
     case "harness_wave_create": {

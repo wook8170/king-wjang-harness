@@ -66,14 +66,14 @@ harness doc upsert --id DOC-P2 --path .harness/design/02-module.md --phase P2 \
 harness doc url DOC-P2 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P2          # refused without artifact_url
 harness gate submit P2 --paths .harness/design/02-module.md --evidence claimed
-# → present .harness/packets/P2.md → wait for the user's approval
+# → present .harness/packets/P2.md → raise the dialog
 harness doc approve DOC-P2
 harness phase set P3
 ```
 
 ## Approval is a human's
 
-**An agent never approves P2 on its own — the user types `/king-wjang-harness:approve P2`.** Check and report that both ADRs are `accepted`
+**An agent never approves P2 on its own.** Run `harness gate approve P2` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P2`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Check and report that both ADRs are `accepted`
 and that the review packet has no blockers, then wait.
 
 ## Pitfalls

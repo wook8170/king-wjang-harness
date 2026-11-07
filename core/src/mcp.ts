@@ -293,10 +293,9 @@ function refuseApprove(o: Record<string, unknown>): McpToolResult {
   const phase = str(o, 'phase');
   const target = isPhase(phase) ? phase : '<P0..P12>';
   return fail(
-    `Gate approval cannot be done over MCP — ask the user to type \`${approveSlash(target)}\`.\n`
-    + 'Alternatively run `harness gate approve ' + target + '` alone through Bash: the hook raises a confirmation '
-    + 'dialog, and the user answers it (spec §4-3). Approving through an MCP tool would skip the user, so this '
-    + "path refuses.\n"
+    'Gate approval cannot be done over MCP. Run `harness gate approve ' + target + '` alone through Bash: the hook '
+    + 'raises a confirmation dialog, and the user answers it (spec §4-3). Approving through an MCP tool would skip '
+    + `the user, so this path refuses. Only if the hook refuses the dialog, the user can type \`${approveSlash(target)}\`.\n`
     + 'You can still submit: use `harness_gate_submit` to build a review packet and hand it to a human.',
   );
 }
@@ -380,7 +379,8 @@ function dispatch(root: string, name: string, o: Record<string, unknown>): McpTo
       return ok(
         `${phase} submitted — hash ${r.artifactHash?.slice(0, 12)} · evidence ${r.evidence}\n`
         + `Review packet: ${path.relative(root, packet)}\n`
-        + `Next: the user approves with \`${approveSlash(phase)}\` — the final decision is a human's.`,
+        + `Next: run \`harness gate approve ${phase}\` alone through Bash. The user answers the dialog, and the final decision is theirs. `
+        + `Only if the hook refuses the dialog, the user can type \`${approveSlash(phase)}\`.`,
       );
     }
 

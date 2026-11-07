@@ -334,7 +334,7 @@ harness doc submit DOC-P6              # refused without artifact_url
 harness gate submit P6 --evidence claimed --paths .harness/audit/audit-r2.md,.harness/audit/reconcile-r1.md,\
 .harness/design/00-concept.md,.harness/design/01-domain.md,.harness/design/02-module.md,\
 .harness/design/03-feature.md,.harness/design/04-experience.md,.harness/design/05-contract.md
-# → present .harness/packets/P6.md → wait for the user's final design approval
+# → present .harness/packets/P6.md → raise the dialog for the final design approval
 harness doc approve DOC-P6
 harness phase set P7                   # source writing opens from here
 ```
@@ -344,7 +344,7 @@ and tampered approved documents **before** you ask for approval.
 
 ## Approval is a human's
 
-**An agent never approves P6 on its own — the user types `/king-wjang-harness:approve P6`.** This is the "design done, start building" button
+**An agent never approves P6 on its own.** Run `harness gate approve P6` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P6`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. This is the "design done, start building" button
 and it is the most expensive one to undo. Summarise the audit verdict, `HIGH N` per round, the
 reconciliation tables, the owner decisions and their answers, every HIGH whose risk this approval accepts,
 every HIGH moved to testing, the carry-over ledger, the re-raised count, the unresolved items, and the

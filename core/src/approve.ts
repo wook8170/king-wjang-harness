@@ -6,9 +6,9 @@
  * 대신할 **표(ticket)** 가 필요하다: 에이전트의 Bash 호출에는 TTY 가 없기 때문이다.
  *
  * - **확인 창**: 훅이 `permissionDecision: "ask"` 와 함께 `updatedInput` 으로 명령 끝에
- *   일회용 표를 붙인다. 실측(Claude Code 2.1.319): 모델의 기록에는 원래 명령만 남고, 거절된
- *   호출은 대화 기록에도 표를 남기지 않는다. 저장소에는 해시만 두므로 창이 거절되면 그 표는
- *   아무도 쓸 수 없다.
+ *   일회용 표를 붙인다. 표는 페이즈와 제출 해시에 묶이고 10분 뒤 무효가 된다. 실측(Claude Code
+ *   2.1.319): 모델의 기록에는 원래 명령만 남고, 거절된 호출은 대화 기록에도 표를 남기지 않는다.
+ *   저장소에는 해시만 두므로 창이 거절되면 그 표는 아무도 쓸 수 없다.
  * - **슬래시 명령**: `UserPromptExpansion` 훅이 사용자가 친 명령을 보고 표를 낸다. 이 이벤트는
  *   사람이 입력한 명령에서만 발생한다(공식 문서). 본문의 `!` 명령에는 값을 건넬 길이 없어
  *   비밀값 대신 짧은 유효 시간으로 범위를 좁힌다.
@@ -29,16 +29,18 @@ export type ApprovalVia = 'terminal' | 'dialog' | 'slash' | 'no-tty';
 /**
  * 창을 띄워도 되는 권한 모드 — **허용 목록**이다.
  *
- * `default`·`acceptEdits`·`auto` 는 실측에서 사람에게 창이 떴다. `auto` 는 공식 문서도 분류기가
- * `ask` 를 대신 판정하지 않는다고 적는다. `dontAsk`·`plan` 은 2.1.319 에서 창이 떴지만 문서의
- * 정의(묻지 않고 거부)나 모드의 취지와 맞지 않아 넣지 않는다. `bypassPermissions` 는 대화형
- * 동작을 재현하지 못했다. 모르는 값은 모두 거부 쪽으로 간다.
+ * `default`·`acceptEdits` 는 실측에서 사람에게 창이 떴다. `auto` 도 2.1.319 에서 창이 떴지만,
+ * 사람이 자리를 비운 채 돌릴 수 있는 모드라 승인을 맡기지 않는다(오너 결정). `dontAsk`·`plan` 은 창이
+ * 떴어도 문서의 정의(묻지 않고 거부)나 모드의 취지와 맞지 않아 넣지 않는다. `bypassPermissions` 는
+ * 대화형 동작을 재현하지 못했다. 모르는 값은 모두 거부 쪽으로 간다.
  */
-const ASK_MODES: readonly string[] = ['default', 'acceptEdits', 'auto'];
+const ASK_MODES: readonly string[] = ['default', 'acceptEdits'];
 
-/** 표의 유효 시간. 창은 응답할 때까지 열려 있으므로 길게 두고, 슬래시 표는 곧바로 쓰이므로 짧게 둔다. */
-const DIALOG_TTL_MS = 30 * 60 * 1000;
+/** 표의 유효 시간. 창에 늦게 답하면 다시 띄운다. 슬래시 표는 곧바로 쓰이므로 더 짧게 둔다. */
+const DIALOG_TTL_MS = 10 * 60 * 1000;
 const SLASH_TTL_MS = 60 * 1000;
+/** 같은 내용의 창을 다시 띄우지 않는 시간. 실수로 거절했으면 잠시 뒤 다시 띄울 수 있게 표의 유효 시간보다 짧게 둔다. */
+const DIALOG_REASK_MS = 2 * 60 * 1000;
 
 interface Ticket {
   kind: 'dialog' | 'slash';
@@ -66,6 +68,14 @@ export function issueDialogTicket(root: string, phase: Phase, artifactHash: stri
   return nonce;
 }
 
+/** 같은 페이즈 · 같은 내용으로 창을 방금 띄웠는가. 거절된 창을 곧바로 다시 띄우지 않으려는 판정이다. */
+export function dialogJustRaised(root: string, phase: Phase, artifactHash: string, now: number = Date.now()): boolean {
+  let t: Ticket;
+  try { t = JSON.parse(fs.readFileSync(ticketPath(root), 'utf8')) as Ticket; } catch { return false; }
+  const age = now - t.issuedAt;
+  return t.kind === 'dialog' && t.phase === phase && t.artifactHash === artifactHash && age >= 0 && age < DIALOG_REASK_MS;
+}
+
 export function issueSlashTicket(root: string, phase: Phase, artifactHash: string): void {
   writeTicket(root, { kind: 'slash', phase, artifactHash, issuedAt: Date.now() });
 }
@@ -88,7 +98,10 @@ export function consumeTicket(
   if (kind === 'dialog' && (!nonce || !t.nonceHash || sha256(nonce) !== t.nonceHash)) return false;
   const age = now - t.issuedAt;
   if (!(age >= 0 && age <= (kind === 'dialog' ? DIALOG_TTL_MS : SLASH_TTL_MS))) return false;
-  fs.rmSync(ticketPath(root), { force: true });
+  // 이름을 바꾸는 쪽이 하나만 성공한다. 같은 표를 동시에 쓰는 두 호출 중 하나는 여기서 실패한다.
+  const claimed = `${ticketPath(root)}.used-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
+  try { fs.renameSync(ticketPath(root), claimed); } catch { return false; }
+  fs.rmSync(claimed, { force: true });
   return true;
 }
 
@@ -114,6 +127,17 @@ export function askableMode(mode: string | undefined): boolean {
  */
 export function interactiveEntrypoint(): boolean {
   return process.env.CLAUDE_CODE_ENTRYPOINT === 'cli';
+}
+
+/**
+ * 이 프로세스가 Claude Code 의 도구 호출 안에서 도는가.
+ *
+ * 터미널 경로는 `stdin` 이 TTY 인지 본다. 그런데 `script` 나 `pty` 로 TTY 를 만들 수 있으므로 TTY 는
+ * 사람이 있다는 증거가 되지 못한다. 그래서 Claude Code 가 도구 프로세스에 넣는 환경 변수가 있으면
+ * 터미널 · `HARNESS_APPROVE_NO_TTY` 경로를 쓰지 않는다. 표를 쓰는 두 경로에는 해당하지 않는다.
+ */
+export function insideClaudeCode(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CLAUDECODE !== undefined || env.CLAUDE_CODE_ENTRYPOINT !== undefined;
 }
 
 function settingsFiles(root: string): string[] {
@@ -143,9 +167,13 @@ function ruleMatches(rule: string, commands: readonly string[]): boolean {
  * 읽지 않는다.
  */
 export function approveAllowRule(root: string): { file: string; rule: string } | null {
-  const commands = PHASES.flatMap(p => ['harness', harnessCliPath()].flatMap(h => [
+  // 경로에 공백이 있으면 훅은 따옴표로 싸서 실행한다. 규칙은 따옴표 없이도 적을 수 있으므로 둘 다 대조한다.
+  const cli = harnessCliPath();
+  const heads = ['harness', cli, cli.replace(/^'|'$/gu, '')];
+  const commands = PHASES.flatMap(p => heads.flatMap(h => [
     `${h} gate approve ${p}`,
     `${h} gate approve ${p} --dialog-ticket 0`,
+    `${h} gate approve ${p} --project x --dialog-ticket 0`,
   ]));
   for (const file of settingsFiles(root)) {
     let allow: unknown;

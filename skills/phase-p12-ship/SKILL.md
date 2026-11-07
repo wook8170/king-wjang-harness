@@ -77,7 +77,7 @@ harness doc url DOC-P12 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P12              # refused without artifact_url
 harness gate submit P12 --evidence measured \
   --paths .harness/ship/release-checklist.md,.harness/ship/release-notes.md,.harness/ship/defects.yaml
-# → present .harness/packets/P12.md → wait for the user's final ship approval
+# → present .harness/packets/P12.md → raise the dialog for the final ship approval
 harness doc approve DOC-P12
 harness report hub                      # refresh the hub artifact — the user's bookmark points at the latest
 ```
@@ -87,7 +87,7 @@ Run `harness gate sweep` once before submitting — it catches artifacts tampere
 
 ## Approval is a human's
 
-**A human approves by typing `/king-wjang-harness:approve P12`. An agent never approves on their behalf.** This is the
+**A human answers the dialog for P12. An agent never approves on their behalf.** Run `harness gate approve P12` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P12`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. This is the
 "ship" button and it is the most expensive one to undo. Present the verdict, the deferred list, and
 the uncovered stretches of the RTM exactly as they are, and let the user approve themselves. A GO is
 not the approval — it is **the input to the approval review**.

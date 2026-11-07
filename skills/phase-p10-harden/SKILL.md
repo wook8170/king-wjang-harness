@@ -119,14 +119,14 @@ harness doc submit DOC-P10              # refused without artifact_url
 harness gate submit P10 --evidence measured \
   --paths .harness/ship/readiness.md,.harness/ship/defects.yaml,.harness/audit/conformance-r2.md,\
 .harness/ship/evidence/ux-adversarial/findings.md
-# → present .harness/packets/P10.md → wait for the user's approval
+# → present .harness/packets/P10.md → raise the dialog
 harness doc approve DOC-P10
 harness phase set P11
 ```
 
 ## Approval is a human's
 
-**A human approves by typing `/king-wjang-harness:approve P10`. An agent never approves on their behalf.** Summarise
+**A human answers the dialog for P10. An agent never approves on their behalf.** Run `harness gate approve P10` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P10`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Summarise
 the verdict, the unresolved items, and the deferral reasons honestly, and wait. If the evidence grade
 is not `measured` the core refuses first — do not try to route around that refusal.
 

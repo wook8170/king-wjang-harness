@@ -19,7 +19,7 @@ one-to-one, so P9 has something concrete to verify against.
 ## Entering the track
 
 ```bash
-/king-wjang-harness:approve P6 # the user types this — this is what unlocks source writes
+harness gate approve P6 # raises the dialog; the user's answer is what unlocks source writes
 harness phase set P7           # refused until the P6 gate is approved
 ```
 

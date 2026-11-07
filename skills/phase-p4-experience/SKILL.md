@@ -127,14 +127,14 @@ harness doc url DOC-P4-DS https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P4 && harness doc submit DOC-P4-DS    # both refused without artifact_url
 harness gate submit P4 --evidence claimed \
   --paths .harness/design/04-experience.md,.harness/design/design-system.html,.harness/design/tokens/design-tokens.json
-# → present .harness/packets/P4.md → wait for the user's approval
+# → present .harness/packets/P4.md → raise the dialog
 harness doc approve DOC-P4 && harness doc approve DOC-P4-DS
 harness phase set P5
 ```
 
 ## Approval is a human's
 
-**An agent never approves P4 on its own — the user types `/king-wjang-harness:approve P4`.** Give the artifact URL of the HTML of record
+**An agent never approves P4 on its own.** Run `harness gate approve P4` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P4`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Give the artifact URL of the HTML of record
 first and let the user actually click through it. P4 is a gate that is approved with the eyes.
 
 ## Pitfalls

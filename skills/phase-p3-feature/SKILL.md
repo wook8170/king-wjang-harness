@@ -38,7 +38,7 @@ harness doc upsert --id DOC-P3 --path .harness/design/03-feature.md --phase P3 -
 harness doc url DOC-P3 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P3          # refused without artifact_url
 harness gate submit P3 --paths .harness/design/03-feature.md --evidence claimed
-# → present .harness/packets/P3.md → wait for the user's approval
+# → present .harness/packets/P3.md → raise the dialog
 harness doc approve DOC-P3
 harness phase set P4
 ```
@@ -49,8 +49,8 @@ never reviewed.
 
 ## Approval is a human's
 
-**An agent never approves P3 on its own — the user types `/king-wjang-harness:approve P3`.** Summarise the feature count, the number of
-acceptance criteria, and any missing exception paths, then wait for the user's approval.
+**An agent never approves P3 on its own.** Run `harness gate approve P3` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P3`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Summarise the feature count, the number of
+acceptance criteria, and any missing exception paths, then raise the dialog.
 
 ## Pitfalls
 

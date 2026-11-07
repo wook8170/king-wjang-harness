@@ -18,11 +18,12 @@ import { loadConfig } from './config';
 import { readWave } from './wave';
 import { readJournalForReplay, replayState, maskSecrets } from './events';
 import { readRuntime, noteActivity, clearActivity } from './runtime';
-import { harnessDir, runtimeDir, eventsPath, humanCmd, approveSlash, harnessCliPath, SLASH_COMMAND_NAME, denialsPath, isUnderTempDir } from './paths';
-import { approveAllowRule, askableMode, interactiveEntrypoint, issueDialogTicket, issueSlashTicket, parseApproveCall } from './approve';
+import { harnessDir, runtimeDir, eventsPath, humanCmd, approveSlash, harnessCliPath, shellQuote, SLASH_COMMAND_NAME, denialsPath, isUnderTempDir } from './paths';
+import { approveAllowRule, askableMode, dialogJustRaised, interactiveEntrypoint, issueDialogTicket, issueSlashTicket, parseApproveCall } from './approve';
+import { approvalRelay, ownedTreeWrite } from './ownedtree';
 import { auditStatus, ensureAuditFormat } from './audit';
 import { measuredOnlyViolation, recordedPaths } from './gate';
-import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, isPhase } from './types';
+import { DESIGN_PHASES, BUILD_PHASES, SHIP_PHASES, PHASES, isPhase } from './types';
 import { scanBashWrites, mentionsPath, pathLikeMentions, PREFIX_COMMANDS, runsCommand, isReadOnlyCommand, commandLines, SHELLS_TAKING_C, judgeableLines, looksLikePath, interpreterProgramFiles, PATH_MAX_GUESS, ENV_ASSIGN_RE, setsEnv } from './bashwrite';
 import { pick, type Lang, type Msg } from './i18n';
 import { sanitizeUntrusted, contentNonce, UNTRUSTED_MAX_LINE, oneLine } from './untrusted';
@@ -239,6 +240,13 @@ function harnessInvokingLines(cmd: string): string[] {
   const hit = lines.filter(l => HARNESS_HEAD_RE.test(l) || CORE_INVOKE_RE.test(l.replace(/^[`'"\s(]+/, '')));
   hilCache = { cmd, lines: hit };
   return hit;
+}
+
+/** 승인을 대신 치는 도구를 찾을 줄들. 명령치환 안쪽도 실행이므로 함께 본다. */
+function harnessRelayLines(cmd: string): string[] {
+  const lines = commandLines(cmd);
+  for (const m of cmd.matchAll(/`([^`]*)`|\$\(([^()]*)\)/g)) lines.push(...commandLines(m[1] ?? m[2] ?? ''));
+  return lines;
 }
 
 /** 하네스를 **실행하는 줄 하나 안에서** 주어진 형태가 모두 나타나는가. */
@@ -840,6 +848,9 @@ function recordDenial(root: string, input: HookInput, out: object | null): void 
   } catch { /* 기록 실패가 판정을 바꾸지 않는다 */ }
 }
 
+/** 거부 안내에 적을 페이즈. 명령에서 읽지 못하면 자리표시를 쓴다. */
+const approvePhaseOf = (cmd: string): string => /\bP(?:1[0-2]|\d)\b/u.exec(cmd)?.[0] ?? '<P>';
+
 /**
  * 에이전트의 `harness gate approve <P>` 호출을 확인 창으로 올릴지, 왜 못 올리는지 판정한다.
  * 조건은 전부 「사람에게 창이 반드시 뜬다」를 보장하기 위한 것이다. 하나라도 어긋나면 거부한다.
@@ -851,7 +862,7 @@ function judgeApproveCall(
   cmd: string,
   degraded: Degraded | null,
   L: (en: string, ko: string) => string,
-): { ask: object } | { why: string } {
+): { ask: object } | { why: string; next?: string } {
   const call = parseApproveCall(cmd);
   if (!call) {
     return { why: L(
@@ -863,7 +874,10 @@ function judgeApproveCall(
     return { why: L('the state is damaged, so what is being approved cannot be shown.', '상태가 손상돼 무엇을 승인하는지 보여 줄 수 없다.') };
   }
   if (input.agent_id) {
-    return { why: L('it came from a subagent.', '서브에이전트의 호출이다.') };
+    return {
+      why: L('it came from a subagent.', '서브에이전트의 호출이다.'),
+      next: L('Report back to the main session, which runs `harness gate approve <P>` alone.', '메인 세션에 보고하면 메인 세션이 `harness gate approve <P>` 를 단독으로 실행한다.'),
+    };
   }
   if (!interactiveEntrypoint()) {
     return { why: L('this session has nobody at the prompt to answer it.', '이 세션에는 창에 답할 사람이 없다.') };
@@ -883,10 +897,35 @@ function judgeApproveCall(
   }
   const gate = state.gates[call.phase];
   if (gate?.status !== 'submitted') {
-    return { why: L(
-      `gate ${call.phase} is not submitted (currently: ${gate?.status ?? 'pending'}).`,
-      `게이트 ${call.phase} 가 제출 상태가 아니다(현재: ${gate?.status ?? 'pending'}).`,
-    ) };
+    const after = PHASES[PHASES.indexOf(call.phase) + 1];
+    if (gate?.status === 'approved') {
+      return {
+        why: L(`gate ${call.phase} is already approved.`, `게이트 ${call.phase} 는 이미 승인됐다.`),
+        next: after
+          ? L(`Do not ask again. Run \`harness phase set ${after}\` and carry on.`, `다시 묻지 않는다. \`harness phase set ${after}\` 를 실행하고 이어 간다.`)
+          : L('Do not ask again.', '다시 묻지 않는다.'),
+      };
+    }
+    return {
+      why: L(
+        `gate ${call.phase} is not submitted (currently: ${gate?.status ?? 'pending'}).`,
+        `게이트 ${call.phase} 가 제출 상태가 아니다(현재: ${gate?.status ?? 'pending'}).`,
+      ),
+      next: L(
+        `Run \`harness gate submit ${call.phase} --evidence measured --paths <artifacts>\` first, then \`harness gate approve ${call.phase}\`.`,
+        `먼저 \`harness gate submit ${call.phase} --evidence measured --paths <산출물>\` 을 실행하고, 그다음 \`harness gate approve ${call.phase}\` 를 실행한다.`,
+      ),
+    };
+  }
+  // 같은 내용을 곧바로 다시 묻지 않는다. 남아 있는 표는 사용자가 거절했거나 아직 답하지 않았다는 뜻이다.
+  if (dialogJustRaised(root, call.phase, gate.artifactHash ?? '')) {
+    return {
+      why: L('the same dialog was raised moments ago, and it was not allowed.', '같은 내용의 창을 방금 띄웠고 허용되지 않았다.'),
+      next: L(
+        'Do not ask again. Find out why from the user, change the artifacts and submit again, which raises a new dialog. If the user asks for the dialog again, run it after two minutes.',
+        '다시 묻지 않는다. 사용자에게 이유를 듣고 산출물을 고쳐 다시 제출하면 새 창이 뜬다. 사용자가 같은 창을 원하면 2분 뒤에 실행한다.',
+      ),
+    };
   }
   const notMeasured = measuredOnlyViolation(root, call.phase, gate.evidence);
   if (notMeasured) return { why: notMeasured };
@@ -895,28 +934,39 @@ function judgeApproveCall(
   const audit = call.phase === 'P6' ? auditStatus(root, paths) : null;
   if (audit && audit.violations.length > 0) return { why: sanitizeUntrusted(audit.violations.join(' '), 1000) };
   // 경로는 제출자(에이전트)가 정한 값이다 — 사람이 읽는 창에 그대로 싣지 않는다.
-  const shown = sanitizeUntrusted(paths.slice(0, 5).join(', ') + (paths.length > 5 ? ` +${paths.length - 5}` : ''), 300);
+  // 보이지 않는 서식 문자는 창에 보이는 글자와 실제 값을 다르게 만들 수 있어 함께 뺀다.
+  const inDialog = (s: string, max: number): string => sanitizeUntrusted(s.replace(/\p{Cf}/gu, ' '), max);
+  const shown = inDialog(paths.slice(0, 5).join(', ') + (paths.length > 5 ? ` +${paths.length - 5}` : ''), 300);
   const hash = (gate.artifactHash ?? '').slice(0, 12);
   const nonce = issueDialogTicket(root, call.phase, gate.artifactHash ?? '');
   // 처리표의 위험 수용은 이 승인으로 효력을 갖는다 — 승인하는 사람이 창에서 그 사실을 봐야 한다.
-  const accepted = audit ? sanitizeUntrusted(audit.acceptedHighs.map(a => a.id).join(', '), 300) : '';
-  const decided = audit ? sanitizeUntrusted(audit.ownerDecisions.map(a => a.id).join(', '), 300) : '';
+  const accepted = audit ? inDialog(audit.acceptedHighs.map(a => a.id).join(', '), 300) : '';
+  const decided = audit ? inDialog(audit.ownerDecisions.map(a => a.id).join(', '), 300) : '';
+  const next = PHASES[PHASES.indexOf(call.phase) + 1];
   return { ask: {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'ask',
+      // 좁은 화면에서 앞부분만 보여도 무엇을 승인하는지 알 수 있게 승인 대상과 결과를 맨 앞에 둔다.
       permissionDecisionReason: L(
-        `Approve gate ${call.phase}? Artifacts: ${shown} · evidence: ${gate.evidence} · hash: ${hash} · `
-        + `review packet: .harness/packets/${call.phase}.md. Saying yes opens the next phase.`
-        + (accepted ? ` Saying yes also accepts the risk of these HIGH findings: ${accepted}.` : '')
+        `[king-wjang-harness] Approve gate ${call.phase}? ${next ? `Allowing lets the project move on to ${next}.` : 'This is the last gate.'} `
+        + `Artifacts: ${shown} · evidence: ${gate.evidence} · hash: ${hash} · review packet: .harness/packets/${call.phase}.md.`
+        + (accepted ? ` Allowing also accepts the risk of these HIGH findings: ${accepted}.` : '')
         + (decided ? ` It also confirms these owner decisions: ${decided}.` : ''),
-        `게이트 ${call.phase} 를 승인합니까? 산출물: ${shown} · 근거: ${gate.evidence} · 해시: ${hash} · `
-        + `리뷰 패킷: .harness/packets/${call.phase}.md. 승인하면 다음 페이즈가 열린다.`
-        + (accepted ? ` 승인하면 다음 HIGH 의 위험도 수용한다: ${accepted}.` : '')
+        `[king-wjang-harness] 게이트 ${call.phase} 를 승인합니까? ${next ? `허용하면 다음 단계(${next})로 넘어갈 수 있다.` : '마지막 게이트다.'} `
+        + `산출물: ${shown} · 근거: ${gate.evidence} · 해시: ${hash} · 리뷰 패킷: .harness/packets/${call.phase}.md.`
+        + (accepted ? ` 허용하면 다음 HIGH 의 위험도 수용한다: ${accepted}.` : '')
         + (decided ? ` 다음 오너 결정도 확정한다: ${decided}.` : ''),
       ),
-      // 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
-      updatedInput: { ...input.tool_input, command: `${harnessCliPath()} gate approve ${call.phase} --dialog-ticket ${nonce}` },
+      /**
+       * 이 설치의 절대 경로로 고정한다. PATH 의 `harness` 가 다른 판을 가리켜도 승인받은 그 프로그램이 돈다.
+       * 프로젝트 루트도 적는다. 세션 폴더를 옮겨 다른 `.harness` 위에서 돌면 창에 보인 게이트와 달라지기 때문이다.
+       * 나머지 입력은 넘기지 않는다. 에이전트가 적은 설명이 창에 그대로 뜨면 승인이 아닌 일로 읽힐 수 있다.
+       */
+      updatedInput: {
+        command: `${harnessCliPath()} gate approve ${call.phase} --project ${shellQuote(root)} --dialog-ticket ${nonce}`,
+        description: L(`Approve gate ${call.phase}`, `게이트 ${call.phase} 승인`),
+      },
     },
   } };
 }
@@ -1674,6 +1724,21 @@ function judgeWritePath(
       ),
       degraded, lang,
     );
+  }
+  /**
+   * 맥의 기본 디스크는 대소문자를 구분하지 않는다. 그래서 `.harness/.runtime/APPROVE-TICKET` 은 승인 표와
+   * 같은 파일이다. 대소문자만 다른 이름도 소유 파일로 판정한다. 구분하는 디스크에서는 쓸 일이 없는 이름이다.
+   */
+  const foldedSpaces = spaces.map(r => r.toLowerCase());
+  const foldedOwned = CORE_FILES.find(f => !spaces.some(r => r === f || coversPath(r, f))
+      && foldedSpaces.some(r => r === f.toLowerCase() || coversPath(r, f.toLowerCase())))
+    ?? POLICY_PREFIXES.find(pre => foldedSpaces.some(r => r.startsWith(pre.toLowerCase()) || coversPath(r, pre.replace(/\/+$/, '').toLowerCase()))
+      && !spaces.some(r => r.startsWith(pre) || coversPath(r, pre.replace(/\/+$/, ''))));
+  if (foldedOwned !== undefined) {
+    return deny(L(
+      `${sanitizeUntrusted(raw)} differs from ${foldedOwned} only by case, and on a case-insensitive disk it is the same file. Only harness commands may change that file.`,
+      `${sanitizeUntrusted(raw)} 은(는) ${foldedOwned} 와 대소문자만 다르다. 대소문자를 구분하지 않는 디스크에서는 같은 파일이고, 그 파일은 harness 명령으로만 바꿀 수 있다.`,
+    ), degraded, lang);
   }
   const stateFile = [rel, realRel].find(r => STATE_FILES.includes(r))
     ?? STATE_FILES.find(sf => spaces.some(r => coversPath(r, sf)));
@@ -2539,6 +2604,33 @@ function preTool(
      * `gate approve` 는 탈출구가 아니라 **정상 흐름**이고, env 를 요구하면 문서·패킷·
      * 도움말이 가리키는 사람의 길이 통째로 어긋난다).
      */
+    // 승인 파일과 표를 이름 없이 만드는 형태(해제 · 상위 폴더 대상 복사)와 승인 입력을 대신 치는 형태.
+    const relay = approvalRelay(harnessRelayLines(cmd), cmd);
+    if (relay !== undefined) {
+      return deny(L(
+        'This types the approval for a person, or makes a terminal for it, so the harness could not tell it from a human. '
+        + `Ask the user to type \`${approveSlash('<P>')}\`, or run \`harness gate approve <P>\` alone on one line to raise the confirmation dialog.`,
+        '승인 입력을 사람 대신 치거나 그 입력을 받을 터미널을 만드는 명령이다. 하네스는 이것을 사람의 입력과 구분할 수 없다. '
+        + `사용자에게 \`${approveSlash('<P>')}\` 입력을 요청하거나, \`harness gate approve <P>\` 를 한 줄 단독으로 실행해 확인 창을 띄워라.`,
+      ), degraded, lang);
+    }
+    const reached = ownedTreeWrite(root, [...CORE_FILES, ...POLICY_PREFIXES], cmd, process.env);
+    if (reached) {
+      const target = sanitizeUntrusted(reached.target, 200);
+      return deny(L(
+        reached.why === 'inside-runtime'
+          ? `This writes from inside ${target}, where the approval ticket lives, so the file it writes need not be named. Run it from another folder.`
+          : reached.why === 'unreadable-archive'
+            ? `This unpacks over the folder holding the harness files, and the hook cannot read what is inside \`${target}\`. It could replace the files that decide gate approval. Unpack into a new subfolder, then move what you need.`
+            : `This would put harness-owned files in place through \`${target}\` without naming them. Those files decide whether a gate is approved. Unpack or copy into a new subfolder, then move what you need, leaving \`.harness\` out.`,
+        reached.why === 'inside-runtime'
+          ? `승인 표가 있는 ${target} 안에서 쓰는 명령이다. 그 안에서는 파일 이름을 적지 않아도 쓸 수 있다. 다른 폴더에서 실행하라.`
+          : reached.why === 'unreadable-archive'
+            ? `하네스 파일이 있는 폴더 위에 푸는데 \`${target}\` 의 내용을 읽을 수 없다. 게이트 승인을 정하는 파일을 덮을 수 있다. 새 하위 폴더에 푼 뒤 필요한 것만 옮겨라.`
+            : `\`${target}\` 로 하네스 소유 파일을 이름 없이 만들게 된다. 그 파일들이 게이트 승인을 정한다. 새 하위 폴더에 풀거나 복사한 뒤 \`.harness\` 를 빼고 옮겨라.`,
+      ), degraded, lang);
+    }
+
     // [SEC-138] 두 번째 겹(CLI 의 TTY 검사)의 탈출구 env 를 **인라인으로 켜는 것**을 막는다 —
     // `--force`·`--accept-policy` 와 같은 두 절 구조다(env 리터럴 언급 + 실행 형태). 이 절이
     // 없으면 훅의 형태 인식을 뚫은 뒤 env 를 붙여 두 번째 겹까지 한 줄로 끌 수 있다.
@@ -2550,15 +2642,13 @@ function preTool(
       if ('ask' in judged) return judged.ask;
       return deny(L(
         `Approving a gate is the human's decision, and this call cannot raise a confirmation dialog: ${judged.why} `
-        + 'Submit the artifacts and let the review packet be read: '
-        + '`harness gate submit <P> --evidence measured --paths <artifacts>`, then **ask the user to type** '
-        + '`' + approveSlash('<P>') + '`. Everything else on the gate is open to '
-        + 'you: `harness gate status`, `harness gate verify <P>`.',
+        + `${judged.next ?? `Run this line alone, and the user only answers the dialog: \`harness gate approve ${approvePhaseOf(cmd)}\`.`} `
+        + `Fallback when the dialog cannot appear: the user types \`${approveSlash(approvePhaseOf(cmd))}\`. `
+        + 'Everything else on the gate is open to you: `harness gate status`, `harness gate verify <P>`.',
         `게이트 승인은 사람의 판단이고, 이 호출로는 확인 창을 띄울 수 없다: ${judged.why} `
-        + '산출물을 제출해 리뷰 패킷이 읽히게 하라: '
-        + '`harness gate submit <P> --evidence measured --paths <산출물>`. 그 다음 **사용자에게** '
-        + '`' + approveSlash('<P>') + '` 입력을 요청한다. 나머지는 열려 있다: '
-        + '`harness gate status`·`harness gate verify <P>`.',
+        + `${judged.next ?? `이 줄을 단독으로 실행하라. 사용자는 창에 답하기만 한다: \`harness gate approve ${approvePhaseOf(cmd)}\`.`} `
+        + `창이 뜰 수 없을 때만 사용자가 \`${approveSlash(approvePhaseOf(cmd))}\` 를 입력한다. `
+        + '나머지는 열려 있다: `harness gate status`·`harness gate verify <P>`.',
       ), degraded, lang);
     }
     // 슬래시 명령은 사람이 친 입력에서만 표를 낸다. 에이전트가 하위 Claude 를 띄워 그 입력을

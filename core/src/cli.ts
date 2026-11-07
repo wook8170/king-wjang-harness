@@ -68,7 +68,7 @@ import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
 import { harnessDir, runtimeDir, packetsDir, isInsideRoot, humanCmd, approveSlash, eventsPath } from './paths';
 import { auditClosedItems, auditStatus } from './audit';
 import { sanitizeUntrusted } from './untrusted';
-import { consumeTicket, type ApprovalVia } from './approve';
+import { consumeTicket, insideClaudeCode, type ApprovalVia } from './approve';
 import { PHASES, isPhase, DOC_STATUSES, LEDGER_STATUSES } from './types';
 import type { LedgerNode } from './types';
 
@@ -875,9 +875,11 @@ export function run(argv: string[], root: string): number {
         console.error(L(
           'NOTE: do not add `harness gate approve` to your permission allowlist. If a rule covers it, the hook '
           + 'refuses to raise the confirmation dialog, and approval works only through '
-          + `\`${approveSlash('<P>')}\`.`,
+          + `\`${approveSlash('<P>')}\`. To let the rest run without prompts, allow narrow rules such as `
+          + '`Bash(harness gate submit:*)` and `Bash(harness phase set:*)`, not `Bash(harness:*)`.',
           '고지: `harness gate approve` 를 권한 허용 목록에 넣지 마라. 규칙이 이 명령을 덮으면 훅이 확인 창을 '
-          + `띄우지 않고 거부하므로 \`${approveSlash('<P>')}\` 로만 승인할 수 있다.`,
+          + `띄우지 않고 거부하므로 \`${approveSlash('<P>')}\` 로만 승인할 수 있다. 나머지를 창 없이 돌리려면 `
+          + '`Bash(harness:*)` 대신 `Bash(harness gate submit:*)` · `Bash(harness phase set:*)` 처럼 좁은 규칙을 쓴다.',
         ));
         return 0;
 
@@ -1048,7 +1050,8 @@ export function run(argv: string[], root: string): number {
                     + `for approval. Link one with \`harness doc upsert --id <DOC-x> --path <file> --phase ${phase}\` `
                     + '→ publish → `harness doc url <DOC-x> <url>`, then submit again.'
                   : '')
-                + `\nNext: the user approves it by typing this in Claude Code:\n  ${approveSlash(phase)}`,
+                + `\nNext: run this line alone from the main session. It raises the confirmation dialog, and the user only answers it:\n  harness gate approve ${phase}`
+                + `\nDo not ask the user to type anything. Only if the hook refuses the dialog, the user can type \`${approveSlash(phase)}\`.`,
                 `${phase} 제출됨 — 해시 ${r.artifactHash?.slice(0, 12)} · 근거 ${r.evidence}`
                 + (packet ? `\n리뷰 패킷: ${path.relative(root, packet)}` : '')
                 + (noDoc
@@ -1056,7 +1059,8 @@ export function run(argv: string[], root: string): number {
                     + `\`harness doc upsert --id <DOC-x> --path <파일> --phase ${phase}\` `
                     + '→ 발행 → `harness doc url <DOC-x> <url>` 로 이은 뒤 다시 제출하라.'
                   : '')
-                + `\n다음: 사용자가 Claude Code 에 아래 명령을 입력해 승인한다:\n  ${approveSlash(phase)}`,
+                + `\n다음: 메인 세션에서 아래 줄을 단독으로 실행한다. 확인 창이 뜨고, 사용자는 창에 답하기만 한다:\n  harness gate approve ${phase}`
+                + `\n사용자에게 입력을 요청하지 않는다. 훅이 창을 거부할 때만 사용자가 \`${approveSlash(phase)}\` 를 입력한다.`,
               ),
             );
             return 0;
@@ -1088,6 +1092,14 @@ export function run(argv: string[], root: string): number {
                 ));
               }
               via = kind;
+            } else if (insideClaudeCode()) {
+              // TTY 는 `script` 로 만들 수 있고, 환경 변수는 파일에서 읽어 올 수 있다. 도구 호출 안에서는 둘 다 믿지 않는다.
+              throw new Error(L(
+                `This is running inside a Claude Code tool call, which cannot approve a gate. The user approves by typing \`${approveSlash('<P>')}\` in Claude Code, `
+                + 'or by answering the confirmation dialog raised when `harness gate approve <P>` runs alone through Bash.',
+                `Claude Code 의 도구 호출 안에서는 게이트를 승인할 수 없다. 사용자가 Claude Code 에 \`${approveSlash('<P>')}\` 를 입력하거나, `
+                + '`harness gate approve <P>` 를 Bash 로 단독 실행할 때 뜨는 확인 창에 답한다.',
+              ));
             } else if (process.stdin.isTTY) {
               via = 'terminal';
             } else if (process.env.HARNESS_APPROVE_NO_TTY === '1') {
@@ -1124,6 +1136,11 @@ export function run(argv: string[], root: string): number {
             const r = approveGate(root, phase, via);
             console.log(L(`${phase} approved — ${r.approvedAt} · evidence ${r.evidence}`, `${phase} 승인됨 — ${r.approvedAt} · 근거 ${r.evidence}`));
             if (listed.length > 0) console.log(L(`Confirmed by this approval:\n${listed.join('\n')}`, `이 승인으로 확정한 항목:\n${listed.join('\n')}`));
+            // 승인은 한 번이면 된다. 에이전트가 다시 묻지 않고 다음 페이즈로 이어 가도록 정확한 줄을 준다.
+            {
+              const next = PHASES[PHASES.indexOf(phase) + 1];
+              if (next) console.log(L(`Next: run \`harness phase set ${next}\` and carry on with ${next}. Do not ask the user again.`, `다음: \`harness phase set ${next}\` 를 실행하고 ${next} 작업을 이어 간다. 사용자에게 다시 묻지 않는다.`));
+            }
             return 0;
           }
           case 'verify': {
