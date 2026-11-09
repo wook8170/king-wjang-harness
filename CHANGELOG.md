@@ -8,6 +8,8 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-11-10
+
 ### Changed — the confirmation dialog for gate approval
 
 The dialog path added in 0.1.8 is now the main way to ask for approval from the main session, and its guards are tighter.
