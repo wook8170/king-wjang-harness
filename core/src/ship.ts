@@ -43,6 +43,7 @@
  * [ENG-157] 여기에는 오래 「아직 없다」고 적혀 있었고 현재 사실과 정반대였다. 전수 대조는
  * `core/test/eng-3i-residuals.test.ts` 가 한다.
  */
+import { carryItemGaps } from './audit';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as YAML from 'yaml';
@@ -581,6 +582,17 @@ export function shipVerdict(root: string): ShipVerdict {
         }));
       }
     }
+  }
+
+  // ── P6 에서 시험으로 옮긴 지적: 시험하지 않은 채 출하하면 옮긴 것이 아니라 버린 것이다.
+  for (const g of carryItemGaps(root).filter(x => x.decision === 'test-transfer')) {
+    reasons.push(g.closure === 'conformance' ? t({
+      en: `design audit item ${g.token} is a HIGH moved to testing, and the newest conformance audit does not mark it holds`,
+      ko: `시험으로 옮긴 HIGH ${g.token} 이 최신 적합성 감사에 holds 로 적혀 있지 않다`,
+    }) : t({
+      en: `design audit item ${g.token} was moved to testing, but no completed wave carries it in its acceptance criteria`,
+      ko: `시험으로 옮긴 설계 감사 항목 ${g.token} 을 수용 기준에 담아 완료한 웨이브가 없다`,
+    }));
   }
 
   // ── 게이트 (페이즈 순서)

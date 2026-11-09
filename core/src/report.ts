@@ -33,8 +33,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { evidenceDir, wavesDir, denialsPath } from './paths';
-import { oneLine } from './untrusted';
-import { verifyGate, readGateFeedback, submissionSignals, MIN_SUBSTANCE_CHARS } from './gate';
+import { oneLine, sanitizeUntrusted } from './untrusted';
+import { auditStatus, carryItemGaps } from './audit';
+import { verifyGate, readGateFeedback, submissionSignals, recordedPaths, MIN_SUBSTANCE_CHARS } from './gate';
 import { loadLedger, getNode } from './ledger';
 import { docsForPhase, inspectRegistry, staleDocs, loadRegistry } from './registry';
 import { readState } from './state';
@@ -318,6 +319,20 @@ export function renderRtm(root: string): string {
     );
   }
   out.push('', `## ${t(GAPS_HEADING)}`, '', ...gapLines(rows, t));
+  const carry = auditStatus(root).carryItems;
+  if (carry.length > 0) {
+    const open = new Set(carryItemGaps(root).map(g => g.token));
+    out.push('', `## ${t({ en: 'Design audit items carried to P7~P9', ko: 'P7~P9 로 넘긴 설계 감사 항목' })}`, '');
+    out.push(...carry.map(c => `- \`${cell(c.token)}\` ${c.severity} ${c.decision} → ${cell(c.target)}: ${
+      open.has(c.token)
+        ? `**${c.closure === 'conformance'
+          ? t({ en: 'not marked holds in the newest conformance audit', ko: '최신 적합성 감사에 holds 로 적혀 있지 않다' })
+          : t({ en: 'no completed wave carries this token in its acceptance criteria', ko: '이 표식을 수용 기준에 담아 완료한 웨이브가 없다' })}**`
+        : c.closure === 'conformance'
+          ? t({ en: 'holds in the conformance audit', ko: '적합성 감사에서 holds' })
+          : t({ en: 'covered by a completed wave', ko: '완료한 웨이브가 다룸' })
+    }`));
+  }
   out.push(...unreadableSection(unreadable, t));
   return out.join('\n') + '\n';
 }
@@ -552,6 +567,50 @@ export function buildReviewPacket(root: string, phase: Phase): string {
       blockers.push(t({
         en: `${a.rel} was submitted to ${phase} but cannot be read now — the gate would approve a file that is not there`,
         ko: `${a.rel} 은 ${phase} 에 제출됐으나 지금 읽을 수 없다 — 없는 파일에 승인 도장이 찍힌다`,
+      }));
+    }
+  }
+
+  if (phase === 'P6') {
+    const audit = auditStatus(root, recordedPaths(root, phase) ?? undefined);
+    out.push(`## ${t({ en: 'Design audit rounds', ko: '설계 감사 회차' })}`, '');
+    out.push(t({
+      en: `Full audits: ${audit.fullRounds} of ${audit.cap} allowed.`,
+      ko: `전체 감사: ${audit.fullRounds}회 (상한 ${audit.cap}회).`,
+    }), '');
+    out.push(
+      `| ${t({ en: 'Round', ko: '회차' })} | ${t({ en: 'Kind', ko: '종류' })} | HIGH |`, '|---|---|---:|',
+      ...audit.rounds.map(r => `| r${r.n} | ${r.kind}${r.labelled ? '' : t({ en: ' (old format)', ko: ' (예전 형식)' })} | ${r.high ?? '?'} |`),
+      '',
+    );
+    const listed = (h: { round: number; id: string; reason: string }): string =>
+      `- r${h.round} ${sanitizeUntrusted(h.id, 80)}: ${sanitizeUntrusted(h.reason, 300)}`;
+    if (audit.acceptedHighs.length > 0) {
+      out.push(`### ${t({ en: 'HIGH findings whose risk this approval accepts', ko: '이 승인으로 위험을 수용하는 HIGH' })}`, '');
+      out.push(...audit.acceptedHighs.map(listed), '');
+    }
+    if (audit.ownerDecisions.length > 0) {
+      out.push(`### ${t({ en: 'Owner decisions this approval confirms', ko: '이 승인으로 확정하는 오너 결정' })}`, '');
+      out.push(...audit.ownerDecisions.map(listed), '');
+    }
+    if (audit.transferredHighs.length > 0) {
+      out.push(`### ${t({ en: 'HIGH findings moved to testing, upheld by the next auditor', ko: '시험으로 옮긴 HIGH (다음 감사자가 확인)' })}`, '');
+      out.push(...audit.transferredHighs.map(listed), '');
+    }
+    if (audit.carryItems.length > 0) {
+      out.push(`### ${t({ en: 'Carried to P7~P9', ko: 'P7~P9 로 넘기는 항목' })}: ${audit.carryItems.length}`, '');
+      out.push(...audit.carryItems.map(c => `- \`${sanitizeUntrusted(c.token, 80)}\` ${c.decision} → ${sanitizeUntrusted(c.target, 200)}`), '');
+    }
+    blockers.push(...audit.violations.map(v => sanitizeUntrusted(v)));
+  }
+  if (phase === 'P9' || phase === 'P10') {
+    for (const g of carryItemGaps(root)) {
+      blockers.push(g.closure === 'conformance' ? t({
+        en: `design audit item \`${g.token}\` (HIGH moved to testing) is not marked holds in the newest conformance-rN.md`,
+        ko: `설계 감사 항목 \`${g.token}\` (시험으로 옮긴 HIGH) 이 최신 conformance-rN.md 에 holds 로 적혀 있지 않다`,
+      }) : t({
+        en: `design audit item \`${g.token}\` (${g.decision}) has no completed wave carrying it in its acceptance criteria`,
+        ko: `설계 감사 항목 \`${g.token}\` (${g.decision}) 을 수용 기준에 담아 완료한 웨이브가 없다`,
       }));
     }
   }

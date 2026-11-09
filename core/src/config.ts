@@ -26,6 +26,7 @@ export const DEFAULT_CONFIG: HarnessConfig = {
   ],
   design_system_frozen_roots: [],
   block_raw_values: false,
+  audit_full_round_cap: 3,
 };
 
 const asBool = (v: unknown, d: boolean): boolean =>
@@ -87,6 +88,8 @@ function parseConfig(p: string): HarnessConfig {
     design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
     design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
     block_raw_values: raw.block_raw_values === true,
+    audit_full_round_cap: Number.isInteger(raw.audit_full_round_cap) && (raw.audit_full_round_cap as number) >= 1
+      ? raw.audit_full_round_cap as number : DEFAULT_CONFIG.audit_full_round_cap,
   };
 }
 

@@ -10,6 +10,8 @@ import { tr } from './tr';
  */
 export const SCHEMA_VERSION = 1;
 
+export const NEW_AUDIT_FORMAT = { version: 1, legacyThrough: 0 } as const;
+
 export function defaultState(): HarnessState {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -196,6 +198,7 @@ export function initHarness(root: string): void {
     '', ].join('\n'));
   fs.writeFileSync(eventsPath(root), '');
   const tmp = `${statePath(root)}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(defaultState(), null, 2) + '\n');
+  // 새 프로젝트에는 예전 회차가 없다 — 처음부터 새 감사 형식이다(audit.ts).
+  fs.writeFileSync(tmp, JSON.stringify({ ...defaultState(), auditFormat: NEW_AUDIT_FORMAT }, null, 2) + '\n');
   fs.renameSync(tmp, statePath(root));
 }

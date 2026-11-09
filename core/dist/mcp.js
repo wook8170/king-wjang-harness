@@ -125,17 +125,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path18) {
-      const ctrl = callVisitor(key, node, visitor, path18);
+    function visit_(key, node, visitor, path19) {
+      const ctrl = callVisitor(key, node, visitor, path19);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path18, ctrl);
-        return visit_(key, ctrl, visitor, path18);
+        replaceNode(key, path19, ctrl);
+        return visit_(key, ctrl, visitor, path19);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path18 = Object.freeze(path18.concat(node));
+          path19 = Object.freeze(path19.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path18);
+            const ci = visit_(i, node.items[i], visitor, path19);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -146,13 +146,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path18 = Object.freeze(path18.concat(node));
-          const ck = visit_("key", node.key, visitor, path18);
+          path19 = Object.freeze(path19.concat(node));
+          const ck = visit_("key", node.key, visitor, path19);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path18);
+          const cv = visit_("value", node.value, visitor, path19);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -173,17 +173,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path18) {
-      const ctrl = await callVisitor(key, node, visitor, path18);
+    async function visitAsync_(key, node, visitor, path19) {
+      const ctrl = await callVisitor(key, node, visitor, path19);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path18, ctrl);
-        return visitAsync_(key, ctrl, visitor, path18);
+        replaceNode(key, path19, ctrl);
+        return visitAsync_(key, ctrl, visitor, path19);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path18 = Object.freeze(path18.concat(node));
+          path19 = Object.freeze(path19.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path18);
+            const ci = await visitAsync_(i, node.items[i], visitor, path19);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -194,13 +194,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path18 = Object.freeze(path18.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path18);
+          path19 = Object.freeze(path19.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path19);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path18);
+          const cv = await visitAsync_("value", node.value, visitor, path19);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -227,23 +227,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path18) {
+    function callVisitor(key, node, visitor, path19) {
       if (typeof visitor === "function")
-        return visitor(key, node, path18);
+        return visitor(key, node, path19);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path18);
+        return visitor.Map?.(key, node, path19);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path18);
+        return visitor.Seq?.(key, node, path19);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path18);
+        return visitor.Pair?.(key, node, path19);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path18);
+        return visitor.Scalar?.(key, node, path19);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path18);
+        return visitor.Alias?.(key, node, path19);
       return void 0;
     }
-    function replaceNode(key, path18, node) {
-      const parent = path18[path18.length - 1];
+    function replaceNode(key, path19, node) {
+      const parent = path19[path19.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -853,10 +853,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path18, value) {
+    function collectionFromPath(schema, path19, value) {
       let v = value;
-      for (let i = path18.length - 1; i >= 0; --i) {
-        const k = path18[i];
+      for (let i = path19.length - 1; i >= 0; --i) {
+        const k = path19[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -875,7 +875,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path18) => path18 == null || typeof path18 === "object" && !!path18[Symbol.iterator]().next().done;
+    var isEmptyPath = (path19) => path19 == null || typeof path19 === "object" && !!path19[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -905,11 +905,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path18, value) {
-        if (isEmptyPath(path18))
+      addIn(path19, value) {
+        if (isEmptyPath(path19))
           this.add(value);
         else {
-          const [key, ...rest] = path18;
+          const [key, ...rest] = path19;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -923,8 +923,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path18) {
-        const [key, ...rest] = path18;
+      deleteIn(path19) {
+        const [key, ...rest] = path19;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -938,8 +938,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path18, keepScalar) {
-        const [key, ...rest] = path18;
+      getIn(path19, keepScalar) {
+        const [key, ...rest] = path19;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path18) {
-        const [key, ...rest] = path18;
+      hasIn(path19) {
+        const [key, ...rest] = path19;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -968,8 +968,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path18, value) {
-        const [key, ...rest] = path18;
+      setIn(path19, value) {
+        const [key, ...rest] = path19;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3484,9 +3484,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path18, value) {
+      addIn(path19, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path18, value);
+          this.contents.addIn(path19, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3561,14 +3561,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path18) {
-        if (Collection.isEmptyPath(path18)) {
+      deleteIn(path19) {
+        if (Collection.isEmptyPath(path19)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path18) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path19) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3583,10 +3583,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path18, keepScalar) {
-        if (Collection.isEmptyPath(path18))
+      getIn(path19, keepScalar) {
+        if (Collection.isEmptyPath(path19))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path18, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path19, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3597,10 +3597,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path18) {
-        if (Collection.isEmptyPath(path18))
+      hasIn(path19) {
+        if (Collection.isEmptyPath(path19))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path18) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path19) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3617,13 +3617,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path18, value) {
-        if (Collection.isEmptyPath(path18)) {
+      setIn(path19, value) {
+        if (Collection.isEmptyPath(path19)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path18), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path19), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path18, value);
+          this.contents.setIn(path19, value);
         }
       }
       /**
@@ -4009,10 +4009,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4026,7 +4026,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep6) {
+          if (!keyProps.anchor && !keyProps.tag && !sep7) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4050,7 +4050,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep7 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4066,7 +4066,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep7, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4157,7 +4157,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep6 = "";
+        let sep7 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4171,13 +4171,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep6 + cb;
-              sep6 = "";
+                comment += sep7 + cb;
+              sep7 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep6 += source;
+                sep7 += source;
               hasSpace = true;
               break;
             default:
@@ -4220,18 +4220,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep6, value } = collItem;
+        const { start, key, sep: sep7, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep6?.[0],
+          next: key ?? sep7?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep6 && !value) {
+          if (!props.anchor && !props.tag && !sep7 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4285,8 +4285,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep6 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
+        if (!isMap && !sep7 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep7, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4298,7 +4298,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep7 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4309,8 +4309,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep6)
-                for (const st of sep6) {
+              if (sep7)
+                for (const st of sep7) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4327,7 +4327,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep7, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4507,7 +4507,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep6 = "";
+      let sep7 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4524,24 +4524,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep6 === " ")
-            sep6 = "\n";
-          else if (!prevMoreIndented && sep6 === "\n")
-            sep6 = "\n\n";
-          value += sep6 + indent.slice(trimIndent) + content;
-          sep6 = "\n";
+          if (sep7 === " ")
+            sep7 = "\n";
+          else if (!prevMoreIndented && sep7 === "\n")
+            sep7 = "\n\n";
+          value += sep7 + indent.slice(trimIndent) + content;
+          sep7 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep6 === "\n")
+          if (sep7 === "\n")
             value += "\n";
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          value += sep6 + content;
-          sep6 = " ";
+          value += sep7 + content;
+          sep7 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4723,25 +4723,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep6 = " ";
+      let sep7 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep6 === "\n")
-            res += sep6;
+          if (sep7 === "\n")
+            res += sep7;
           else
-            sep6 = "\n";
+            sep7 = "\n";
         } else {
-          res += sep6 + match[1];
-          sep6 = " ";
+          res += sep7 + match[1];
+          sep7 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep6 + (match?.[1] ?? "");
+      return res + sep7 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5551,14 +5551,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep6, value }) {
+    function stringifyItem({ start, key, sep: sep7, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep6)
-        for (const st of sep6)
+      if (sep7)
+        for (const st of sep7)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -5583,9 +5583,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path18) => {
+    visit.itemAtPath = (cst, path19) => {
       let item = cst;
-      for (const [field, index] of path18) {
+      for (const [field, index] of path19) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5594,23 +5594,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path18) => {
-      const parent = visit.itemAtPath(cst, path18.slice(0, -1));
-      const field = path18[path18.length - 1][0];
+    visit.parentCollection = (cst, path19) => {
+      const parent = visit.itemAtPath(cst, path19.slice(0, -1));
+      const field = path19[path19.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path18, item, visitor) {
-      let ctrl = visitor(item, path18);
+    function _visit(path19, item, visitor) {
+      let ctrl = visitor(item, path19);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path18.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path19.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5621,10 +5621,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path18);
+            ctrl = ctrl(item, path19);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path18) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path19) : ctrl;
     }
     exports2.visit = visit;
   }
@@ -6725,18 +6725,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep6;
+          let sep7;
           if (scalar.end) {
-            sep6 = scalar.end;
-            sep6.push(this.sourceToken);
+            sep7 = scalar.end;
+            sep7.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep6 = [this.sourceToken];
+            sep7 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep6 }]
+            items: [{ start, key: scalar, sep: sep7 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6889,15 +6889,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep6 = it.sep;
-                  sep6.push(this.sourceToken);
+                  const sep7 = it.sep;
+                  sep7.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep6 }]
+                    items: [{ start: start2, key, sep: sep7 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -6926,14 +6926,14 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs21 = this.flowScalar(this.type);
+              const fs22 = this.flowScalar(this.type);
               if (atNextItem || it.value) {
-                map.items.push({ start, key: fs21, sep: [] });
+                map.items.push({ start, key: fs22, sep: [] });
                 this.onKeyLine = true;
               } else if (it.sep) {
-                this.stack.push(fs21);
+                this.stack.push(fs22);
               } else {
-                Object.assign(it, { key: fs21, sep: [] });
+                Object.assign(it, { key: fs22, sep: [] });
                 this.onKeyLine = true;
               }
               return;
@@ -7061,13 +7061,13 @@ var require_parser = __commonJS({
             case "scalar":
             case "single-quoted-scalar":
             case "double-quoted-scalar": {
-              const fs21 = this.flowScalar(this.type);
+              const fs22 = this.flowScalar(this.type);
               if (!it || it.value)
-                fc.items.push({ start: [], key: fs21, sep: [] });
+                fc.items.push({ start: [], key: fs22, sep: [] });
               else if (it.sep)
-                this.stack.push(fs21);
+                this.stack.push(fs22);
               else
-                Object.assign(it, { key: fs21, sep: [] });
+                Object.assign(it, { key: fs22, sep: [] });
               return;
             }
             case "flow-map-end":
@@ -7091,13 +7091,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep6 = fc.end.splice(1, fc.end.length);
-            sep6.push(this.sourceToken);
+            const sep7 = fc.end.splice(1, fc.end.length);
+            sep7.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep6 }]
+              items: [{ start, key: fc, sep: sep7 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7382,8 +7382,8 @@ __export(mcp_exports, {
   toolDefinitions: () => toolDefinitions
 });
 module.exports = __toCommonJS(mcp_exports);
-var fs20 = __toESM(require("fs"));
-var path17 = __toESM(require("path"));
+var fs21 = __toESM(require("fs"));
+var path18 = __toESM(require("path"));
 
 // core/src/state.ts
 var fs3 = __toESM(require("fs"));
@@ -7498,7 +7498,8 @@ var DEFAULT_CONFIG = {
     "pulumi up"
   ],
   design_system_frozen_roots: [],
-  block_raw_values: false
+  block_raw_values: false,
+  audit_full_round_cap: 3
 };
 var asBool = (v, d) => typeof v === "boolean" ? v : v === "on" || v === "yes" ? true : v === "off" || v === "no" ? false : d;
 var asStrArray = (v, d) => Array.isArray(v) ? v.map(String) : [...d];
@@ -7538,7 +7539,8 @@ function parseConfig(p) {
     design_allowed_prefixes: asStrArray(raw.design_allowed_prefixes, DEFAULT_CONFIG.design_allowed_prefixes),
     design_blocked_bash: asStrArray(raw.design_blocked_bash, DEFAULT_CONFIG.design_blocked_bash),
     design_system_frozen_roots: asStrArray(raw.design_system_frozen_roots, DEFAULT_CONFIG.design_system_frozen_roots),
-    block_raw_values: raw.block_raw_values === true
+    block_raw_values: raw.block_raw_values === true,
+    audit_full_round_cap: Number.isInteger(raw.audit_full_round_cap) && raw.audit_full_round_cap >= 1 ? raw.audit_full_round_cap : DEFAULT_CONFIG.audit_full_round_cap
   };
 }
 var KNOWN_CONFIG_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
@@ -7659,19 +7661,9 @@ function writeState(root, state) {
 // core/src/gate.ts
 var crypto4 = __toESM(require("crypto"));
 
-// core/src/hash.ts
-function updateHashEntry(h, rel, content) {
-  if (content === null) {
-    h.update(`${rel}\0unreadable\0`);
-    return;
-  }
-  h.update(`${rel}\0${content.length}\0`);
-  h.update(content);
-}
-
-// core/src/gate.ts
-var fs16 = __toESM(require("fs"));
-var path13 = __toESM(require("path"));
+// core/src/audit.ts
+var fs13 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
 
 // core/src/events.ts
 var fs5 = __toESM(require("fs"));
@@ -7811,7 +7803,9 @@ var EVENT_TYPES = [
   // OPS-76: 정책 베이스라인 고정(init·`doctor --accept-policy`). 상태 무변이라 replayState 는
   // 폴드하지 않지만, 여기 등록하지 않으면 정책을 한 번 고정한 프로젝트에서 doctor 가
   // 「미지 이벤트 → 재생 불신」으로 판정해 `--repair` 가 복구를 거부한다.
-  "policy-pinned"
+  "policy-pinned",
+  // P6 감사 형식을 처음 적용한 시점. 재생에 들어가야 `doctor --repair` 가 값을 지우지 못한다.
+  "audit-format-pinned"
 ];
 var KNOWN_EVENT_TYPES = new Set(EVENT_TYPES);
 var MASK = "***MASKED***";
@@ -7902,7 +7896,9 @@ var REPLAY_TYPES = /* @__PURE__ */ new Set([
   "gate-approved",
   "gate-invalidated",
   "backtrack-started",
-  "backtrack-cleared"
+  "backtrack-cleared",
+  "init",
+  "audit-format-pinned"
 ]);
 function replayState(events) {
   const s = defaultState();
@@ -7911,6 +7907,15 @@ function replayState(events) {
     const d = ev.data;
     if (REPLAY_TYPES.has(ev.type) && ev.ts) lastAppliedTs = ev.ts;
     switch (ev.type) {
+      // 첫 기록만 따른다. 뒤에 붙은 기록으로 예전 회차의 범위를 넓히지 못한다.
+      case "init":
+      case "audit-format-pinned": {
+        const f2 = ev.type === "init" ? d.auditFormat : d;
+        if (!s.auditFormat && f2 && f2.version === 1 && Number.isInteger(f2.legacyThrough) && f2.legacyThrough >= 0) {
+          s.auditFormat = { version: 1, legacyThrough: f2.legacyThrough };
+        }
+        break;
+      }
       case "phase-set":
         if (isPhase(d.phase)) s.phase = d.phase;
         break;
@@ -7969,6 +7974,18 @@ function replayState(events) {
 
 // core/src/policy.ts
 var crypto = __toESM(require("crypto"));
+
+// core/src/hash.ts
+function updateHashEntry(h, rel, content) {
+  if (content === null) {
+    h.update(`${rel}\0unreadable\0`);
+    return;
+  }
+  h.update(`${rel}\0${content.length}\0`);
+  h.update(content);
+}
+
+// core/src/policy.ts
 var fs6 = __toESM(require("fs"));
 var path3 = __toESM(require("path"));
 var POLICY_FILES = [".harness/config.yaml"];
@@ -8052,114 +8069,150 @@ function pinPolicy(root, via) {
   return { ...snap, prevHash: prev?.hash ?? null, changed };
 }
 
+// core/src/wave.ts
+var fs12 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
+var YAML4 = __toESM(require_dist());
+
 // core/src/untrusted.ts
 var import_node_crypto = require("crypto");
+var UNTRUSTED_MAX_LINE = 200;
+function sanitizeUntrusted(s, max = UNTRUSTED_MAX_LINE) {
+  return String(s).replace(/[\r\n]+/g, " ").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, max);
+}
 function oneLine(s) {
   return String(s).replace(/\r\n|\r|\n/gu, "\\n");
 }
 
-// core/src/registry.ts
+// core/src/ledger.ts
 var fs7 = __toESM(require("fs"));
 var path4 = __toESM(require("path"));
-var crypto2 = __toESM(require("crypto"));
 var YAML2 = __toESM(require_dist());
-function toDocNode(v) {
-  if (typeof v !== "object" || v === null) return null;
-  const o = v;
-  if (typeof o.id !== "string" || !o.id) return null;
-  if (typeof o.path !== "string" || !o.path) return null;
-  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
-  if (!isPhase(o.phase) || !isDocStatus(o.status)) return null;
-  const node = {
-    id: o.id,
-    phase: o.phase,
-    path: o.path,
-    version: o.version,
-    status: o.status,
-    linkedNodes: Array.isArray(o.linkedNodes) ? o.linkedNodes.map(String) : []
+function loadLedger(root) {
+  if (!fs7.existsSync(ledgerPath(root))) return [];
+  const doc = YAML2.parse(readCapped(root, ledgerPath(root), READ_CAPS.LEDGER, "the design ledger"));
+  const nodes = doc?.nodes;
+  return Array.isArray(nodes) ? nodes : [];
+}
+function saveLedger(root, nodes) {
+  const target = ledgerPath(root);
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs7.writeFileSync(tmp, YAML2.stringify({ nodes }));
+  fs7.renameSync(tmp, target);
+}
+function getNode(root, id) {
+  return loadLedger(root).find((n) => n.id === id);
+}
+function upsertNode(root, node) {
+  const nodes = loadLedger(root);
+  const parent = node.parent === "" ? void 0 : node.parent;
+  if (parent !== void 0) {
+    if (parent === node.id) {
+      throw new Error(tr(root, {
+        en: `A node cannot be its own parent: ${node.id}`,
+        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
+      }));
+    }
+    if (!nodes.some((n) => n.id === parent)) {
+      throw new Error(tr(root, {
+        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
+        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
+      }));
+    }
+  }
+  const stored = parent === void 0 ? (() => {
+    const { parent: _drop, ...rest } = node;
+    return rest;
+  })() : { ...node, parent };
+  const i = nodes.findIndex((n) => n.id === node.id);
+  if (i >= 0) nodes[i] = stored;
+  else nodes.push(stored);
+  saveLedger(root, nodes);
+}
+function bumpNode(root, id) {
+  const nodes = loadLedger(root);
+  const node = nodes.find((n) => n.id === id);
+  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
+  node.version += 1;
+  node.status = "stale";
+  saveLedger(root, nodes);
+  const affectedWaves = [];
+  const unverifiable = [];
+  if (fs7.existsSync(wavesDir(root))) {
+    for (const f2 of fs7.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+      const stem = f2.replace(/\.md$/, "");
+      let txt;
+      try {
+        txt = fs7.readFileSync(path4.join(wavesDir(root), f2), "utf8");
+      } catch {
+        unverifiable.push(stem);
+        continue;
+      }
+      let meta;
+      try {
+        meta = parseWave(txt).meta;
+      } catch {
+        unverifiable.push(stem);
+        continue;
+      }
+      if (meta.design_refs.includes(id) && meta.status !== "stale") {
+        affectedWaves.push(stem);
+      }
+    }
+  }
+  return { node, affectedWaves, unverifiable };
+}
+function reviseNode(root, id) {
+  const { node, affectedWaves, unverifiable } = bumpNode(root, id);
+  appendEvent(root, "node-bumped", {
+    id: node.id,
+    version: node.version,
+    affected: affectedWaves,
+    unverifiable
+  });
+  let activeBefore = null;
+  try {
+    activeBefore = readState(root).activeWave;
+  } catch {
+  }
+  const failed = [];
+  for (const w of affectedWaves) {
+    try {
+      markStale(root, w);
+    } catch {
+      failed.push(w);
+    }
+  }
+  return {
+    node,
+    marked: affectedWaves.filter((w) => !failed.includes(w)),
+    failed,
+    unverifiable,
+    activeBefore
   };
-  if (typeof o.hash === "string" && o.hash) node.hash = o.hash;
-  if (typeof o.artifactUrl === "string" && o.artifactUrl) node.artifactUrl = o.artifactUrl;
+}
+function mergeNode(root, patch) {
+  const id = validateId(root, patch.id, "node id");
+  const parentRaw = patch.parent;
+  patch = {
+    ...patch,
+    id,
+    parent: parentRaw === void 0 || parentRaw === "" ? parentRaw : validateId(root, parentRaw, "node parent")
+  };
+  const prev = getNode(root, patch.id);
+  const node = {
+    id: patch.id,
+    title: patch.title,
+    parent: patch.parent ?? prev?.parent,
+    doc_anchor: patch.doc_anchor ?? prev?.doc_anchor,
+    version: prev?.version ?? 1,
+    // bump 이력 보존
+    status: patch.status ?? prev?.status ?? "draft"
+  };
+  upsertNode(root, node);
+  appendEvent(root, "node-upserted", { id: node.id });
   return node;
 }
-function readEntries(root) {
-  if (!fs7.existsSync(registryPath(root))) return { entries: [] };
-  let doc;
-  try {
-    doc = YAML2.parse(fs7.readFileSync(registryPath(root), "utf8"));
-  } catch (e) {
-    return { entries: [], parseError: e.message };
-  }
-  const docs = doc?.docs;
-  return { entries: Array.isArray(docs) ? docs : [] };
-}
-function inspectRegistry(root) {
-  const { entries, parseError } = readEntries(root);
-  const docs = [];
-  const invalid = [];
-  for (const e of entries) {
-    const n = toDocNode(e);
-    if (n) docs.push(n);
-    else invalid.push(e);
-  }
-  return parseError ? { docs, invalid, parseError } : { docs, invalid };
-}
-function loadRegistry(root) {
-  return { docs: inspectRegistry(root).docs };
-}
-function computeDocHash(root, doc) {
-  const abs = path4.join(root, doc.path);
-  let buf;
-  try {
-    buf = fs7.readFileSync(abs);
-  } catch {
-    throw new Error(
-      tr(root, {
-        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
-        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
-      })
-    );
-  }
-  return crypto2.createHash("sha256").update(buf).digest("hex");
-}
-function staleDocs(root) {
-  return loadRegistry(root).docs.filter((d) => {
-    if (d.status !== "approved" || !d.hash) return false;
-    try {
-      return computeDocHash(root, d) !== d.hash;
-    } catch {
-      return true;
-    }
-  });
-}
-function docsForPhase(root, phase) {
-  const latest = /* @__PURE__ */ new Map();
-  for (const d of loadRegistry(root).docs) {
-    if (d.phase !== phase || d.status === "superseded") continue;
-    const cur = latest.get(d.id);
-    if (!cur || d.version > cur.version) latest.set(d.id, d);
-  }
-  return [...latest.values()];
-}
-
-// core/src/ship.ts
-var fs15 = __toESM(require("fs"));
-var path12 = __toESM(require("path"));
-var YAML6 = __toESM(require_dist());
-
-// core/src/evidence.ts
-var fs13 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
-
-// core/src/ledger.ts
-var fs10 = __toESM(require("fs"));
-var path7 = __toESM(require("path"));
-var YAML4 = __toESM(require_dist());
-
-// core/src/wave.ts
-var fs9 = __toESM(require("fs"));
-var path6 = __toESM(require("path"));
-var YAML3 = __toESM(require_dist());
 
 // core/src/runtime.ts
 var fs8 = __toESM(require("fs"));
@@ -8168,6 +8221,191 @@ var f = (root, name) => path5.join(runtimeDir(root), name);
 function noteTurnLogged(root) {
   fs8.mkdirSync(runtimeDir(root), { recursive: true });
   fs8.writeFileSync(f(root, "last-turn"), (/* @__PURE__ */ new Date()).toISOString());
+}
+
+// core/src/evidence.ts
+var fs11 = __toESM(require("fs"));
+var path8 = __toESM(require("path"));
+
+// core/src/design.ts
+var fs10 = __toESM(require("fs"));
+var path7 = __toESM(require("path"));
+var crypto2 = __toESM(require("crypto"));
+var YAML3 = __toESM(require_dist());
+
+// core/src/tokens.ts
+var fs9 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
+var TOKENS_REL = "design/tokens/design-tokens.json";
+var BANNER = {
+  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
+  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
+};
+
+// core/src/evidence.ts
+var trFor = (lang) => (m) => pick(m, lang);
+var MIN_PNG_BYTES = 1024;
+var MIN_PNG_EDGE = 200;
+var EXPECTED_EXTS = /* @__PURE__ */ new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "webm",
+  "mp4",
+  "zip",
+  "json",
+  "html",
+  "txt",
+  "md"
+]);
+var IMAGE_MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp"
+};
+var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+function requireWaveId(id) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
+    throw new Error(
+      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
+      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
+    );
+  }
+  return id;
+}
+function pngDimensions(pngPath) {
+  let fd = null;
+  try {
+    fd = fs11.openSync(pngPath, "r");
+    const head = Buffer.alloc(24);
+    if (fs11.readSync(fd, head, 0, 24, 0) < 24) return null;
+    if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
+    if (head.readUInt32BE(8) !== 13) return null;
+    if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
+    const width = head.readUInt32BE(16);
+    const height = head.readUInt32BE(20);
+    if (width === 0 || height === 0) return null;
+    return { width, height };
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) {
+      try {
+        fs11.closeSync(fd);
+      } catch {
+      }
+    }
+  }
+}
+function validateEvidence(root, waveId) {
+  const t = trFor(langFor(root));
+  requireWaveId(waveId);
+  const dir = evidenceDir(root, waveId);
+  const files = [];
+  const problems = [];
+  const unusable = /* @__PURE__ */ new Set();
+  let names;
+  try {
+    names = fs11.readdirSync(dir).sort();
+  } catch {
+    return {
+      ok: false,
+      files,
+      entries: 0,
+      usable: [],
+      problems: [
+        t({
+          en: `the evidence directory is missing or unreadable: ${dir} \u2014 the UX gate opens only once a headless real run has left a 2x screenshot (spec \xA73-5).`,
+          ko: `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
+        })
+      ]
+    };
+  }
+  for (const name of names) {
+    if (name.startsWith(".")) {
+      problems.push(`${name}: ${t({
+        en: "dot files do not count as evidence",
+        ko: "dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
+      continue;
+    }
+    const abs = path8.join(dir, name);
+    let st;
+    try {
+      st = fs11.statSync(abs);
+    } catch {
+      problems.push(`${name}: ${t({
+        en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
+        ko: "\uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4"
+      })}`);
+      continue;
+    }
+    if (st.isDirectory()) {
+      problems.push(t({
+        en: `${name}/: a directory is not evidence \u2014 one empty subdirectory must not pass the UX gate. If there are files inside, move them directly under the evidence directory.`,
+        ko: `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
+      }));
+      continue;
+    }
+    if (!st.isFile()) {
+      problems.push(`${name}: ${t({
+        en: "not a regular file \u2014 it does not count as evidence",
+        ko: "\uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
+      })}`);
+      continue;
+    }
+    if (st.size === 0) {
+      problems.push(t({
+        en: `${name}: 0 bytes \u2014 an empty capture does not fail a visual comparison, it silently passes it. Capture it again.`,
+        ko: `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+      }));
+      continue;
+    }
+    const ext = path8.extname(name).slice(1).toLowerCase();
+    const file = { name, path: abs, size: st.size, ext };
+    if (!IMAGE_MIME[ext] && ext !== "html" && ext !== "htm") {
+      unusable.add(name);
+      problems.push(`${name}: ${t({
+        en: "is not a visual artifact \u2014 the UX gate opens on a screenshot (png/jpg/webp) or an exported HTML mockup. Other files may sit here, but they do not stand in for a capture.",
+        ko: "\uC2DC\uAC01 \uC0B0\uCD9C\uBB3C\uC774 \uC544\uB2C8\uB2E4 \u2014 UX \uAC8C\uC774\uD2B8\uB294 \uCEA1\uCC98(png\xB7jpg\xB7webp)\uB098 \uB0B4\uBCF4\uB0B8 HTML \uBAA9\uC5C5\uC73C\uB85C \uC5F4\uB9B0\uB2E4. \uB2E4\uB978 \uD30C\uC77C\uC774 \uD568\uAED8 \uC788\uC5B4\uB3C4 \uB418\uC9C0\uB9CC \uCEA1\uCC98\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4."
+      })}`);
+    }
+    if (ext === "png") {
+      const d = pngDimensions(abs);
+      if (!d) {
+        unusable.add(name);
+        problems.push(`${name}: ${t({
+          en: "cannot read the PNG header \u2014 it may be a corrupt file that is only named .png",
+          ko: "PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4"
+        })}`);
+      } else {
+        file.dimensions = d;
+        if (st.size < MIN_PNG_BYTES || Math.min(d.width, d.height) < MIN_PNG_EDGE) {
+          unusable.add(name);
+          problems.push(t({
+            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. A real screen capture is at least ${MIN_PNG_EDGE}px on each side. Capture the running UI again.`,
+            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uCEA1\uCC98\uB294 \uAC01 \uBCC0\uC774 \uCD5C\uC18C ${MIN_PNG_EDGE}px \uB2E4. \uC2E4\uD589 \uC911\uC778 \uD654\uBA74\uC744 \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+          }));
+        }
+      }
+    }
+    if (!EXPECTED_EXTS.has(ext)) {
+      unusable.add(name);
+      problems.push(t({
+        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : "no extension"}) \u2014 only screenshots, videos, traces and reports are treated as visual evidence.`,
+        ko: `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
+      }));
+    }
+    files.push(file);
+  }
+  const usable = files.filter((f2) => !unusable.has(f2.name));
+  return { ok: usable.length > 0, files, entries: names.length, usable, problems };
+}
+var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES && Math.min(f2.dimensions.width, f2.dimensions.height) >= MIN_PNG_EDGE;
+function hasMeasuredEvidence(root, waveId) {
+  return validateEvidence(root, waveId).files.some(isRealCapture);
 }
 
 // core/src/wave.ts
@@ -8182,7 +8420,7 @@ function parseWave(txt, lang = DEFAULT_LANG) {
   if (!m) throw new Error(pick({ en: "Malformed wave file: no frontmatter", ko: "\uC6E8\uC774\uBE0C \uD30C\uC77C \uD615\uC2DD \uC624\uB958: frontmatter\uAC00 \uC5C6\uB2E4" }, lang));
   let raw;
   try {
-    raw = YAML3.parse(m[1]);
+    raw = YAML4.parse(m[1]);
   } catch {
     raw = null;
   }
@@ -8202,7 +8440,7 @@ function parseWave(txt, lang = DEFAULT_LANG) {
 var UNSPECIFIED = { en: "(unspecified)", ko: "(\uBBF8\uC9C0\uC815)" };
 function serializeWave(meta, body) {
   return `---
-${YAML3.stringify(meta).trimEnd()}
+${YAML4.stringify(meta).trimEnd()}
 ---
 ${body}`;
 }
@@ -8210,11 +8448,11 @@ function readWave(root, id) {
   return parseWave(readCapped(root, wavePath(root, id), READ_CAPS.WAVE, `the instruction sheet of ${id}`), langFor(root));
 }
 function listWaves(root) {
-  if (!fs9.existsSync(wavesDir(root))) return [];
+  if (!fs12.existsSync(wavesDir(root))) return [];
   const out = [];
-  for (const f2 of fs9.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
+  for (const f2 of fs12.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
     try {
-      out.push(parseWave(readCapped(root, path6.join(wavesDir(root), f2), READ_CAPS.WAVE, `the instruction sheet ${f2}`), langFor(root)).meta);
+      out.push(parseWave(readCapped(root, path9.join(wavesDir(root), f2), READ_CAPS.WAVE, `the instruction sheet ${f2}`), langFor(root)).meta);
     } catch {
       continue;
     }
@@ -8224,22 +8462,22 @@ function listWaves(root) {
 function writeWave(root, id, meta, body) {
   const target = wavePath(root, id);
   const tmp = `${target}.tmp-${process.pid}`;
-  fs9.writeFileSync(tmp, serializeWave(meta, body));
-  fs9.renameSync(tmp, target);
+  fs12.writeFileSync(tmp, serializeWave(meta, body));
+  fs12.renameSync(tmp, target);
 }
 function evidenceFiles(root, id) {
   const dir = evidenceDir(root, id);
-  if (!fs9.existsSync(dir)) return [];
-  return fs9.readdirSync(dir).filter((f2) => {
+  if (!fs12.existsSync(dir)) return [];
+  return fs12.readdirSync(dir).filter((f2) => {
     if (f2.startsWith(".")) return false;
-    const st = fs9.statSync(path6.join(dir, f2));
+    const st = fs12.statSync(path9.join(dir, f2));
     return st.isFile() && st.size > 0;
   });
 }
 function nextWaveId(root) {
   const nums = [];
-  if (fs9.existsSync(wavesDir(root))) {
-    for (const f2 of fs9.readdirSync(wavesDir(root))) {
+  if (fs12.existsSync(wavesDir(root))) {
+    for (const f2 of fs12.readdirSync(wavesDir(root))) {
       const n = waveNumberOf(f2);
       if (n !== void 0) nums.push(n);
     }
@@ -8269,7 +8507,7 @@ function createWave(root, opts) {
     }));
   }
   const id = nextWaveId(root);
-  if (fs9.existsSync(wavePath(root, id))) {
+  if (fs12.existsSync(wavePath(root, id))) {
     throw new Error(tr(root, { en: `${id} already exists \u2014 aborting wave creation (concurrent creation suspected)`, ko: `${id} \uD30C\uC77C\uC774 \uC774\uBBF8 \uC874\uC7AC\uD55C\uB2E4 \u2014 \uB3D9\uC2DC \uC0DD\uC131 \uC758\uC2EC\uC73C\uB85C \uC6E8\uC774\uBE0C \uC0DD\uC131\uC744 \uC911\uB2E8\uD55C\uB2E4` }));
   }
   const inherited = evidenceFiles(root, id);
@@ -8391,317 +8629,622 @@ function markStale(root, id) {
   if (state.activeWave === id) writeState(root, { ...state, activeWave: null });
 }
 
-// core/src/ledger.ts
-function loadLedger(root) {
-  if (!fs10.existsSync(ledgerPath(root))) return [];
-  const doc = YAML4.parse(readCapped(root, ledgerPath(root), READ_CAPS.LEDGER, "the design ledger"));
-  const nodes = doc?.nodes;
-  return Array.isArray(nodes) ? nodes : [];
+// core/src/audit.ts
+var AUDIT_DIR = ".harness/audit";
+var DECISIONS = ["accepted", "not accepted", "owner-decided", "owner-accepted", "carried", "test-transfer"];
+var DOC_CHANGING = ["accepted", "owner-decided"];
+var NEEDS_REASON = ["not accepted", "owner-decided", "owner-accepted", "carried", "test-transfer"];
+var NEEDS_LOCATION = ["carried", "test-transfer"];
+var ROUND_FILE_RE = /^audit-r([1-9]\d*)\.md$/u;
+var BAD_NUMBER_RE = /^(?:audit|reconcile)-r0\d*\.md$/u;
+var APPLICATION_CHECK_RE = /^##\s+Application check$/iu;
+var TABLE_RULE_RE = /^\|[-:\s|]+\|$/u;
+var LENS_TOKENS = [/logical/i, /ambiguity/i, /blockers|feasibility/i, /ux/i];
+function tableCells(line) {
+  const t = line.trim();
+  if (!t.startsWith("|")) return null;
+  return t.replace(/^\|/u, "").replace(/\|$/u, "").split(/(?<!\\)\|/u).map((c) => c.trim());
 }
-function saveLedger(root, nodes) {
-  const target = ledgerPath(root);
-  const tmp = `${target}.tmp-${process.pid}`;
-  fs10.writeFileSync(tmp, YAML4.stringify({ nodes }));
-  fs10.renameSync(tmp, target);
-}
-function getNode(root, id) {
-  return loadLedger(root).find((n) => n.id === id);
-}
-function upsertNode(root, node) {
-  const nodes = loadLedger(root);
-  const parent = node.parent === "" ? void 0 : node.parent;
-  if (parent !== void 0) {
-    if (parent === node.id) {
-      throw new Error(tr(root, {
-        en: `A node cannot be its own parent: ${node.id}`,
-        ko: `\uC790\uAE30 \uC790\uC2E0\uC744 \uBD80\uBAA8\uB85C \uB458 \uC218 \uC5C6\uB2E4: ${node.id}`
-      }));
-    }
-    if (!nodes.some((n) => n.id === parent)) {
-      throw new Error(tr(root, {
-        en: `Parent ${parent} is not in the design ledger \u2014 register it first (node upsert --id ${parent} --title "<title>"). A parentless chain breaks the RTM.`,
-        ko: `\uBD80\uBAA8 ${parent} \uAC00 \uC124\uACC4 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4 \u2014 \uBA3C\uC800 \uB4F1\uB85D\uD558\uB77C (node upsert --id ${parent} --title "<\uC81C\uBAA9>"). \uB04A\uAE34 \uC0AC\uC2AC\uC740 RTM \uC758 \uBF08\uB300\uB97C \uAE6C\uB2E4.`
-      }));
-    }
+var plainCell = (c) => c.replace(/[*`]/gu, "").trim();
+var asSeverity = (c) => {
+  const m = /^(HIGH|MED|LOW)/iu.exec(plainCell(c ?? ""));
+  return m ? m[1].toUpperCase() : null;
+};
+function sectionLines(text, heading) {
+  let out = null;
+  let inside = false;
+  for (const line of text.split("\n")) {
+    if (/^##\s/u.test(line)) {
+      inside = heading.test(line.trim());
+      if (inside) out ??= [];
+    } else if (inside) out?.push(line);
   }
-  const stored = parent === void 0 ? (() => {
-    const { parent: _drop, ...rest } = node;
-    return rest;
-  })() : { ...node, parent };
-  const i = nodes.findIndex((n) => n.id === node.id);
-  if (i >= 0) nodes[i] = stored;
-  else nodes.push(stored);
-  saveLedger(root, nodes);
+  return out;
 }
-function bumpNode(root, id) {
-  const nodes = loadLedger(root);
-  const node = nodes.find((n) => n.id === id);
-  if (!node) throw new Error(tr(root, { en: `Node ${id} is not in the design ledger`, ko: `\uB178\uB4DC ${id} \uAC00 \uC6D0\uC7A5\uC5D0 \uC5C6\uB2E4` }));
-  node.version += 1;
-  node.status = "stale";
-  saveLedger(root, nodes);
-  const affectedWaves = [];
-  const unverifiable = [];
-  if (fs10.existsSync(wavesDir(root))) {
-    for (const f2 of fs10.readdirSync(wavesDir(root)).filter(isWaveFile).sort()) {
-      const stem = f2.replace(/\.md$/, "");
-      let txt;
-      try {
-        txt = fs10.readFileSync(path7.join(wavesDir(root), f2), "utf8");
-      } catch {
-        unverifiable.push(stem);
-        continue;
-      }
-      let meta;
-      try {
-        meta = parseWave(txt).meta;
-      } catch {
-        unverifiable.push(stem);
-        continue;
-      }
-      if (meta.design_refs.includes(id) && meta.status !== "stale") {
-        affectedWaves.push(stem);
-      }
-    }
+function parseFindings(text) {
+  const lines = sectionLines(text, /^##\s+Findings\b/iu);
+  if (!lines) return null;
+  const out = [];
+  for (const line of lines) {
+    const cells = tableCells(line);
+    const severity = asSeverity(cells?.[1]);
+    if (cells && severity) out.push({ id: plainCell(cells[0]), severity, evidence: cells[2] ?? "" });
   }
-  return { node, affectedWaves, unverifiable };
+  return out;
 }
-function reviseNode(root, id) {
-  const { node, affectedWaves, unverifiable } = bumpNode(root, id);
-  appendEvent(root, "node-bumped", {
-    id: node.id,
-    version: node.version,
-    affected: affectedWaves,
-    unverifiable
+function parseReconcile(text) {
+  const out = [];
+  for (const line of text.split("\n")) {
+    const cells = tableCells(line);
+    if (!cells) continue;
+    const severity = asSeverity(cells[1]) ?? (plainCell(cells[1] ?? "") === "CONFLICT" ? "CONFLICT" : null);
+    if (!severity) continue;
+    out.push({
+      id: plainCell(cells[0]),
+      severity,
+      decision: plainCell(cells[2] ?? "").toLowerCase(),
+      appliedAt: (cells[3] ?? "").trim(),
+      reason: (cells[4] ?? "").trim()
+    });
+  }
+  return out;
+}
+function parseApplied(text) {
+  const lines = sectionLines(text, APPLICATION_CHECK_RE);
+  if (!lines) return null;
+  const out = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    const cells = tableCells(line);
+    const result = plainCell(cells?.[cells.length - 1] ?? "").toLowerCase();
+    if (!cells || result !== "applied" && result !== "missing") continue;
+    const id = plainCell(cells[0]).replace(/\.\d+$/u, "");
+    if (out.get(id) !== "missing") out.set(id, result);
+  }
+  return out;
+}
+function parseClassification(text) {
+  const out = /* @__PURE__ */ new Map();
+  for (const line of sectionLines(text, /^##\s+Classification check$/iu) ?? []) {
+    const cells = tableCells(line);
+    const verdict = plainCell(cells?.[1] ?? "").toLowerCase();
+    if (cells && (verdict === "upheld" || verdict === "overturned")) out.set(plainCell(cells[0]), verdict);
+  }
+  return out;
+}
+function parseConflicts(text) {
+  const out = [];
+  for (const line of sectionLines(text, /^##\s+Reversal conflicts$/iu) ?? []) {
+    const id = plainCell(tableCells(line)?.[0] ?? "");
+    if (/^RC-\S+$/u.test(id)) out.push(id);
+  }
+  return out;
+}
+function parseRechecks(text) {
+  const lines = (sectionLines(text, /^##\s+Owner re-check needed\b/iu) ?? []).map((l) => l.trim());
+  return lines.filter((l, i) => {
+    if (l.startsWith("- ")) return !/^-\s*(?:none\b|없음)/iu.test(l);
+    if (!l.startsWith("|") || TABLE_RULE_RE.test(l)) return false;
+    return !TABLE_RULE_RE.test(lines[i + 1] ?? "");
   });
-  let activeBefore = null;
-  try {
-    activeBefore = readState(root).activeWave;
-  } catch {
-  }
-  const failed = [];
-  for (const w of affectedWaves) {
-    try {
-      markStale(root, w);
-    } catch {
-      failed.push(w);
-    }
-  }
-  return {
-    node,
-    marked: affectedWaves.filter((w) => !failed.includes(w)),
-    failed,
-    unverifiable,
-    activeBefore
-  };
 }
-function mergeNode(root, patch) {
-  const id = validateId(root, patch.id, "node id");
-  const parentRaw = patch.parent;
-  patch = {
-    ...patch,
-    id,
-    parent: parentRaw === void 0 || parentRaw === "" ? parentRaw : validateId(root, parentRaw, "node parent")
-  };
-  const prev = getNode(root, patch.id);
-  const node = {
-    id: patch.id,
-    title: patch.title,
-    parent: patch.parent ?? prev?.parent,
-    doc_anchor: patch.doc_anchor ?? prev?.doc_anchor,
-    version: prev?.version ?? 1,
-    // bump 이력 보존
-    status: patch.status ?? prev?.status ?? "draft"
-  };
-  upsertNode(root, node);
-  appendEvent(root, "node-upserted", { id: node.id });
-  return node;
+function hasCheckableEvidence(evidence) {
+  const isPathLine = [...evidence.matchAll(/([\w./-]*[A-Za-z][\w./-]*):\d+/gu)].some((hit) => !/(?:^|[\d-])T\d{1,2}$/u.test(hit[1]));
+  return isPathLine || /(?<![\w:./-])(?<!\d{4}-\d{2}-\d{2}\s)0[0-5]:0*[1-9]\d*\b(?!:)/u.test(evidence) || /(?:^|\s)(?:repro|재현)\s*:/iu.test(evidence) || /\bUX-\d+\b.*\bS\d+-\d+\b/u.test(evidence);
 }
-
-// core/src/design.ts
-var fs12 = __toESM(require("fs"));
-var path9 = __toESM(require("path"));
-var crypto3 = __toESM(require("crypto"));
-var YAML5 = __toESM(require_dist());
-
-// core/src/tokens.ts
-var fs11 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
-var TOKENS_REL = "design/tokens/design-tokens.json";
-var BANNER = {
-  en: `Generated \u2014 do not hand-edit. Source: .harness/${TOKENS_REL}`,
-  ko: `\uC0DD\uC131\uBB3C \u2014 \uC190\uC73C\uB85C \uACE0\uCE58\uC9C0 \uB9C8\uB77C. \uC6D0\uCC9C: .harness/${TOKENS_REL}`
+var hasId = (text, id) => {
+  const esc = id.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}-])${esc}(?![\\p{L}\\p{N}-])`, "u").test(text);
 };
-
-// core/src/evidence.ts
-var trFor = (lang) => (m) => pick(m, lang);
-var MIN_PNG_BYTES = 1024;
-var MIN_PNG_EDGE = 200;
-var EXPECTED_EXTS = /* @__PURE__ */ new Set([
-  "png",
-  "jpg",
-  "jpeg",
-  "webp",
-  "webm",
-  "mp4",
-  "zip",
-  "json",
-  "html",
-  "txt",
-  "md"
-]);
-var IMAGE_MIME = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp"
-};
-var PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-function requireWaveId(id) {
-  if (typeof id !== "string" || !/^[A-Za-z0-9._-]+$/.test(id) || id === "." || id === "..") {
-    throw new Error(
-      // i18n 예외: 순수 검증기라 root 가 없다. 영어 고정.
-      `Invalid wave id: ${String(id)} \u2014 it must be an identifier using only alphanumerics, . _ - (like \`wave-001\`); it becomes an evidence directory path, so no path characters.`
-    );
-  }
-  return id;
-}
-function pngDimensions(pngPath) {
-  let fd = null;
-  try {
-    fd = fs13.openSync(pngPath, "r");
-    const head = Buffer.alloc(24);
-    if (fs13.readSync(fd, head, 0, 24, 0) < 24) return null;
-    if (!head.subarray(0, 8).equals(PNG_SIG)) return null;
-    if (head.readUInt32BE(8) !== 13) return null;
-    if (head.subarray(12, 16).toString("latin1") !== "IHDR") return null;
-    const width = head.readUInt32BE(16);
-    const height = head.readUInt32BE(20);
-    if (width === 0 || height === 0) return null;
-    return { width, height };
-  } catch {
-    return null;
-  } finally {
-    if (fd !== null) {
-      try {
-        fs13.closeSync(fd);
-      } catch {
-      }
-    }
-  }
-}
-function validateEvidence(root, waveId) {
-  const t = trFor(langFor(root));
-  requireWaveId(waveId);
-  const dir = evidenceDir(root, waveId);
-  const files = [];
-  const problems = [];
-  const unusable = /* @__PURE__ */ new Set();
+function readRounds(root, violations, m) {
+  const dir = path10.join(root, AUDIT_DIR);
   let names;
   try {
-    names = fs13.readdirSync(dir).sort();
+    names = fs13.readdirSync(dir);
   } catch {
-    return {
-      ok: false,
-      files,
-      entries: 0,
-      usable: [],
-      problems: [
-        t({
-          en: `the evidence directory is missing or unreadable: ${dir} \u2014 the UX gate opens only once a headless real run has left a 2x screenshot (spec \xA73-5).`,
-          ko: `\uC99D\uC801 \uB514\uB809\uD1A0\uB9AC\uAC00 \uC5C6\uAC70\uB098 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${dir} \u2014 headless \uC2E4\uC8FC\uD589\uC73C\uB85C 2x \uC2A4\uD06C\uB9B0\uC0F7\uC744 \uB0A8\uACA8\uC57C UX \uAC8C\uC774\uD2B8\uAC00 \uC5F4\uB9B0\uB2E4(\uC2A4\uD399 \xA73-5).`
-        })
-      ]
-    };
+    return [];
   }
+  const rounds = [];
   for (const name of names) {
-    if (name.startsWith(".")) {
-      problems.push(`${name}: ${t({
-        en: "dot files do not count as evidence",
-        ko: "dot \uD30C\uC77C\uC740 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
-      })}`);
-      continue;
+    if (BAD_NUMBER_RE.test(name)) {
+      violations.push(m({
+        en: `${AUDIT_DIR}/${name}: round numbers start at 1 and have no leading zero. Rename it.`,
+        ko: `${AUDIT_DIR}/${name}: \uD68C\uCC28 \uBC88\uD638\uB294 1 \uBD80\uD130\uC774\uACE0 \uC55E\uC790\uB9AC\uC5D0 0 \uC744 \uC4F0\uC9C0 \uC54A\uB294\uB2E4. \uC774\uB984\uC744 \uACE0\uCCD0\uB77C.`
+      }));
     }
-    const abs = path10.join(dir, name);
-    let st;
+    const hit = ROUND_FILE_RE.exec(name);
+    if (!hit) continue;
+    const n = Number(hit[1]);
+    const rel = `${AUDIT_DIR}/${name}`;
+    let text;
     try {
-      st = fs13.statSync(abs);
+      text = fs13.readFileSync(path10.join(dir, name), "utf8");
     } catch {
-      problems.push(`${name}: ${t({
-        en: "cannot stat it (a broken symlink?) \u2014 what cannot be counted is not evidence",
-        ko: "\uC0C1\uD0DC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4(\uB04A\uAE34 \uC2EC\uBCFC\uB9AD \uB9C1\uD06C?) \u2014 \uC140 \uC218 \uC5C6\uB294 \uAC83\uC740 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4"
-      })}`);
-      continue;
+      violations.push(m({ en: `Cannot read ${rel}.`, ko: `${rel} \uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4.` }));
+      text = "";
     }
-    if (st.isDirectory()) {
-      problems.push(t({
-        en: `${name}/: a directory is not evidence \u2014 one empty subdirectory must not pass the UX gate. If there are files inside, move them directly under the evidence directory.`,
-        ko: `${name}/: \uB514\uB809\uD1A0\uB9AC\uB294 \uC99D\uC801\uC774 \uC544\uB2C8\uB2E4 \u2014 \uBE48 \uC11C\uBE0C\uB514\uB809\uD1A0\uB9AC \uD558\uB098\uB85C UX \uAC8C\uC774\uD2B8\uAC00 \uD1B5\uACFC\uB418\uBA74 \uC548 \uB41C\uB2E4. \uC548\uC5D0 \uD30C\uC77C\uC774 \uC788\uB2E4\uBA74 \uC99D\uC801 \uB514\uB809\uD1A0\uB9AC \uBC14\uB85C \uBC11\uC73C\uB85C \uC62E\uACA8\uB77C.`
+    const kindLine = /^Audit-Kind:[ \t]*(full|short)[ \t]*$/mu.exec(text);
+    const last = text.split("\n").map((l) => l.trim()).filter(Boolean).pop() ?? "";
+    const highLine = /^HIGH (\d+)$/u.exec(last);
+    let rows = null;
+    let applied = null;
+    try {
+      const table = fs13.readFileSync(path10.join(dir, `reconcile-r${n}.md`), "utf8");
+      rows = parseReconcile(table);
+      applied = parseApplied(table);
+    } catch {
+    }
+    rounds.push({
+      n,
+      rel,
+      text,
+      rows,
+      applied,
+      classification: kindLine ? parseClassification(text) : /* @__PURE__ */ new Map(),
+      conflicts: kindLine ? parseConflicts(text) : [],
+      rechecks: kindLine ? parseRechecks(text) : [],
+      kind: kindLine?.[1] === "short" ? "short" : "full",
+      labelled: kindLine !== null,
+      high: highLine ? Number(highLine[1]) : null,
+      findings: kindLine ? parseFindings(text) : null
+    });
+  }
+  return rounds.sort((a, b) => a.n - b.n);
+}
+function checkAgainstPrior(r, prior, out, m) {
+  for (const f2 of prior.findings ?? []) {
+    const row = prior.rows?.find((x) => x.id === f2.id);
+    if (!row) continue;
+    if (f2.severity === "HIGH" && row.decision === "test-transfer") {
+      const verdict = r.classification.get(f2.id);
+      if (!verdict) {
+        out.push(m({
+          en: `${r.rel}: HIGH ${f2.id} was moved to testing in the previous round, but \`## Classification check\` has no upheld or overturned row for it.`,
+          ko: `${r.rel}: \uC55E \uD68C\uCC28\uC5D0\uC11C \uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH ${f2.id} \uC758 upheld\xB7overturned \uD589\uC774 \`## Classification check\` \uC5D0 \uC5C6\uB2E4.`
+        }));
+      } else if (verdict === "overturned" && !r.findings?.some((x) => x.id === f2.id && x.severity === "HIGH")) {
+        out.push(m({
+          en: `${r.rel}: the auditor overturned the move of ${f2.id}, so it must be a HIGH row in this round's findings table.`,
+          ko: `${r.rel}: \uAC10\uC0AC\uC790\uAC00 ${f2.id} \uC758 \uC2DC\uD5D8 \uC804\uD658\uC744 \uB4A4\uC9D1\uC5C8\uC73C\uBBC0\uB85C \uC774 \uD68C\uCC28\uC758 \uC9C0\uC801 \uD45C\uC5D0 HIGH \uD589\uC73C\uB85C \uC788\uC5B4\uC57C \uD55C\uB2E4.`
+        }));
+      }
+    }
+    if (DOC_CHANGING.includes(row.decision)) {
+      const result = prior.applied?.get(f2.id);
+      const file = `${AUDIT_DIR}/reconcile-r${prior.n}.md`;
+      if (result === void 0) {
+        out.push(m({
+          en: `${file}: \`## Application check\` has no result for ${f2.id}. Compare each confirmed sentence with the revised text before the re-audit.`,
+          ko: `${file}: \`## Application check\` \uC5D0 ${f2.id} \uC758 \uACB0\uACFC\uAC00 \uC5C6\uB2E4. \uC7AC\uAC10\uC0AC \uC804\uC5D0 \uD655\uC815 \uBB38\uC7A5\uC744 \uAC1C\uC815\uBCF8\uACFC \uBB38\uC7A5\uBCC4\uB85C \uB300\uC870\uD558\uB77C.`
+        }));
+      } else if (result === "missing") {
+        out.push(m({
+          en: `${file}: the fix for ${f2.id} is marked missing. Apply it${f2.severity === "HIGH" ? "; this HIGH stays open until then" : ""}.`,
+          ko: `${file}: ${f2.id} \uC758 \uC218\uC815\uC774 \uBBF8\uBC18\uC601\uC774\uB2E4. \uBC18\uC601\uD558\uB77C${f2.severity === "HIGH" ? ". \uADF8\uB54C\uAE4C\uC9C0 \uC774 HIGH \uB294 \uB2EB\uD788\uC9C0 \uC54A\uB294\uB2E4" : ""}.`
+        }));
+      }
+    }
+  }
+}
+function checkLabelledRound(r, prior, out, m) {
+  if (r.high === null) {
+    out.push(m({ en: `${r.rel}: the last line must be \`HIGH N\`.`, ko: `${r.rel}: \uB05D \uC904\uC740 \`HIGH N\` \uC774\uC5B4\uC57C \uD55C\uB2E4.` }));
+  }
+  if (r.findings === null) {
+    out.push(m({ en: `${r.rel}: there is no \`## Findings\` section.`, ko: `${r.rel}: \`## Findings\` \uC808\uC774 \uC5C6\uB2E4.` }));
+  } else if (r.high !== null) {
+    const counted = r.findings.filter((f2) => f2.severity === "HIGH").length;
+    if (counted !== r.high) {
+      out.push(m({
+        en: `${r.rel}: the last line says HIGH ${r.high} but the findings table has ${counted} HIGH row(s). A HIGH leaves the count only by being fixed and re-audited.`,
+        ko: `${r.rel}: \uB05D \uC904\uC740 HIGH ${r.high} \uC778\uB370 \uC9C0\uC801 \uD45C\uC758 HIGH \uD589\uC740 ${counted}\uAC1C\uB2E4. HIGH \uB294 \uACE0\uCE58\uACE0 \uC7AC\uAC10\uC0AC\uD574\uC57C \uC22B\uC790\uC5D0\uC11C \uBE60\uC9C4\uB2E4.`
       }));
-      continue;
     }
-    if (!st.isFile()) {
-      problems.push(`${name}: ${t({
-        en: "not a regular file \u2014 it does not count as evidence",
-        ko: "\uC77C\uBC18 \uD30C\uC77C\uC774 \uC544\uB2C8\uB2E4 \u2014 \uC99D\uC801\uC73C\uB85C \uC138\uC9C0 \uC54A\uB294\uB2E4"
-      })}`);
-      continue;
-    }
-    if (st.size === 0) {
-      problems.push(t({
-        en: `${name}: 0 bytes \u2014 an empty capture does not fail a visual comparison, it silently passes it. Capture it again.`,
-        ko: `${name}: 0\uBC14\uC774\uD2B8\uB2E4 \u2014 \uBE48 \uCEA1\uCC98\uB294 \uC2DC\uAC01 \uBE44\uAD50\uB97C \uC2E4\uD328\uC2DC\uD0A4\uB294 \uAC8C \uC544\uB2C8\uB77C \uC870\uC6A9\uD788 \uD1B5\uACFC\uC2DC\uD0A8\uB2E4. \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+  }
+  if (prior?.findings) checkAgainstPrior(r, prior, out, m);
+  if (r.kind === "full") {
+    const lenses = /^Lenses:(.*)$/mu.exec(r.text)?.[1] ?? "";
+    if (!LENS_TOKENS.every((t) => t.test(lenses))) {
+      out.push(m({
+        en: `${r.rel}: a full audit needs a \`Lenses:\` line naming all four lenses (logical coherence, ambiguity, blockers, UX walkthrough).`,
+        ko: `${r.rel}: \uC804\uCCB4 \uAC10\uC0AC\uC5D0\uB294 \uB124 \uB80C\uC988\uB97C \uBAA8\uB450 \uC801\uC740 \`Lenses:\` \uC904\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4 (logical coherence, ambiguity, blockers, UX walkthrough).`
       }));
+    }
+  } else {
+    if (!prior) {
+      out.push(m({ en: `${r.rel}: the first round must be a full audit.`, ko: `${r.rel}: \uCCAB \uD68C\uCC28\uB294 \uC804\uCCB4 \uAC10\uC0AC\uC5EC\uC57C \uD55C\uB2E4.` }));
+    }
+    if (!/^##\s+New risks/imu.test(r.text)) {
+      out.push(m({ en: `${r.rel}: a short re-audit needs a \`## New risks of this revision\` section.`, ko: `${r.rel}: \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uC5D0\uB294 \`## New risks of this revision\` \uC808\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4.` }));
+    }
+    const scope = /^structural change:[ \t]*(yes|no)[ \t]*$/imu.exec(r.text)?.[1]?.toLowerCase();
+    if (scope === void 0) {
+      out.push(m({ en: `${r.rel}: a short re-audit needs a \`structural change: yes|no\` line from the auditor.`, ko: `${r.rel}: \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uC5D0\uB294 \uAC10\uC0AC\uC790\uAC00 \uC801\uC740 \`structural change: yes|no\` \uC904\uC774 \uC788\uC5B4\uC57C \uD55C\uB2E4.` }));
+    } else if (scope === "yes") {
+      out.push(m({ en: `${r.rel}: the auditor found a structural change, so this revision needs all four lenses.`, ko: `${r.rel}: \uAC10\uC0AC\uC790\uAC00 \uAD6C\uC870 \uBCC0\uACBD\uC744 \uD655\uC778\uD588\uC73C\uBBC0\uB85C \uC774 \uAC1C\uC815\uC740 \uB124 \uB80C\uC988 \uC804\uCCB4 \uAC10\uC0AC\uAC00 \uD544\uC694\uD558\uB2E4.` }));
+    }
+  }
+  const owed = (prior?.findings ?? []).filter((f2) => f2.severity === "HIGH").filter((f2) => prior?.rows?.find((x) => x.id === f2.id)?.decision !== "owner-accepted").filter((f2) => !hasId(r.text, f2.id));
+  if (owed.length > 0) {
+    out.push(m({
+      en: `${r.rel}: this round does not mention HIGH finding(s) of the previous round: ${owed.map((f2) => f2.id).join(", ")}.`,
+      ko: `${r.rel}: \uC774 \uD68C\uCC28\uAC00 \uC55E \uD68C\uCC28\uC758 HIGH \uB97C \uB2E4\uB8E8\uC9C0 \uC54A\uC558\uB2E4: ${owed.map((f2) => f2.id).join(", ")}.`
+    }));
+  }
+}
+function checkReconcile(r, out, m) {
+  const findings = r.findings ?? [];
+  const file = `${AUDIT_DIR}/reconcile-r${r.n}.md`;
+  for (const id of r.conflicts) {
+    const row = r.rows?.find((x) => x.id === id);
+    if (row?.decision !== "owner-decided" || !row.reason) {
+      out.push(m({
+        en: `${r.rel}: reversal conflict ${id} needs the owner's choice. Stop fixing, show both sides, and record it in ${file} as \`owner-decided\` with the reason.`,
+        ko: `${r.rel}: \uBC88\uBCF5 \uCDA9\uB3CC ${id} \uC740 \uC624\uB108\uAC00 \uACE8\uB77C\uC57C \uD55C\uB2E4. \uC218\uC815\uC744 \uBA48\uCD94\uACE0 \uC591\uCABD \uADFC\uAC70\uB97C \uBCF4\uC778 \uB4A4 ${file} \uC5D0 \uC0AC\uC720\uC640 \uD568\uAED8 \`owner-decided\` \uB85C \uC801\uC5B4\uB77C.`
+      }));
+    }
+  }
+  if (findings.length === 0) return;
+  if (r.rows === null) {
+    out.push(m({ en: `${file} is missing: it needs one row per finding of ${r.rel}.`, ko: `${file} \uC774 \uC5C6\uB2E4: ${r.rel} \uC758 \uC9C0\uC801\uB9C8\uB2E4 \uD55C \uD589\uC774 \uD544\uC694\uD558\uB2E4.` }));
+    return;
+  }
+  for (const f2 of findings) {
+    const row = r.rows.find((x) => x.id === f2.id);
+    if (!row) {
+      out.push(m({ en: `${file}: no row for finding ${f2.id}.`, ko: `${file}: \uC9C0\uC801 ${f2.id} \uC758 \uD589\uC774 \uC5C6\uB2E4.` }));
       continue;
     }
-    const ext = path10.extname(name).slice(1).toLowerCase();
-    const file = { name, path: abs, size: st.size, ext };
-    if (!IMAGE_MIME[ext] && ext !== "html" && ext !== "htm") {
-      unusable.add(name);
-      problems.push(`${name}: ${t({
-        en: "is not a visual artifact \u2014 the UX gate opens on a screenshot (png/jpg/webp) or an exported HTML mockup. Other files may sit here, but they do not stand in for a capture.",
-        ko: "\uC2DC\uAC01 \uC0B0\uCD9C\uBB3C\uC774 \uC544\uB2C8\uB2E4 \u2014 UX \uAC8C\uC774\uD2B8\uB294 \uCEA1\uCC98(png\xB7jpg\xB7webp)\uB098 \uB0B4\uBCF4\uB0B8 HTML \uBAA9\uC5C5\uC73C\uB85C \uC5F4\uB9B0\uB2E4. \uB2E4\uB978 \uD30C\uC77C\uC774 \uD568\uAED8 \uC788\uC5B4\uB3C4 \uB418\uC9C0\uB9CC \uCEA1\uCC98\uB97C \uB300\uC2E0\uD558\uC9C0\uB294 \uBABB\uD55C\uB2E4."
-      })}`);
+    if (row.severity !== f2.severity) {
+      out.push(m({
+        en: `${file}: ${f2.id} is ${f2.severity} in the audit but ${row.severity} here. Lowering a severity is not a fix.`,
+        ko: `${file}: ${f2.id} \uB294 \uAC10\uC0AC\uC5D0\uC11C ${f2.severity} \uC778\uB370 \uC5EC\uAE30\uC11C\uB294 ${row.severity} \uB2E4. \uC2EC\uAC01\uB3C4\uB97C \uB0AE\uCD94\uB294 \uAC83\uC740 \uC218\uC815\uC774 \uC544\uB2C8\uB2E4.`
+      }));
     }
-    if (ext === "png") {
-      const d = pngDimensions(abs);
-      if (!d) {
-        unusable.add(name);
-        problems.push(`${name}: ${t({
-          en: "cannot read the PNG header \u2014 it may be a corrupt file that is only named .png",
-          ko: "PNG \uD5E4\uB354\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4 \u2014 \uD655\uC7A5\uC790\uB9CC png \uC778 \uC190\uC0C1 \uD30C\uC77C\uC77C \uC218 \uC788\uB2E4"
-        })}`);
-      } else {
-        file.dimensions = d;
-        if (st.size < MIN_PNG_BYTES || Math.min(d.width, d.height) < MIN_PNG_EDGE) {
-          unusable.add(name);
-          problems.push(t({
-            en: `${name}: ${st.size} bytes (${d.width}x${d.height}) is too small \u2014 most likely a blank screen or a failed capture. A real screen capture is at least ${MIN_PNG_EDGE}px on each side. Capture the running UI again.`,
-            ko: `${name}: ${st.size}\uBC14\uC774\uD2B8(${d.width}x${d.height})\uB85C \uB108\uBB34 \uC791\uB2E4 \u2014 \uBE48 \uD654\uBA74\uC774\uAC70\uB098 \uC2E4\uD328\uD55C \uCEA1\uCC98\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uB2E4. \uC2E4\uC8FC\uD589 \uCEA1\uCC98\uB294 \uAC01 \uBCC0\uC774 \uCD5C\uC18C ${MIN_PNG_EDGE}px \uB2E4. \uC2E4\uD589 \uC911\uC778 \uD654\uBA74\uC744 \uB2E4\uC2DC \uCC0D\uC5B4\uB77C.`
+    if (!DECISIONS.includes(row.decision)) {
+      out.push(m({
+        en: `${file}: ${f2.id} has an unknown decision "${row.decision}" (one of ${DECISIONS.join(", ")}).`,
+        ko: `${file}: ${f2.id} \uC758 \uACB0\uC815 "${row.decision}" \uC744 \uC54C \uC218 \uC5C6\uB2E4 (${DECISIONS.join(", ")} \uC911 \uD558\uB098).`
+      }));
+    } else if (NEEDS_REASON.includes(row.decision) && !row.reason) {
+      out.push(m({ en: `${file}: ${f2.id} is "${row.decision}" without a reason.`, ko: `${file}: ${f2.id} \uAC00 \uC0AC\uC720 \uC5C6\uC774 "${row.decision}" \uC774\uB2E4.` }));
+    }
+    if (NEEDS_LOCATION.includes(row.decision) && /^(?:[-—–]*)$/u.test(row.appliedAt)) {
+      out.push(m({
+        en: `${file}: ${f2.id} is "${row.decision}" without a target in the Applied at column (F-x acceptance criterion, P7 scenario or P9 check).`,
+        ko: `${file}: ${f2.id} \uAC00 "${row.decision}" \uC778\uB370 \uBC18\uC601 \uC704\uCE58 \uCE78\uC5D0 \uC62E\uAE34 \uACF3\uC774 \uC5C6\uB2E4 (F-x \uC218\uC6A9 \uAE30\uC900, P7 \uC2DC\uB098\uB9AC\uC624, P9 \uAC80\uC99D \uD56D\uBAA9).`
+      }));
+    }
+    if (f2.severity === "HIGH" && row.decision === "carried") {
+      out.push(m({
+        en: `${file}: HIGH ${f2.id} cannot be carried over. Only MED and LOW go to the carry-over ledger; only an auditor can change a severity.`,
+        ko: `${file}: HIGH ${f2.id} \uB294 \uC774\uC6D4\uD560 \uC218 \uC5C6\uB2E4. \uC774\uC6D4 \uB300\uC7A5\uC5D0\uB294 MED\xB7LOW \uB9CC \uB4E4\uC5B4\uAC00\uACE0, \uC2EC\uAC01\uB3C4\uB294 \uAC10\uC0AC\uC790\uB9CC \uBC14\uAFBC\uB2E4.`
+      }));
+    }
+  }
+}
+var roundNumbers = (root) => {
+  try {
+    return fs13.readdirSync(path10.join(root, AUDIT_DIR)).flatMap((f2) => {
+      const hit = ROUND_FILE_RE.exec(f2);
+      return hit ? [Number(hit[1])] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+function ensureAuditFormat(root) {
+  const state = readState(root);
+  if (state.auditFormat) return;
+  const auditFormat = { version: 1, legacyThrough: Math.max(0, ...roundNumbers(root)) };
+  appendEvent(root, "audit-format-pinned", auditFormat);
+  writeState(root, { ...state, auditFormat });
+}
+function legacyThrough(root) {
+  let pinned;
+  try {
+    pinned = readState(root).auditFormat?.legacyThrough;
+  } catch {
+  }
+  return pinned ?? Math.max(0, ...roundNumbers(root));
+}
+function effectiveCap(root) {
+  const configured = loadConfig(root).audit_full_round_cap;
+  const fallback = DEFAULT_CONFIG.audit_full_round_cap;
+  if (configured === fallback) return { cap: fallback, untrusted: null };
+  try {
+    const pin = pinnedPolicy(root);
+    if (pin !== null && pin.hash === computePolicyHash(root).hash) return { cap: configured, untrusted: null };
+  } catch {
+  }
+  return { cap: fallback, untrusted: configured };
+}
+function auditStatus(root, submittedPaths) {
+  const m = (x) => tr(root, x);
+  const violations = [];
+  const { cap, untrusted } = effectiveCap(root);
+  const rounds = readRounds(root, violations, m);
+  const legacyEnd = legacyThrough(root);
+  let fullRounds = 0;
+  let seenLabelled = false;
+  const acceptedHighs = [];
+  const ownerDecisions = [];
+  const transferredHighs = [];
+  const carryItems = [];
+  rounds.forEach((r, i) => {
+    if (r.kind === "full") fullRounds++;
+    if (!r.labelled) {
+      if (seenLabelled || r.n > legacyEnd) {
+        violations.push(m({
+          en: `${r.rel}: there is no \`Audit-Kind:\` line. Only rounds from before this project adopted the format (r${legacyEnd} and earlier) may omit it.`,
+          ko: `${r.rel}: \`Audit-Kind:\` \uC904\uC774 \uC5C6\uB2E4. \uC774 \uD504\uB85C\uC81D\uD2B8\uAC00 \uD615\uC2DD\uC744 \uC801\uC6A9\uD558\uAE30 \uC804\uC758 \uD68C\uCC28(r${legacyEnd} \uAE4C\uC9C0)\uB9CC \uC0DD\uB7B5\uD560 \uC218 \uC788\uB2E4.`
+        }));
+      }
+      return;
+    }
+    seenLabelled = true;
+    if (r.kind === "full" && fullRounds > cap) {
+      violations.push(m({
+        en: `${r.rel} is full audit number ${fullRounds} but the cap is ${cap}. Another full audit is the owner's decision: raise \`audit_full_round_cap\` in .harness/config.yaml.`,
+        ko: `${r.rel} \uC740 ${fullRounds}\uBC88\uC9F8 \uC804\uCCB4 \uAC10\uC0AC\uC778\uB370 \uC0C1\uD55C\uC740 ${cap}\uD68C\uB2E4. \uC804\uCCB4 \uAC10\uC0AC \uCD94\uAC00\uB294 \uC624\uB108\uC758 \uACB0\uC815\uC774\uB2E4: .harness/config.yaml \uC758 \`audit_full_round_cap\` \uC744 \uC624\uB108\uAC00 \uC62C\uB9B0\uB2E4.`
+      }));
+    }
+    checkLabelledRound(r, rounds[i - 1], violations, m);
+    checkReconcile(r, violations, m);
+    for (const row of r.rows ?? []) {
+      if (row.decision === "owner-decided") ownerDecisions.push({ round: r.n, id: row.id, reason: row.reason });
+    }
+    for (const f2 of r.findings ?? []) {
+      const row = r.rows?.find((x) => x.id === f2.id);
+      if (!row) continue;
+      if (f2.severity === "HIGH" && row.decision === "owner-accepted") acceptedHighs.push({ round: r.n, id: f2.id, reason: row.reason });
+      if (row.decision !== "carried" && row.decision !== "test-transfer") continue;
+      const verdict = rounds[i + 1]?.classification.get(f2.id);
+      if (verdict === "overturned" || f2.severity === "HIGH" && verdict !== "upheld") continue;
+      if (f2.severity === "HIGH") transferredHighs.push({ round: r.n, id: f2.id, reason: row.reason });
+      carryItems.push({
+        token: `AUD-r${r.n}-${f2.id}`,
+        round: r.n,
+        id: f2.id,
+        severity: f2.severity,
+        decision: row.decision,
+        target: row.appliedAt,
+        reason: row.reason,
+        closure: f2.severity === "HIGH" ? "conformance" : "wave"
+      });
+    }
+  });
+  if (untrusted !== null && fullRounds > cap) {
+    violations.push(m({
+      en: `audit_full_round_cap is ${untrusted} but the policy files differ from the pinned baseline, so the default ${cap} applies. The owner re-pins with \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\`.`,
+      ko: `audit_full_round_cap \uC774 ${untrusted} \uC778\uB370 \uC815\uCC45 \uD30C\uC77C\uC774 \uACE0\uC815\uB41C \uAE30\uC900\uC120\uACFC \uB2EC\uB77C \uAE30\uBCF8\uAC12 ${cap} \uC744 \uC4F4\uB2E4. \uC624\uB108\uAC00 \`HARNESS_ACCEPT_POLICY=1 harness doctor --accept-policy\` \uB85C \uC7AC\uACE0\uC815\uD574\uC57C \uD55C\uB2E4.`
+    }));
+  }
+  const capReached = fullRounds >= cap;
+  const openHighs = [];
+  const pendingTransfers = [];
+  let next = "ready";
+  const newest = rounds[rounds.length - 1];
+  if (!newest) {
+    violations.push(m({
+      en: `No audit round in ${AUDIT_DIR}/: P6 needs at least one full audit (audit-r1.md).`,
+      ko: `${AUDIT_DIR}/ \uC5D0 \uAC10\uC0AC \uD68C\uCC28\uAC00 \uC5C6\uB2E4: P6 \uC5D0\uB294 \uC804\uCCB4 \uAC10\uC0AC\uAC00 \uD55C \uD68C \uC774\uC0C1 \uD544\uC694\uD558\uB2E4 (audit-r1.md).`
+    }));
+    next = "run-full-audit";
+  } else if (newest.high === null && !newest.labelled) {
+    violations.push(m({
+      en: `${newest.rel} does not end with \`HIGH N\`, so its result cannot be read. Run a short re-audit in the current format.`,
+      ko: `${newest.rel} \uC774 \`HIGH N\` \uC73C\uB85C \uB05D\uB098\uC9C0 \uC54A\uC544 \uACB0\uACFC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4. \uD604\uC7AC \uD615\uC2DD\uC73C\uB85C \uC9E7\uC740 \uC7AC\uAC10\uC0AC\uB97C \uB3CC\uB824\uB77C.`
+    }));
+    next = "short-reaudit";
+  } else {
+    if (newest.labelled) {
+      const rows = newest.rows ?? [];
+      for (const f2 of newest.findings ?? []) {
+        if (f2.severity !== "HIGH") continue;
+        const decision = rows.find((x) => x.id === f2.id)?.decision;
+        if (decision === "test-transfer") pendingTransfers.push(f2.id);
+        else if (decision !== "owner-accepted") openHighs.push(f2.id);
+        if (!hasCheckableEvidence(f2.evidence)) {
+          violations.push(m({
+            en: `${newest.rel}: HIGH ${f2.id} has no checkable evidence (path:line, repro:, or a UX node with a scenario step). Ask the auditor for evidence or a new severity.`,
+            ko: `${newest.rel}: HIGH ${f2.id} \uC5D0 \uD655\uC778\uD560 \uC218 \uC788\uB294 \uADFC\uAC70\uAC00 \uC5C6\uB2E4 (\uACBD\uB85C:\uC904, \uC7AC\uD604:, UX \uB178\uB4DC\uC640 \uC2DC\uB098\uB9AC\uC624 \uB2E8\uACC4). \uAC10\uC0AC\uC790\uC5D0\uAC8C \uADFC\uAC70\uB098 \uC0C8 \uD310\uC815\uC744 \uBC1B\uC544\uB77C.`
           }));
         }
       }
+      for (const line of newest.rechecks) {
+        const ref = /\br(\d+)\/[`(.]*([^\s:|,`)\]]+)/u.exec(line);
+        const id = ref?.[2].replace(/\.+$/u, "");
+        const row = ref ? rounds.find((x) => x.n === Number(ref[1]))?.rows?.find((x) => x.id === id) : void 0;
+        if (row?.decision !== "owner-decided" && row?.decision !== "owner-accepted") {
+          openHighs.push(`re-check without an owner decision (r<N>/<ID>): ${line.slice(0, 80)}`);
+        }
+      }
+    } else if ((newest.high ?? 0) > 0) {
+      const accepted = (newest.rows ?? []).filter((x) => x.severity === "HIGH" && x.decision === "owner-accepted" && x.reason);
+      if (accepted.length >= (newest.high ?? 0)) {
+        acceptedHighs.push(...accepted.map((x) => ({ round: newest.n, id: x.id, reason: x.reason })));
+      } else openHighs.push(`${newest.rel}: HIGH ${newest.high}`);
     }
-    if (!EXPECTED_EXTS.has(ext)) {
-      unusable.add(name);
-      problems.push(t({
-        en: `${name}: unexpected format for evidence (${ext ? `.${ext}` : "no extension"}) \u2014 only screenshots, videos, traces and reports are treated as visual evidence.`,
-        ko: `${name}: \uC99D\uC801\uC73C\uB85C \uC608\uC0C1\uB418\uC9C0 \uC54A\uB294 \uD615\uC2DD(${ext ? `.${ext}` : "\uD655\uC7A5\uC790 \uC5C6\uC74C"}) \u2014 \uC2A4\uD06C\uB9B0\uC0F7\xB7\uBE44\uB514\uC624\xB7\uD2B8\uB808\uC774\uC2A4\xB7\uB9AC\uD3EC\uD2B8\uB9CC \uC2DC\uAC01 \uC99D\uC801\uC73C\uB85C \uB2E4\uB8EC\uB2E4.`
+    const changed = (newest.rows ?? []).some((x) => DOC_CHANGING.includes(x.decision) || /\[r\d+\]/u.test(x.appliedAt));
+    if (openHighs.length > 0) {
+      violations.push(m({
+        en: `${newest.rel} has open HIGH finding(s): ${openHighs.join(", ")}.`,
+        ko: `${newest.rel} \uC5D0 \uC5F4\uB9B0 HIGH \uAC00 \uC788\uB2E4: ${openHighs.join(", ")}.`
+      }));
+      next = capReached ? "owner-decision" : "fix-and-reaudit";
+    } else if (pendingTransfers.length > 0) {
+      violations.push(m({
+        en: `${pendingTransfers.join(", ")} moved to testing but still count as HIGH until the next auditor upholds the move in a short round (audit-r${newest.n + 1}.md).`,
+        ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 ${pendingTransfers.join(", ")} \uB294 \uB2E4\uC74C \uAC10\uC0AC\uC790\uAC00 \uC9E7\uC740 \uC7AC\uAC10\uC0AC(audit-r${newest.n + 1}.md)\uC5D0\uC11C upheld \uB85C \uD655\uC778\uD560 \uB54C\uAE4C\uC9C0 HIGH \uB85C \uB0A8\uB294\uB2E4.`
+      }));
+      next = "short-reaudit";
+    } else if (changed) {
+      violations.push(m({
+        en: `reconcile-r${newest.n}.md records document changes after ${newest.rel}. Re-audit the changed paragraphs in a short round (audit-r${newest.n + 1}.md).`,
+        ko: `reconcile-r${newest.n}.md \uC5D0 ${newest.rel} \uB4A4\uC758 \uBB38\uC11C \uC218\uC815\uC774 \uC801\uD600 \uC788\uB2E4. \uACE0\uCE5C \uBB38\uB2E8\uC744 \uC9E7\uC740 \uC7AC\uAC10\uC0AC(audit-r${newest.n + 1}.md)\uB85C \uD655\uC778\uD558\uB77C.`
+      }));
+      next = "short-reaudit";
+    }
+  }
+  if (newest && submittedPaths) {
+    const have = new Set(submittedPaths.map((p) => path10.normalize(p).split(path10.sep).join("/")));
+    const needed = [newest.rel, ...rounds.filter((r) => r.rows !== null).map((r) => `${AUDIT_DIR}/reconcile-r${r.n}.md`)];
+    const missing = needed.filter((p) => !have.has(p));
+    if (missing.length > 0) {
+      violations.push(m({
+        en: `The P6 submission must include the newest round and every reconciliation table. Missing: ${missing.join(", ")}.`,
+        ko: `P6 \uC81C\uCD9C\uC5D0\uB294 \uCD5C\uC2E0 \uD68C\uCC28\uC640 \uBAA8\uB4E0 \uCC98\uB9AC\uD45C\uAC00 \uB4E4\uC5B4\uAC00\uC57C \uD55C\uB2E4. \uBE60\uC9C4 \uAC83: ${missing.join(", ")}.`
       }));
     }
-    files.push(file);
   }
-  const usable = files.filter((f2) => !unusable.has(f2.name));
-  return { ok: usable.length > 0, files, entries: names.length, usable, problems };
+  if (next === "ready" && violations.length > 0) next = "fix-format";
+  return {
+    rounds: rounds.map(({ n, rel, kind, labelled, high }) => ({ n, rel, kind, labelled, high })),
+    fullRounds,
+    cap,
+    capReached,
+    openHighs,
+    acceptedHighs,
+    ownerDecisions,
+    transferredHighs,
+    carryItems,
+    violations,
+    next
+  };
 }
-var isRealCapture = (f2) => f2.ext === "png" && f2.dimensions !== void 0 && f2.size >= MIN_PNG_BYTES && Math.min(f2.dimensions.width, f2.dimensions.height) >= MIN_PNG_EDGE;
-function hasMeasuredEvidence(root, waveId) {
-  return validateEvidence(root, waveId).files.some(isRealCapture);
+function conformanceHolds(root) {
+  const verdicts = [];
+  try {
+    const dir = path10.join(root, AUDIT_DIR);
+    const files = fs13.readdirSync(dir).flatMap((f2) => {
+      const hit = /^conformance-r([1-9]\d*)\.md$/u.exec(f2);
+      return hit ? [{ f: f2, n: Number(hit[1]) }] : [];
+    }).sort((x, y) => x.n - y.n);
+    for (const { f: f2 } of files) {
+      for (const line of fs13.readFileSync(path10.join(dir, f2), "utf8").split("\n")) {
+        const cells = tableCells(line);
+        const results = (cells ?? []).map((c) => plainCell(c).toLowerCase());
+        if (cells && (results.includes("holds") || results.includes("breaks"))) {
+          verdicts.push({ cells, holds: !results.includes("breaks") });
+        }
+      }
+    }
+  } catch {
+    return () => false;
+  }
+  return (token) => {
+    const latest = verdicts.filter((v) => v.cells.some((c) => hasId(c, token))).pop();
+    return latest?.holds ?? false;
+  };
+}
+function carryItemGaps(root) {
+  const items = auditStatus(root).carryItems;
+  if (items.length === 0) return [];
+  let criteria = [];
+  try {
+    criteria = listWaves(root).filter((w) => w.status === "done").flatMap((w) => w.acceptance);
+  } catch {
+  }
+  const holds = conformanceHolds(root);
+  return items.filter((c) => c.closure === "conformance" ? !holds(c.token) : !criteria.some((a) => hasId(a, c.token)));
 }
 
-// core/src/report.ts
+// core/src/gate.ts
+var fs17 = __toESM(require("fs"));
+var path14 = __toESM(require("path"));
+
+// core/src/registry.ts
 var fs14 = __toESM(require("fs"));
 var path11 = __toESM(require("path"));
+var crypto3 = __toESM(require("crypto"));
+var YAML5 = __toESM(require_dist());
+function toDocNode(v) {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v;
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.path !== "string" || !o.path) return null;
+  if (typeof o.version !== "number" || !Number.isFinite(o.version)) return null;
+  if (!isPhase(o.phase) || !isDocStatus(o.status)) return null;
+  const node = {
+    id: o.id,
+    phase: o.phase,
+    path: o.path,
+    version: o.version,
+    status: o.status,
+    linkedNodes: Array.isArray(o.linkedNodes) ? o.linkedNodes.map(String) : []
+  };
+  if (typeof o.hash === "string" && o.hash) node.hash = o.hash;
+  if (typeof o.artifactUrl === "string" && o.artifactUrl) node.artifactUrl = o.artifactUrl;
+  return node;
+}
+function readEntries(root) {
+  if (!fs14.existsSync(registryPath(root))) return { entries: [] };
+  let doc;
+  try {
+    doc = YAML5.parse(fs14.readFileSync(registryPath(root), "utf8"));
+  } catch (e) {
+    return { entries: [], parseError: e.message };
+  }
+  const docs = doc?.docs;
+  return { entries: Array.isArray(docs) ? docs : [] };
+}
+function inspectRegistry(root) {
+  const { entries, parseError } = readEntries(root);
+  const docs = [];
+  const invalid = [];
+  for (const e of entries) {
+    const n = toDocNode(e);
+    if (n) docs.push(n);
+    else invalid.push(e);
+  }
+  return parseError ? { docs, invalid, parseError } : { docs, invalid };
+}
+function loadRegistry(root) {
+  return { docs: inspectRegistry(root).docs };
+}
+function computeDocHash(root, doc) {
+  const abs = path11.join(root, doc.path);
+  let buf;
+  try {
+    buf = fs14.readFileSync(abs);
+  } catch {
+    throw new Error(
+      tr(root, {
+        en: `Cannot read the file for document ${doc.id}: ${doc.path} (${abs}) \u2014 create the file, or fix the registry path, then try again`,
+        ko: `\uBB38\uC11C ${doc.id} \uC758 \uD30C\uC77C\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4: ${doc.path} (${abs}) \u2014 \uD30C\uC77C\uC744 \uB9CC\uB4E4\uAC70\uB098 \uB808\uC9C0\uC2A4\uD2B8\uB9AC\uC758 path \uB97C \uACE0\uCE5C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uB77C`
+      })
+    );
+  }
+  return crypto3.createHash("sha256").update(buf).digest("hex");
+}
+function staleDocs(root) {
+  return loadRegistry(root).docs.filter((d) => {
+    if (d.status !== "approved" || !d.hash) return false;
+    try {
+      return computeDocHash(root, d) !== d.hash;
+    } catch {
+      return true;
+    }
+  });
+}
+function docsForPhase(root, phase) {
+  const latest = /* @__PURE__ */ new Map();
+  for (const d of loadRegistry(root).docs) {
+    if (d.phase !== phase || d.status === "superseded") continue;
+    const cur = latest.get(d.id);
+    if (!cur || d.version > cur.version) latest.set(d.id, d);
+  }
+  return [...latest.values()];
+}
+
+// core/src/ship.ts
+var fs16 = __toESM(require("fs"));
+var path13 = __toESM(require("path"));
+var YAML6 = __toESM(require_dist());
+
+// core/src/report.ts
+var fs15 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
 var trFor2 = (lang) => (m) => pick(m, lang);
 var MSG = {
   ledgerUnreadable: { en: "cannot read the design ledger", ko: "\uC124\uACC4 \uC6D0\uC7A5\uC744 \uC77D\uC744 \uC218 \uC5C6\uB2E4" },
@@ -8746,10 +9289,10 @@ function currentDocs(root) {
 function waveEntries(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs14.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs14.readdirSync(wavesDir(root));
+    files = fs15.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
@@ -8765,14 +9308,14 @@ function hasEvidence(root, waveId) {
   const dir = evidenceDir(root, waveId);
   let files;
   try {
-    files = fs14.readdirSync(dir);
+    files = fs15.readdirSync(dir);
   } catch {
     return false;
   }
   return files.some((f2) => {
     if (f2.startsWith(".")) return false;
     try {
-      const st = fs14.statSync(path11.join(dir, f2));
+      const st = fs15.statSync(path12.join(dir, f2));
       return st.isFile() && st.size > 0;
     } catch {
       return false;
@@ -8910,6 +9453,12 @@ function renderRtm(root) {
     );
   }
   out.push("", `## ${t(GAPS_HEADING)}`, "", ...gapLines(rows, t));
+  const carry = auditStatus(root).carryItems;
+  if (carry.length > 0) {
+    const open = new Set(carryItemGaps(root).map((g) => g.token));
+    out.push("", `## ${t({ en: "Design audit items carried to P7~P9", ko: "P7~P9 \uB85C \uB118\uAE34 \uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9" })}`, "");
+    out.push(...carry.map((c) => `- \`${cell(c.token)}\` ${c.severity} ${c.decision} \u2192 ${cell(c.target)}: ${open.has(c.token) ? `**${c.closure === "conformance" ? t({ en: "not marked holds in the newest conformance audit", ko: "\uCD5C\uC2E0 \uC801\uD569\uC131 \uAC10\uC0AC\uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4" }) : t({ en: "no completed wave carries this token in its acceptance criteria", ko: "\uC774 \uD45C\uC2DD\uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4" })}**` : c.closure === "conformance" ? t({ en: "holds in the conformance audit", ko: "\uC801\uD569\uC131 \uAC10\uC0AC\uC5D0\uC11C holds" }) : t({ en: "covered by a completed wave", ko: "\uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uB2E4\uB8F8" })}`));
+  }
   out.push(...unreadableSection(unreadable, t));
   return out.join("\n") + "\n";
 }
@@ -9090,6 +9639,49 @@ function buildReviewPacket(root, phase) {
       }));
     }
   }
+  if (phase === "P6") {
+    const audit = auditStatus(root, recordedPaths(root, phase) ?? void 0);
+    out.push(`## ${t({ en: "Design audit rounds", ko: "\uC124\uACC4 \uAC10\uC0AC \uD68C\uCC28" })}`, "");
+    out.push(t({
+      en: `Full audits: ${audit.fullRounds} of ${audit.cap} allowed.`,
+      ko: `\uC804\uCCB4 \uAC10\uC0AC: ${audit.fullRounds}\uD68C (\uC0C1\uD55C ${audit.cap}\uD68C).`
+    }), "");
+    out.push(
+      `| ${t({ en: "Round", ko: "\uD68C\uCC28" })} | ${t({ en: "Kind", ko: "\uC885\uB958" })} | HIGH |`,
+      "|---|---|---:|",
+      ...audit.rounds.map((r) => `| r${r.n} | ${r.kind}${r.labelled ? "" : t({ en: " (old format)", ko: " (\uC608\uC804 \uD615\uC2DD)" })} | ${r.high ?? "?"} |`),
+      ""
+    );
+    const listed = (h) => `- r${h.round} ${sanitizeUntrusted(h.id, 80)}: ${sanitizeUntrusted(h.reason, 300)}`;
+    if (audit.acceptedHighs.length > 0) {
+      out.push(`### ${t({ en: "HIGH findings whose risk this approval accepts", ko: "\uC774 \uC2B9\uC778\uC73C\uB85C \uC704\uD5D8\uC744 \uC218\uC6A9\uD558\uB294 HIGH" })}`, "");
+      out.push(...audit.acceptedHighs.map(listed), "");
+    }
+    if (audit.ownerDecisions.length > 0) {
+      out.push(`### ${t({ en: "Owner decisions this approval confirms", ko: "\uC774 \uC2B9\uC778\uC73C\uB85C \uD655\uC815\uD558\uB294 \uC624\uB108 \uACB0\uC815" })}`, "");
+      out.push(...audit.ownerDecisions.map(listed), "");
+    }
+    if (audit.transferredHighs.length > 0) {
+      out.push(`### ${t({ en: "HIGH findings moved to testing, upheld by the next auditor", ko: "\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH (\uB2E4\uC74C \uAC10\uC0AC\uC790\uAC00 \uD655\uC778)" })}`, "");
+      out.push(...audit.transferredHighs.map(listed), "");
+    }
+    if (audit.carryItems.length > 0) {
+      out.push(`### ${t({ en: "Carried to P7~P9", ko: "P7~P9 \uB85C \uB118\uAE30\uB294 \uD56D\uBAA9" })}: ${audit.carryItems.length}`, "");
+      out.push(...audit.carryItems.map((c) => `- \`${sanitizeUntrusted(c.token, 80)}\` ${c.decision} \u2192 ${sanitizeUntrusted(c.target, 200)}`), "");
+    }
+    blockers.push(...audit.violations.map((v) => sanitizeUntrusted(v)));
+  }
+  if (phase === "P9" || phase === "P10") {
+    for (const g of carryItemGaps(root)) {
+      blockers.push(g.closure === "conformance" ? t({
+        en: `design audit item \`${g.token}\` (HIGH moved to testing) is not marked holds in the newest conformance-rN.md`,
+        ko: `\uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 \`${g.token}\` (\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH) \uC774 \uCD5C\uC2E0 conformance-rN.md \uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4`
+      }) : t({
+        en: `design audit item \`${g.token}\` (${g.decision}) has no completed wave carrying it in its acceptance criteria`,
+        ko: `\uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 \`${g.token}\` (${g.decision}) \uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4`
+      }));
+    }
+  }
   out.push(`## ${t(BLOCKERS_HEADING)}`, "");
   out.push(...blockers.length === 0 ? [t({
     en: "No blockers \u2014 approval review can proceed on the artifacts above.",
@@ -9168,8 +9760,8 @@ function buildHub(root) {
 
 // core/src/ship.ts
 var trFor3 = (lang) => (m) => pick(m, lang);
-var shipDir = (root) => path12.join(harnessDir(root), "ship");
-var defectsPath = (root) => path12.join(shipDir(root), "defects.yaml");
+var shipDir = (root) => path13.join(harnessDir(root), "ship");
+var defectsPath = (root) => path13.join(shipDir(root), "defects.yaml");
 var DEFECT_SEVERITIES = ["blocker", "high", "medium", "low"];
 var DEFECT_STATUSES = ["open", "fixed", "verified", "deferred"];
 var SHIP_BLOCKING_SEVERITIES = ["blocker", "high"];
@@ -9179,10 +9771,10 @@ function shipBlockingDefects(root) {
   );
 }
 function readRecords(root, file, key, to) {
-  if (!fs15.existsSync(file)) return [];
+  if (!fs16.existsSync(file)) return [];
   let doc;
   try {
-    doc = YAML6.parse(fs15.readFileSync(file, "utf8"));
+    doc = YAML6.parse(fs16.readFileSync(file, "utf8"));
   } catch (e) {
     throw new Error(tr(root, { en: `Cannot parse ${file}: ${e.message} \u2014 restore it from git history`, ko: `${file} \uC744 \uD574\uC11D\uD560 \uC218 \uC5C6\uB2E4: ${e.message} \u2014 git \uC774\uB825\uC5D0\uC11C \uBCF5\uC6D0\uD558\uB77C` }));
   }
@@ -9234,16 +9826,16 @@ function attempt2(fn) {
 function waveEntries2(root, t) {
   const entries = [];
   const unreadable = [];
-  if (!fs15.existsSync(wavesDir(root))) return { entries, unreadable };
+  if (!fs16.existsSync(wavesDir(root))) return { entries, unreadable };
   let files;
   try {
-    files = fs15.readdirSync(wavesDir(root));
+    files = fs16.readdirSync(wavesDir(root));
   } catch (e) {
     return { entries, unreadable: [`${t({ en: "cannot read the waves directory", ko: "\uC6E8\uC774\uBE0C \uB514\uB809\uD1A0\uB9AC\uB97C \uC77D\uC744 \uC218 \uC5C6\uB2E4" })}: ${e.message}`] };
   }
   for (const f2 of files.filter(isWaveFile).sort()) {
     const id = f2.replace(/\.md$/, "");
-    const r = attempt2(() => parseWave(fs15.readFileSync(path12.join(wavesDir(root), f2), "utf8")).meta);
+    const r = attempt2(() => parseWave(fs16.readFileSync(path13.join(wavesDir(root), f2), "utf8")).meta);
     if (r.ok) entries.push({ id, meta: r.value });
     else {
       unreadable.push(t({
@@ -9280,6 +9872,15 @@ function shipVerdict(root) {
         }));
       }
     }
+  }
+  for (const g of carryItemGaps(root).filter((x) => x.decision === "test-transfer")) {
+    reasons.push(g.closure === "conformance" ? t({
+      en: `design audit item ${g.token} is a HIGH moved to testing, and the newest conformance audit does not mark it holds`,
+      ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 HIGH ${g.token} \uC774 \uCD5C\uC2E0 \uC801\uD569\uC131 \uAC10\uC0AC\uC5D0 holds \uB85C \uC801\uD600 \uC788\uC9C0 \uC54A\uB2E4`
+    }) : t({
+      en: `design audit item ${g.token} was moved to testing, but no completed wave carries it in its acceptance criteria`,
+      ko: `\uC2DC\uD5D8\uC73C\uB85C \uC62E\uAE34 \uC124\uACC4 \uAC10\uC0AC \uD56D\uBAA9 ${g.token} \uC744 \uC218\uC6A9 \uAE30\uC900\uC5D0 \uB2F4\uC544 \uC644\uB8CC\uD55C \uC6E8\uC774\uBE0C\uAC00 \uC5C6\uB2E4`
+    }));
   }
   const state = attempt2(() => readState(root));
   if (!state.ok) {
@@ -9328,9 +9929,9 @@ function shipVerdict(root) {
 var NON_ALNUM_RE = /[^\p{L}\p{N}]/gu;
 function canonicalRel(root, rel) {
   try {
-    const real = fs16.realpathSync(path13.resolve(root, rel));
-    const r = path13.relative(fs16.realpathSync(root), real);
-    return r && !r.startsWith(`..${path13.sep}`) && r !== ".." && !path13.isAbsolute(r) ? r : rel;
+    const real = fs17.realpathSync(path14.resolve(root, rel));
+    const r = path14.relative(fs17.realpathSync(root), real);
+    return r && !r.startsWith(`..${path14.sep}`) && r !== ".." && !path14.isAbsolute(r) ? r : rel;
   } catch {
     return rel;
   }
@@ -9352,7 +9953,7 @@ var PLACEHOLDER_WORDS = /\b(?:to-?do|tbd|tba|fixme|wip|xxx|n\/?a|none|nil|null|p
 var PLACEHOLDER_WORDS_KO = /(?:미지정|미정|없음|추후|추가예정|작성예정|자리표시자|채워넣기|해당없음)/g;
 function readArtifact(root, rel) {
   try {
-    return fs16.readFileSync(path13.resolve(root, rel));
+    return fs17.readFileSync(path14.resolve(root, rel));
   } catch {
     throw new Error(
       tr(root, {
@@ -9501,7 +10102,7 @@ function assertNewMaterial(root, phase, paths, gates) {
     );
   }
 }
-var normRel = (p) => path13.normalize(p).replace(/^(?:\.[\\/])+/, "");
+var normRel = (p) => path14.normalize(p).replace(/^(?:\.[\\/])+/, "");
 function assertPhaseFit(root, phase, paths) {
   const want = new Set(paths.map(normRel));
   const known = loadRegistry(root).docs.filter((d) => want.has(normRel(d.path)));
@@ -9544,7 +10145,7 @@ function submissionSignals(root, phase) {
   const paths = rels.map((rel) => {
     let text;
     try {
-      text = fs16.readFileSync(path13.resolve(root, rel)).toString("utf8");
+      text = fs17.readFileSync(path14.resolve(root, rel)).toString("utf8");
     } catch {
       return { rel, missing: true, binary: false, substance: 0, distinctChars: 0, words: 0 };
     }
@@ -9593,6 +10194,7 @@ function submitGate(root, phase, opts) {
   assertSubstantive(root, readArtifacts(root, paths));
   assertPhaseFit(root, phase, paths);
   assertNoShipBlockers(root, phase);
+  assertAuditRounds(root, phase, paths);
   const artifactHash = computeArtifactHash(root, paths);
   const contentHash = contentDigest(root, paths);
   const state = readState(root);
@@ -9626,6 +10228,18 @@ function assertNoShipBlockers(root, phase) {
     ko: `\uCC28\uB2E8\xB7\uB192\uC74C \uACB0\uD568 ${blocking.length}\uAC74\uC774 open \uC774\uAC70\uB098 fixed \uC5D0 \uBA38\uBB38 \uCC44\uB85C P10 \uC744 \uC81C\uCD9C\uD560 \uC218 \uC5C6\uB2E4: ${list} \u2014 \uC218\uC815 \u2192 \uC0C8 \uAC10\uC0AC\uC790\uB85C \uC7AC\uCE21\uC815 \u2192 \`harness ship defect update <id> --status verified\`, \uB610\uB294 \uC624\uB108 \uACB0\uC815\uC744 \`--status deferred --defer-reason "<\uC0AC\uC720>"\` \uB85C \uB0A8\uACA8\uB77C`
   }));
 }
+function assertAuditRounds(root, phase, paths) {
+  if (phase !== "P6") return;
+  ensureAuditFormat(root);
+  const { violations } = auditStatus(root, paths);
+  if (violations.length === 0) return;
+  throw new Error(tr(root, {
+    en: `Cannot pass the P6 gate on the current audit rounds (see \`harness audit status\`):
+- ${violations.join("\n- ")}`,
+    ko: `\uD604\uC7AC \uAC10\uC0AC \uD68C\uCC28\uB85C\uB294 P6 \uAC8C\uC774\uD2B8\uB97C \uD1B5\uACFC\uD560 \uC218 \uC5C6\uB2E4 (\`harness audit status\` \uCC38\uACE0):
+- ${violations.join("\n- ")}`
+  }));
+}
 function measuredOnlyViolation(root, phase, evidence) {
   if (!SHIP_PHASES.includes(phase) || evidence === "measured") return null;
   return tr(root, {
@@ -9634,11 +10248,11 @@ function measuredOnlyViolation(root, phase, evidence) {
   });
 }
 function feedbackPath(root, phase) {
-  return path13.join(packetsDir(root), `${phase}.feedback.md`);
+  return path14.join(packetsDir(root), `${phase}.feedback.md`);
 }
 function readGateFeedback(root, phase) {
   try {
-    return fs16.readFileSync(feedbackPath(root, phase), "utf8");
+    return fs17.readFileSync(feedbackPath(root, phase), "utf8");
   } catch {
     return "";
   }
@@ -9690,22 +10304,22 @@ function verifyGate(root, phase) {
 }
 
 // core/src/doctor.ts
-var fs19 = __toESM(require("fs"));
-var path16 = __toESM(require("path"));
+var fs20 = __toESM(require("fs"));
+var path17 = __toESM(require("path"));
 
 // core/src/approve.ts
 var crypto5 = __toESM(require("crypto"));
-var fs17 = __toESM(require("fs"));
+var fs18 = __toESM(require("fs"));
 var os2 = __toESM(require("os"));
-var path14 = __toESM(require("path"));
+var path15 = __toESM(require("path"));
 var DIALOG_TTL_MS = 30 * 60 * 1e3;
 var SLASH_TTL_MS = 60 * 1e3;
 function settingsFiles(root) {
-  const home = process.env.CLAUDE_CONFIG_DIR ?? path14.join(os2.homedir(), ".claude");
+  const home = process.env.CLAUDE_CONFIG_DIR ?? path15.join(os2.homedir(), ".claude");
   return [
-    path14.join(home, "settings.json"),
-    path14.join(root, ".claude", "settings.json"),
-    path14.join(root, ".claude", "settings.local.json")
+    path15.join(home, "settings.json"),
+    path15.join(root, ".claude", "settings.json"),
+    path15.join(root, ".claude", "settings.local.json")
   ];
 }
 function ruleMatches(rule, commands) {
@@ -9724,7 +10338,7 @@ function approveAllowRule(root) {
   for (const file of settingsFiles(root)) {
     let allow;
     try {
-      allow = JSON.parse(fs17.readFileSync(file, "utf8"))?.permissions?.allow;
+      allow = JSON.parse(fs18.readFileSync(file, "utf8"))?.permissions?.allow;
     } catch {
       continue;
     }
@@ -9737,10 +10351,10 @@ function approveAllowRule(root) {
 }
 
 // core/src/adr.ts
-var fs18 = __toESM(require("fs"));
-var path15 = __toESM(require("path"));
+var fs19 = __toESM(require("fs"));
+var path16 = __toESM(require("path"));
 var YAML7 = __toESM(require_dist());
-var adrDir = (root) => path15.join(designDir(root), "adr");
+var adrDir = (root) => path16.join(designDir(root), "adr");
 function toAdrRecord(v) {
   if (typeof v !== "object" || v === null) return null;
   const o = v;
@@ -9771,13 +10385,13 @@ function toAdrRecord(v) {
 }
 function listAdrs(root) {
   const dir = adrDir(root);
-  if (!fs18.existsSync(dir)) return [];
+  if (!fs19.existsSync(dir)) return [];
   const out = [];
-  for (const f2 of fs18.readdirSync(dir).sort()) {
+  for (const f2 of fs19.readdirSync(dir).sort()) {
     if (!f2.startsWith("ADR-") || !f2.endsWith(".yaml")) continue;
     if (/\.v\d+\.yaml$/.test(f2)) continue;
     try {
-      const rec = toAdrRecord(YAML7.parse(fs18.readFileSync(path15.join(dir, f2), "utf8")));
+      const rec = toAdrRecord(YAML7.parse(fs19.readFileSync(path16.join(dir, f2), "utf8")));
       if (rec) out.push(rec);
     } catch {
       continue;
@@ -9803,17 +10417,17 @@ function sweepOrphanTmp(root) {
   for (const dir of [harnessDir(root), designDir(root), wavesDir(root)]) {
     let names;
     try {
-      names = fs19.readdirSync(dir);
+      names = fs20.readdirSync(dir);
     } catch {
       continue;
     }
     for (const name of names) {
       const m = TMP_RE.exec(name);
       if (!m || pidAlive(Number(m[1]))) continue;
-      const p = path16.join(dir, name);
+      const p = path17.join(dir, name);
       try {
-        if (!fs19.statSync(p).isFile()) continue;
-        fs19.rmSync(p);
+        if (!fs20.statSync(p).isFile()) continue;
+        fs20.rmSync(p);
         swept++;
       } catch {
       }
@@ -9824,11 +10438,11 @@ function sweepOrphanTmp(root) {
 function unwritableDirs(root) {
   const bad = [];
   for (const dir of [harnessDir(root), runtimeDir(root)]) {
-    if (!fs19.existsSync(dir)) continue;
-    const probe = path16.join(dir, `write-probe.tmp-${process.pid}`);
+    if (!fs20.existsSync(dir)) continue;
+    const probe = path17.join(dir, `write-probe.tmp-${process.pid}`);
     try {
-      fs19.writeFileSync(probe, "");
-      fs19.rmSync(probe);
+      fs20.writeFileSync(probe, "");
+      fs20.rmSync(probe);
     } catch {
       bad.push(dir);
     }
@@ -9836,9 +10450,9 @@ function unwritableDirs(root) {
   return bad;
 }
 function countHookErrors(root) {
-  const p = path16.join(runtimeDir(root), "hook-errors.log");
-  if (!fs19.existsSync(p)) return 0;
-  return fs19.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
+  const p = path17.join(runtimeDir(root), "hook-errors.log");
+  if (!fs20.existsSync(p)) return 0;
+  return fs20.readFileSync(p, "utf8").split("\n").filter((l) => l.trim()).length;
 }
 var isPristine = (s) => {
   const d = defaultState();
@@ -9849,7 +10463,7 @@ function runDoctor(root, opts = {}) {
   const issues = [];
   const warnings = [];
   const notes = [];
-  if (fs19.existsSync(harnessDir(root))) {
+  if (fs20.existsSync(harnessDir(root))) {
     const unwritable = unwritableDirs(root);
     if (unwritable.length > 0) {
       issues.push(t({
@@ -9858,7 +10472,7 @@ function runDoctor(root, opts = {}) {
       }));
     }
   }
-  const journalExists = fs19.existsSync(eventsPath(root));
+  const journalExists = fs20.existsSync(eventsPath(root));
   let events = [];
   let corruptLines = 0;
   let journalReadable = true;
@@ -9934,7 +10548,7 @@ function runDoctor(root, opts = {}) {
     trustworthy = false;
   }
   if (current) {
-    for (const field of COMPARED_FIELDS) {
+    for (const field of replayed.auditFormat ? [...COMPARED_FIELDS, "auditFormat"] : COMPARED_FIELDS) {
       const a = JSON.stringify(current[field]);
       const b = JSON.stringify(replayed[field]);
       if (a !== b) {
@@ -9946,7 +10560,7 @@ function runDoctor(root, opts = {}) {
     }
   }
   const effective = current ?? replayed;
-  if (effective.activeWave && !fs19.existsSync(wavePath(root, effective.activeWave))) {
+  if (effective.activeWave && !fs20.existsSync(wavePath(root, effective.activeWave))) {
     issues.push(
       tr(root, {
         en: `The wave file for activeWave ${effective.activeWave} is missing \u2014 it may be temporarily absent (a git branch switch, say), so restoring the file comes first. If it really is lost, settle activeWave to null with \`harness doctor --repair\``,
@@ -9979,7 +10593,7 @@ function runDoctor(root, opts = {}) {
   ]) {
     let size = 0;
     try {
-      size = fs19.statSync(file).size;
+      size = fs20.statSync(file).size;
     } catch {
       continue;
     }
@@ -10018,13 +10632,13 @@ function runDoctor(root, opts = {}) {
   }
   const hookErrors = countHookErrors(root);
   if (hookErrors > 0) {
-    const log = path16.join(runtimeDir(root), "hook-errors.log");
+    const log = path17.join(runtimeDir(root), "hook-errors.log");
     warnings.push(t({
       en: `${hookErrors} hook decision failure(s) recorded \u2014 read ${log} to find out why`,
       ko: `\uD6C5 \uD310\uC815 \uC2E4\uD328 ${hookErrors}\uAC74 \uAE30\uB85D\uB428 \u2014 \uC6D0\uC778\uC740 ${log} \uC5D0\uC11C \uD655\uC778\uD558\uB77C`
     }));
   }
-  if (fs19.existsSync(harnessDir(root))) try {
+  if (fs20.existsSync(harnessDir(root))) try {
     if (opts.acceptPolicy) {
       const pin = pinPolicy(root, "accept");
       notes.push(
@@ -10094,7 +10708,7 @@ function runDoctor(root, opts = {}) {
       );
     } else {
       const replayedWave = replayed.activeWave;
-      const settledActiveWave = replayedWave !== null && !fs19.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
+      const settledActiveWave = replayedWave !== null && !fs20.existsSync(wavePath(root, replayedWave)) ? replayedWave : null;
       let target = replayed;
       if (settledActiveWave) {
         appendEvent(root, "wave-stale", {
@@ -10114,9 +10728,9 @@ function runDoctor(root, opts = {}) {
     }
   }
   if (opts.repair && !refused && hookErrors > 0) {
-    const log = path16.join(runtimeDir(root), "hook-errors.log");
+    const log = path17.join(runtimeDir(root), "hook-errors.log");
     try {
-      fs19.renameSync(log, `${log}.prev`);
+      fs20.renameSync(log, `${log}.prev`);
       notes.push(t({
         en: `rotated hook-errors.log (${hookErrors} entries) to .prev`,
         ko: `hook-errors.log ${hookErrors}\uAC74 \u2192 .prev \uD68C\uC804`
@@ -10350,9 +10964,9 @@ function dispatch(root, name, o) {
       const r = submitGate(root, phase, { paths: strArr(o, "paths"), evidence });
       let packet = "";
       try {
-        fs20.mkdirSync(packetsDir(root), { recursive: true });
-        packet = path17.join(packetsDir(root), `${phase}.md`);
-        fs20.writeFileSync(packet, buildReviewPacket(root, phase));
+        fs21.mkdirSync(packetsDir(root), { recursive: true });
+        packet = path18.join(packetsDir(root), `${phase}.md`);
+        fs21.writeFileSync(packet, buildReviewPacket(root, phase));
       } catch (e) {
         return ok(
           `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
@@ -10361,7 +10975,7 @@ Warning: review packet generation failed (the submission still stands) \u2014 ${
       }
       return ok(
         `${phase} submitted \u2014 hash ${r.artifactHash?.slice(0, 12)} \xB7 evidence ${r.evidence}
-Review packet: ${path17.relative(root, packet)}
+Review packet: ${path18.relative(root, packet)}
 Next: the user approves with \`${approveSlash(phase)}\` \u2014 the final decision is a human's.`
       );
     }

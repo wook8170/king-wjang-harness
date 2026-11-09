@@ -121,7 +121,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1665 tests** (69 files) — **1658 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1808 tests** (72 files) — **1801 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -288,6 +288,7 @@ block feels wrong for your stack, this is the dial, not the source code.
 | `design_blocked_bash` | deploy commands (`npm publish`, `docker push`, `terraform apply`, …) | **Shipping commands that stay blocked** until the shipping track opens. Substring match, so no trailing flags. Your stack's own commands belong in the profile's `deploy_commands`. |
 | `design_system_frozen_roots` | `[]` | Directories where design-system files must not change once frozen. |
 | `block_raw_values` | `false` | Deny writes that hardcode raw colors/sizes instead of referencing semantic tokens. |
+| `audit_full_round_cap` | `3` | How many P6 rounds may run all four lenses. Agents cannot edit this file, so raising the number is the owner's approval of another full audit. |
 
 `.harness/config.yaml` is itself a protected file — an agent cannot rewrite it to widen its own
 permissions ([SEC-136]); you edit it in your terminal. Run `harness doctor` afterwards: a policy
@@ -298,7 +299,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1665 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1808 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -318,7 +319,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1665 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1808 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and
@@ -335,7 +336,7 @@ core — is a wall.
 - ✅ Wave lifecycle, design ledger with STALE propagation, UX evidence gate
 - ✅ Injection hardening, non-interference & harmless invariants, committed self-contained dist
 - ✅ Approval **gates** (`gate submit/approve/verify/sweep/feedback`) + artifact registry (`doc`) + RTM (`report rtm`)
-- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the lanekeeper plugin (`lanekeeper:quality-ux-adversarial`). P6 enters P7 only at `HIGH 0` (per-round re-audit, reconciliation table, code citations checked); P10 and P12 take two adversarial reviews as mandatory inputs — the implementation conformance audit and the changed-screen UX review on nine axes with persona task scenarios and design system visual comparison — and an open high from either blocks
+- ✅ **Phase skills — all thirteen** (P0–P12: design `P0–P6`, build `P7–P9`, ship `P10–P12`) + researcher / design-auditor / wave-executor / wave-verifier / readiness-auditor agents + ADR (`adr`) — the pre-ship adversarial UX review is referenced from the lanekeeper plugin (`lanekeeper:quality-ux-adversarial`). P6 enters P7 at `HIGH 0`, checked by the gate (short re-audits for revisions that keep the structure, at most three full audits by default and then the owner decides, reconciliation table, code citations checked; `harness audit status` shows the rounds and what blocks the gate); P10 and P12 take two adversarial reviews as mandatory inputs — the implementation conformance audit and the changed-screen UX review on nine axes with persona task scenarios and design system visual comparison — and an open high from either blocks
 - ✅ **Design subsystem** — `design link/sync/baseline/html`, the interactive HTML source-of-truth, and the token pipeline (`tokens gen/lint/swap`)
 - ✅ **Build & ship tracks** — stack profiles (`profile`), the wave loop (`loop`), visual evidence (`evidence`), ship ledger and verdict (`ship`)
 
