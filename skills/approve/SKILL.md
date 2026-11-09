@@ -12,4 +12,4 @@ The line above is the result of the user's gate approval. Report it to the user 
 If it was refused with a list of owner decisions and accepted risks, show that whole list to the user word for word,
 and tell them to type the command with `--accept-risk` once they have read it. Do not decide for them.
 A user who types `--accept-risk` the first time approves without that list, so the review packet `.harness/packets/P6.md` is the only place it was shown.
-Do not run `harness gate approve` again. If the gate opened, tell the user which phase comes next.
+Do not run `harness gate approve` again. If the gate opened, run the `harness phase set` line it printed and carry on with that phase without asking again.

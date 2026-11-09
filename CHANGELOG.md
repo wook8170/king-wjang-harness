@@ -8,6 +8,35 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — the confirmation dialog for gate approval
+
+The dialog path added in 0.1.8 is now the main way to ask for approval from the main session, and its guards are tighter.
+
+- `harness gate submit` now names the dialog next to the slash command.
+- **`auto` no longer raises the dialog.** That mode can run with nobody at the prompt, so the hook refuses and points to the slash command. Only `default` and `acceptEdits` raise it.
+- The dialog opens with what is being approved and what happens next, on one line. The agent's own description and other tool input no longer reach the dialog.
+- A dialog ticket lasts 10 minutes (it was 30), is claimed atomically, and the command now carries `--project`, so it opens the gate that the dialog showed.
+
+### Changed — fewer things for the owner to do
+
+- After `gate submit`, the guidance tells the agent to run `harness gate approve <P>` itself, so the owner only answers the dialog. Skills, MCP messages and refusals say the same. The slash command stays as the fallback when a dialog cannot appear.
+- Refusals name the exact next line: the plain command, `gate submit` first, or `phase set` when the gate is already approved.
+- After approval the CLI prints the `harness phase set <next>` line and tells the agent to carry on without asking again.
+- A dialog that was just raised and not allowed is not raised again with the same content for two minutes.
+- `loop critical clear` no longer asks the owner to type it. The owner gives the decision and the agent clears the escalation.
+
+### Fixed — ways to approve without a person
+
+- **A TTY made by a program counted as a person.** A `python3` pty around `harness gate approve P0` passed the hook, and the CLI approved the gate with `via: terminal`. The terminal path and `HARNESS_APPROVE_NO_TTY` now refuse inside a Claude Code tool call (`CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT` set), and the hook refuses commands that type the approval for a person or make a terminal for it (`script`, `expect`, `tmux`, `screen`, `osascript`, `orca`, `paseo`, `pty`).
+- **Names that differ only by case** reached the approval ticket and the journal on a case-insensitive disk (`.harness/.runtime/APPROVE-TICKET`). They are now judged as the same file.
+- **Unpacking and copying over the project** could put `.harness/state.json` or the ticket in place without naming them. The hook now refuses an archive holding `.harness` unpacked over the root or a parent, an archive it cannot read there, any unpacking inside `.harness`, and copies that cover `.harness` (`cp -R x/. .`, `rsync -a x/ ./`, `ditto x .`, `git clone x .`). An archive without `.harness` can still be unpacked at the root.
+- **Writes run from inside `.harness/.runtime`** could name the ticket indirectly (`curl -O`). Only read-only commands pass there now.
+
+### Behavior to expect
+
+- A person who sets `HARNESS_APPROVE_NO_TTY=1` at the Claude Code prompt (`!`) is refused. Use the slash command. A real terminal or CI outside Claude Code still works.
+- `tar -xf a.tar` at the project root now reads the archive first, for up to 3 seconds. An archive that cannot be read in time is refused, so unpack it into a subfolder.
+
 The P6 design audit now has an end condition and a limit on how often it repeats, and the gate checks them.
 Real projects ran 16 and 7 rounds with four auditors in each, because the only exit was "newest round HIGH 0",
 and fixing a MED or LOW finding forced another four-lens round.

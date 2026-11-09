@@ -5,3 +5,10 @@
  * 테스트(`help-trace-feedback.test.ts` 의 i18n 절)가 따로 검증한다.
  */
 process.env.HARNESS_LANG = 'ko';
+
+/**
+ * 게이트 승인의 터미널 경로는 Claude Code 도구 호출 안에서 막힌다(`insideClaudeCode`). Claude Code 안에서
+ * 시험을 돌려도 CI 와 같은 결과가 나오도록 그 표시를 지우고, 표시가 필요한 시험이 직접 켠다.
+ */
+delete process.env.CLAUDECODE;
+delete process.env.CLAUDE_CODE_ENTRYPOINT;

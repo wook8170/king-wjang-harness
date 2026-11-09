@@ -1900,6 +1900,17 @@ export function judgeableLines(cmd: string): string[] {
   return commandLines(cmd).filter(line => !isDryRun(line));
 }
 
+/** 명령 하나의 이름 · 인자 · 그 자리의 작업 폴더(루트 상대, 모르면 null). */
+export interface CommandSegment { name: string; args: string[]; cwd: string | null }
+
+/** 스캐너와 같은 규칙으로 명령을 나눈다. 볼 수 있는 대입은 편 뒤에 나눈다. */
+export function commandSegments(rawCmd: string, env: Record<string, string | undefined> = {}): CommandSegment[] {
+  const cmd = maskNonCommandText(expandStaticVars(foldLineContinuations(rawCmd), env));
+  return segmentsWithIndex(cmd)
+    .map(seg => ({ ...commandName(seg.tokens), cwd: seg.cwd }))
+    .filter(seg => seg.name !== '');
+}
+
 export function commandLines(cmd: string): string[] {
   const out: string[] = [];
   // [SEC-300] 줄이음을 세그먼트 분해 전에 접는다 — 배포/인터프리터 판정도 같은 맹점이 있었다.

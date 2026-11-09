@@ -65,7 +65,7 @@ export const approveSlash = (phase: string): string => `/king-wjang-harness:appr
 export const SLASH_COMMAND_NAME = 'king-wjang-harness:approve';
 
 /** 셸 명령에 그대로 넣을 수 있게 공백·메타문자가 있으면 따옴표로 싼다. */
-function shellQuote(p: string): string {
+export function shellQuote(p: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/u.test(p) ? p : "'" + p.replace(/'/gu, "'\\''") + "'";
 }
 

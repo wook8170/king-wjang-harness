@@ -69,7 +69,7 @@ flowchart LR
 - **Three tracks, thirteen phases.** Design `P0–P6` · Build `P7–P9` · Ship `P10–P12`.
 - **Five hooks, one binary:**
   - `SessionStart` — injects current phase, active wave, the wave's instructions, recent turn log, and any degradation warnings. Your agent wakes up knowing exactly where it is.
-  - `PreToolUse` — denies source writes on the design track, deploy-class Bash on the design track, and hand-edits of the three harness-owned files, in **any** phase.
+  - `PreToolUse` — denies source writes on the design track, deploy-class Bash on the design track, and hand-edits of the three harness-owned files, in **any** phase. When the main session's agent runs `harness gate approve <P>` alone on one line, it raises a confirmation dialog that names what is being approved.
   - `PostToolUse` — records "real work happened" (writes / non-self Bash), so the Stop guard knows a turn needs settling.
   - `UserPromptExpansion` — when the user types `/king-wjang-harness:approve <P>`, issues the ticket that lets the approval run.
   - `Stop` — blocks session end if there was activity on the active wave but the turn log wasn't updated. (An explicit "this was trivial" one-liner is an accepted escape hatch.)
@@ -121,7 +121,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1808 tests** (72 files) — **1801 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1891 tests** (73 files) — **1884 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -226,10 +226,16 @@ An agent cannot invoke the slash command: it sets `disable-model-invocation: tru
 
 The hook refuses the dialog and points to the slash command in these cases, because it cannot guarantee that a person sees the dialog:
 
-- The permission mode is anything other than `default`, `acceptEdits` or `auto`. That includes `bypassPermissions`, `dontAsk` and `plan`.
+- The permission mode is anything other than `default` or `acceptEdits`. That includes `auto`, `bypassPermissions`, `dontAsk` and `plan`. `auto` can run with nobody at the prompt, so approval is not left to it.
 - The session is `-p` or the SDK, or the call comes from a subagent.
 - The command is chained, piped, substituted, or has a path or an environment prefix.
 - A `permissions.allow` rule in your settings covers `harness gate approve`. `harness doctor` warns about this too.
+
+The dialog is the default path. After a submission the main session's agent runs the command first, so the user only answers the dialog and has nothing to type. Once allowed, the agent carries on to the next phase without asking again. If a dialog was just raised and not allowed, the same content is not raised again for two minutes. To run the other steps without prompts, use narrow allow rules such as `Bash(harness gate submit:*)` and `Bash(harness phase set:*)`, not `Bash(harness:*)`.
+
+A dialog's ticket works once and expires after 10 minutes. It is tied to the phase, the submission hash and the project, so a late answer or a resubmission needs a new dialog.
+
+Inside a Claude Code tool call, the terminal path and `HARNESS_APPROVE_NO_TTY` are not accepted: `script` can make a TTY, so a TTY alone does not show that a person is there. Commands that type for a person (`tmux send-keys`, `osascript`, `expect`, `orca`, `paseo` and similar, with the approval text on the line) are refused too.
 
 Other human-only commands (`phase set --force`, `doctor --accept-policy`) run at the Claude Code prompt with a leading `!`, for example `!harness loop critical clear`.
 
@@ -299,7 +305,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1808 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1891 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -319,7 +325,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1808 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1891 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and
@@ -342,6 +348,7 @@ core — is a wall.
 
 ### Known limits (measured, still open)
 
+- **Write protection for the approval files and tickets covers the listed forms only.** Covered: file tools; paths named in a command, including names that differ only by case; writes run from inside the ticket's folder; unpacking an archive that holds `.harness` over the project root or a parent (`tar`, `bsdtar`, `unzip`); unpacking whose contents cannot be read (`pax`, `cpio`, `7z`, standard input); copies that cover `.harness` (`cp`, `mv`, `rsync`, `ditto`, `ln`, `git clone`). Not covered: scripts that assemble a path, unpacking after `cd "$X"`, a copy destination held in a variable, and terminal tools called with the name `harness` assembled from pieces. A dialog does not prove that a person answered it either.
 - **Arbitrary MCP server schemas cannot all be known.** Tools whose names read as writes (`write`, `edit`, `put`, …) are judged, and every path-shaped argument is checked — but a server that names neither its tool nor its argument that way is outside what the hook can see.
 - **Content that arrives from outside can carry an alias the command text never names.** A symlink inside an archive is in neither the command nor the filesystem at the moment of judgment, so the hook cannot see it. An earlier rule that refused writes onto freshly-created paths after an extract, clone or install was **removed**: one extra word defeated it (`mkdir h && tar -xf a.tar -C h && echo x > h/f`), and it blocked ordinary single commands (`git clone <url> y && echo x > y/f`). Closing this belongs to the filesystem layer, not the hook.
 - **Hard links that already exist are only checked against the core files.** Creating a new name for a protected file is refused, and an existing alias of `config.yaml`/`state.json`/`events.jsonl` is caught by inode. An alias of a *source* file made before the harness was installed is not — matching every source by inode would cost a directory walk on every write, and a slow verdict is a hook that times out, which is a hook that allows.

@@ -687,8 +687,8 @@ export function renderReleaseChecklist(root: string): string {
       }),
       '',
       t({
-        en: 'This verdict does not open the gate for you — a human presses `' + approveSlash('P12') + '`.',
-        ko: '이 판정은 게이트를 대신 열지 않는다 — `' + approveSlash('P12') + '` 는 사람이 누른다.',
+        en: 'This verdict does not open the gate for you — run `harness gate approve P12` and a human answers the dialog (or types `' + approveSlash('P12') + '`).',
+        ko: '이 판정은 게이트를 대신 열지 않는다 — `harness gate approve P12` 를 실행하면 사람이 창에 답한다(또는 `' + approveSlash('P12') + '` 입력).',
       }),
     );
   } else {

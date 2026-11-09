@@ -260,8 +260,8 @@ acceptance: ["결제 e2e 그린", "F-12 수용기준 3/3", "UX-7 시각 증적"]
 1. `harness gate submit <P>` → 리뷰 패킷 아티팩트 생성 (산출물 요약 + 원장 diff + 스크린샷·캔버스 링크).
 2. 승인은 세 경로로 한다(`core/src/approve.ts`).
    - 슬래시 명령 `/king-wjang-harness:approve <P>`: `disable-model-invocation` 으로 사용자만 부른다.
-   - 확인 창: 에이전트의 `harness gate approve <P>` 호출에 훅이 `ask` 와 일회용 표를 돌려준다.
-   - 터미널: 사람이 TTY 에서 실행한다.
+   - 확인 창: 메인 세션 에이전트의 `harness gate approve <P>` 호출에 훅이 `ask` 와 일회용 표를 돌려준다. `default` · `acceptEdits` 모드에서만 뜬다.
+   - 터미널: 사람이 Claude Code 밖의 TTY 에서 실행한다. 도구 호출 안에서는 거부한다.
 3. 승인 레코드에 산출물 해시를 저장한다 → 나중에 산출물이 바뀌면 게이트를 자동으로 무효화한다.
 
 ### 4-4. 크리티컬 이벤트 소환 (요구 5)

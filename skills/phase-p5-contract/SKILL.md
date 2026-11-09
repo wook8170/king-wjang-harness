@@ -55,14 +55,14 @@ harness doc upsert --id DOC-P5 --path .harness/design/05-contract.md --phase P5 
 harness doc url DOC-P5 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P5          # refused without artifact_url
 harness gate submit P5 --paths .harness/design/05-contract.md --evidence claimed
-# → present .harness/packets/P5.md → wait for the user's approval
+# → present .harness/packets/P5.md → raise the dialog
 harness doc approve DOC-P5
 harness phase set P6
 ```
 
 ## Approval is a human's
 
-**An agent never approves P5 on its own — the user types `/king-wjang-harness:approve P5`.** Present the review packet and the artifact URL,
+**An agent never approves P5 on its own.** Run `harness gate approve P5` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P5`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Present the review packet and the artifact URL,
 then wait. Without approval, `harness phase set P6` is refused.
 
 ## Pitfalls

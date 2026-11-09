@@ -53,7 +53,7 @@ harness doc url DOC-P11 https://claude.ai/public/artifacts/<id>
 harness doc submit DOC-P11              # refused without artifact_url
 harness gate submit P11 --evidence measured \
   --paths .harness/ship/deployments.yaml,.harness/ship/evidence/smoke.log
-# → present .harness/packets/P11.md → wait for the user's approval
+# → present .harness/packets/P11.md → raise the dialog
 harness doc approve DOC-P11
 harness phase set P12
 ```
@@ -63,7 +63,7 @@ through is not a record.
 
 ## Approval is a human's
 
-**A human approves by typing `/king-wjang-harness:approve P11`. An agent never approves on their behalf.** Deploying is
+**A human answers the dialog for P11. An agent never approves on their behalf.** Run `harness gate approve P11` alone on one line from the main session: the hook raises a confirmation dialog and the user answers it. Do not ask the user to type anything; only if the hook refuses the dialog, the user types `/king-wjang-harness:approve P11`. Once it is allowed, run `harness phase set <next>` and carry on without asking again. Deploying is
 the most expensive action to undo. Present the smoke and canary results and the rollback path, then
 wait. If the evidence grade is not `measured`, the core refuses first.
 

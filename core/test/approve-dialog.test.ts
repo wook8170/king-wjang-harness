@@ -132,7 +132,7 @@ describe('M3: 창이 없는 슬래시 경로도 승인 전에 오너 결정을 �
 });
 
 describe('확인 창 — 조건이 맞으면 ask 를 돌려준다', () => {
-  for (const mode of ['default', 'acceptEdits', 'auto']) {
+  for (const mode of ['default', 'acceptEdits']) {
     it(`권한 모드 ${mode}`, () => {
       const out = bash(submitted(), 'harness gate approve P0', { permission_mode: mode });
       expect(decision(out)).toBe('ask');
@@ -190,15 +190,16 @@ describe('확인 창 — 조건이 맞으면 ask 를 돌려준다', () => {
     const root = submitted();
     const out = bash(root, 'harness gate approve P0');
     const { command, description } = out.hookSpecificOutput.updatedInput;
-    const m = /^(.+) gate approve P0 --dialog-ticket ([0-9a-f]{32})$/.exec(command);
+    const m = /^(.+) gate approve P0 --project (\S+) --dialog-ticket ([0-9a-f]{32})$/.exec(command);
     expect(m?.[1]).toBe(harnessCliPath());
-    expect(description).toBe('d');
-    expect(fs.readFileSync(ticketFile(root), 'utf8')).not.toContain(m?.[2]);
+    expect(m?.[2]).toBe(root);
+    expect(description).toBe('게이트 P0 승인');
+    expect(fs.readFileSync(ticketFile(root), 'utf8')).not.toContain(m?.[3]);
   });
 });
 
 describe('확인 창 — 사람에게 뜬다고 보장할 수 없으면 거부한다', () => {
-  for (const mode of ['bypassPermissions', 'dontAsk', 'plan', 'someFutureMode']) {
+  for (const mode of ['auto', 'bypassPermissions', 'dontAsk', 'plan', 'someFutureMode']) {
     it(`권한 모드 ${mode}`, () => {
       const root = submitted();
       const out = bash(root, 'harness gate approve P0', { permission_mode: mode });
@@ -330,7 +331,7 @@ describe('표 — 확인 창 경로', () => {
     const out = bash(root, 'harness gate approve P0');
     const nonce = (out.hookSpecificOutput.updatedInput.command as string).split(' ').pop();
     const hash = readState(root).gates.P0?.artifactHash;
-    expect(consumeTicket(root, 'dialog', 'P0', hash, nonce, Date.now() + 31 * 60 * 1000)).toBe(false);
+    expect(consumeTicket(root, 'dialog', 'P0', hash, nonce, Date.now() + 11 * 60 * 1000)).toBe(false);
     expect(consumeTicket(root, 'dialog', 'P0', hash, nonce)).toBe(true);
   });
 
@@ -413,6 +414,7 @@ describe('표 — 슬래시 명령 경로', () => {
 describe('터미널 경로와 기록', () => {
   it('TTY 가 있으면 표 없이 승인되고 저널에 terminal 이 남는다', () => {
     const root = submitted();
+    delete process.env.CLAUDE_CODE_ENTRYPOINT;
     Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
     try {
       expect(quiet(() => run(['gate', 'approve', 'P0'], root))).toBe(0);
@@ -424,6 +426,7 @@ describe('터미널 경로와 기록', () => {
 
   it('HARNESS_APPROVE_NO_TTY 경로는 terminal 로 적지 않는다', () => {
     const root = submitted();
+    delete process.env.CLAUDE_CODE_ENTRYPOINT;
     process.env.HARNESS_APPROVE_NO_TTY = '1';
     expect(quiet(() => run(['gate', 'approve', 'P0'], root))).toBe(0);
     expect(approvedEvent(root)?.data.via).toBe('no-tty');
