@@ -62,6 +62,7 @@ import {
   addDefect, updateDefect, openBlockers, renderDefectLedger,
   recordDeployment, listDeployments, shipVerdict, renderReleaseChecklist,
 } from './ship';
+import { releaseSecurityStatus, runReleaseSecurity } from './release-security';
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
@@ -1262,7 +1263,21 @@ export function run(argv: string[], root: string): number {
             const v = shipVerdict(root);
             console.log(v.ok ? L('GO', '출하 가능(GO)') : L('NO-GO', '출하 불가(NO-GO)'));
             if (v.reasons.length > 0) console.log(v.reasons.map(r => `  - ${r}`).join('\n'));
+            // 보안 관문 미설정(선택)은 막지 않는다 — 판정 출력은 그대로 두고 경고만 stderr 로 알린다.
+            const sec = releaseSecurityStatus(root);
+            if (sec.state === 'unconfigured') console.error(`${L('warning', '경고')}: ${sec.message}`);
             return v.ok ? 0 : EXIT_VERDICT_NO;
+          }
+          case 'security': {
+            // 관문 명령은 프로파일이 정한다. 이미 이 커밋에서 통과했으면 다시 돌리지 않는다(--force 면 다시).
+            const r = runReleaseSecurity(root, { force: args.includes('--force') });
+            if (r.ran && r.output) process.stdout.write(r.output.endsWith('\n') ? r.output : `${r.output}\n`);
+            const s = r.status;
+            if (s.state === 'unconfigured') { console.error(`${L('warning', '경고')}: ${s.message}`); return 0; }
+            console.log(s.state === 'passed'
+              ? (r.ran ? s.message : L(`${s.message} — already recorded, not run again`, `${s.message} — 이미 기록돼 있어 다시 돌리지 않았다`))
+              : s.message);
+            return s.blocking ? EXIT_VERDICT_NO : 0;
           }
           case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
           default: throw new Error(unknownSub('ship', sub, lang));

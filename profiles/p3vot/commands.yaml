@@ -1,0 +1,8 @@
+# p3vot command mapping (spec §9).
+test: pnpm -r --workspace-concurrency=1 test
+build: pnpm -r build
+deploy: ''
+e2e: pnpm --filter @p3vot/e2e e2e
+dev-server: bash scripts/dev.sh
+# Release security gate (DAST round + security code review record + checked since the last release tag).
+release-security-check: pnpm security:release-check

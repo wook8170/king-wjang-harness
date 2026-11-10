@@ -57,6 +57,7 @@ import { renderRtm } from './report';
 import { readState } from './state';
 import { parseWave, isWaveFile } from './wave';
 import { SHIP_PHASES } from './types';
+import { releaseSecurityStatus } from './release-security';
 import type { WaveMeta } from './types';
 
 /**
@@ -649,6 +650,11 @@ export function shipVerdict(root: string): ShipVerdict {
     }));
   }
   reasons.push(...waves.unreadable);
+
+  // ── 릴리스 보안 관문 — 명령이 설정됐거나 프로파일이 필수로 켰을 때만 막는다(미설정 · 선택은 경고만,
+  //    `releaseSecurityStatus` 가 판정 한 벌이다). 지금 커밋에서 통과한 기록이면 다시 돌리지 않는다.
+  const sec = releaseSecurityStatus(root);
+  if (sec.blocking) reasons.push(sec.message);
 
   return { ok: reasons.length === 0, reasons };
 }

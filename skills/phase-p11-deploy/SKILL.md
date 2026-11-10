@@ -19,6 +19,7 @@ empty forever.
 
 ```bash
 harness ship verdict          # re-confirm the P10 approval and 0 open blockers here
+harness ship security         # the project's release security gate on this commit (P11 approval is refused until it passes)
 harness gate verify P10       # confirm the approved artifacts have not been tampered with
 harness profile cmd deploy    # the deploy command comes from the profile — do not hand-roll it
 ```

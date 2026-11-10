@@ -16,7 +16,7 @@ the verdict is produced fresh.
 
 ## The final verdict — `harness ship verdict`
 
-The machine checks four blocking conditions. Any one of them left standing is a NO-GO, and the reason
+The machine checks the blocking conditions below. Any one of them left standing is a NO-GO, and the reason
 names **what to close and how**.
 
 | Blocking condition | How to close it |
@@ -26,6 +26,7 @@ names **what to close and how**.
 | The P10 or P11 gate is not approved | Go back to that phase, submit the artifacts, and get the user's approval |
 | A ship-track gate whose evidence is not `measured` | Attach real-run and measurement evidence and resubmit |
 | A UX-referencing wave with no real-run capture | `harness evidence check <wave>` → leave headless 2x screenshots |
+| The release security check (`release-security-check` in the profile) has no pass on the current commit, or the profile requires it and no command is set | `harness ship security` — it runs the project's gate once and records it; a commit that already passed is not run again. P12 approval is refused until it passes |
 
 **Two adversarial inputs, checked before the verdict.** The machine verdict above blocks open or
 unverified blocker and high defects, but it cannot see a review that was never run. Before running

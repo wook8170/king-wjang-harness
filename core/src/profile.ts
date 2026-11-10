@@ -69,6 +69,12 @@ export interface Profile {
    * 판정이 둘이 되는 순간 느슨한 쪽이 정본이 된다.
    */
   designSystemRoots: string[];
+  /**
+   * 릴리스 보안 관문을 필수로 볼지(`profile.yaml` 의 `release_security`). 없으면 선택이다 —
+   * 명령(`commands.yaml` 의 `release-security-check`)이 없을 때 막지 않고 경고만 한다.
+   * 판정은 `release-security.ts` 한 곳이 한다.
+   */
+  releaseSecurity?: 'required' | 'optional';
   origin: ProfileOrigin;
   /** 프로파일 디렉토리 절대경로. `guidance/`·`rules/` 를 여기서 찾는다. 내장 바닥은 `''`. */
   dir: string;
@@ -272,6 +278,14 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
 
   const name = typeof m.name === 'string' && m.name.trim() ? m.name.trim() : path.basename(dir);
   const description = typeof m.description === 'string' ? m.description.trim() : undefined;
+  const rs = m.release_security;
+  const releaseSecurity = rs === 'required' || rs === 'optional' ? rs : undefined;
+  if (rs !== undefined && rs !== null && !releaseSecurity) {
+    problems.push(t({
+      en: `${yamlPath}: \`release_security\` must be \`required\` or \`optional\` (currently ${String(rs)}) — treated as optional`,
+      ko: `${yamlPath}: \`release_security\` 는 \`required\` 또는 \`optional\` 이어야 한다(현재 ${String(rs)}) — 선택으로 본다`,
+    }));
+  }
 
   return {
     name,
@@ -282,6 +296,7 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
       readList(m, 'deploy_commands', GENERIC_FLOOR.deployCommands, yamlPath, problems, true, t),
     // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
     designSystemRoots: readList(m, 'design_system_roots', [], yamlPath, problems, false, t),
+    ...(releaseSecurity ? { releaseSecurity } : {}),
     commands: readCommands(dir, problems, t),
     origin,
     dir,

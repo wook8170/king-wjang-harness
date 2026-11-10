@@ -34,6 +34,8 @@ export const EVENT_TYPES = [
   'canvas-linked', 'canvas-synced', 'baseline-recorded',
   'critical-raised', 'critical-cleared',
   'defect-added', 'defect-updated', 'deployment-recorded',
+  // 릴리스 보안 관문 결과(release-security.ts). 상태 무변이라 replayState 는 폴드하지 않는다.
+  'release-security-recorded',
   'backtrack-started', 'backtrack-cleared',
   'doctor-repaired', // 복구 흔적 — replayState 는 폴드하지 않는다(상태 무변이)
   // OPS-76: 정책 베이스라인 고정(init·`doctor --accept-policy`). 상태 무변이라 replayState 는

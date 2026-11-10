@@ -1,0 +1,24 @@
+# p3vot — P3vot Studio (pnpm monorepo: apps/* · packages/*).
+#
+# Release security is required here: before the P11 deploy and P12 ship approvals the harness checks
+# that `release-security-check` (commands.yaml) passed on the current commit. Run it with
+# `harness ship security`; a commit that already passed is not run again.
+name: p3vot
+description: P3vot Studio pnpm monorepo (apps/* · packages/*). Requires the release security gate before deploy and ship.
+
+source_globs:
+  - apps/**
+  - packages/**
+
+# Deploy commands (§4-2) — the core default list; P3vot ships signed installer bundles through
+# scripts/release/build-signed.sh, which runs the same security gate itself.
+deploy_commands:
+  - docker push
+  - kubectl apply
+  - helm upgrade
+  - helm install
+  - npm publish
+  - pnpm publish
+  - scripts/release/build-signed.sh
+
+release_security: required
