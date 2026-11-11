@@ -121,7 +121,7 @@ A wave that references a `UX-` node **cannot be completed without a visual artif
 | Metric | Value |
 |---|---|
 | Hook latency (p95) | Two surfaces, **both printed by `npm run bench:hook`**. *In-process* (the judgement itself, bundle already loaded): **0.9 ms** normally, **18.6 ms** while the journal-replay fallback is active on a 100k-entry (15 MB) journal. *Wall-clock* (what a tool call actually waits for), same run: **77 ms** / **102 ms** — of which **40 ms is `node` booting** on that machine. Absolute wall-clock is a property of your machine; the gate is on what the fallback **adds** (+17.7 ms in-process, +24.7 ms wall-clock — threshold 50 ms). |
-| Test suite | **1891 tests** (73 files) — **1884 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
+| Test suite | **1913 tests** (74 files) — **1906 pass in the published package** (the rest check repo-internal documents that ship excluded; measured on `git archive`). Two wall-clock checks report *not measurable*, with the load they saw, instead of a verdict on a busy machine |
 | Added context per session | **~260 tokens** when the harness is on; **0** in projects without `.harness/`. Re-measure: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — the injected briefing is ~1 KB (it embeds the project path, so the exact size varies); divide by 4 for a token estimate |
 | Runtime dependencies | **1** (`yaml`, bundled) |
 | Determinism | identical verdicts across 3× runs |
@@ -208,9 +208,33 @@ harness --version
 | `harness gate submit <P0..P12>` | Put a phase's artifacts up for review |
 | `/king-wjang-harness:approve <P0..P12>` · `harness gate approve <P0..P12>` | **Human only** — the approval that opens the next phase; see [Approving a gate](#approving-a-gate) (never allowlist it) |
 | `harness report denials [--limit <n>]` | Recent tool calls the hooks denied — what got blocked, and why |
+| `harness ship gates [--name <gate>] [--force]` | Runs the profile's release gates (`release_gates` in `profile.yaml`: security check, static analysis …) on this commit and records each result. P11 · P12 approval and `ship verdict` require every required gate to pass on the current commit; a gate that already passed on this commit is not run again |
+| `harness ship security [--force]` | Same as `harness ship gates --name security`. Kept for the old single setting (`release-security-check` in `commands.yaml`) |
 | `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | Escalate to a human and stop the wave loop; clear it once decided |
 
 `harness --help` prints the command map and `harness <group> --help` the subcommands of one group; this table is the short reference. Hook events (`harness hook …`) are called by the plugin, never by hand.
+
+#### Release gates (`release_gates`)
+
+A profile lists the checks that must pass before deploy and ship. Each gate has a `name`, a `command` and `required` (default `true`).
+
+```yaml
+# .harness/profile/profile.yaml
+release_gates:
+  - name: security
+    command: pnpm security:release-check
+    required: true
+  - name: static-analysis        # SonarQube quality gate
+    command: >-
+      curl -fsS -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=<key>"
+      | jq -e '.projectStatus.status=="OK"'
+    required: true
+  - name: semgrep
+    command: semgrep scan --config p/owasp-top-ten --error --metrics=off
+    required: false
+```
+
+`harness ship gates` runs them in the project root and records the commit, exit code and command per gate in `.harness/ship/release-gates.yaml`. A gate that passed on the same commit with the same command is not run again. A failed gate, a gate never run, or a result from another commit blocks P11 · P12 approval, and the message names the exact command for that gate (`harness ship gates --name <gate>`). A gate with `required: false` only warns. The old single setting (`release-security-check` in `commands.yaml` plus `release_security` in `profile.yaml`) is still read as the `security` gate, and the old record `.harness/ship/release-security.yaml` still counts for it.
 
 ### Approving a gate
 
@@ -305,7 +329,7 @@ change is journalled, and accepting it needs `HARNESS_ACCEPT_POLICY=1 harness do
 ## Status — verified for production
 
 **v0.1.2 — SHIP-READY.** The core engine, all three tracks, and every phase are implemented and
-measured (1891 tests) — and then put through the harness's **own** production-readiness gate. The tool
+measured (1913 tests) — and then put through the harness's **own** production-readiness gate. The tool
 that enforces a ship discipline was held to that discipline, and cleared it.
 
 ### How thoroughly it was verified
@@ -325,7 +349,7 @@ product end-to-end*, not merely reads it. What it found:
   journal forgery, `base64 -d | sh`, and nested / array MCP arguments. **Every irreversible target —
   core, policy, state, the event journal — was denied. Zero over-blocks on the "must not block" control
   set.**
-- **1891 tests green · `tsc` 0 · deterministic** across repeated runs.
+- **1913 tests green · `tsc` 0 · deterministic** across repeated runs.
 
 **Verdict: SHIP-READY — no blocking defects.** The one intentional permeability is stated plainly, not
 hidden: the design → source separation is a *speed bump, not a security wall* (see **Known limits** and
@@ -395,7 +419,7 @@ The hooks never edit `~/.claude/`, your settings files, or permission rules. The
 
 **MCP server** `harness`: `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.js`, a local stdio server with no dependencies. Its tools read and write the same `.harness/` files as the CLI.
 
-**CLI**: `bin/harness` is on the Bash tool's `PATH` while the plugin is enabled. It runs only when you or Claude call it. Because the plugin has a top-level `bin/` directory, it installs in Claude Code only, not in claude.ai or Cowork.
+**CLI**: `bin/harness` is on the Bash tool's `PATH` while the plugin is enabled. It runs only when you or Claude call it. `harness ship gates` (and its alias `harness ship security`) are the subcommands that run project commands: the `command` of each gate under `release_gates` in the profile (or the old `release-security-check` line), in the project root, through the shell. Because the plugin has a top-level `bin/` directory, it installs in Claude Code only, not in claude.ai or Cowork.
 
 The code that runs is `core/dist/cli.js` and `core/dist/mcp.js`. They are unminified bundles of `core/src/`, and CI checks that a fresh build reproduces them byte for byte.
 

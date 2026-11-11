@@ -1,0 +1,41 @@
+# p3vot — P3vot Studio (pnpm monorepo: apps/* · packages/*).
+#
+# Release gates are required here: before the P11 deploy and P12 ship approvals the harness checks
+# that every required gate under `release_gates` passed on the current commit. Run them with
+# `harness ship gates` (or one gate: `harness ship gates --name <name>`); a gate that already passed on
+# this commit is not run again.
+name: p3vot
+description: P3vot Studio pnpm monorepo (apps/* · packages/*). Requires the release gates before deploy and ship.
+
+source_globs:
+  - apps/**
+  - packages/**
+
+# Deploy commands (§4-2) — the core default list; P3vot ships signed installer bundles through
+# scripts/release/build-signed.sh, which runs the same security gate itself.
+deploy_commands:
+  - docker push
+  - kubectl apply
+  - helm upgrade
+  - helm install
+  - npm publish
+  - pnpm publish
+  - scripts/release/build-signed.sh
+
+# Release gates (name · command · required). P3vot needs one line: `pnpm security:release-check` already
+# judges static analysis (SonarQube · Semgrep results) as its 4th check, next to the DAST round, the
+# security code review record and the check since the last release tag.
+release_gates:
+  - name: security
+    command: pnpm security:release-check
+    required: true
+# Another project that runs static analysis as its own gate could add, for example:
+#  - name: static-analysis
+#    # SonarQube quality gate — needs SONAR_TOKEN and SONAR_HOST_URL in the environment
+#    command: >-
+#      curl -fsS -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=<key>"
+#      | jq -e '.projectStatus.status=="OK"'
+#    required: true
+#  - name: semgrep
+#    command: semgrep scan --config p/owasp-top-ten --error --metrics=off
+#    required: true

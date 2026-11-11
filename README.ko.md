@@ -121,7 +121,7 @@ flowchart LR
 | 지표 | 값 |
 |---|---|
 | 훅 지연 (p95) | 두 가지로 재며 **둘 다 `npm run bench:hook` 이 출력한다**. *인프로세스*(번들이 이미 메모리에 올라온 상태에서 판정에 걸린 시간): 정상 **0.9 ms**, 10만 건(15 MB) 저널을 다시 읽는 폴백 중 **18.6 ms**. *wall-time*(도구 호출이 실제로 기다리는 시간), 같은 실행에서: **77 ms** / **102 ms**. 그중 **40 ms 는 그 머신에서 `node` 를 띄우는 시간**이다. wall-time 절대값은 머신마다 다르므로, 게이트는 폴백이 **더하는 시간**으로 판정한다(인프로세스 +17.7 ms · wall-time +24.7 ms · 문턱 50 ms). |
-| 테스트 스위트 | **1891 tests** (73 파일) — **배포본에서 1884건 통과**(나머지는 배포본에 들어가지 않는 리포 내부 문서를 검사한다. `git archive` 로 실측). 시간을 단언하는 시험 2건은 머신이 바쁠 때 판정하지 않고 **「측정 불가」와 그때의 부하**를 기록한다 |
+| 테스트 스위트 | **1913 tests** (74 파일) — **배포본에서 1906건 통과**(나머지는 배포본에 들어가지 않는 리포 내부 문서를 검사한다. `git archive` 로 실측). 시간을 단언하는 시험 2건은 머신이 바쁠 때 판정하지 않고 **「측정 불가」와 그때의 부하**를 기록한다 |
 | 세션당 추가 컨텍스트 | 하네스가 켜졌을 때 **~260 토큰** · `.harness/` 없는 프로젝트는 **0**. 다시 재려면: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` — 주입되는 브리핑은 ~1KB 다(프로젝트 경로가 들어가므로 정확한 크기는 조금씩 다르다). 바이트 수를 4로 나누면 토큰 수 추정치가 된다 |
 | 런타임 의존성 | **1** (`yaml`, 번들) |
 | 결정성 | 3회 실행해도 판정이 같다 |
@@ -207,9 +207,33 @@ harness --version
 | `harness gate submit <P0..P12>` | 해당 페이즈의 산출물을 검토에 올린다 |
 | `/king-wjang-harness:approve <P0..P12>` · `harness gate approve <P0..P12>` | **사람만** 한다 — 다음 페이즈로 넘어가는 승인이다. [게이트 승인](#게이트-승인) 참고(허용목록에 넣지 않는다) |
 | `harness report denials [--limit <n>]` | 훅이 최근에 거부한 도구 호출과 그 이유를 보여 준다 |
+| `harness ship gates [--name <관문>] [--force]` | 프로파일의 출하 관문(`profile.yaml` 의 `release_gates`: 보안 점검 · 정적 분석 등)을 이 커밋에서 돌리고 관문마다 결과를 남긴다. P11 · P12 승인과 `ship verdict` 는 필수 관문이 모두 지금 커밋에서 통과했는지 본다. 이 커밋에서 이미 통과한 관문은 다시 돌리지 않는다 |
+| `harness ship security [--force]` | `harness ship gates --name security` 와 같다. 옛 단일 설정(`commands.yaml` 의 `release-security-check`)을 쓰는 프로젝트를 위해 남겨 둔다 |
 | `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | 사람에게 판단을 요청하고 웨이브 루프를 멈춘다. 판단이 끝나면 해제한다 |
 
 `harness --help`는 전체 명령 목록을, `harness <군> --help`는 그 명령군의 하위명령을 보여 준다. 이 표는 짧은 요약이다. 훅 이벤트(`harness hook …`)는 플러그인이 호출하므로 직접 입력할 일이 없다.
+
+#### 출하 관문 (`release_gates`)
+
+프로파일은 배포 · 출하 전에 통과해야 할 점검을 목록으로 적는다. 관문마다 이름(`name`) · 명령(`command`) · 필수 여부(`required`, 기본값 `true`)를 둔다.
+
+```yaml
+# .harness/profile/profile.yaml
+release_gates:
+  - name: security
+    command: pnpm security:release-check
+    required: true
+  - name: static-analysis        # SonarQube quality gate
+    command: >-
+      curl -fsS -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=<key>"
+      | jq -e '.projectStatus.status=="OK"'
+    required: true
+  - name: semgrep
+    command: semgrep scan --config p/owasp-top-ten --error --metrics=off
+    required: false
+```
+
+`harness ship gates` 는 관문 명령을 프로젝트 루트에서 돌린다. 그리고 관문마다 커밋 · 종료 코드 · 명령을 `.harness/ship/release-gates.yaml` 에 남긴다. 같은 커밋 · 같은 명령에서 이미 통과한 관문은 다시 돌리지 않는다. 실패했거나 돌린 적이 없거나 다른 커밋의 기록만 있는 관문은 P11 · P12 승인을 막는다. 이때 안내문에 그 관문만 돌리는 명령(`harness ship gates --name <관문>`)이 함께 나온다. `required: false` 인 관문은 막지 않고 경고만 한다. 옛 단일 설정(`commands.yaml` 의 `release-security-check` 와 `profile.yaml` 의 `release_security`)은 `security` 관문 하나로 읽는다. 옛 기록 파일 `.harness/ship/release-security.yaml` 도 그 관문의 기록으로 인정한다.
 
 ### 게이트 승인
 
@@ -303,7 +327,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 ## 상태 — 프로덕션 검증 완료
 
 **v0.1.2 — SHIP-READY.** 코어 엔진, 세 트랙, 열세 페이즈를 모두 구현하고 실측했다
-(1891 tests). 그리고 하네스 **자신의** 출하 준비 게이트도 통과했다. 출하 규율을 강제하는 도구를
+(1913 tests). 그리고 하네스 **자신의** 출하 준비 게이트도 통과했다. 출하 규율을 강제하는 도구를
 같은 규율로 검사해 통과시킨 것이다.
 
 ### 얼마나 검증했나
@@ -321,7 +345,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
   `awk -i inplace` …), 코어 / 정책 / 저널 쓰기, 심링크·하드링크 TOCTOU, 저널 위조,
   `base64 -d | sh`, 중첩·배열 MCP 인자. **되돌릴 수 없는 대상인 코어·정책·상태·이벤트 저널에
   대한 쓰기는 전부 거부됐다. 「막으면 안 되는」 대조군에서는 과차단이 0건이었다.**
-- **1891 tests green · `tsc` 0 · 반복 실행에서 결정적.**
+- **1913 tests green · `tsc` 0 · 반복 실행에서 결정적.**
 
 **판정: SHIP-READY — 출하를 막는 결함 없음.** 일부러 열어 둔 빈틈 하나는 숨기지 않고 적어
 둔다. 설계 단계에서 소스 쓰기를 막는 규칙은 *보안 벽이 아니라 과속방지턱*이다(「알려진 한계」와 FAQ 참조). 반면 뚫리면
@@ -390,7 +414,7 @@ rm -rf .harness/          # 이 프로젝트 하나 — 훅이 즉시 조용해�
 
 **MCP 서버** `harness`: `node ${CLAUDE_PLUGIN_ROOT}/mcp/server.js` 로 실행하는 로컬 stdio 서버다. 의존 패키지가 없다. 도구는 CLI 와 같은 `.harness/` 파일을 읽고 쓴다.
 
-**CLI**: 플러그인이 켜져 있는 동안 `bin/harness` 가 Bash 도구의 `PATH` 에 들어간다. 사용자나 Claude 가 부를 때만 실행된다. 플러그인 최상위에 `bin/` 폴더가 있어서, 이 플러그인은 Claude Code 에만 설치되고 claude.ai 와 Cowork 에는 설치되지 않는다.
+**CLI**: 플러그인이 켜져 있는 동안 `bin/harness` 가 Bash 도구의 `PATH` 에 들어간다. 사용자나 Claude 가 부를 때만 실행된다. 프로젝트 명령을 실행하는 하위 명령은 `harness ship gates` 와 그 별칭 `harness ship security` 다. 프로파일 `release_gates` 에 적힌 관문 명령(또는 옛 `release-security-check` 줄)을 프로젝트 루트에서 셸로 실행한다. 플러그인 최상위에 `bin/` 폴더가 있어서, 이 플러그인은 Claude Code 에만 설치되고 claude.ai 와 Cowork 에는 설치되지 않는다.
 
 실제로 실행되는 코드는 `core/dist/cli.js` 와 `core/dist/mcp.js` 다. 둘 다 `core/src/` 를 압축하지 않고 묶은 파일이다. CI 는 새로 빌드한 결과가 이 두 파일과 한 바이트도 다르지 않은지 확인한다.
 

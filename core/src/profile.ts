@@ -39,6 +39,7 @@ import { harnessDir } from './paths';
 import { loadConfig, DEFAULT_CONFIG } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { runsCommand, judgeableLines } from './bashwrite';
+import { parseReleaseGates, type ReleaseGateSpec } from './release-gates-spec';
 
 /**
  * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
@@ -69,6 +70,14 @@ export interface Profile {
    * 판정이 둘이 되는 순간 느슨한 쪽이 정본이 된다.
    */
   designSystemRoots: string[];
+  /**
+   * 옛 단일 보안 관문 설정(`profile.yaml` 의 `release_security`). `commands.yaml` 의
+   * `release-security-check` 와 함께 `security` 출하 관문 한 개로 바꿔 읽는다 — 판정은
+   * `release-gates.ts` 한 곳이 한다.
+   */
+  releaseSecurity?: 'required' | 'optional';
+  /** 출하 관문 목록(`profile.yaml` 의 `release_gates`). 옛 단일 설정은 `release-gates.ts` 가 합친다. */
+  releaseGates?: ReleaseGateSpec[];
   origin: ProfileOrigin;
   /** 프로파일 디렉토리 절대경로. `guidance/`·`rules/` 를 여기서 찾는다. 내장 바닥은 `''`. */
   dir: string;
@@ -272,6 +281,15 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
 
   const name = typeof m.name === 'string' && m.name.trim() ? m.name.trim() : path.basename(dir);
   const description = typeof m.description === 'string' ? m.description.trim() : undefined;
+  const rs = m.release_security;
+  const releaseSecurity = rs === 'required' || rs === 'optional' ? rs : undefined;
+  if (rs !== undefined && rs !== null && !releaseSecurity) {
+    problems.push(t({
+      en: `${yamlPath}: \`release_security\` must be \`required\` or \`optional\` (currently ${String(rs)}) — treated as optional`,
+      ko: `${yamlPath}: \`release_security\` 는 \`required\` 또는 \`optional\` 이어야 한다(현재 ${String(rs)}) — 선택으로 본다`,
+    }));
+  }
+  const releaseGates = parseReleaseGates(m.release_gates, yamlPath, problems, t);
 
   return {
     name,
@@ -282,6 +300,8 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
       readList(m, 'deploy_commands', GENERIC_FLOOR.deployCommands, yamlPath, problems, true, t),
     // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
     designSystemRoots: readList(m, 'design_system_roots', [], yamlPath, problems, false, t),
+    ...(releaseSecurity ? { releaseSecurity } : {}),
+    ...(releaseGates ? { releaseGates } : {}),
     commands: readCommands(dir, problems, t),
     origin,
     dir,

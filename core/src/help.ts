@@ -196,6 +196,8 @@ export const COMMANDS: CommandGroup[] = [
       { name: 'deployments', summary: M('Print deployment history as JSON.', '배포 이력을 JSON 으로 출력한다.') },
       { name: 'verdict', summary: M('Final go/no-go. Never passes without measured evidence.', '최종 go/no-go. measured 근거 없이는 통과하지 않는다.') },
       { name: 'checklist', summary: M('Render the release checklist.', '릴리스 체크리스트를 렌더링한다.') },
+      { name: 'gates', args: '[--name <gate>] [--force]', summary: M('Run the profile’s release gates (`release_gates`: security, static analysis …) on this commit and record each result. Gates that already passed on this commit are not run again.', '프로파일의 출하 관문(`release_gates`: 보안 점검 · 정적 분석 등)을 이 커밋에서 돌리고 관문마다 결과를 남긴다. 이 커밋에서 이미 통과한 관문은 다시 돌리지 않는다.') },
+      { name: 'security', args: '[--force]', summary: M('Same as `ship gates --name security` (the old single `release-security-check` setting is read as this gate).', '`ship gates --name security` 와 같다(옛 단일 설정 `release-security-check` 는 이 관문으로 읽는다).') },
     ],
   },
   {

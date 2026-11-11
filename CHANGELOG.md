@@ -8,6 +8,15 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — release security gate before deploy and ship
+
+- **A profile can name its security gate.** `commands.yaml` takes `release-security-check` (for example `pnpm security:release-check`), and `profile.yaml` takes `release_security: required | optional`.
+- **`harness ship security [--force]`** runs that command in the project root and records the commit and exit code in `.harness/ship/release-security.yaml` (journal event `release-security-recorded`). A commit that already passed is not run again unless `--force` is given.
+- **P11 and P12 approval and `ship verdict` check it.** When a command is set, they need a pass on the current commit; a failure, a missing run, or a result from another commit blocks and names `harness ship security`. When the profile marks it `required` and no command is set, they block too.
+- **No command and not required** does not block. `ship verdict` and `ship security` print a "release security check not configured" warning.
+- **New bundled profile `p3vot`** (pnpm monorepo `apps/**` · `packages/**`) with `release-security-check: pnpm security:release-check` and `release_security: required`.
+- **The single security gate is now a list of release gates.** `profile.yaml` takes `release_gates:` (each with `name` · `command` · `required`, default required), so a project can add static analysis (a SonarQube quality-gate query, `semgrep scan --error`) next to its security check; `harness ship gates [--name <gate>] [--force]` runs them and records each gate's commit, exit code and command in `.harness/ship/release-gates.yaml` (journal `release-gate-recorded`). A gate that passed on this commit is not run again; only failed, missing or stale gates block, and the message names the exact command for that gate. Non-required gates only warn. The old `release-security-check` + `release_security` setting is read as the `security` gate, `harness ship security` stays as its alias, and the old `.harness/ship/release-security.yaml` record still counts. The `p3vot` profile now uses `release_gates` (its `pnpm security:release-check` judges SonarQube · Semgrep results as a 4th check).
+
 ## [0.1.9] — 2026-11-10
 
 ### Changed — the confirmation dialog for gate approval

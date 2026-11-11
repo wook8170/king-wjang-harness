@@ -57,6 +57,7 @@ import { renderRtm } from './report';
 import { readState } from './state';
 import { parseWave, isWaveFile } from './wave';
 import { SHIP_PHASES } from './types';
+import { releaseGatesStatus } from './release-gates';
 import type { WaveMeta } from './types';
 
 /**
@@ -649,6 +650,10 @@ export function shipVerdict(root: string): ShipVerdict {
     }));
   }
   reasons.push(...waves.unreadable);
+
+  // ── 출하 관문 — 필수 관문이 지금 커밋에서 통과하지 않았으면 막는다(필수 아님 · 미설정은 경고만,
+  //    `releaseGatesStatus` 가 판정 한 벌이다). 지금 커밋에서 통과한 기록이면 다시 돌리지 않는다.
+  reasons.push(...releaseGatesStatus(root).blocking.map(s => s.message));
 
   return { ok: reasons.length === 0, reasons };
 }
