@@ -62,7 +62,7 @@ import {
   addDefect, updateDefect, openBlockers, renderDefectLedger,
   recordDeployment, listDeployments, shipVerdict, renderReleaseChecklist,
 } from './ship';
-import { releaseSecurityStatus, runReleaseSecurity } from './release-security';
+import { releaseGatesStatus, runReleaseGates, SECURITY_GATE } from './release-gates';
 import type { DefectRecord } from './ship';
 import { isEvidenceGrade, isDocStatus, DESIGN_PHASES } from './types';
 import type { DocNode, EvidenceGrade, Phase, HarnessState } from './types';
@@ -1263,21 +1263,34 @@ export function run(argv: string[], root: string): number {
             const v = shipVerdict(root);
             console.log(v.ok ? L('GO', '출하 가능(GO)') : L('NO-GO', '출하 불가(NO-GO)'));
             if (v.reasons.length > 0) console.log(v.reasons.map(r => `  - ${r}`).join('\n'));
-            // 보안 관문 미설정(선택)은 막지 않는다 — 판정 출력은 그대로 두고 경고만 stderr 로 알린다.
-            const sec = releaseSecurityStatus(root);
-            if (sec.state === 'unconfigured') console.error(`${L('warning', '경고')}: ${sec.message}`);
+            // 필수 아닌 관문 · 관문 미설정은 막지 않는다 — 판정 출력은 그대로 두고 경고만 stderr 로 알린다.
+            for (const w of releaseGatesStatus(root).warnings) console.error(`${L('warning', '경고')}: ${w}`);
             return v.ok ? 0 : EXIT_VERDICT_NO;
           }
+          case 'gates':
           case 'security': {
-            // 관문 명령은 프로파일이 정한다. 이미 이 커밋에서 통과했으면 다시 돌리지 않는다(--force 면 다시).
-            const r = runReleaseSecurity(root, { force: args.includes('--force') });
-            if (r.ran && r.output) process.stdout.write(r.output.endsWith('\n') ? r.output : `${r.output}\n`);
-            const s = r.status;
-            if (s.state === 'unconfigured') { console.error(`${L('warning', '경고')}: ${s.message}`); return 0; }
-            console.log(s.state === 'passed'
-              ? (r.ran ? s.message : L(`${s.message} — already recorded, not run again`, `${s.message} — 이미 기록돼 있어 다시 돌리지 않았다`))
-              : s.message);
-            return s.blocking ? EXIT_VERDICT_NO : 0;
+            // 관문 명령은 프로파일이 정한다. 이 커밋에서 이미 통과한 관문은 다시 돌리지 않는다(--force 면 다시).
+            // `ship security` 는 `ship gates --name security` 와 같다(옛 단일 설정의 하위 호환).
+            const name = sub === 'security' ? SECURITY_GATE : flag(args, 'name');
+            const force = args.includes('--force');
+            const all = releaseGatesStatus(root);
+            if (all.gates.length === 0 || (sub === 'security' && !all.gates.some(g => g.name === SECURITY_GATE))) {
+              for (const w of all.warnings.length ? all.warnings : [L('release gate `security` not configured', '출하 관문 `security` 미설정')]) {
+                console.error(`${L('warning', '경고')}: ${w}`);
+              }
+              return 0;
+            }
+            const results = runReleaseGates(root, { ...(name !== undefined ? { name } : {}), force });
+            for (const r of results) {
+              if (r.ran && r.output) process.stdout.write(r.output.endsWith('\n') ? r.output : `${r.output}\n`);
+              const s = r.status;
+              const line = s.state === 'passed' && !r.ran
+                ? L(`${s.message} — already recorded, not run again`, `${s.message} — 이미 기록돼 있어 다시 돌리지 않았다`)
+                : s.message;
+              if (s.state !== 'passed' && !s.required) console.error(`${L('warning', '경고')}: ${line}`);
+              else console.log(line);
+            }
+            return results.some(r => r.status.blocking) ? EXIT_VERDICT_NO : 0;
           }
           case 'checklist': console.log(renderReleaseChecklist(root)); return 0;
           default: throw new Error(unknownSub('ship', sub, lang));

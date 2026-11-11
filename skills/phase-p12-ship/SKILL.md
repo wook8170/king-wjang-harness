@@ -26,7 +26,7 @@ names **what to close and how**.
 | The P10 or P11 gate is not approved | Go back to that phase, submit the artifacts, and get the user's approval |
 | A ship-track gate whose evidence is not `measured` | Attach real-run and measurement evidence and resubmit |
 | A UX-referencing wave with no real-run capture | `harness evidence check <wave>` → leave headless 2x screenshots |
-| The release security check (`release-security-check` in the profile) has no pass on the current commit, or the profile requires it and no command is set | `harness ship security` — it runs the project's gate once and records it; a commit that already passed is not run again. P12 approval is refused until it passes |
+| A required release gate (`release_gates` in the profile: security check, SonarQube · Semgrep static analysis …) has no pass on the current commit, or it is required and has no command | `harness ship gates` — it runs the gates and records each one; a gate that already passed on this commit is not run again. The NO-GO reason names the exact command for the failing gate (`harness ship gates --name <gate>`). P12 approval is refused until every required gate passes; a gate with `required: false` only warns |
 
 **Two adversarial inputs, checked before the verdict.** The machine verdict above blocks open or
 unverified blocker and high defects, but it cannot see a review that was never run. Before running

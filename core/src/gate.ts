@@ -62,7 +62,7 @@ import { loadRegistry } from './registry';
 import { readState, writeState } from './state';
 // 순환 import(ship → gate → ship)지만 양쪽 다 함수 안에서만 쓰므로 평가 순서에 기대지 않는다.
 import { shipBlockingDefects } from './ship';
-import { releaseSecurityStatus } from './release-security';
+import { releaseGatesStatus } from './release-gates';
 import { PHASES, SHIP_PHASES, isEvidenceGrade } from './types';
 import type { EvidenceGrade, GateRecord, HarnessState, Phase } from './types';
 
@@ -684,17 +684,17 @@ function assertAuditRounds(root: string, phase: Phase, paths: string[]): void {
  * 위반이면 사유 문자열을, 아니면 `null` 을 준다 — 던질지 모을지는 부르는 쪽이 정한다.
  */
 /**
- * 배포(P11) · 출하(P12) 승인 전에 릴리스 보안 관문을 본다. 막는 경우는 `releaseSecurityStatus` 가
- * 정한다(명령이 있는데 지금 커밋에서 통과 기록이 없음 · 실패, 또는 필수인데 명령 없음). 미설정 · 선택은
- * 승인을 막지 않는다 — 결정 지점에서 사람을 세우는 것은 실패했을 때뿐이다.
+ * 배포(P11) · 출하(P12) 승인 전에 출하 관문(보안 점검 · 정적 분석 등)을 본다. 막는 경우는
+ * `releaseGatesStatus` 가 정한다(필수 관문이 지금 커밋에서 통과 기록이 없음 · 실패 · 명령 없음).
+ * 필수 아닌 관문과 미설정은 승인을 막지 않는다 — 결정 지점에서 사람을 세우는 것은 실패했을 때뿐이다.
  */
-function assertReleaseSecurity(root: string, phase: Phase): void {
+function assertReleaseGates(root: string, phase: Phase): void {
   if (phase !== 'P11' && phase !== 'P12') return;
-  const s = releaseSecurityStatus(root);
-  if (!s.blocking) return;
+  const { blocking } = releaseGatesStatus(root);
+  if (blocking.length === 0) return;
   throw new Error(tr(root, {
-    en: `Cannot approve ${phase} before the release security check passes: ${s.message}`,
-    ko: `릴리스 보안 관문을 통과하기 전에는 ${phase} 를 승인할 수 없다: ${s.message}`,
+    en: `Cannot approve ${phase} before the required release gates pass: ${blocking.map(s => s.message).join(' / ')}`,
+    ko: `필수 출하 관문을 통과하기 전에는 ${phase} 를 승인할 수 없다: ${blocking.map(s => s.message).join(' / ')}`,
   }));
 }
 
@@ -727,7 +727,7 @@ export function approveGate(root: string, phase: Phase, via?: ApprovalVia): Gate
   }
   const notMeasured = measuredOnlyViolation(root, phase, current.evidence);
   if (notMeasured) throw new Error(notMeasured);
-  assertReleaseSecurity(root, phase);
+  assertReleaseGates(root, phase);
   const paths = recordedPaths(root, phase);
   if (!paths) {
     throw new Error(

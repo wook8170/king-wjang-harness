@@ -121,7 +121,7 @@ flowchart LR
 | 指標 | 値 |
 |---|---|
 | フックレイテンシ (p95) | 二つの表面があり、**どちらも `npm run bench:hook` が出力する**。*インプロセス*（バンドル読込済みでの判定そのもの）: 通常 **0.9 ms**、10万件（15 MB）ジャーナル再生フォールバック中は **18.6 ms**。*実時間*（ツール呼び出しが実際に待つ値）は同じ実行で **77 ms** / **102 ms** —— そのうち **40 ms がそのマシンの `node` 起動**である。実時間の絶対値はマシンの性質であり、ゲートはフォールバックが**加える**値に掛かる（インプロセス +17.7 ms・実時間 +24.7 ms・閾値 50 ms）。 |
-| テストスイート | **1904 tests**（74ファイル）— **配布物では1897件がパス**（残りは配布物から除外されるリポジトリ内部文書を見る検査、`git archive` 実測）。時間の断定2件は、忙しいマシンでは判定の代わりに**「測定不能」とその時の負荷**を記録する |
+| テストスイート | **1913 tests**（74ファイル）— **配布物では1906件がパス**（残りは配布物から除外されるリポジトリ内部文書を見る検査、`git archive` 実測）。時間の断定2件は、忙しいマシンでは判定の代わりに**「測定不能」とその時の負荷**を記録する |
 | セッションあたりの追加コンテキスト | ハーネス有効時 **~260トークン**・`.harness/` の無いプロジェクトでは **0**。再測定: `echo '{"hook_event_name":"SessionStart"}' \| ./bin/harness-hook session-start \| wc -c` —— 注入されるブリーフィングは ~1KB で（プロジェクトパスを含むため正確な大きさは前後する）、4 で割るとトークン概算になる |
 | ランタイム依存 | **1件**（`yaml`、バンドル済み） |
 | 決定性 | 3回の実行で判定が完全一致 |
@@ -207,10 +207,33 @@ harness --version
 | `harness gate submit <P0..P12>` | そのフェーズの成果物をレビューに出す |
 | `/king-wjang-harness:approve <P0..P12>` · `harness gate approve <P0..P12>` | **人間のみ** —— 次のフェーズを開く承認。[ゲートの承認](#ゲートの承認)を参照（許可リストに入れないこと） |
 | `harness report denials [--limit <n>]` | フックが最近拒否したツール呼び出し —— 何が、なぜ止まったか |
-| `harness ship security [--force]` | プロファイルのリリースセキュリティ関門(`commands.yaml` の `release-security-check`)をこのコミットで実行し、結果を記録する。P11 · P12 の承認と `ship verdict` は現在のコミットでの合格記録を求める。合格済みのコミットでは再実行しない |
+| `harness ship gates [--name <関門>] [--force]` | プロファイルの出荷関門(`profile.yaml` の `release_gates`: セキュリティ点検 · 静的解析など)をこのコミットで実行し、関門ごとに結果を記録する。P11 · P12 の承認と `ship verdict` は、必須の関門がすべて現在のコミットで合格しているかを見る。このコミットで合格済みの関門は再実行しない |
+| `harness ship security [--force]` | `harness ship gates --name security` と同じ。旧来の単一設定(`commands.yaml` の `release-security-check`)のために残している |
 | `harness loop critical raise --reason <r> [--detail <d>]` · `harness loop critical clear` | 人間を呼び、ウェーブループを止める。判断が済んだら解除する |
 
 `harness --help` がコマンドマップを、`harness <グループ> --help` がそのグループのサブコマンドを表示する。このテーブルは簡易リファレンスだ。フックイベント（`harness hook …`）はプラグインが呼び出すものであり、手で呼ぶことはない。
+
+#### 出荷関門 (`release_gates`)
+
+プロファイルは、デプロイ · 出荷の前に合格すべき点検を一覧で書く。関門ごとに名前(`name`) · コマンド(`command`) · 必須かどうか(`required`、既定値 `true`)を持つ。
+
+```yaml
+# .harness/profile/profile.yaml
+release_gates:
+  - name: security
+    command: pnpm security:release-check
+    required: true
+  - name: static-analysis        # SonarQube quality gate
+    command: >-
+      curl -fsS -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=<key>"
+      | jq -e '.projectStatus.status=="OK"'
+    required: true
+  - name: semgrep
+    command: semgrep scan --config p/owasp-top-ten --error --metrics=off
+    required: false
+```
+
+`harness ship gates` は関門のコマンドをプロジェクトルートで実行し、関門ごとにコミット · 終了コード · コマンドを `.harness/ship/release-gates.yaml` に記録する。同じコミット · 同じコマンドで合格済みの関門は再実行しない。失敗した関門、未実行の関門、別のコミットの記録しかない関門は P11 · P12 の承認を止める。そのときメッセージに、その関門だけを実行するコマンド(`harness ship gates --name <関門>`)が出る。`required: false` の関門は止めず、警告だけ出す。旧来の単一設定(`commands.yaml` の `release-security-check` と `profile.yaml` の `release_security`)は `security` 関門ひとつとして読む。旧記録ファイル `.harness/ship/release-security.yaml` もその関門の記録として扱う。
 
 ### ゲートの承認
 
@@ -304,7 +327,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
 ## ステータス —— 本番検証済み
 
 **v0.1.2 —— SHIP-READY。** コアエンジン、3つのトラック、13フェーズのすべてが実装され実測されており
-（1904 tests）、その上でハーネス**自身**のリリース準備ゲートを通した。出荷規律を強制する道具を、
+（1913 tests）、その上でハーネス**自身**のリリース準備ゲートを通した。出荷規律を強制する道具を、
 その規律で測って通した。
 
 ### どこまで検証したか
@@ -323,7 +346,7 @@ rm -rf .harness/          # このプロジェクトだけ —— フックは�
   シンボリックリンクとハードリンクの TOCTOU、ジャーナル偽造、`base64 -d | sh`、
   ネスト・配列の MCP 引数。**取り返しのつかない対象 —— コア・ポリシー・状態・イベント
   ジャーナル —— はすべて拒否された。「止めてはいけない」対照群での過剰ブロックは0件。**
-- **1904 tests green · `tsc` 0 · 繰り返し実行しても決定的。**
+- **1913 tests green · `tsc` 0 · 繰り返し実行しても決定的。**
 
 **判定: SHIP-READY —— 出荷を止める欠陥なし。** 意図的に開けてある透過性が一つあり、それは隠さず
 書いてある: 設計 → ソースの分離は*セキュリティの壁ではなく速度制限バンプ*だ（「既知の限界」と FAQ

@@ -7796,8 +7796,10 @@ var EVENT_TYPES = [
   "defect-added",
   "defect-updated",
   "deployment-recorded",
-  // 릴리스 보안 관문 결과(release-security.ts). 상태 무변이라 replayState 는 폴드하지 않는다.
+  // 출하 관문 결과(release-gates.ts). 상태 무변이라 replayState 는 폴드하지 않는다.
+  // `release-security-recorded` 는 옛 단일 보안 관문 기록 — 이미 쓰인 저널을 읽으려고 남긴다.
   "release-security-recorded",
+  "release-gate-recorded",
   "backtrack-started",
   "backtrack-cleared",
   "doctor-repaired",
@@ -9760,7 +9762,7 @@ function buildHub(root) {
   return out.join("\n") + "\n";
 }
 
-// core/src/release-security.ts
+// core/src/release-gates.ts
 var fs17 = __toESM(require("fs"));
 var path14 = __toESM(require("path"));
 var import_node_child_process = require("child_process");
@@ -9804,6 +9806,47 @@ var INTERPRETERS = /* @__PURE__ */ new Set([
   "Rscript"
 ]);
 var SCRIPT_INTERP = new Set([...INTERPRETERS].filter((n) => !SHELLS_TAKING_C.includes(n)));
+
+// core/src/release-gates-spec.ts
+var isGateName = (n) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(n);
+function parseReleaseGates(v, yamlPath, problems, t) {
+  if (v === void 0 || v === null) return void 0;
+  if (!Array.isArray(v)) {
+    problems.push(t({
+      en: `${yamlPath}: \`release_gates\` must be a list of { name, command, required } \u2014 ignored`,
+      ko: `${yamlPath}: \`release_gates\` \uB294 { name, command, required } \uBAA9\uB85D\uC774\uC5B4\uC57C \uD55C\uB2E4 \u2014 \uBB34\uC2DC\uD588\uB2E4`
+    }));
+    return [];
+  }
+  const out = [];
+  v.forEach((item, i) => {
+    const o = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    const bad = (why, ko) => problems.push(t({
+      en: `${yamlPath}: \`release_gates[${i}]\` ${why} \u2014 ignored`,
+      ko: `${yamlPath}: \`release_gates[${i}]\` ${ko} \u2014 \uBB34\uC2DC\uD588\uB2E4`
+    }));
+    if (!isGateName(name)) {
+      bad("needs a `name` of lowercase letters, digits and hyphens", "\uC758 `name` \uC740 \uC18C\uBB38\uC790 \xB7 \uC22B\uC790 \xB7 \uD558\uC774\uD508\uC774\uC5B4\uC57C \uD55C\uB2E4");
+      return;
+    }
+    if (out.some((g) => g.name === name)) {
+      bad(`repeats the name \`${name}\``, `\uC758 \uC774\uB984 \`${name}\` \uC774 \uACB9\uCE5C\uB2E4`);
+      return;
+    }
+    if (o.command !== void 0 && o.command !== null && typeof o.command !== "string") {
+      bad("`command` must be a string", "\uC758 `command` \uB294 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD55C\uB2E4");
+      return;
+    }
+    if (o.required !== void 0 && typeof o.required !== "boolean") {
+      bad("`required` must be true or false", "\uC758 `required` \uB294 true \uB610\uB294 false \uC5EC\uC57C \uD55C\uB2E4");
+      return;
+    }
+    const command = typeof o.command === "string" && o.command.trim() ? o.command.trim() : void 0;
+    out.push({ name, ...command ? { command } : {}, required: o.required !== false });
+  });
+  return out;
+}
 
 // core/src/profile.ts
 var trFor3 = (lang) => (m) => pick(m, lang);
@@ -9962,6 +10005,7 @@ function readProfileDir(dir, origin, problems, t) {
       ko: `${yamlPath}: \`release_security\` \uB294 \`required\` \uB610\uB294 \`optional\` \uC774\uC5B4\uC57C \uD55C\uB2E4(\uD604\uC7AC ${String(rs)}) \u2014 \uC120\uD0DD\uC73C\uB85C \uBCF8\uB2E4`
     }));
   }
+  const releaseGates = parseReleaseGates(m.release_gates, yamlPath, problems, t);
   return {
     name,
     ...description ? { description } : {},
@@ -9971,6 +10015,7 @@ function readProfileDir(dir, origin, problems, t) {
     // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
     designSystemRoots: readList(m, "design_system_roots", [], yamlPath, problems, false, t),
     ...releaseSecurity ? { releaseSecurity } : {},
+    ...releaseGates ? { releaseGates } : {},
     commands: readCommands(dir, problems, t),
     origin,
     dir
@@ -10058,11 +10103,19 @@ function commandFor(profile, key) {
   return typeof v === "string" && v.trim().length > 0 ? v : void 0;
 }
 
-// core/src/release-security.ts
+// core/src/release-gates.ts
 var RELEASE_SECURITY_KEY = "release-security-check";
-var releaseSecurityPath = (root) => path14.join(harnessDir(root), "ship", "release-security.yaml");
-function releaseSecurityConfig(profile) {
-  return { command: commandFor(profile, RELEASE_SECURITY_KEY), required: profile.releaseSecurity === "required" };
+var SECURITY_GATE = "security";
+var releaseGatesPath = (root) => path14.join(harnessDir(root), "ship", "release-gates.yaml");
+var legacySecurityPath = (root) => path14.join(harnessDir(root), "ship", "release-security.yaml");
+var gateRunCommand = (name) => name === SECURITY_GATE ? "harness ship security" : `harness ship gates --name ${name}`;
+function releaseGatesConfig(profile) {
+  const list = (profile.releaseGates ?? []).map((g) => ({ ...g }));
+  if (list.some((g) => g.name === SECURITY_GATE)) return list;
+  const command = commandFor(profile, RELEASE_SECURITY_KEY);
+  if (!command && profile.releaseSecurity !== "required") return list;
+  const required = command ? profile.releaseSecurity !== "optional" : true;
+  return [{ name: SECURITY_GATE, ...command ? { command } : {}, required, legacy: true }, ...list];
 }
 function headCommit(root) {
   try {
@@ -10073,15 +10126,12 @@ function headCommit(root) {
     return null;
   }
 }
-function readReleaseSecurity(root) {
-  const f2 = releaseSecurityPath(root);
-  if (!fs17.existsSync(f2)) return null;
-  const doc = YAML7.parse(fs17.readFileSync(f2, "utf8"));
-  const o = doc ?? {};
+function toRecord(root, file, v) {
+  const o = v && typeof v === "object" ? v : {};
   if (typeof o.command !== "string" || typeof o.commitSha !== "string" || typeof o.exitCode !== "number") {
     throw new Error(tr(root, {
-      en: `${f2} is damaged (command \xB7 commitSha \xB7 exitCode) \u2014 run \`harness ship security\` again`,
-      ko: `${f2} \uAC00 \uC190\uC0C1\uB410\uB2E4(command \xB7 commitSha \xB7 exitCode) \u2014 \`harness ship security\` \uB97C \uB2E4\uC2DC \uB3CC\uB824\uB77C`
+      en: `${file} is damaged (command \xB7 commitSha \xB7 exitCode)`,
+      ko: `${file} \uAC00 \uC190\uC0C1\uB410\uB2E4(command \xB7 commitSha \xB7 exitCode)`
     }));
   }
   return {
@@ -10092,106 +10142,119 @@ function readReleaseSecurity(root) {
     recordedAt: typeof o.recordedAt === "string" ? o.recordedAt : ""
   };
 }
-function releaseSecurityStatus(root, opts = {}) {
-  let profile;
-  try {
-    profile = opts.profile ?? loadProfile(root);
-  } catch (e) {
-    return {
-      state: "unreadable",
-      blocking: true,
-      required: false,
-      message: tr(root, {
-        en: `cannot read the profile to find the release security check: ${e.message}`,
-        ko: `\uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38 \uC124\uC815\uC744 \uCC3E\uC73C\uB824\uACE0 \uD504\uB85C\uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uB2E4: ${e.message}`
-      })
-    };
+function readGateFile(root) {
+  const f2 = releaseGatesPath(root);
+  if (!fs17.existsSync(f2)) return {};
+  const doc = YAML7.parse(fs17.readFileSync(f2, "utf8"));
+  const gates = doc?.gates;
+  if (!gates || typeof gates !== "object" || Array.isArray(gates)) {
+    throw new Error(tr(root, { en: `${f2} is damaged (no \`gates\` mapping)`, ko: `${f2} \uAC00 \uC190\uC0C1\uB410\uB2E4(\`gates\` \uB9E4\uD551 \uC5C6\uC74C)` }));
   }
-  const { command, required } = releaseSecurityConfig(profile);
+  return gates;
+}
+function readReleaseGate(root, name) {
+  const gates = readGateFile(root);
+  if (Object.prototype.hasOwnProperty.call(gates, name)) return toRecord(root, releaseGatesPath(root), gates[name]);
+  if (name !== SECURITY_GATE) return null;
+  const old = legacySecurityPath(root);
+  if (!fs17.existsSync(old)) return null;
+  return toRecord(root, old, YAML7.parse(fs17.readFileSync(old, "utf8")));
+}
+function releaseGateStatus(root, gate, head) {
+  const { name, command, required } = gate;
+  const run = tr(root, { en: `run \`${gateRunCommand(name)}\``, ko: `\`${gateRunCommand(name)}\` \uB97C \uB3CC\uB824\uB77C` });
+  const tag = required ? "" : tr(root, { en: " (not required \u2014 warning only)", ko: "(\uD544\uC218 \uC544\uB2D8 \u2014 \uACBD\uACE0\uB9CC)" });
+  const out = (state, m) => ({
+    name,
+    state,
+    required,
+    blocking: required && state !== "passed",
+    ...command ? { command } : {},
+    message: `${tr(root, m)}${state === "passed" ? "" : tag}`
+  });
   if (!command) {
-    return required ? {
-      state: "required-unset",
-      blocking: true,
-      required,
-      message: tr(root, {
-        en: `release security check is required by profile ${profile.name} but \`${RELEASE_SECURITY_KEY}\` is empty in commands.yaml \u2014 set the project's security gate command there`,
-        ko: `\uD504\uB85C\uD30C\uC77C ${profile.name} \uC774 \uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38\uC744 \uD544\uC218\uB85C \uCF30\uB294\uB370 commands.yaml \uC758 \`${RELEASE_SECURITY_KEY}\` \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uADF8 \uD504\uB85C\uC81D\uD2B8\uC758 \uBCF4\uC548 \uC810\uAC80 \uAD00\uBB38 \uBA85\uB839\uC744 \uCC44\uC6CC\uB77C`
-      })
-    } : {
-      state: "unconfigured",
-      blocking: false,
-      required,
-      message: tr(root, {
-        en: `release security check not configured \u2014 set \`${RELEASE_SECURITY_KEY}\` in the profile's commands.yaml (and \`release_security: required\` in profile.yaml to enforce it)`,
-        ko: `\uBCF4\uC548 \uAD00\uBB38 \uBBF8\uC124\uC815 \u2014 \uD504\uB85C\uD30C\uC77C commands.yaml \uC5D0 \`${RELEASE_SECURITY_KEY}\` \uB97C \uCC44\uC6CC\uB77C(\uAC15\uC81C\uD558\uB824\uBA74 profile.yaml \uC5D0 \`release_security: required\`)`
-      })
-    };
+    return gate.legacy ? out("unset", {
+      en: `release gate \`${name}\` is required but \`${RELEASE_SECURITY_KEY}\` is empty in commands.yaml \u2014 set the project's security gate command there (or list it under \`release_gates\` in profile.yaml)`,
+      ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uC774 \uD544\uC218\uC778\uB370 commands.yaml \uC758 \`${RELEASE_SECURITY_KEY}\` \uAC00 \uBE44\uC5B4 \uC788\uB2E4 \u2014 \uADF8 \uD504\uB85C\uC81D\uD2B8\uC758 \uBCF4\uC548 \uC810\uAC80 \uAD00\uBB38 \uBA85\uB839\uC744 \uCC44\uC6CC\uB77C(\uB610\uB294 profile.yaml \`release_gates\` \uC5D0 \uC801\uC5B4\uB77C)`
+    }) : out("unset", {
+      en: `release gate \`${name}\` has no command \u2014 set \`command\` under \`release_gates\` in profile.yaml`,
+      ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uC758 \uBA85\uB839\uC774 \uBE44\uC5B4 \uC788\uB2E4 \u2014 profile.yaml \`release_gates\` \uC758 \`command\` \uB97C \uCC44\uC6CC\uB77C`
+    });
   }
-  const run = tr(root, { en: "run `harness ship security`", ko: "`harness ship security` \uB97C \uB3CC\uB824\uB77C" });
-  const head = opts.head === void 0 ? headCommit(root) : opts.head;
   if (!head) {
-    return {
-      state: "unknown-head",
-      blocking: true,
-      required,
-      command,
-      message: tr(root, {
-        en: "cannot determine the current commit (git rev-parse HEAD) \u2014 the release security result is tied to a commit",
-        ko: "\uC9C0\uAE08 \uCEE4\uBC0B\uC744 \uC54C \uC218 \uC5C6\uB2E4(git rev-parse HEAD) \u2014 \uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38 \uACB0\uACFC\uB294 \uCEE4\uBC0B\uC5D0 \uBB36\uC778\uB2E4"
-      })
-    };
+    return out("unknown-head", {
+      en: `cannot determine the current commit (git rev-parse HEAD) \u2014 release gate \`${name}\` results are tied to a commit`,
+      ko: `\uC9C0\uAE08 \uCEE4\uBC0B\uC744 \uC54C \uC218 \uC5C6\uB2E4(git rev-parse HEAD) \u2014 \uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uACB0\uACFC\uB294 \uCEE4\uBC0B\uC5D0 \uBB36\uC778\uB2E4`
+    });
   }
   let rec;
   try {
-    rec = readReleaseSecurity(root);
+    rec = readReleaseGate(root, name);
   } catch (e) {
-    return { state: "unreadable", blocking: true, required, command, message: e.message };
+    const msg = e.message;
+    return out("unreadable", { en: `release gate \`${name}\`: ${msg} \u2014 ${run}`, ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\`: ${msg} \u2014 ${run}` });
   }
   if (!rec) {
-    return {
-      state: "missing",
-      blocking: true,
-      required,
-      command,
-      message: tr(root, {
-        en: `release security check (${command}) has not been run on this commit \u2014 ${run}`,
-        ko: `\uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38(${command})\uC744 \uC774 \uCEE4\uBC0B\uC5D0\uC11C \uB3CC\uB9B0 \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 ${run}`
-      })
-    };
+    return out("missing", {
+      en: `release gate \`${name}\` (${command}) has not been run on this commit \u2014 ${run}`,
+      ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\`(${command})\uC744 \uC774 \uCEE4\uBC0B\uC5D0\uC11C \uB3CC\uB9B0 \uAE30\uB85D\uC774 \uC5C6\uB2E4 \u2014 ${run}`
+    });
   }
   if (rec.commitSha !== head || rec.command !== command) {
-    return {
-      state: "stale",
-      blocking: true,
-      required,
-      command,
-      message: tr(root, {
-        en: `release security result is for ${rec.commitSha.slice(0, 9)} (\`${rec.command}\`), not the current ${head.slice(0, 9)} (\`${command}\`) \u2014 ${run}`,
-        ko: `\uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38 \uACB0\uACFC\uAC00 \uC9C0\uAE08 \uCEE4\uBC0B ${head.slice(0, 9)}(\`${command}\`)\uAC00 \uC544\uB2C8\uB77C ${rec.commitSha.slice(0, 9)}(\`${rec.command}\`) \uAC83\uC774\uB2E4 \u2014 ${run}`
-      })
-    };
+    return out("stale", {
+      en: `release gate \`${name}\` result is for ${rec.commitSha.slice(0, 9)} (\`${rec.command}\`), not the current ${head.slice(0, 9)} (\`${command}\`) \u2014 ${run}`,
+      ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uACB0\uACFC\uAC00 \uC9C0\uAE08 \uCEE4\uBC0B ${head.slice(0, 9)}(\`${command}\`)\uAC00 \uC544\uB2C8\uB77C ${rec.commitSha.slice(0, 9)}(\`${rec.command}\`) \uAC83\uC774\uB2E4 \u2014 ${run}`
+    });
   }
   if (rec.exitCode !== 0) {
+    return out("failed", {
+      en: `release gate \`${name}\` failed on this commit (\`${command}\` exit ${rec.exitCode}) \u2014 fix what it reports, then ${run}`,
+      ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uC774 \uC774 \uCEE4\uBC0B\uC5D0\uC11C \uC2E4\uD328\uD588\uB2E4(\`${command}\` \uC885\uB8CC \uCF54\uB4DC ${rec.exitCode}) \u2014 \uBCF4\uACE0\uB41C \uD56D\uBAA9\uC744 \uACE0\uCE5C \uB4A4 ${run}`
+    });
+  }
+  return out("passed", {
+    en: `release gate \`${name}\` passed on ${head.slice(0, 9)} (\`${command}\`)`,
+    ko: `\uCD9C\uD558 \uAD00\uBB38 \`${name}\` \uD1B5\uACFC \u2014 ${head.slice(0, 9)}(\`${command}\`)`
+  });
+}
+function gatesOf(root, profile) {
+  try {
+    return { gates: releaseGatesConfig(profile ?? loadProfile(root)) };
+  } catch (e) {
     return {
-      state: "failed",
-      blocking: true,
-      required,
-      command,
-      message: tr(root, {
-        en: `release security check failed on this commit (\`${command}\` exit ${rec.exitCode}) \u2014 fix what it reports, then ${run}`,
-        ko: `\uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38\uC774 \uC774 \uCEE4\uBC0B\uC5D0\uC11C \uC2E4\uD328\uD588\uB2E4(\`${command}\` \uC885\uB8CC \uCF54\uB4DC ${rec.exitCode}) \u2014 \uBCF4\uACE0\uB41C \uD56D\uBAA9\uC744 \uACE0\uCE5C \uB4A4 ${run}`
-      })
+      gates: [],
+      error: {
+        name: "(profile)",
+        state: "unreadable",
+        required: true,
+        blocking: true,
+        message: tr(root, {
+          en: `cannot read the profile to find the release gates: ${e.message}`,
+          ko: `\uCD9C\uD558 \uAD00\uBB38 \uC124\uC815\uC744 \uCC3E\uC73C\uB824\uACE0 \uD504\uB85C\uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uB2E4: ${e.message}`
+        })
+      }
     };
   }
+}
+function releaseGatesStatus(root, opts = {}) {
+  const { gates, error } = gatesOf(root, opts.profile);
+  if (error) return { gates: [error], blocking: [error], warnings: [] };
+  if (gates.length === 0) {
+    return {
+      gates: [],
+      blocking: [],
+      warnings: [tr(root, {
+        en: "release gates not configured \u2014 list them under `release_gates` in profile.yaml (security \xB7 static analysis)",
+        ko: "\uCD9C\uD558 \uAD00\uBB38 \uBBF8\uC124\uC815 \u2014 profile.yaml \uC758 `release_gates` \uC5D0 \uAD00\uBB38(\uBCF4\uC548 \uC810\uAC80 \xB7 \uC815\uC801 \uBD84\uC11D)\uC744 \uC801\uC5B4\uB77C"
+      })]
+    };
+  }
+  const head = opts.head === void 0 ? headCommit(root) : opts.head;
+  const all = gates.map((g) => releaseGateStatus(root, g, head));
   return {
-    state: "passed",
-    blocking: false,
-    required,
-    command,
-    message: tr(root, {
-      en: `release security check passed on ${head.slice(0, 9)} (\`${command}\`)`,
-      ko: `\uB9B4\uB9AC\uC2A4 \uBCF4\uC548 \uAD00\uBB38 \uD1B5\uACFC \u2014 ${head.slice(0, 9)}(\`${command}\`)`
-    })
+    gates: all,
+    blocking: all.filter((s) => s.blocking),
+    warnings: all.filter((s) => !s.required && s.state !== "passed").map((s) => s.message)
   };
 }
 
@@ -10359,8 +10422,7 @@ function shipVerdict(root) {
     }));
   }
   reasons.push(...waves.unreadable);
-  const sec = releaseSecurityStatus(root);
-  if (sec.blocking) reasons.push(sec.message);
+  reasons.push(...releaseGatesStatus(root).blocking.map((s) => s.message));
   return { ok: reasons.length === 0, reasons };
 }
 

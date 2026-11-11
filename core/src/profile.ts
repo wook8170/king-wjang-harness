@@ -39,6 +39,7 @@ import { harnessDir } from './paths';
 import { loadConfig, DEFAULT_CONFIG } from './config';
 import { pick, DEFAULT_LANG, type Lang, type Msg } from './i18n';
 import { runsCommand, judgeableLines } from './bashwrite';
+import { parseReleaseGates, type ReleaseGateSpec } from './release-gates-spec';
 
 /**
  * 프로파일 진단은 **프로파일 파일을 고치는 사람**이 읽는다. 파일마다 여러 줄이 나오므로
@@ -70,11 +71,13 @@ export interface Profile {
    */
   designSystemRoots: string[];
   /**
-   * 릴리스 보안 관문을 필수로 볼지(`profile.yaml` 의 `release_security`). 없으면 선택이다 —
-   * 명령(`commands.yaml` 의 `release-security-check`)이 없을 때 막지 않고 경고만 한다.
-   * 판정은 `release-security.ts` 한 곳이 한다.
+   * 옛 단일 보안 관문 설정(`profile.yaml` 의 `release_security`). `commands.yaml` 의
+   * `release-security-check` 와 함께 `security` 출하 관문 한 개로 바꿔 읽는다 — 판정은
+   * `release-gates.ts` 한 곳이 한다.
    */
   releaseSecurity?: 'required' | 'optional';
+  /** 출하 관문 목록(`profile.yaml` 의 `release_gates`). 옛 단일 설정은 `release-gates.ts` 가 합친다. */
+  releaseGates?: ReleaseGateSpec[];
   origin: ProfileOrigin;
   /** 프로파일 디렉토리 절대경로. `guidance/`·`rules/` 를 여기서 찾는다. 내장 바닥은 `''`. */
   dir: string;
@@ -286,6 +289,7 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
       ko: `${yamlPath}: \`release_security\` 는 \`required\` 또는 \`optional\` 이어야 한다(현재 ${String(rs)}) — 선택으로 본다`,
     }));
   }
+  const releaseGates = parseReleaseGates(m.release_gates, yamlPath, problems, t);
 
   return {
     name,
@@ -297,6 +301,7 @@ function readProfileDir(dir: string, origin: ProfileOrigin, problems: string[], 
     // 동결 경로는 비어 있는 것이 정상(=P4 승인 전) — 없다고 보고하지 않는다.
     designSystemRoots: readList(m, 'design_system_roots', [], yamlPath, problems, false, t),
     ...(releaseSecurity ? { releaseSecurity } : {}),
+    ...(releaseGates ? { releaseGates } : {}),
     commands: readCommands(dir, problems, t),
     origin,
     dir,
